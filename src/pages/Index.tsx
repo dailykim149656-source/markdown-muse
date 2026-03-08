@@ -92,6 +92,15 @@ const Index = () => {
     setEditorKey(k => k + 1);
   }, []);
 
+  const handleTemplateSelect = useCallback((template: DocumentTemplate) => {
+    const newDoc = createNewDocument(template.name, template.mode);
+    newDoc.content = template.content;
+    setDocuments(prev => [...prev, newDoc]);
+    setActiveDocId(newDoc.id);
+    setEditorKey(k => k + 1);
+    toast.success("템플릿이 적용되었습니다");
+  }, []);
+
   const handleSelectDoc = useCallback((id: string) => {
     saveImmediate();
     setActiveDocId(id);
