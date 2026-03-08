@@ -73,10 +73,47 @@ const Index = () => {
     updateActiveDoc({ content });
   }, [updateActiveDoc]);
 
-  const handleModeChange = useCallback((mode: EditorMode) => {
-    updateActiveDoc({ mode });
+  // Shared conversion utilities (memoized)
+  const turndownService = useMemo(() => createTurndownService(), []);
+  const markedInstance = useMemo(() => createMarkedInstance(), []);
+
+  const handleModeChange = useCallback((newMode: EditorMode) => {
+    const oldMode = activeDoc.mode;
+    if (oldMode === newMode) return;
+
+    // JSON/YAML modes are data editors, not convertible to/from text editors
+    if (oldMode === "json" || oldMode === "yaml" || newMode === "json" || newMode === "yaml") {
+      updateActiveDoc({ mode: newMode });
+      setEditorKey(k => k + 1);
+      return;
+    }
+
+    // Get Tiptap HTML from DOM as the universal intermediate format
+    const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || "";
+
+    let convertedContent = "";
+
+    try {
+      if (newMode === "markdown") {
+        // Any → Markdown: use Tiptap HTML → Turndown
+        convertedContent = turndownService.turndown(editorHtml);
+      } else if (newMode === "latex") {
+        // Any → LaTeX: use Tiptap HTML → htmlToLatex (without wrapper)
+        convertedContent = htmlToLatex(editorHtml, false);
+      } else if (newMode === "html") {
+        // Any → HTML: Tiptap HTML is already the format
+        convertedContent = editorHtml;
+      }
+    } catch (e) {
+      console.error("Mode conversion error:", e);
+      // Fallback: keep content as-is
+      convertedContent = activeDoc.content;
+    }
+
+    updateActiveDoc({ mode: newMode, content: convertedContent });
     setEditorKey(k => k + 1);
-  }, [updateActiveDoc]);
+    toast.success(`${oldMode.toUpperCase()} → ${newMode.toUpperCase()} 변환 완료`);
+  }, [activeDoc.mode, activeDoc.content, updateActiveDoc, turndownService]);
 
   const handleFileNameChange = useCallback((name: string) => {
     updateActiveDoc({ name });
