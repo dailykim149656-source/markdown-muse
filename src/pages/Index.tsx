@@ -328,6 +328,7 @@ ${editorHtml}
           onNewDoc={handleNewDoc}
           onDeleteDoc={handleDeleteDoc}
           onRenameDoc={handleRenameDoc}
+          onOpenTemplates={() => setTemplateOpen(true)}
         />
         <div className="flex-1 flex flex-col min-w-0">
           <EditorHeader
