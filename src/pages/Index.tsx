@@ -364,6 +364,7 @@ ${editorHtml}
             onSaveJson={handleSaveJson}
             onSaveYaml={handleSaveYaml}
             onSaveTypst={handleSaveTypst}
+            onSaveAdoc={handleSaveAdoc}
             onSavePdf={handleSavePdf}
             onPrint={handlePrint}
             onLoad={handleLoad}
