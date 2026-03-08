@@ -2,28 +2,36 @@ import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown }
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
+export type EditorMode = "markdown" | "latex";
+
 interface EditorHeaderProps {
   isDark: boolean;
   onToggleTheme: () => void;
   onSaveMd: () => void;
+  onSaveTex: () => void;
   onSavePdf: () => void;
   onPrint: () => void;
   onLoad: () => void;
   fileName: string;
   onFileNameChange: (name: string) => void;
   wordCount: number;
+  mode: EditorMode;
+  onModeChange: (mode: EditorMode) => void;
 }
 
 const EditorHeader = ({
   isDark,
   onToggleTheme,
   onSaveMd,
+  onSaveTex,
   onSavePdf,
   onPrint,
   onLoad,
   fileName,
   onFileNameChange,
   wordCount,
+  mode,
+  onModeChange,
 }: EditorHeaderProps) => {
   return (
     <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background">
@@ -32,10 +40,26 @@ const EditorHeader = ({
         <input
           value={fileName}
           onChange={(e) => onFileNameChange(e.target.value)}
-          className="bg-transparent border-none outline-none text-sm font-medium text-foreground w-48 focus:ring-0"
+          className="bg-transparent border-none outline-none text-sm font-medium text-foreground w-36 focus:ring-0"
           placeholder="Untitled"
         />
-        <span className="text-xs text-muted-foreground">.md</span>
+        <span className="text-xs text-muted-foreground">{mode === "latex" ? ".tex" : ".md"}</span>
+
+        {/* Mode tabs */}
+        <div className="flex items-center ml-3 bg-secondary rounded-md p-0.5">
+          <button
+            className={`px-3 py-1 text-xs rounded-sm transition-colors ${mode === "markdown" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={() => onModeChange("markdown")}
+          >
+            Markdown
+          </button>
+          <button
+            className={`px-3 py-1 text-xs rounded-sm transition-colors ${mode === "latex" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            onClick={() => onModeChange("latex")}
+          >
+            LaTeX
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-1">
@@ -54,9 +78,15 @@ const EditorHeader = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
-            <DropdownMenuItem onClick={onSaveMd} className="text-sm gap-2">
+            {mode === "markdown" && (
+              <DropdownMenuItem onClick={onSaveMd} className="text-sm gap-2">
+                <FileDown className="h-4 w-4" />
+                마크다운 (.md)
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuItem onClick={onSaveTex} className="text-sm gap-2">
               <FileDown className="h-4 w-4" />
-              마크다운 (.md)
+              LaTeX (.tex)
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
               <FileText className="h-4 w-4" />
