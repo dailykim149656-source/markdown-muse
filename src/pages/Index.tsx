@@ -8,6 +8,7 @@ import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
+import { htmlToRst } from "@/components/editor/utils/htmlToRst";
 import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
