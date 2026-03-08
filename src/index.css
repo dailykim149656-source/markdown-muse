@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=D2+Coding&family=Do+Hyeon&family=Fira+Code:wght@400;600&family=Gaegu:wght@400;700&family=Gamja+Flower&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Jua&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@300;400;500;600;700&family=Noto+Serif+KR:wght@400;600;700&display=swap');
 
 @layer base {
   :root {

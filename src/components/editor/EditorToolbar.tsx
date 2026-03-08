@@ -18,6 +18,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import AdvancedColorPicker from "./AdvancedColorPicker";
+import { FONT_FAMILIES, FONT_SIZES } from "./fonts";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -286,6 +289,104 @@ const ColorPicker = ({ editor }: { editor: Editor }) => {
   );
 };
 
+const FontFamilySelect = ({ editor }: { editor: Editor }) => {
+  const currentFont = editor.getAttributes("textStyle").fontFamily || "__default__";
+  const categories = [...new Set(FONT_FAMILIES.map((f) => f.category))];
+
+  return (
+    <Select
+      value={currentFont}
+      onValueChange={(val) => {
+        if (val === "__default__") {
+          editor.chain().focus().unsetFontFamily().run();
+        } else {
+          editor.chain().focus().setFontFamily(val).run();
+        }
+      }}
+    >
+      <SelectTrigger className="h-8 w-32 text-xs border-none bg-transparent hover:bg-toolbar-active/50 px-2 gap-1">
+        <SelectValue placeholder="폰트" />
+      </SelectTrigger>
+      <SelectContent>
+        <ScrollArea className="h-72">
+          {categories.map((cat) => (
+            <SelectGroup key={cat}>
+              <SelectLabel className="text-[10px] text-muted-foreground">{cat}</SelectLabel>
+              {FONT_FAMILIES.filter((f) => f.category === cat).map((font) => (
+                <SelectItem key={font.label} value={font.value || "__default__"} className="text-sm">
+                  <span style={{ fontFamily: font.value || "inherit" }}>{font.label}</span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          ))}
+        </ScrollArea>
+      </SelectContent>
+    </Select>
+  );
+};
+
+const FontSizeSelect = ({ editor }: { editor: Editor }) => {
+  const currentSize = editor.getAttributes("textStyle").fontSize || "";
+  const [customSize, setCustomSize] = useState("");
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" className="h-8 min-w-[52px] text-xs px-2 hover:bg-toolbar-active/50 font-normal justify-between gap-1">
+          {currentSize || "크기"}
+          <span className="text-[8px] text-muted-foreground">▼</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-32 p-1.5" align="start">
+        <ScrollArea className="h-52">
+          <div className="space-y-0.5">
+            <button
+              className={`w-full text-left px-2 py-1 text-xs rounded-sm hover:bg-accent ${!currentSize ? "bg-accent font-medium" : ""}`}
+              onClick={() => editor.chain().focus().unsetFontSize().run()}
+            >
+              기본
+            </button>
+            {FONT_SIZES.map((s) => (
+              <button
+                key={s.value}
+                className={`w-full text-left px-2 py-1 text-xs rounded-sm hover:bg-accent ${currentSize === s.value ? "bg-accent font-medium" : ""}`}
+                onClick={() => editor.chain().focus().setFontSize(s.value).run()}
+              >
+                {s.label}px
+              </button>
+            ))}
+          </div>
+        </ScrollArea>
+        <Separator className="my-1.5" />
+        <div className="flex gap-1">
+          <Input
+            placeholder="직접 입력"
+            value={customSize}
+            onChange={(e) => setCustomSize(e.target.value)}
+            className="h-7 text-xs flex-1"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && customSize) {
+                const val = customSize.includes("px") ? customSize : `${customSize}px`;
+                editor.chain().focus().setFontSize(val).run();
+                setCustomSize("");
+              }
+            }}
+          />
+          <Button size="sm" className="h-7 text-xs px-2" onClick={() => {
+            if (customSize) {
+              const val = customSize.includes("px") ? customSize : `${customSize}px`;
+              editor.chain().focus().setFontSize(val).run();
+              setCustomSize("");
+            }
+          }}>
+            적용
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 const EditorToolbar = ({ editor }: EditorToolbarProps) => {
   if (!editor) return null;
 
@@ -329,6 +430,10 @@ const EditorToolbar = ({ editor }: EditorToolbarProps) => {
 
   return (
     <div className="flex items-center gap-0.5 px-3 py-1.5 bg-toolbar border-b border-toolbar-border overflow-x-auto flex-wrap">
+      {/* Font selects */}
+      <FontFamilySelect editor={editor} />
+      <FontSizeSelect editor={editor} />
+      <Separator orientation="vertical" className="mx-1.5 h-5" />
       {toolbarGroups.map((group, gi) => (
         <div key={gi} className="flex items-center gap-0.5">
           {gi > 0 && <Separator orientation="vertical" className="mx-1.5 h-5" />}
