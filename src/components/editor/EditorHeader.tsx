@@ -106,23 +106,39 @@ const EditorHeader = ({
                 마크다운 (.md)
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={onSaveTex} className="text-sm gap-2">
-              <FileDown className="h-4 w-4" />
-              LaTeX (.tex)
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onSaveHtml} className="text-sm gap-2">
-              <FileDown className="h-4 w-4" />
-              HTML (.html)
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
-              <FileText className="h-4 w-4" />
-              PDF로 저장
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onPrint} className="text-sm gap-2">
-              <Printer className="h-4 w-4" />
-              인쇄
-            </DropdownMenuItem>
+            {(mode === "json" || mode === "yaml") && (
+              <>
+                <DropdownMenuItem onClick={onSaveJson} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  JSON (.json)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSaveYaml} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  YAML (.yaml)
+                </DropdownMenuItem>
+              </>
+            )}
+            {mode !== "json" && mode !== "yaml" && (
+              <>
+                <DropdownMenuItem onClick={onSaveTex} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  LaTeX (.tex)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSaveHtml} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  HTML (.html)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
+                  <FileText className="h-4 w-4" />
+                  PDF로 저장
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onPrint} className="text-sm gap-2">
+                  <Printer className="h-4 w-4" />
+                  인쇄
+                </DropdownMenuItem>
+              </>
+            )
           </DropdownMenuContent>
         </DropdownMenu>
 
