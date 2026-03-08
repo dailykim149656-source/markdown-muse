@@ -13,7 +13,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Palette, TableProperties, Plus, Trash2, ArrowUpDown, ArrowLeftRight, Sigma, GitBranch,
   MessageSquareWarning, FootprintsIcon,
-  ListTree, ImageIcon, Tag,
+  ListTree, TextCursorInput, Tag,
 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
