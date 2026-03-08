@@ -156,6 +156,26 @@ const FootnoteRef = Node.create({
   addNodeView() {
     return ReactNodeViewRenderer(FootnoteRefView);
   },
+
+  addCommands() {
+    return {
+      insertFootnote:
+        () =>
+        ({ editor, commands }: any) => {
+          const id = `fn-${Date.now()}-${++footnoteIdCounter}`;
+          commands.insertContent({
+            type: "footnoteRef",
+            attrs: { id },
+          });
+          const endPos = editor.state.doc.content.size;
+          editor.chain().insertContentAt(endPos, {
+            type: "footnoteItem",
+            attrs: { id, text: "" },
+          }).run();
+          return true;
+        },
+    } as any;
+  },
 });
 
 const FootnoteItem = Node.create({
