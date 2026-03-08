@@ -142,6 +142,10 @@ const EditorHeader = ({
                   <FileDown className="h-4 w-4" />
                   AsciiDoc (.adoc)
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSaveRst} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  RST (.rst)
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
                   <FileText className="h-4 w-4" />
                   PDF로 저장
