@@ -147,7 +147,14 @@ const Index = () => {
   const handleSaveJson = useCallback(() => downloadFile(activeDoc.content, ".json", "application/json"), [activeDoc, downloadFile]);
   const handleSaveYaml = useCallback(() => downloadFile(activeDoc.content, ".yaml", "text/yaml"), [activeDoc, downloadFile]);
 
-  // Enhanced HTML export
+  // Typst export
+  const handleSaveTypst = useCallback(() => {
+    const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
+    const typstContent = htmlToTypst(editorHtml);
+    downloadFile(typstContent, ".typ", "text/plain");
+    toast.success("Typst 파일로 내보냈습니다");
+  }, [activeDoc, downloadFile]);
+
   const handleSaveHtml = useCallback(() => {
     const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
     const fullHtml = `<!DOCTYPE html>
