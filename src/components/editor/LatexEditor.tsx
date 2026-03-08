@@ -64,7 +64,7 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
       UnderlineExt,
       TaskList,
       TaskItem.configure({ nested: true }),
-      ImageExt.configure({ inline: false, allowBase64: true }),
+      ResizableImage,
       LinkExt.configure({
         openOnClick: false,
         HTMLAttributes: { class: "text-primary underline cursor-pointer" },
