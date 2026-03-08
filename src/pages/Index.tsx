@@ -16,6 +16,8 @@ import DocumentTabs from "@/components/editor/DocumentTabs";
 import FileSidebar from "@/components/editor/FileSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { loadSavedData, saveData, useAutoSave, createNewDocument, type AutoSaveData, type DocumentData } from "@/components/editor/useAutoSave";
+import ExportPreviewPanel from "@/components/editor/ExportPreviewPanel";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { toast } from "sonner";
 
 const Index = () => {
