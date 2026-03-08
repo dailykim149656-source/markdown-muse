@@ -52,6 +52,8 @@ const EditorHeader = ({
   fileName,
   onFileNameChange,
   wordCount,
+  countWithSpaces = true,
+  onToggleCountMode,
   mode,
   onModeChange,
   isFullscreen,
