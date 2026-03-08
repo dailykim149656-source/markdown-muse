@@ -259,6 +259,17 @@ describe("htmlToTypst", () => {
     expect(r).toContain("#super[2]");
     expect(r).toContain("#sub[2]");
   });
+  it("converts mermaid to commented code block", () => {
+    const r = htmlToTypst('<div data-type="mermaid" code="graph TD\n    A-->B"></div>');
+    expect(r).toContain("// Mermaid diagram");
+    expect(r).toContain("A-->B");
+  });
+
+  it("preserves admonition type and content", () => {
+    const r = htmlToTypst('<div data-type="admonition" data-admonition-type="tip"><p>유용한 팁</p></div>');
+    expect(r).toContain('#admonition(title: "Tip"');
+    expect(r).toContain("유용한 팁");
+  });
 });
 
 // ═══════════════════════════════════════════
@@ -367,6 +378,18 @@ describe("htmlToAsciidoc", () => {
     const r = htmlToAsciidoc("<p>x<sup>2</sup> H<sub>2</sub>O</p>");
     expect(r).toContain("^2^");
     expect(r).toContain("~2~");
+  });
+  it("converts mermaid to code block", () => {
+    const r = htmlToAsciidoc('<div data-type="mermaid" code="graph LR\n    A-->B"></div>');
+    expect(r).toContain("[source,mermaid]");
+    expect(r).toContain("----");
+    expect(r).toContain("A-->B");
+  });
+
+  it("preserves admonition type and content", () => {
+    const r = htmlToAsciidoc('<div data-type="admonition" data-admonition-type="tip"><p>유용한 팁입니다</p></div>');
+    expect(r).toContain("[TIP]");
+    expect(r).toContain("유용한 팁입니다");
   });
 });
 
