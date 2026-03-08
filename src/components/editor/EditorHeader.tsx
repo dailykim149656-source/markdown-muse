@@ -1,16 +1,17 @@
-import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown } from "lucide-react";
+import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown, Maximize, Minimize, Keyboard } from "lucide-react";
 import { Link } from "react-router-dom";
 import docslyLogo from "@/assets/docsly-logo.png";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
-export type EditorMode = "markdown" | "latex";
+export type EditorMode = "markdown" | "latex" | "html";
 
 interface EditorHeaderProps {
   isDark: boolean;
   onToggleTheme: () => void;
   onSaveMd: () => void;
   onSaveTex: () => void;
+  onSaveHtml: () => void;
   onSavePdf: () => void;
   onPrint: () => void;
   onLoad: () => void;
@@ -19,6 +20,9 @@ interface EditorHeaderProps {
   wordCount: number;
   mode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
+  onOpenShortcuts: () => void;
 }
 
 const EditorHeader = ({
@@ -26,6 +30,7 @@ const EditorHeader = ({
   onToggleTheme,
   onSaveMd,
   onSaveTex,
+  onSaveHtml,
   onSavePdf,
   onPrint,
   onLoad,
@@ -34,7 +39,12 @@ const EditorHeader = ({
   wordCount,
   mode,
   onModeChange,
+  isFullscreen,
+  onToggleFullscreen,
+  onOpenShortcuts,
 }: EditorHeaderProps) => {
+  const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : ".md";
+
   return (
     <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background">
       <div className="flex items-center gap-2">
@@ -49,22 +59,19 @@ const EditorHeader = ({
           className="bg-transparent border-none outline-none text-sm font-medium text-foreground w-36 focus:ring-0"
           placeholder="Untitled"
         />
-        <span className="text-xs text-muted-foreground">{mode === "latex" ? ".tex" : ".md"}</span>
+        <span className="text-xs text-muted-foreground">{modeExt}</span>
 
         {/* Mode tabs */}
         <div className="flex items-center ml-3 bg-secondary rounded-md p-0.5">
-          <button
-            className={`px-3 py-1 text-xs rounded-sm transition-colors ${mode === "markdown" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-            onClick={() => onModeChange("markdown")}
-          >
-            Markdown
-          </button>
-          <button
-            className={`px-3 py-1 text-xs rounded-sm transition-colors ${mode === "latex" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-            onClick={() => onModeChange("latex")}
-          >
-            LaTeX
-          </button>
+          {(["markdown", "latex", "html"] as EditorMode[]).map((m) => (
+            <button
+              key={m}
+              className={`px-3 py-1 text-xs rounded-sm transition-colors ${mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => onModeChange(m)}
+            >
+              {m === "markdown" ? "Markdown" : m === "latex" ? "LaTeX" : "HTML"}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -94,6 +101,10 @@ const EditorHeader = ({
               <FileDown className="h-4 w-4" />
               LaTeX (.tex)
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={onSaveHtml} className="text-sm gap-2">
+              <FileDown className="h-4 w-4" />
+              HTML (.html)
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
               <FileText className="h-4 w-4" />
               PDF로 저장
@@ -105,6 +116,14 @@ const EditorHeader = ({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <Button variant="ghost" size="sm" onClick={onOpenShortcuts} title="단축키 안내 (Ctrl+/)" className="h-8 w-8 p-0">
+          <Keyboard className="h-4 w-4" />
+        </Button>
+
+        <Button variant="ghost" size="sm" onClick={onToggleFullscreen} title="전체화면 (F11)" className="h-8 w-8 p-0">
+          {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+        </Button>
 
         <Button variant="ghost" size="sm" onClick={onToggleTheme} title="테마 전환" className="h-8 w-8 p-0">
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
