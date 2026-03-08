@@ -220,34 +220,31 @@ const TableMenu = ({ editor }: { editor: Editor }) => {
 
 const ColorPicker = ({ editor }: { editor: Editor }) => {
   const [open, setOpen] = useState(false);
+  const currentColor = editor.getAttributes("textStyle").color || "inherit";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Toggle size="sm" pressed={false} className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm" title="텍스트 색상">
+        <Toggle size="sm" pressed={false} className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm relative" title="텍스트 색상">
           <Palette className="h-4 w-4" />
+          <div
+            className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
+            style={{ backgroundColor: currentColor === "inherit" ? "hsl(var(--foreground))" : currentColor }}
+          />
         </Toggle>
       </PopoverTrigger>
-      <PopoverContent className="w-40 p-2">
-        <p className="text-xs font-medium mb-2">텍스트 색상</p>
-        <div className="grid grid-cols-5 gap-1">
-          {COLORS.map((c) => (
-            <button
-              key={c.value}
-              title={c.label}
-              className="w-6 h-6 rounded-sm border border-border hover:scale-110 transition-transform"
-              style={{ backgroundColor: c.value === "inherit" ? "hsl(var(--foreground))" : c.value }}
-              onClick={() => {
-                if (c.value === "inherit") {
-                  editor.chain().focus().unsetColor().run();
-                } else {
-                  editor.chain().focus().setColor(c.value).run();
-                }
-                setOpen(false);
-              }}
-            />
-          ))}
-        </div>
+      <PopoverContent className="w-auto p-3" align="start">
+        <AdvancedColorPicker
+          currentColor={currentColor}
+          onColorSelect={(color) => {
+            editor.chain().focus().setColor(color).run();
+            setOpen(false);
+          }}
+          onReset={() => {
+            editor.chain().focus().unsetColor().run();
+            setOpen(false);
+          }}
+        />
       </PopoverContent>
     </Popover>
   );
