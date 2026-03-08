@@ -8,6 +8,7 @@ import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
+import { htmlToRst } from "@/components/editor/utils/htmlToRst";
 import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
@@ -169,6 +170,14 @@ const Index = () => {
     const adocContent = htmlToAsciidoc(editorHtml);
     downloadFile(adocContent, ".adoc", "text/plain");
     toast.success("AsciiDoc 파일로 내보냈습니다");
+  }, [activeDoc, downloadFile]);
+
+  // RST export
+  const handleSaveRst = useCallback(() => {
+    const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
+    const rstContent = htmlToRst(editorHtml);
+    downloadFile(rstContent, ".rst", "text/x-rst");
+    toast.success("reStructuredText 파일로 내보냈습니다");
   }, [activeDoc, downloadFile]);
 
   const handleSaveHtml = useCallback(() => {
@@ -372,6 +381,7 @@ ${editorHtml}
             onSaveYaml={handleSaveYaml}
             onSaveTypst={handleSaveTypst}
             onSaveAdoc={handleSaveAdoc}
+            onSaveRst={handleSaveRst}
             onSavePdf={handleSavePdf}
             onPrint={handlePrint}
             onLoad={handleLoad}
