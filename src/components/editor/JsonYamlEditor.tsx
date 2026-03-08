@@ -279,6 +279,7 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
   const [showSource, setShowSource] = useState(true);
   const [sourceLeft, setSourceLeft] = useState(false);
   const suppressSync = useRef(false);
+  const [showSchema, setShowSchema] = useState(false);
 
   // Source → Form sync
   const handleSourceChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
