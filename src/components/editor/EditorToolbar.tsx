@@ -506,6 +506,10 @@ const CaptionMenu = ({ editor }: { editor: Editor }) => {
 
   const insert = () => {
     (editor.commands as any).insertFigureCaption({ captionType, label, captionText });
+    // Move cursor after the caption into a new paragraph
+    const { state } = editor;
+    const pos = state.selection.to;
+    editor.chain().focus().insertContentAt(pos, { type: "paragraph" }).run();
     setLabel("");
     setCaptionText("");
     setOpen(false);
