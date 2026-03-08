@@ -136,6 +136,7 @@ const EditorHeader = ({
                 <span>단어수: {textStats.wordCount}</span>
                 <span>줄수: {textStats.lines}</span>
                 <span>문단수: {textStats.paragraphs}</span>
+                <span>읽기 시간: 약 {textStats.readingTimeMin}분</span>
                 <span className="text-muted-foreground mt-1">클릭하여 공백 포함/제외 전환</span>
               </div>
             </TooltipContent>
