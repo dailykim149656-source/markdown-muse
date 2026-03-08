@@ -6,13 +6,18 @@ const FigureCaptionComponent = ({ node, updateAttributes, editor }: any) => {
   const { captionType, label, captionText } = node.attrs;
   const [editing, setEditing] = useState(false);
 
-  // Auto-number: count all figureCaption nodes of the same type before this one
+  // Auto-number: count all figureCaption nodes of the same type up to and including this one
   let number = 1;
   if (editor) {
+    let found = false;
     editor.state.doc.descendants((n: any, pos: number) => {
-      if (n === node) return false; // stop at current node
+      if (found) return false;
       if (n.type.name === "figureCaption" && n.attrs.captionType === captionType) {
-        number++;
+        if (n.attrs.label === label && n.attrs.captionText === captionText) {
+          found = true;
+        } else {
+          number++;
+        }
       }
     });
   }
