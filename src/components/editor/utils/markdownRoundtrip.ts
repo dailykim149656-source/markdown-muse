@@ -53,9 +53,9 @@ function preProcessHtml(html: string): { html: string; replacements: Map<string,
 
   // Mermaid: <div data-type="mermaid" code="..."></div>
   // Mermaid: <div data-type="mermaid" code="..."></div>
-  // Use [\s\S] instead of [^"] for code attr since it may contain newlines
+  // Use a more robust regex that handles > inside attribute values
   processed = processed.replace(
-    /<div[^>]*data-type="mermaid"[^>]*><\/div>/g,
+    /<div\s[^]*?data-type="mermaid"[^]*?><\/div>/g,
     (match) => {
       const codeMatch = match.match(/code="([\s\S]*?)"/);
       const code = codeMatch?.[1] || "";
