@@ -48,9 +48,9 @@ const Landing = () => {
           </div>
         </div>
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-tight max-w-3xl">
-          개발자 문서,{" "}
+          개도 편집하는{" "}
           <span className="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
-            누구나 쉽게
+            개발자 문서
           </span>
         </h1>
         <p className="mt-5 text-lg sm:text-xl text-muted-foreground max-w-xl leading-relaxed">
