@@ -294,10 +294,12 @@ export function createMarkedInstance(): typeof marked {
     name: "footnoteItem",
     level: "block",
     start(src: string) {
-      return src.indexOf("[^");
+      // Only match [^ at start of line followed by ]:
+      const match = src.match(/(?:^|\n)\[\^[^\]]+\]:/);
+      return match ? (src.indexOf(match[0]) + (match[0].startsWith("\n") ? 1 : 0)) : -1;
     },
     tokenizer(src: string) {
-      const match = src.match(/^\[\^([^\]]+)\]:\s*(.+)$/m);
+      const match = src.match(/^\[\^([^\]]+)\]:\s*(.+)/);
       if (match) {
         return { type: "footnoteItem", raw: match[0], id: match[1], text: match[2].trim() };
       }
