@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { htmlToLatex } from "@/components/editor/utils/htmlToLatex";
+import { htmlToLatex, latexToHtml } from "@/components/editor/utils/htmlToLatex";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
@@ -116,6 +116,40 @@ describe("htmlToLatex", () => {
   it("converts text alignment", () => {
     const r = convert('<p style="text-align: center">Centered</p>');
     expect(r).toContain("\\begin{center}");
+  });
+  it("converts mermaid to comment block", () => {
+    const r = convert('<div data-type="mermaid" code="graph TD\n    A-->B"></div>');
+    expect(r).toContain("% begin-mermaid");
+    expect(r).toContain("% mermaid: graph TD");
+    expect(r).toContain("% end-mermaid");
+  });
+
+  it("converts admonitions with metadata comment", () => {
+    const r = convert('<div data-type="admonition" data-admonition-type="warning" data-admonition-color="yellow" data-admonition-icon="alert-triangle" title="주의"><p>위험합니다</p></div>');
+    expect(r).toContain("% admonition-meta: type=warning color=yellow icon=alert-triangle");
+    expect(r).toContain("\\begin{admonitionbox}");
+  });
+});
+
+describe("LaTeX round-trip: HTML→LaTeX→HTML", () => {
+  it("preserves mermaid through round-trip", () => {
+    const html = '<div data-type="mermaid" code="graph LR\n    A-->B"></div>';
+    const latex = htmlToLatex(html, false);
+    expect(latex).toContain("% begin-mermaid");
+    const restored = latexToHtml(latex);
+    expect(restored).toContain('data-type="mermaid"');
+    expect(restored).toContain("A--&gt;B");
+  });
+
+  it("preserves admonition type/color/icon through round-trip", () => {
+    const html = '<div data-type="admonition" data-admonition-type="tip" data-admonition-color="green" data-admonition-icon="lightbulb" title="팁"><p>유용한 정보</p></div>';
+    const latex = htmlToLatex(html, false);
+    expect(latex).toContain("type=tip");
+    expect(latex).toContain("color=green");
+    const restored = latexToHtml(latex);
+    expect(restored).toContain('data-admonition-type="tip"');
+    expect(restored).toContain('data-admonition-color="green"');
+    expect(restored).toContain('data-admonition-icon="lightbulb"');
   });
 });
 

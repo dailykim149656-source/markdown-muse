@@ -328,16 +328,25 @@ function processNode(node: ChildNode, state: ConversionState): string {
       if (dataType === "admonition") {
         state.usedFeatures.add("admonition");
         const type = el.getAttribute("data-admonition-type") || "note";
-        const colorKey = el.getAttribute("data-admonition-color") || "blue";
-        const latexColor = ADMONITION_COLOR_MAP[colorKey] || "blue";
+        const colorKey = el.getAttribute("data-admonition-color") || "";
+        const icon = el.getAttribute("data-admonition-icon") || "";
+        const titleAttr = el.getAttribute("title") || "";
+        const latexColor = ADMONITION_COLOR_MAP[colorKey] || ADMONITION_COLOR_MAP[
+          ({ note: "blue", warning: "yellow", tip: "green", danger: "red" } as Record<string, string>)[type] || "blue"
+        ] || "blue";
 
         const titleMap: Record<string, string> = {
           note: "노트", warning: "경고", tip: "팁", danger: "위험"
         };
-        const title = titleMap[type] || type;
+        const title = titleAttr || titleMap[type] || type;
         const content = children();
 
-        return `\\begin{admonitionbox}[${escapeLatex(title)}]{${latexColor}}\n${content.trim()}\n\\end{admonitionbox}\n\n`;
+        // Encode type, color, icon as comment for lossless round-trip
+        let metaComment = `% admonition-meta: type=${type}`;
+        if (colorKey) metaComment += ` color=${colorKey}`;
+        if (icon) metaComment += ` icon=${icon}`;
+
+        return `${metaComment}\n\\begin{admonitionbox}[${escapeLatex(title)}]{${latexColor}}\n${content.trim()}\n\\end{admonitionbox}\n\n`;
       }
 
       // Footnote item — collect for later
@@ -348,9 +357,11 @@ function processNode(node: ChildNode, state: ConversionState): string {
         return ""; // Don't output here — will be inlined via \footnote{}
       }
 
-      // Mermaid — comment out
-      if (dataType === "mermaidBlock") {
-        return `% [Mermaid 다이어그램 — LaTeX에서 지원되지 않음]\n`;
+      // Mermaid — store code as LaTeX comment for round-trip
+      if (dataType === "mermaid" || dataType === "mermaidBlock") {
+        const code = el.getAttribute("code") || el.textContent || "";
+        const encodedLines = code.split("\n").map((l: string) => `% mermaid: ${l}`).join("\n");
+        return `% begin-mermaid\n${encodedLines}\n% end-mermaid\n`;
       }
 
       return children();
@@ -512,7 +523,30 @@ export function latexToHtml(latex: string): string {
   body = body.replace(/\\begin\{verbatim\}([\s\S]*?)\\end\{verbatim\}/g,
     '<pre><code>$1</code></pre>');
 
-  // Admonition tcolorbox
+  // Mermaid comments → Tiptap mermaid node
+  body = body.replace(/% begin-mermaid\n([\s\S]*?)% end-mermaid/g, (_, lines) => {
+    const code = lines
+      .split("\n")
+      .map((l: string) => l.replace(/^% mermaid: /, ""))
+      .filter((l: string) => l !== "")
+      .join("\n");
+    const escaped = code.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `<div data-type="mermaid" code="${escaped}"></div>`;
+  });
+
+  // Admonition tcolorbox with metadata comment
+  body = body.replace(
+    /% admonition-meta: type=(\S+)(?: color=(\S+))?(?: icon=(\S+))?\n\\begin\{admonitionbox\}\[([^\]]*)\]\{[^}]*\}([\s\S]*?)\\end\{admonitionbox\}/g,
+    (_, type, color, icon, title, content) => {
+      const attrs = [`data-type="admonition"`, `data-admonition-type="${type}"`];
+      if (title) attrs.push(`title="${title}"`);
+      if (color) attrs.push(`data-admonition-color="${color}"`);
+      if (icon) attrs.push(`data-admonition-icon="${icon}"`);
+      return `<div ${attrs.join(" ")}>${content.trim()}</div>`;
+    }
+  );
+
+  // Fallback: Admonition tcolorbox without metadata comment
   body = body.replace(/\\begin\{admonitionbox\}\[([^\]]*)\]\{[^}]*\}([\s\S]*?)\\end\{admonitionbox\}/g,
     '<div data-type="admonition" data-admonition-type="note"><strong>$1</strong>$2</div>');
 
