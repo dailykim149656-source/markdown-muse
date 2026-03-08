@@ -166,8 +166,17 @@ const AdmonitionExtension = Node.create({
     return [{ tag: 'div[data-type="admonition"]' }];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    return ["div", mergeAttributes(HTMLAttributes, { "data-type": "admonition" }), 0];
+  renderHTML({ node, HTMLAttributes }) {
+    const type = node.attrs.type || "note";
+    const legacy = LEGACY_TYPE_MAP[type];
+    const colorKey = node.attrs.color || legacy?.color || "blue";
+    const iconKey = node.attrs.icon || legacy?.icon || "info";
+    return ["div", mergeAttributes(HTMLAttributes, {
+      "data-type": "admonition",
+      "data-admonition-type": type,
+      "data-admonition-color": colorKey,
+      "data-admonition-icon": iconKey,
+    }), 0];
   },
 
   addNodeView() {

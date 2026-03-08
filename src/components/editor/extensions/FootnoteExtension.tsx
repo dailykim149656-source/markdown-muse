@@ -149,8 +149,11 @@ const FootnoteRef = Node.create({
     return [{ tag: 'span[data-type="footnote-ref"]' }];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    return ["span", mergeAttributes(HTMLAttributes, { "data-type": "footnote-ref" })];
+  renderHTML({ node, HTMLAttributes }) {
+    return ["span", mergeAttributes(HTMLAttributes, {
+      "data-type": "footnote-ref",
+      "data-footnote-id": node.attrs.id,
+    }), `[*]`];
   },
 
   addNodeView() {
@@ -196,8 +199,11 @@ const FootnoteItem = Node.create({
     return [{ tag: 'div[data-type="footnote-item"]' }];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    return ["div", mergeAttributes(HTMLAttributes, { "data-type": "footnote-item" })];
+  renderHTML({ node, HTMLAttributes }) {
+    return ["div", mergeAttributes(HTMLAttributes, {
+      "data-type": "footnote-item",
+      "data-footnote-id": node.attrs.id,
+    }), node.attrs.text || ""];
   },
 
   addNodeView() {
