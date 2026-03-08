@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useSidebar } from "@/components/ui/sidebar";
 
-export type EditorMode = "markdown" | "latex" | "html";
+export type EditorMode = "markdown" | "latex" | "html" | "json" | "yaml";
 
 interface EditorHeaderProps {
   isDark: boolean;
@@ -13,6 +13,8 @@ interface EditorHeaderProps {
   onSaveMd: () => void;
   onSaveTex: () => void;
   onSaveHtml: () => void;
+  onSaveJson: () => void;
+  onSaveYaml: () => void;
   onSavePdf: () => void;
   onPrint: () => void;
   onLoad: () => void;
@@ -32,6 +34,8 @@ const EditorHeader = ({
   onSaveMd,
   onSaveTex,
   onSaveHtml,
+  onSaveJson,
+  onSaveYaml,
   onSavePdf,
   onPrint,
   onLoad,
@@ -44,7 +48,7 @@ const EditorHeader = ({
   onToggleFullscreen,
   onOpenShortcuts,
 }: EditorHeaderProps) => {
-  const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : ".md";
+  const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : mode === "json" ? ".json" : mode === "yaml" ? ".yaml" : ".md";
   const { toggleSidebar } = useSidebar();
 
   return (
@@ -68,13 +72,13 @@ const EditorHeader = ({
 
         {/* Mode tabs */}
         <div className="flex items-center ml-3 bg-secondary rounded-md p-0.5">
-          {(["markdown", "latex", "html"] as EditorMode[]).map((m) => (
+          {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((m) => (
             <button
               key={m}
               className={`px-3 py-1 text-xs rounded-sm transition-colors ${mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => onModeChange(m)}
             >
-              {m === "markdown" ? "Markdown" : m === "latex" ? "LaTeX" : "HTML"}
+              {m === "markdown" ? "Markdown" : m === "latex" ? "LaTeX" : m === "html" ? "HTML" : m === "json" ? "JSON" : "YAML"}
             </button>
           ))}
         </div>
@@ -102,23 +106,39 @@ const EditorHeader = ({
                 마크다운 (.md)
               </DropdownMenuItem>
             )}
-            <DropdownMenuItem onClick={onSaveTex} className="text-sm gap-2">
-              <FileDown className="h-4 w-4" />
-              LaTeX (.tex)
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onSaveHtml} className="text-sm gap-2">
-              <FileDown className="h-4 w-4" />
-              HTML (.html)
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
-              <FileText className="h-4 w-4" />
-              PDF로 저장
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onPrint} className="text-sm gap-2">
-              <Printer className="h-4 w-4" />
-              인쇄
-            </DropdownMenuItem>
+            {(mode === "json" || mode === "yaml") && (
+              <>
+                <DropdownMenuItem onClick={onSaveJson} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  JSON (.json)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSaveYaml} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  YAML (.yaml)
+                </DropdownMenuItem>
+              </>
+            )}
+            {mode !== "json" && mode !== "yaml" && (
+              <>
+                <DropdownMenuItem onClick={onSaveTex} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  LaTeX (.tex)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSaveHtml} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  HTML (.html)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
+                  <FileText className="h-4 w-4" />
+                  PDF로 저장
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onPrint} className="text-sm gap-2">
+                  <Printer className="h-4 w-4" />
+                  인쇄
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

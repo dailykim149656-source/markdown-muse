@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, FilePlus, Trash2, Pencil, Check, X, FileCode, FileType, FolderOpen, Clock } from "lucide-react";
+import { FileText, FilePlus, Trash2, Pencil, Check, X, FileCode, FileType, FolderOpen, Clock, FileJson, Braces } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,7 +22,7 @@ interface FileSidebarProps {
   documents: DocumentData[];
   activeDocId: string;
   onSelectDoc: (id: string) => void;
-  onNewDoc: (mode?: "markdown" | "latex" | "html") => void;
+  onNewDoc: (mode?: "markdown" | "latex" | "html" | "json" | "yaml") => void;
   onDeleteDoc: (id: string) => void;
   onRenameDoc: (id: string, name: string) => void;
 }
@@ -31,6 +31,8 @@ const modeIcon = (mode: string) => {
   switch (mode) {
     case "latex": return FileCode;
     case "html": return FileType;
+    case "json": return FileJson;
+    case "yaml": return Braces;
     default: return FileText;
   }
 };
@@ -39,6 +41,8 @@ const modeExt = (mode: string) => {
   switch (mode) {
     case "latex": return ".tex";
     case "html": return ".html";
+    case "json": return ".json";
+    case "yaml": return ".yaml";
     default: return ".md";
   }
 };
@@ -196,6 +200,26 @@ const FileSidebar = ({ documents, activeDocId, onSelectDoc, onNewDoc, onDeleteDo
           >
             <FileType className="h-3.5 w-3.5" />
             <span className="group-data-[collapsible=icon]:hidden">새 HTML</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
+            onClick={() => onNewDoc("json")}
+            title="새 JSON"
+          >
+            <FileJson className="h-3.5 w-3.5" />
+            <span className="group-data-[collapsible=icon]:hidden">새 JSON</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
+            onClick={() => onNewDoc("yaml")}
+            title="새 YAML"
+          >
+            <Braces className="h-3.5 w-3.5" />
+            <span className="group-data-[collapsible=icon]:hidden">새 YAML</span>
           </Button>
         </div>
       </SidebarFooter>

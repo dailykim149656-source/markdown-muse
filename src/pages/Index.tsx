@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import MarkdownEditor from "@/components/editor/MarkdownEditor";
 import LatexEditor from "@/components/editor/LatexEditor";
 import HtmlEditor from "@/components/editor/HtmlEditor";
+import JsonYamlEditor from "@/components/editor/JsonYamlEditor";
 import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
@@ -130,6 +131,8 @@ const Index = () => {
 
   const handleSaveMd = useCallback(() => downloadFile(activeDoc.content, ".md", "text/markdown"), [activeDoc, downloadFile]);
   const handleSaveTex = useCallback(() => downloadFile(activeDoc.content, ".tex", "application/x-tex"), [activeDoc, downloadFile]);
+  const handleSaveJson = useCallback(() => downloadFile(activeDoc.content, ".json", "application/json"), [activeDoc, downloadFile]);
+  const handleSaveYaml = useCallback(() => downloadFile(activeDoc.content, ".yaml", "text/yaml"), [activeDoc, downloadFile]);
 
   // Enhanced HTML export
   const handleSaveHtml = useCallback(() => {
@@ -252,10 +255,12 @@ ${editorHtml}
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = ev.target?.result as string;
-      const name = file.name.replace(/\.(md|tex|txt|html|htm)$/, "");
+      const name = file.name.replace(/\.(md|tex|txt|html|htm|json|yaml|yml)$/, "");
       let mode: EditorMode = "markdown";
       if (file.name.endsWith(".tex")) mode = "latex";
       else if (file.name.endsWith(".html") || file.name.endsWith(".htm")) mode = "html";
+      else if (file.name.endsWith(".json")) mode = "json";
+      else if (file.name.endsWith(".yaml") || file.name.endsWith(".yml")) mode = "yaml";
       const newDoc = createNewDocument(name, mode);
       newDoc.content = content;
       setDocuments(prev => [...prev, newDoc]);
@@ -320,6 +325,8 @@ ${editorHtml}
             onSaveMd={handleSaveMd}
             onSaveTex={handleSaveTex}
             onSaveHtml={handleSaveHtml}
+            onSaveJson={handleSaveJson}
+            onSaveYaml={handleSaveYaml}
             onSavePdf={handleSavePdf}
             onPrint={handlePrint}
             onLoad={handleLoad}
@@ -357,6 +364,14 @@ ${editorHtml}
                 initialContent={activeDoc.content}
                 onContentChange={handleContentChange}
               />
+            ) : activeDoc.mode === "json" || activeDoc.mode === "yaml" ? (
+              <JsonYamlEditor
+                key={editorKey}
+                initialContent={activeDoc.content}
+                onContentChange={handleContentChange}
+                mode={activeDoc.mode}
+                onModeChange={(m) => handleModeChange(m)}
+              />
             ) : (
               <HtmlEditor
                 key={editorKey}
@@ -368,7 +383,7 @@ ${editorHtml}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".md,.markdown,.txt,.tex,.html,.htm"
+            accept=".md,.markdown,.txt,.tex,.html,.htm,.json,.yaml,.yml"
             className="hidden"
             onChange={handleFileChange}
           />
