@@ -109,8 +109,8 @@ const EditorHeader = ({
         </DropdownMenu>
       </div>
 
-      <div className="flex items-center gap-1">
-        <span className="text-xs text-muted-foreground mr-3">
+      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+        <span className="text-xs text-muted-foreground mr-1 sm:mr-3 hidden sm:inline">
           {wordCount}자
         </span>
         <Button variant="ghost" size="sm" onClick={onLoad} title="불러오기" className="h-8 w-8 p-0">
