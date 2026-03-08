@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Editor } from "@tiptap/react";
 import {
   Bold, Italic, Underline, Strikethrough, Code, CodeSquare,
