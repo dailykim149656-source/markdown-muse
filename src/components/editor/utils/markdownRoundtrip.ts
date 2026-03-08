@@ -5,6 +5,8 @@
  */
 
 import TurndownService from "turndown";
+// @ts-ignore - no type defs available
+import { gfm } from "turndown-plugin-gfm";
 import { marked } from "marked";
 
 // ─── Turndown: HTML → Markdown ───────────────────────────────────
@@ -111,6 +113,9 @@ export function createTurndownService(): TurndownService {
     headingStyle: "atx",
     codeBlockStyle: "fenced",
   });
+
+  // Enable GFM tables, strikethrough, task lists
+  td.use(gfm);
 
   // Admonition: <div data-type="admonition" ...> → > [!type] title\n> content
   // (Admonitions have content so Turndown processes them normally)

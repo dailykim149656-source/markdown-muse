@@ -92,6 +92,35 @@ describe("Markdown round-trip: marked custom extensions (MD→HTML)", () => {
     expect(html).toContain('data-footnote-id="fn-1"');
     expect(html).toContain("각주 내용입니다");
   });
+  it("converts table HTML to GFM table", () => {
+    const html = '<table><thead><tr><th>이름</th><th>나이</th></tr></thead><tbody><tr><td>홍길동</td><td>30</td></tr></tbody></table>';
+    const md = htmlToMd(html);
+    expect(md).toContain("| 이름 | 나이 |");
+    expect(md).toContain("| 홍길동 | 30 |");
+    expect(md).toContain("---");
+  });
+});
+
+describe("Markdown round-trip: MD→HTML tables", () => {
+  it("parses GFM table to HTML table", () => {
+    const md = "| 이름 | 나이 |\n| --- | --- |\n| 홍길동 | 30 |";
+    const html = mdToHtml(md);
+    expect(html).toContain("<table");
+    expect(html).toContain("<th>이름</th>");
+    expect(html).toContain("<td>홍길동</td>");
+  });
+});
+
+describe("Markdown round-trip: table full cycle", () => {
+  it("preserves table through HTML→MD→HTML", () => {
+    const originalHtml = '<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></tbody></table>';
+    const md = htmlToMd(originalHtml);
+    expect(md).toContain("| A | B |");
+    const restoredHtml = mdToHtml(md);
+    expect(restoredHtml).toContain("<th>A</th>");
+    expect(restoredHtml).toContain("<td>1</td>");
+    expect(restoredHtml).toContain("<td>4</td>");
+  });
 });
 
 describe("Markdown round-trip: full cycle", () => {
