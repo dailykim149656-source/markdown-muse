@@ -189,13 +189,16 @@ const Index = () => {
       border-left: 4px solid #3b82f6; background: rgba(59,130,246,0.06);
       border-radius: 0 8px 8px 0; padding: 0.75em 1em; margin: 1.25em 0;
     }
-    div[data-type="admonition"][data-admonition-color="green"] { border-left-color: #22c55e; background: rgba(34,197,94,0.06); }
-    div[data-type="admonition"][data-admonition-color="yellow"] { border-left-color: #eab308; background: rgba(234,179,8,0.06); }
-    div[data-type="admonition"][data-admonition-color="red"] { border-left-color: #ef4444; background: rgba(239,68,68,0.06); }
-    div[data-type="admonition"][data-admonition-color="purple"] { border-left-color: #a855f7; background: rgba(168,85,247,0.06); }
-    div[data-type="admonition"][data-admonition-color="orange"] { border-left-color: #f97316; background: rgba(249,115,22,0.06); }
+    div[data-admonition-color="blue"] { border-left-color: #3b82f6; background: rgba(59,130,246,0.06); }
+    div[data-admonition-color="green"] { border-left-color: #22c55e; background: rgba(34,197,94,0.06); }
+    div[data-admonition-color="yellow"] { border-left-color: #eab308; background: rgba(234,179,8,0.06); }
+    div[data-admonition-color="red"] { border-left-color: #ef4444; background: rgba(239,68,68,0.06); }
+    div[data-admonition-color="purple"] { border-left-color: #a855f7; background: rgba(168,85,247,0.06); }
+    div[data-admonition-color="orange"] { border-left-color: #f97316; background: rgba(249,115,22,0.06); }
+    div[data-admonition-color="teal"] { border-left-color: #14b8a6; background: rgba(20,184,166,0.06); }
+    div[data-admonition-color="gray"] { border-left-color: #6b7280; background: rgba(107,114,128,0.06); }
     /* Footnotes */
-    span[data-type="footnote-ref"] { vertical-align: super; font-size: 0.75em; font-weight: 600; color: #2563eb; }
+    span[data-type="footnote-ref"] { vertical-align: super; font-size: 0.75em; font-weight: 600; color: #2563eb; cursor: pointer; }
     div[data-type="footnote-item"] { border-top: 1px solid #e5e7eb; padding: 0.5em 0; font-size: 0.9em; color: #6b7280; }
     div[data-type="footnote-item"]:first-of-type { margin-top: 2em; }
     @media (max-width: 640px) {
