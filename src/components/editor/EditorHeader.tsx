@@ -37,6 +37,7 @@ const EditorHeader = ({
   onSaveHtml,
   onSaveJson,
   onSaveYaml,
+  onSaveTypst,
   onSavePdf,
   onPrint,
   onLoad,
