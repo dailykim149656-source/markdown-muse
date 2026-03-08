@@ -1,4 +1,5 @@
 import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown, Maximize, Minimize, Keyboard, PanelLeft, Eye } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
 import docslyLogo from "@/assets/docsly-logo.png";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ interface EditorHeaderProps {
   onLoad: () => void;
   fileName: string;
   onFileNameChange: (name: string) => void;
-  wordCount: number;
+  textStats: { charCount: number; wordCount: number; lines: number; paragraphs: number };
   countWithSpaces?: boolean;
   onToggleCountMode?: () => void;
   mode: EditorMode;
@@ -51,7 +52,7 @@ const EditorHeader = ({
   onLoad,
   fileName,
   onFileNameChange,
-  wordCount,
+  textStats,
   countWithSpaces = true,
   onToggleCountMode,
   mode,
@@ -114,13 +115,32 @@ const EditorHeader = ({
       </div>
 
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-        <button
-          onClick={onToggleCountMode}
-          className="text-xs text-muted-foreground mr-1 sm:mr-3 hidden sm:inline hover:text-foreground transition-colors cursor-pointer"
-          title={countWithSpaces ? "공백 포함 글자수 (클릭: 공백 제외로 전환)" : "공백 제외 글자수 (클릭: 공백 포함으로 전환)"}
-        >
-          {wordCount}자{countWithSpaces ? "" : " (공백제외)"}
-        </button>
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={onToggleCountMode}
+                className="text-xs text-muted-foreground mr-1 sm:mr-3 hidden sm:inline-flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer"
+                title=""
+              >
+                <span>{textStats.charCount}자</span>
+                <span className="text-muted-foreground/60">·</span>
+                <span>{textStats.wordCount}단어</span>
+                <span className="text-muted-foreground/60">·</span>
+                <span>{textStats.lines}줄</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              <div className="flex flex-col gap-0.5">
+                <span>글자수: {textStats.charCount}{countWithSpaces ? " (공백 포함)" : " (공백 제외)"}</span>
+                <span>단어수: {textStats.wordCount}</span>
+                <span>줄수: {textStats.lines}</span>
+                <span>문단수: {textStats.paragraphs}</span>
+                <span className="text-muted-foreground mt-1">클릭하여 공백 포함/제외 전환</span>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <Button variant="ghost" size="sm" onClick={onLoad} title="불러오기" className="h-8 w-8 p-0">
           <Upload className="h-4 w-4" />
         </Button>
