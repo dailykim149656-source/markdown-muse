@@ -396,6 +396,8 @@ ${editorHtml}
             isFullscreen={isFullscreen}
             onToggleFullscreen={toggleFullscreen}
             onOpenShortcuts={() => setShortcutsOpen(true)}
+            previewOpen={previewOpen}
+            onTogglePreview={() => setPreviewOpen(p => !p)}
           />
           <DocumentTabs
             documents={documents}
