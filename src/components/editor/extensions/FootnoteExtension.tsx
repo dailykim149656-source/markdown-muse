@@ -161,17 +161,19 @@ const FootnoteRef = Node.create({
     return {
       insertFootnote:
         () =>
-        ({ editor, commands }: any) => {
+        ({ editor, tr, dispatch }: any) => {
           const id = `fn-${Date.now()}-${++footnoteIdCounter}`;
-          commands.insertContent({
-            type: "footnoteRef",
-            attrs: { id },
-          });
-          const endPos = editor.state.doc.content.size;
-          editor.chain().insertContentAt(endPos, {
-            type: "footnoteItem",
-            attrs: { id, text: "" },
-          }).run();
+          if (dispatch) {
+            // Insert ref at current cursor position
+            const refNode = editor.schema.nodes.footnoteRef.create({ id });
+            tr.replaceSelectionWith(refNode);
+            
+            // Insert footnote item at end of document
+            const itemNode = editor.schema.nodes.footnoteItem.create({ id, text: "" });
+            tr.insert(tr.doc.content.size, itemNode);
+            
+            dispatch(tr);
+          }
           return true;
         },
     } as any;
