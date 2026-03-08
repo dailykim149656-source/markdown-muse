@@ -41,6 +41,8 @@ const modeExt = (mode: string) => {
   switch (mode) {
     case "latex": return ".tex";
     case "html": return ".html";
+    case "json": return ".json";
+    case "yaml": return ".yaml";
     default: return ".md";
   }
 };
