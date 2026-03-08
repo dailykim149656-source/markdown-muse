@@ -130,13 +130,8 @@ const ImageDialog = ({ editor }: { editor: Editor }) => {
       </PopoverContent>
     </Popover>
   );
-          <Input value={alt} onChange={(e) => setAlt(e.target.value)} placeholder="이미지 설명" className="h-8 text-sm" />
-        </div>
-        <Button size="sm" onClick={insertImage} className="w-full h-8 text-sm">삽입</Button>
-      </PopoverContent>
-    </Popover>
-  );
 };
+
 
 const LinkDialog = ({ editor }: { editor: Editor }) => {
   const [url, setUrl] = useState("");
