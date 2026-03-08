@@ -94,6 +94,21 @@ function preProcessHtml(html: string): { html: string; replacements: Map<string,
     }
   );
 
+  // Tables: Clean up Tiptap's verbose table HTML for turndown-plugin-gfm compatibility
+  // Remove colgroup, strip colspan/rowspan="1", unwrap <p> inside cells
+  processed = processed.replace(/<colgroup>[\s\S]*?<\/colgroup>/g, "");
+  processed = processed.replace(/ colspan="1"/g, "");
+  processed = processed.replace(/ rowspan="1"/g, "");
+  // Remove inline styles on table elements
+  processed = processed.replace(/(<(?:table|th|td|tr)[^>]*?) style="[^"]*"/g, "$1");
+  // Unwrap <p> inside <th> and <td>
+  processed = processed.replace(/<(th|td)([^>]*)><p>([\s\S]*?)<\/p><\/(th|td)>/g, "<$1$2>$3</$4>");
+  // Ensure first row with <th> is wrapped in <thead>
+  processed = processed.replace(
+    /<table>\s*<tbody>\s*<tr>((?:\s*<th[^>]*>[\s\S]*?<\/th>)+)\s*<\/tr>/,
+    "<table><thead><tr>$1</tr></thead><tbody>"
+  );
+
   return { html: processed, replacements };
 }
 
