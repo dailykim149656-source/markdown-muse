@@ -379,6 +379,18 @@ describe("htmlToAsciidoc", () => {
     expect(r).toContain("^2^");
     expect(r).toContain("~2~");
   });
+  it("converts mermaid to code block", () => {
+    const r = htmlToAsciidoc('<div data-type="mermaid" code="graph LR\n    A-->B"></div>');
+    expect(r).toContain("[source,mermaid]");
+    expect(r).toContain("----");
+    expect(r).toContain("A-->B");
+  });
+
+  it("preserves admonition type and content", () => {
+    const r = htmlToAsciidoc('<div data-type="admonition" data-admonition-type="tip"><p>유용한 팁입니다</p></div>');
+    expect(r).toContain("[TIP]");
+    expect(r).toContain("유용한 팁입니다");
+  });
 });
 
 // ═══════════════════════════════════════════
