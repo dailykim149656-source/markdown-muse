@@ -31,6 +31,8 @@ const modeIcon = (mode: string) => {
   switch (mode) {
     case "latex": return FileCode;
     case "html": return FileType;
+    case "json": return FileJson;
+    case "yaml": return Braces;
     default: return FileText;
   }
 };
