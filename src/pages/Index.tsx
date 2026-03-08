@@ -6,6 +6,7 @@ import JsonYamlEditor from "@/components/editor/JsonYamlEditor";
 import TemplateDialog, { type DocumentTemplate } from "@/components/editor/TemplateDialog";
 import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
+import { latexToTypst } from "@/components/editor/utils/latexToTypst";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
 import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
@@ -150,8 +151,14 @@ const Index = () => {
 
   // Typst export
   const handleSaveTypst = useCallback(() => {
-    const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
-    const typstContent = htmlToTypst(editorHtml);
+    let typstContent: string;
+    if (activeDoc.mode === "latex") {
+      // Direct LaTeX → Typst conversion
+      typstContent = latexToTypst(activeDoc.content);
+    } else {
+      const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
+      typstContent = htmlToTypst(editorHtml);
+    }
     downloadFile(typstContent, ".typ", "text/plain");
     toast.success("Typst 파일로 내보냈습니다");
   }, [activeDoc, downloadFile]);
