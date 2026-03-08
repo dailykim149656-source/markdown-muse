@@ -98,7 +98,7 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
         if (!editor || syncingFromWysiwyg.current) return;
         syncingFromSource.current = true;
         const html = latexToHtml(newLatex);
-        editor.commands.setContent(html, false);
+        editor.commands.setContent(html, { emitUpdate: false });
         queueMicrotask(() => {
           syncingFromSource.current = false;
         });
