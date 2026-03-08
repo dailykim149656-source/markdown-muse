@@ -203,26 +203,8 @@ const FootnoteItem = Node.create({
   },
 });
 
-// Command to insert a footnote (ref + item)
-const insertFootnoteCommand = () => {
-  return {
-    insertFootnote:
-      () =>
-      ({ editor, commands }: any) => {
-        const id = `fn-${Date.now()}-${++footnoteIdCounter}`;
-        // Insert ref at cursor
-        commands.insertContent({
-          type: "footnoteRef",
-          attrs: { id },
-        });
-        // Append footnote item at end of document
-        const endPos = editor.state.doc.content.size;
-        editor.chain().insertContentAt(endPos, {
-          type: "footnoteItem",
-          attrs: { id, text: "" },
-        }).run();
-        return true;
-      },
+
+export { FootnoteRef, FootnoteItem };
   };
 };
 
