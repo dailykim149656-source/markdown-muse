@@ -591,7 +591,7 @@ const CrossRefMenu = ({ editor }: { editor: Editor }) => {
   );
 };
 
-
+const EditorToolbar = ({ editor }: EditorToolbarProps) => {
   if (!editor) return null;
 
   const toolbarGroups = [
