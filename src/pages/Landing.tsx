@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, FileText, Code2, Printer, Moon, Sun, Sparkles, Zap, Shield } from "lucide-react";
+import { ArrowRight, FileText, Code2, Printer, Moon, Sun, Sparkles, Zap, Shield, FileCode, FileJson, Table, Layout, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
