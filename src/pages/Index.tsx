@@ -121,7 +121,7 @@ const Index = () => {
 
   const [countWithSpaces, setCountWithSpaces] = useState(true);
 
-  const wordCount = useMemo(() => {
+  const textStats = useMemo(() => {
     let text = "";
     const content = activeDoc.content;
     if (activeDoc.mode === "latex") {
@@ -133,7 +133,11 @@ const Index = () => {
     } else {
       text = content.replace(/[#*_~`>\-\[\]()!|]/g, "").trim();
     }
-    return countWithSpaces ? text.length : text.replace(/\s/g, "").length;
+    const charCount = countWithSpaces ? text.length : text.replace(/\s/g, "").length;
+    const wordCnt = text.length === 0 ? 0 : text.split(/\s+/).filter(Boolean).length;
+    const lines = content.length === 0 ? 0 : content.split(/\n/).length;
+    const paragraphs = content.length === 0 ? 0 : content.split(/\n\s*\n/).filter(p => p.trim().length > 0).length;
+    return { charCount, wordCount: wordCnt, lines, paragraphs };
   }, [activeDoc.content, activeDoc.mode, countWithSpaces]);
 
   // Document operations
