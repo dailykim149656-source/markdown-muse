@@ -62,6 +62,8 @@ const MarkdownEditor = ({ onContentChange, initialContent }: MarkdownEditorProps
       Color,
       FontFamily,
       FontSize,
+      MathExtension,
+      MathBlockExtension,
     ],
     content: initialContent ? marked.parse(initialContent, { async: false }) as string : "",
     onUpdate: ({ editor }) => {
