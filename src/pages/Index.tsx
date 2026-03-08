@@ -280,7 +280,7 @@ ${editorHtml}
         toast.info("AsciiDoc → HTML로 변환되었습니다");
       }
       const newDoc = createNewDocument(name, mode);
-      newDoc.content = content;
+      newDoc.content = finalContent;
       setDocuments(prev => [...prev, newDoc]);
       setActiveDocId(newDoc.id);
       setEditorKey(k => k + 1);
