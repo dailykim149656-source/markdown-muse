@@ -236,10 +236,10 @@ function processInline(s: string): string {
   s = s.replace(/<sup[^>]*>([\s\S]*?)<\/sup>/gi, (_, c) => `:sup:\`${stripTags(c)}\``);
   s = s.replace(/<sub[^>]*>([\s\S]*?)<\/sub>/gi, (_, c) => `:sub:\`${stripTags(c)}\``);
 
-  // Links
+  // Links — use placeholder to protect angle brackets from tag stripping
   s = s.replace(
     /<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
-    (_, href, text) => `\`${stripTags(text)} <${href}>\`_`
+    (_, href, text) => `\`${stripTags(text)} \x00LT\x00${href}\x00GT\x00\`_`
   );
 
   // Colored text — no native RST support, use raw role
