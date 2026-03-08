@@ -131,6 +131,8 @@ const Index = () => {
 
   const handleSaveMd = useCallback(() => downloadFile(activeDoc.content, ".md", "text/markdown"), [activeDoc, downloadFile]);
   const handleSaveTex = useCallback(() => downloadFile(activeDoc.content, ".tex", "application/x-tex"), [activeDoc, downloadFile]);
+  const handleSaveJson = useCallback(() => downloadFile(activeDoc.content, ".json", "application/json"), [activeDoc, downloadFile]);
+  const handleSaveYaml = useCallback(() => downloadFile(activeDoc.content, ".yaml", "text/yaml"), [activeDoc, downloadFile]);
 
   // Enhanced HTML export
   const handleSaveHtml = useCallback(() => {
