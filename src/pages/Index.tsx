@@ -402,7 +402,7 @@ ${editorHtml}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".md,.markdown,.txt,.tex,.html,.htm,.json,.yaml,.yml"
+            accept=".md,.markdown,.txt,.tex,.html,.htm,.json,.yaml,.yml,.adoc,.asciidoc"
             className="hidden"
             onChange={handleFileChange}
           />
