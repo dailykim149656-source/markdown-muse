@@ -99,7 +99,8 @@ function preProcessHtml(html: string): { html: string; replacements: Map<string,
 function postProcessMd(md: string, replacements: Map<string, string>): string {
   let result = md;
   for (const [key, value] of replacements) {
-    result = result.replace(key, value);
+    // Use function replacement to avoid $$ being interpreted as $
+    result = result.replace(key, () => value);
   }
   // Clean up excessive blank lines
   return result.replace(/\n{3,}/g, "\n\n");
