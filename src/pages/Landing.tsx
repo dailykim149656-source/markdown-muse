@@ -86,7 +86,24 @@ const Landing = () => {
             <Zap className="h-3.5 w-3.5" /> 설치 불필요
           </span>
         </div>
-      </section>
+
+        {/* Editor Preview */}
+        <div className="mt-16 w-full max-w-5xl mx-auto px-2">
+          <div className="rounded-2xl border border-border shadow-2xl overflow-hidden bg-card">
+            <div className="flex items-center gap-1.5 px-4 py-2.5 bg-secondary/60 border-b border-border">
+              <div className="h-3 w-3 rounded-full bg-destructive/60" />
+              <div className="h-3 w-3 rounded-full bg-amber-400/60" />
+              <div className="h-3 w-3 rounded-full bg-green-400/60" />
+              <span className="ml-3 text-xs text-muted-foreground">Docsy Editor</span>
+            </div>
+            <img
+              src={editorPreview}
+              alt="Docsy 에디터 미리보기"
+              className="w-full h-auto"
+              loading="lazy"
+            />
+          </div>
+        </div>
 
       {/* Features */}
       <section id="features" className="px-6 py-20 bg-secondary/40">
