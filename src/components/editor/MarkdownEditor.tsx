@@ -16,6 +16,8 @@ import SuperscriptExt from "@tiptap/extension-superscript";
 import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
+import FontFamily from "@tiptap/extension-font-family";
+import FontSize from "./extensions/FontSize";
 import EditorToolbar from "./EditorToolbar";
 import TurndownService from "turndown";
 import { marked } from "marked";
