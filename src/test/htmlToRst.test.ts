@@ -338,10 +338,16 @@ describe("htmlToRst", () => {
       expect(r).toContain("Architecture Overview");
     });
 
-    it("converts mermaid blocks as comments", () => {
-      const r = htmlToRst('<div data-type="mermaidBlock">graph TD; A-->B;</div>');
-      expect(r).toContain(".. comment::");
-      expect(r).toContain("Mermaid");
+    it("converts mermaid blocks (mermaidBlock) to code-block", () => {
+      const r = htmlToRst('<div data-type="mermaidBlock" code="graph TD\n    A-->B"></div>');
+      expect(r).toContain(".. code-block:: mermaid");
+      expect(r).toContain("A-->B");
+    });
+
+    it("converts mermaid blocks (mermaid) to code-block", () => {
+      const r = htmlToRst('<div data-type="mermaid" code="graph LR\n    X-->Y"></div>');
+      expect(r).toContain(".. code-block:: mermaid");
+      expect(r).toContain("X-->Y");
     });
 
     it("converts colored text by stripping color", () => {
