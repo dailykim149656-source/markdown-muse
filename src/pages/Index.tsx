@@ -3,6 +3,8 @@ import MarkdownEditor from "@/components/editor/MarkdownEditor";
 import LatexEditor from "@/components/editor/LatexEditor";
 import HtmlEditor from "@/components/editor/HtmlEditor";
 import JsonYamlEditor from "@/components/editor/JsonYamlEditor";
+import TemplateDialog, { type DocumentTemplate } from "@/components/editor/TemplateDialog";
+import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
 import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
@@ -20,6 +22,7 @@ const Index = () => {
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
+  const [templateOpen, setTemplateOpen] = useState(false);
 
   // Multi-document state
   const [documents, setDocuments] = useState<DocumentData[]>(() => {
@@ -88,6 +91,15 @@ const Index = () => {
     setDocuments(prev => [...prev, newDoc]);
     setActiveDocId(newDoc.id);
     setEditorKey(k => k + 1);
+  }, []);
+
+  const handleTemplateSelect = useCallback((template: DocumentTemplate) => {
+    const newDoc = createNewDocument(template.name, template.mode);
+    newDoc.content = template.content;
+    setDocuments(prev => [...prev, newDoc]);
+    setActiveDocId(newDoc.id);
+    setEditorKey(k => k + 1);
+    toast.success("템플릿이 적용되었습니다");
   }, []);
 
   const handleSelectDoc = useCallback((id: string) => {
@@ -255,14 +267,20 @@ ${editorHtml}
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = ev.target?.result as string;
-      const name = file.name.replace(/\.(md|tex|txt|html|htm|json|yaml|yml)$/, "");
+      const name = file.name.replace(/\.(md|tex|txt|html|htm|json|yaml|yml|adoc|asciidoc)$/, "");
       let mode: EditorMode = "markdown";
+      let finalContent = content;
       if (file.name.endsWith(".tex")) mode = "latex";
       else if (file.name.endsWith(".html") || file.name.endsWith(".htm")) mode = "html";
       else if (file.name.endsWith(".json")) mode = "json";
       else if (file.name.endsWith(".yaml") || file.name.endsWith(".yml")) mode = "yaml";
+      else if (file.name.endsWith(".adoc") || file.name.endsWith(".asciidoc")) {
+        mode = "html";
+        finalContent = asciidocToHtml(content);
+        toast.info("AsciiDoc → HTML로 변환되었습니다");
+      }
       const newDoc = createNewDocument(name, mode);
-      newDoc.content = content;
+      newDoc.content = finalContent;
       setDocuments(prev => [...prev, newDoc]);
       setActiveDocId(newDoc.id);
       setEditorKey(k => k + 1);
@@ -317,6 +335,7 @@ ${editorHtml}
           onNewDoc={handleNewDoc}
           onDeleteDoc={handleDeleteDoc}
           onRenameDoc={handleRenameDoc}
+          onOpenTemplates={() => setTemplateOpen(true)}
         />
         <div className="flex-1 flex flex-col min-w-0">
           <EditorHeader
@@ -383,11 +402,12 @@ ${editorHtml}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".md,.markdown,.txt,.tex,.html,.htm,.json,.yaml,.yml"
+            accept=".md,.markdown,.txt,.tex,.html,.htm,.json,.yaml,.yml,.adoc,.asciidoc"
             className="hidden"
             onChange={handleFileChange}
           />
           <KeyboardShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+          <TemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} onSelect={handleTemplateSelect} />
         </div>
       </div>
     </SidebarProvider>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, FilePlus, Trash2, Pencil, Check, X, FileCode, FileType, FolderOpen, Clock, FileJson, Braces } from "lucide-react";
+import { FileText, FilePlus, Trash2, Pencil, Check, X, FileCode, FileType, FolderOpen, Clock, FileJson, Braces, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -25,6 +25,7 @@ interface FileSidebarProps {
   onNewDoc: (mode?: "markdown" | "latex" | "html" | "json" | "yaml") => void;
   onDeleteDoc: (id: string) => void;
   onRenameDoc: (id: string, name: string) => void;
+  onOpenTemplates?: () => void;
 }
 
 const modeIcon = (mode: string) => {
@@ -58,7 +59,7 @@ const formatDate = (ts: number) => {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
 
-const FileSidebar = ({ documents, activeDocId, onSelectDoc, onNewDoc, onDeleteDoc, onRenameDoc }: FileSidebarProps) => {
+const FileSidebar = ({ documents, activeDocId, onSelectDoc, onNewDoc, onDeleteDoc, onRenameDoc, onOpenTemplates }: FileSidebarProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
 
@@ -171,53 +172,35 @@ const FileSidebar = ({ documents, activeDocId, onSelectDoc, onNewDoc, onDeleteDo
       <SidebarFooter className="p-2 group-data-[collapsible=icon]:p-1">
         <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
         <div className="flex flex-col gap-1 group-data-[collapsible=icon]:items-center">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
-            onClick={() => onNewDoc("markdown")}
-            title="새 마크다운"
-          >
+          {onOpenTemplates && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center mb-1"
+              onClick={onOpenTemplates}
+              title="템플릿으로 새 문서"
+            >
+              <LayoutTemplate className="h-3.5 w-3.5" />
+              <span className="group-data-[collapsible=icon]:hidden">템플릿</span>
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center" onClick={() => onNewDoc("markdown")} title="새 마크다운">
             <FilePlus className="h-3.5 w-3.5" />
             <span className="group-data-[collapsible=icon]:hidden">새 마크다운</span>
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
-            onClick={() => onNewDoc("latex")}
-            title="새 LaTeX"
-          >
+          <Button variant="ghost" size="sm" className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center" onClick={() => onNewDoc("latex")} title="새 LaTeX">
             <FileCode className="h-3.5 w-3.5" />
             <span className="group-data-[collapsible=icon]:hidden">새 LaTeX</span>
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
-            onClick={() => onNewDoc("html")}
-            title="새 HTML"
-          >
+          <Button variant="ghost" size="sm" className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center" onClick={() => onNewDoc("html")} title="새 HTML">
             <FileType className="h-3.5 w-3.5" />
             <span className="group-data-[collapsible=icon]:hidden">새 HTML</span>
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
-            onClick={() => onNewDoc("json")}
-            title="새 JSON"
-          >
+          <Button variant="ghost" size="sm" className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center" onClick={() => onNewDoc("json")} title="새 JSON">
             <FileJson className="h-3.5 w-3.5" />
             <span className="group-data-[collapsible=icon]:hidden">새 JSON</span>
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
-            onClick={() => onNewDoc("yaml")}
-            title="새 YAML"
-          >
+          <Button variant="ghost" size="sm" className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center" onClick={() => onNewDoc("yaml")} title="새 YAML">
             <Braces className="h-3.5 w-3.5" />
             <span className="group-data-[collapsible=icon]:hidden">새 YAML</span>
           </Button>
