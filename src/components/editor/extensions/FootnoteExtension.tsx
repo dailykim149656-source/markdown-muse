@@ -204,8 +204,4 @@ const FootnoteItem = Node.create({
 });
 
 
-export { FootnoteRef, FootnoteItem };
-  };
-};
-
 export { FootnoteRef, FootnoteItem, insertFootnoteCommand };
