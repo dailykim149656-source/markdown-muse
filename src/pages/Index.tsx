@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import MarkdownEditor from "@/components/editor/MarkdownEditor";
 import LatexEditor from "@/components/editor/LatexEditor";
 import HtmlEditor from "@/components/editor/HtmlEditor";
+import JsonYamlEditor from "@/components/editor/JsonYamlEditor";
 import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
