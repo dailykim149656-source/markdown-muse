@@ -694,6 +694,18 @@ const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         >
           <FootprintsIcon className="h-4 w-4" />
         </Toggle>
+        <Separator orientation="vertical" className="mx-1.5 h-5" />
+        <Toggle
+          size="sm"
+          pressed={false}
+          onPressedChange={() => (editor.commands as any).insertTableOfContents()}
+          title="목차 삽입"
+          className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm"
+        >
+          <ListTree className="h-4 w-4" />
+        </Toggle>
+        <CaptionMenu editor={editor} />
+        <CrossRefMenu editor={editor} />
       </div>
     </div>
   );
