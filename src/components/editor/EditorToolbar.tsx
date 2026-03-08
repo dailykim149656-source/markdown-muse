@@ -540,6 +540,7 @@ const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         )}
         <TableMenu editor={editor} />
         <ColorPicker editor={editor} />
+        <MathMenu editor={editor} />
       </div>
     </div>
   );
