@@ -3,12 +3,14 @@ import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import mermaid from "mermaid";
 
-mermaid.initialize({
-  startOnLoad: false,
-  theme: "default",
-  securityLevel: "loose",
-  fontFamily: "inherit",
-});
+const initMermaid = (dark: boolean) => {
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: dark ? "dark" : "default",
+    securityLevel: "loose",
+    fontFamily: "inherit",
+  });
+};
 
 let mermaidId = 0;
 
