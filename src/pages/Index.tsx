@@ -452,6 +452,8 @@ ${editorHtml}
             fileName={activeDoc.name}
             onFileNameChange={handleFileNameChange}
             wordCount={wordCount}
+            countWithSpaces={countWithSpaces}
+            onToggleCountMode={() => setCountWithSpaces(p => !p)}
             mode={activeDoc.mode}
             onModeChange={handleModeChange}
             isFullscreen={isFullscreen}
