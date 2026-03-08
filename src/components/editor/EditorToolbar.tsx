@@ -430,6 +430,10 @@ const EditorToolbar = ({ editor }: EditorToolbarProps) => {
 
   return (
     <div className="flex items-center gap-0.5 px-3 py-1.5 bg-toolbar border-b border-toolbar-border overflow-x-auto flex-wrap">
+      {/* Font selects */}
+      <FontFamilySelect editor={editor} />
+      <FontSizeSelect editor={editor} />
+      <Separator orientation="vertical" className="mx-1.5 h-5" />
       {toolbarGroups.map((group, gi) => (
         <div key={gi} className="flex items-center gap-0.5">
           {gi > 0 && <Separator orientation="vertical" className="mx-1.5 h-5" />}
