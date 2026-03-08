@@ -156,6 +156,14 @@ const Index = () => {
     toast.success("Typst 파일로 내보냈습니다");
   }, [activeDoc, downloadFile]);
 
+  // AsciiDoc export
+  const handleSaveAdoc = useCallback(() => {
+    const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
+    const adocContent = htmlToAsciidoc(editorHtml);
+    downloadFile(adocContent, ".adoc", "text/plain");
+    toast.success("AsciiDoc 파일로 내보냈습니다");
+  }, [activeDoc, downloadFile]);
+
   const handleSaveHtml = useCallback(() => {
     const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
     const fullHtml = `<!DOCTYPE html>
