@@ -5,6 +5,7 @@ import HtmlEditor from "@/components/editor/HtmlEditor";
 import JsonYamlEditor from "@/components/editor/JsonYamlEditor";
 import TemplateDialog, { type DocumentTemplate } from "@/components/editor/TemplateDialog";
 import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
+import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
@@ -146,7 +147,14 @@ const Index = () => {
   const handleSaveJson = useCallback(() => downloadFile(activeDoc.content, ".json", "application/json"), [activeDoc, downloadFile]);
   const handleSaveYaml = useCallback(() => downloadFile(activeDoc.content, ".yaml", "text/yaml"), [activeDoc, downloadFile]);
 
-  // Enhanced HTML export
+  // Typst export
+  const handleSaveTypst = useCallback(() => {
+    const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
+    const typstContent = htmlToTypst(editorHtml);
+    downloadFile(typstContent, ".typ", "text/plain");
+    toast.success("Typst 파일로 내보냈습니다");
+  }, [activeDoc, downloadFile]);
+
   const handleSaveHtml = useCallback(() => {
     const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
     const fullHtml = `<!DOCTYPE html>
@@ -346,6 +354,7 @@ ${editorHtml}
             onSaveHtml={handleSaveHtml}
             onSaveJson={handleSaveJson}
             onSaveYaml={handleSaveYaml}
+            onSaveTypst={handleSaveTypst}
             onSavePdf={handleSavePdf}
             onPrint={handlePrint}
             onLoad={handleLoad}
