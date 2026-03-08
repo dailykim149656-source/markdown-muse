@@ -6,6 +6,8 @@ import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader"
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
 import DocumentTabs from "@/components/editor/DocumentTabs";
+import FileSidebar from "@/components/editor/FileSidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { loadSavedData, saveData, useAutoSave, createNewDocument, type AutoSaveData, type DocumentData } from "@/components/editor/useAutoSave";
 import { toast } from "sonner";
 
@@ -41,7 +43,6 @@ const Index = () => {
 
   useAutoSave(autoSaveData);
 
-  // Save on every document change too (immediate)
   const saveImmediate = useCallback(() => {
     saveData({ documents, activeDocId, lastSaved: Date.now() });
   }, [documents, activeDocId]);
@@ -50,7 +51,6 @@ const Index = () => {
     document.documentElement.classList.toggle("dark", isDark);
   }, [isDark]);
 
-  // Update active document helper
   const updateActiveDoc = useCallback((patch: Partial<DocumentData>) => {
     setDocuments(prev => prev.map(d => d.id === activeDocId ? { ...d, ...patch, updatedAt: Date.now() } : d));
   }, [activeDocId]);
@@ -68,12 +68,10 @@ const Index = () => {
     updateActiveDoc({ name });
   }, [updateActiveDoc]);
 
-  // Word count
   const wordCount = useMemo(() => {
     const content = activeDoc.content;
     if (activeDoc.mode === "latex") {
-      const text = content.replace(/\\[a-zA-Z]+\{?[^}]*\}?/g, "").replace(/[{}\\$%&]/g, "").trim();
-      return text.length;
+      return content.replace(/\\[a-zA-Z]+\{?[^}]*\}?/g, "").replace(/[{}\\$%&]/g, "").trim().length;
     }
     if (activeDoc.mode === "html") {
       const tmp = document.createElement("div");
@@ -83,9 +81,9 @@ const Index = () => {
     return content.replace(/[#*_~`>\-\[\]()!|]/g, "").trim().length;
   }, [activeDoc.content, activeDoc.mode]);
 
-  // Tab operations
-  const handleNewDoc = useCallback(() => {
-    const newDoc = createNewDocument();
+  // Document operations
+  const handleNewDoc = useCallback((mode: EditorMode = "markdown") => {
+    const newDoc = createNewDocument("Untitled", mode);
     setDocuments(prev => [...prev, newDoc]);
     setActiveDocId(newDoc.id);
     setEditorKey(k => k + 1);
@@ -111,36 +109,98 @@ const Index = () => {
     });
   }, [activeDocId]);
 
+  const handleDeleteDoc = useCallback((id: string) => {
+    handleCloseDoc(id);
+  }, [handleCloseDoc]);
+
+  const handleRenameDoc = useCallback((id: string, name: string) => {
+    setDocuments(prev => prev.map(d => d.id === id ? { ...d, name, updatedAt: Date.now() } : d));
+  }, []);
+
   // Save handlers
-  const handleSaveMd = useCallback(() => {
-    const blob = new Blob([activeDoc.content], { type: "text/markdown" });
+  const downloadFile = useCallback((content: string, ext: string, type: string) => {
+    const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${activeDoc.name || "Untitled"}.md`;
+    a.download = `${activeDoc.name || "Untitled"}${ext}`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [activeDoc]);
+  }, [activeDoc.name]);
 
-  const handleSaveTex = useCallback(() => {
-    const blob = new Blob([activeDoc.content], { type: "application/x-tex" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${activeDoc.name || "Untitled"}.tex`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [activeDoc]);
+  const handleSaveMd = useCallback(() => downloadFile(activeDoc.content, ".md", "text/markdown"), [activeDoc, downloadFile]);
+  const handleSaveTex = useCallback(() => downloadFile(activeDoc.content, ".tex", "application/x-tex"), [activeDoc, downloadFile]);
 
+  // Enhanced HTML export
   const handleSaveHtml = useCallback(() => {
-    const blob = new Blob([activeDoc.content], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${activeDoc.name || "Untitled"}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [activeDoc]);
+    const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
+    const fullHtml = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="generator" content="Docsy Editor">
+  <title>${activeDoc.name || "Untitled"}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 16px; line-height: 1.8; color: #1a1a2e; background: #fafafa;
+      max-width: 800px; margin: 0 auto; padding: 3rem 2rem;
+    }
+    h1 { font-size: 2.25em; font-weight: 700; margin: 2rem 0 1rem; color: #0a0a0a; letter-spacing: -0.02em; }
+    h2 { font-size: 1.625em; font-weight: 600; margin: 1.75rem 0 0.75rem; color: #1a1a1a; }
+    h3 { font-size: 1.25em; font-weight: 600; margin: 1.5rem 0 0.5rem; color: #2a2a2a; }
+    p { margin: 0.75em 0; }
+    a { color: #2563eb; text-decoration: underline; text-underline-offset: 2px; }
+    a:hover { color: #1d4ed8; }
+    strong { font-weight: 600; }
+    em { font-style: italic; }
+    ul, ol { padding-left: 1.75em; margin: 0.75em 0; }
+    li { margin: 0.25em 0; }
+    blockquote {
+      border-left: 4px solid #e5e7eb; padding: 0.5em 1em; margin: 1.25em 0;
+      color: #6b7280; background: #f9fafb; border-radius: 0 8px 8px 0;
+    }
+    code {
+      background: #f1f5f9; padding: 0.2em 0.45em; border-radius: 4px;
+      font-size: 0.875em; font-family: 'Fira Code', 'JetBrains Mono', monospace;
+      color: #e11d48;
+    }
+    pre {
+      background: #1e293b; color: #e2e8f0; padding: 1.25rem; border-radius: 8px;
+      overflow-x: auto; margin: 1.25em 0; font-size: 0.875em; line-height: 1.6;
+    }
+    pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+    table { border-collapse: collapse; width: 100%; margin: 1.25em 0; }
+    th, td { border: 1px solid #e5e7eb; padding: 10px 14px; text-align: left; }
+    th { background: #f8fafc; font-weight: 600; color: #374151; }
+    tr:nth-child(even) { background: #fafafa; }
+    img { max-width: 100%; height: auto; border-radius: 8px; margin: 1.25em 0; }
+    hr { border: none; border-top: 1px solid #e5e7eb; margin: 2em 0; }
+    mark { background: #fef3c7; padding: 0.1em 0.25em; border-radius: 3px; }
+    sub { font-size: 0.75em; }
+    sup { font-size: 0.75em; }
+    @media (max-width: 640px) {
+      body { padding: 1.5rem 1rem; font-size: 15px; }
+      h1 { font-size: 1.75em; }
+    }
+    @media print {
+      body { background: white; padding: 0; }
+      pre { background: #f5f5f5; color: #1a1a1a; }
+    }
+  </style>
+</head>
+<body>
+${editorHtml}
+</body>
+</html>`;
+    downloadFile(fullHtml, ".html", "text/html");
+    toast.success("완전한 HTML 페이지로 내보냈습니다");
+  }, [activeDoc, downloadFile]);
 
   const getEditorHtmlForPrint = useCallback(() => {
     if (activeDoc.mode === "latex") {
@@ -150,9 +210,10 @@ const Index = () => {
   }, [activeDoc.mode]);
 
   const buildPrintHtml = useCallback((content: string) => {
-    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-      .map((el) => el.outerHTML).join("\n");
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${activeDoc.name || "Untitled"}</title>${styles}<style>@media print{body{margin:0;padding:40px;background:white!important;color:black!important;font-family:'Inter','Noto Sans KR',sans-serif}*{color-adjust:exact;-webkit-print-color-adjust:exact}}body{max-width:800px;margin:0 auto;padding:40px;font-family:'Inter','Noto Sans KR',sans-serif;font-size:14px;line-height:1.7;color:#1a1a1a;background:white}h1{font-size:2em;font-weight:700;margin:1.5em 0 .5em}h2{font-size:1.5em;font-weight:600;margin:1.2em 0 .4em}h3{font-size:1.25em;font-weight:600;margin:1em 0 .3em}p{margin:.5em 0}ul,ol{padding-left:1.5em;margin:.5em 0}blockquote{border-left:3px solid #ddd;padding-left:1em;color:#666;margin:1em 0}code{background:#f5f5f5;padding:.15em .4em;border-radius:3px;font-size:.9em}pre{background:#f5f5f5;padding:1em;border-radius:6px;overflow-x:auto}pre code{background:none;padding:0}table{border-collapse:collapse;width:100%;margin:1em 0}th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}th{background:#f9f9f9;font-weight:600}img{max-width:100%;height:auto;margin:1em 0}hr{border:none;border-top:1px solid #ddd;margin:1.5em 0}mark{background:#fff3bf;padding:.1em .2em;border-radius:2px}a{color:#1971c2}</style></head><body>${content}</body></html>`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${activeDoc.name || "Untitled"}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<style>@media print{body{margin:0;padding:40px;background:white!important;color:black!important}*{color-adjust:exact;-webkit-print-color-adjust:exact}}body{max-width:800px;margin:0 auto;padding:40px;font-family:'Inter','Noto Sans KR',sans-serif;font-size:14px;line-height:1.7;color:#1a1a1a;background:white}h1{font-size:2em;font-weight:700;margin:1.5em 0 .5em}h2{font-size:1.5em;font-weight:600;margin:1.2em 0 .4em}h3{font-size:1.25em;font-weight:600;margin:1em 0 .3em}p{margin:.5em 0}ul,ol{padding-left:1.5em;margin:.5em 0}blockquote{border-left:3px solid #ddd;padding-left:1em;color:#666;margin:1em 0}code{background:#f5f5f5;padding:.15em .4em;border-radius:3px;font-size:.9em}pre{background:#f5f5f5;padding:1em;border-radius:6px;overflow-x:auto}pre code{background:none;padding:0}table{border-collapse:collapse;width:100%;margin:1em 0}th,td{border:1px solid #ddd;padding:8px 12px;text-align:left}th{background:#f9f9f9;font-weight:600}img{max-width:100%;height:auto;margin:1em 0}hr{border:none;border-top:1px solid #ddd;margin:1.5em 0}mark{background:#fff3bf;padding:.1em .2em;border-radius:2px}a{color:#1971c2}</style></head><body>${content}</body></html>`;
   }, [activeDoc.name]);
 
   const handleSavePdf = useCallback(() => {
@@ -166,7 +227,6 @@ const Index = () => {
   }, [getEditorHtmlForPrint, buildPrintHtml]);
 
   const handlePrint = handleSavePdf;
-
   const handleLoad = useCallback(() => { fileInputRef.current?.click(); }, []);
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -179,7 +239,6 @@ const Index = () => {
       let mode: EditorMode = "markdown";
       if (file.name.endsWith(".tex")) mode = "latex";
       else if (file.name.endsWith(".html") || file.name.endsWith(".htm")) mode = "html";
-
       const newDoc = createNewDocument(name, mode);
       newDoc.content = content;
       setDocuments(prev => [...prev, newDoc]);
@@ -219,7 +278,6 @@ const Index = () => {
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
 
-  // Auto-save indicator
   useEffect(() => {
     const saved = loadSavedData();
     if (saved?.documents?.length) {
@@ -228,67 +286,79 @@ const Index = () => {
   }, []);
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      <EditorHeader
-        isDark={isDark}
-        onToggleTheme={() => setIsDark((d) => !d)}
-        onSaveMd={handleSaveMd}
-        onSaveTex={handleSaveTex}
-        onSaveHtml={handleSaveHtml}
-        onSavePdf={handleSavePdf}
-        onPrint={handlePrint}
-        onLoad={handleLoad}
-        fileName={activeDoc.name}
-        onFileNameChange={handleFileNameChange}
-        wordCount={wordCount}
-        mode={activeDoc.mode}
-        onModeChange={handleModeChange}
-        isFullscreen={isFullscreen}
-        onToggleFullscreen={toggleFullscreen}
-        onOpenShortcuts={() => setShortcutsOpen(true)}
-      />
-      <DocumentTabs
-        documents={documents}
-        activeDocId={activeDocId}
-        onSelectDoc={handleSelectDoc}
-        onCloseDoc={handleCloseDoc}
-        onNewDoc={handleNewDoc}
-      />
-      <FindReplaceBar
-        open={findReplaceOpen}
-        onClose={() => setFindReplaceOpen(false)}
-        containerRef={editorContainerRef}
-      />
-      <div className="flex-1 overflow-hidden" ref={editorContainerRef}>
-        {activeDoc.mode === "markdown" ? (
-          <MarkdownEditor
-            key={editorKey}
-            onContentChange={handleContentChange}
-            initialContent={activeDoc.content || undefined}
+    <SidebarProvider defaultOpen={false}>
+      <div className="h-screen flex w-full">
+        <FileSidebar
+          documents={documents}
+          activeDocId={activeDocId}
+          onSelectDoc={handleSelectDoc}
+          onNewDoc={handleNewDoc}
+          onDeleteDoc={handleDeleteDoc}
+          onRenameDoc={handleRenameDoc}
+        />
+        <div className="flex-1 flex flex-col min-w-0">
+          <EditorHeader
+            isDark={isDark}
+            onToggleTheme={() => setIsDark((d) => !d)}
+            onSaveMd={handleSaveMd}
+            onSaveTex={handleSaveTex}
+            onSaveHtml={handleSaveHtml}
+            onSavePdf={handleSavePdf}
+            onPrint={handlePrint}
+            onLoad={handleLoad}
+            fileName={activeDoc.name}
+            onFileNameChange={handleFileNameChange}
+            wordCount={wordCount}
+            mode={activeDoc.mode}
+            onModeChange={handleModeChange}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={toggleFullscreen}
+            onOpenShortcuts={() => setShortcutsOpen(true)}
           />
-        ) : activeDoc.mode === "latex" ? (
-          <LatexEditor
-            key={editorKey}
-            initialContent={activeDoc.content}
-            onContentChange={handleContentChange}
+          <DocumentTabs
+            documents={documents}
+            activeDocId={activeDocId}
+            onSelectDoc={handleSelectDoc}
+            onCloseDoc={handleCloseDoc}
+            onNewDoc={() => handleNewDoc()}
           />
-        ) : (
-          <HtmlEditor
-            key={editorKey}
-            initialContent={activeDoc.content}
-            onContentChange={handleContentChange}
+          <FindReplaceBar
+            open={findReplaceOpen}
+            onClose={() => setFindReplaceOpen(false)}
+            containerRef={editorContainerRef}
           />
-        )}
+          <div className="flex-1 overflow-hidden" ref={editorContainerRef}>
+            {activeDoc.mode === "markdown" ? (
+              <MarkdownEditor
+                key={editorKey}
+                onContentChange={handleContentChange}
+                initialContent={activeDoc.content || undefined}
+              />
+            ) : activeDoc.mode === "latex" ? (
+              <LatexEditor
+                key={editorKey}
+                initialContent={activeDoc.content}
+                onContentChange={handleContentChange}
+              />
+            ) : (
+              <HtmlEditor
+                key={editorKey}
+                initialContent={activeDoc.content}
+                onContentChange={handleContentChange}
+              />
+            )}
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".md,.markdown,.txt,.tex,.html,.htm"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <KeyboardShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+        </div>
       </div>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".md,.markdown,.txt,.tex,.html,.htm"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-      <KeyboardShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
-    </div>
+    </SidebarProvider>
   );
 };
 
