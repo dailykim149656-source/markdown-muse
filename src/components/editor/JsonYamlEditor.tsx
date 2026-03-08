@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import SchemaValidator from "./SchemaValidator";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -278,6 +279,7 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
   const [showSource, setShowSource] = useState(true);
   const [sourceLeft, setSourceLeft] = useState(false);
   const suppressSync = useRef(false);
+  const [showSchema, setShowSchema] = useState(false);
 
   // Source → Form sync
   const handleSourceChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -378,7 +380,19 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
               유효한 {mode.toUpperCase()}
             </span>
           )}
+          {!showSchema && data !== undefined && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 ml-auto" onClick={() => setShowSchema(true)}>
+              스키마 검증
+            </Button>
+          )}
         </div>
+
+        {/* Schema Validator */}
+        {showSchema && data !== undefined && (
+          <div className="mb-4">
+            <SchemaValidator data={data} onClose={() => setShowSchema(false)} />
+          </div>
+        )}
 
         {/* Empty state */}
         {data === undefined && !parseError && (
