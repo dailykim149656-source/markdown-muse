@@ -19,6 +19,8 @@ import FontFamily from "@tiptap/extension-font-family";
 import FontSize from "./extensions/FontSize";
 import { MathExtension, MathBlockExtension } from "./extensions/MathExtension";
 import MermaidBlock from "./extensions/MermaidBlock";
+import AdmonitionExtension from "./extensions/AdmonitionExtension";
+import { FootnoteRef, FootnoteItem } from "./extensions/FootnoteExtension";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 
@@ -54,6 +56,9 @@ export const createEditorExtensions = (placeholder: string) => [
   MathExtension,
   MathBlockExtension,
   MermaidBlock,
+  AdmonitionExtension,
+  FootnoteRef,
+  FootnoteItem,
 ];
 
 export const editorPropsDefault = {

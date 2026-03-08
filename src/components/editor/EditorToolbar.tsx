@@ -12,6 +12,7 @@ import {
   Superscript, Subscript,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Palette, TableProperties, Plus, Trash2, ArrowUpDown, ArrowLeftRight, Sigma, GitBranch,
+  MessageSquareWarning, FootprintsIcon,
 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
@@ -458,6 +459,44 @@ const MathPreview = ({ latex, displayMode }: { latex: string; displayMode: boole
   }
 };
 
+const AdmonitionMenu = ({ editor }: { editor: Editor }) => {
+  const types = [
+    { type: "note", label: "노트", icon: "📝" },
+    { type: "tip", label: "팁", icon: "💡" },
+    { type: "warning", label: "경고", icon: "⚠️" },
+    { type: "danger", label: "위험", icon: "🚨" },
+  ];
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Toggle
+          size="sm"
+          pressed={editor.isActive("admonition")}
+          title="콜아웃 삽입"
+          className="h-8 w-8 p-0 data-[state=on]:bg-toolbar-active hover:bg-toolbar-active/50 rounded-sm"
+        >
+          <MessageSquareWarning className="h-4 w-4" />
+        </Toggle>
+      </PopoverTrigger>
+      <PopoverContent className="w-40 p-1" align="start">
+        {types.map((t) => (
+          <button
+            key={t.type}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent text-left"
+            onClick={() => {
+              (editor.commands as any).insertAdmonition({ type: t.type });
+            }}
+          >
+            <span>{t.icon}</span>
+            <span>{t.label}</span>
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 const EditorToolbar = ({ editor }: EditorToolbarProps) => {
   if (!editor) return null;
 
@@ -550,6 +589,16 @@ const EditorToolbar = ({ editor }: EditorToolbarProps) => {
           className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm"
         >
           <GitBranch className="h-4 w-4" />
+        </Toggle>
+        <AdmonitionMenu editor={editor} />
+        <Toggle
+          size="sm"
+          pressed={false}
+          onPressedChange={() => (editor.commands as any).insertFootnote()}
+          title="각주 삽입"
+          className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm"
+        >
+          <FootprintsIcon className="h-4 w-4" />
         </Toggle>
       </div>
     </div>
