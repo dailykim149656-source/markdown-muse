@@ -9,8 +9,9 @@ import { marked } from "marked";
 
 // ─── Turndown: HTML → Markdown ───────────────────────────────────
 
-const PLACEHOLDER_PREFIX = "\x00CUSTOM_";
-const PLACEHOLDER_SUFFIX = "\x00";
+// Use placeholders with no special chars that Turndown might escape
+const PLACEHOLDER_PREFIX = "XPLACEHOLDERX";
+const PLACEHOLDER_SUFFIX = "XENDX";
 
 /**
  * Pre-process HTML to replace custom Tiptap nodes with placeholders
