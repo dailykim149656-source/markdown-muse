@@ -59,7 +59,7 @@ const formatDate = (ts: number) => {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 };
 
-const FileSidebar = ({ documents, activeDocId, onSelectDoc, onNewDoc, onDeleteDoc, onRenameDoc }: FileSidebarProps) => {
+const FileSidebar = ({ documents, activeDocId, onSelectDoc, onNewDoc, onDeleteDoc, onRenameDoc, onOpenTemplates }: FileSidebarProps) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
 
