@@ -29,6 +29,7 @@ const Index = () => {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Multi-document state
   const [documents, setDocuments] = useState<DocumentData[]>(() => {
