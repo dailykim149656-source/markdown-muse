@@ -81,7 +81,7 @@ const EditorHeader = ({
         <span className="text-xs text-muted-foreground shrink-0">{modeExt}</span>
 
         {/* Mode tabs - dropdown on mobile, tabs on desktop */}
-        <div className="hidden md:flex items-center ml-3 bg-secondary rounded-md p-0.5">
+        <div className="hidden lg:flex items-center ml-3 bg-secondary rounded-md p-0.5">
           {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((m) => (
             <button
               key={m}
