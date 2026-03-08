@@ -5,6 +5,8 @@
  */
 
 import TurndownService from "turndown";
+// @ts-ignore - no type defs available
+import { gfm } from "turndown-plugin-gfm";
 import { marked } from "marked";
 
 // ─── Turndown: HTML → Markdown ───────────────────────────────────
