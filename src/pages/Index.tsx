@@ -137,7 +137,8 @@ const Index = () => {
     const wordCnt = text.length === 0 ? 0 : text.split(/\s+/).filter(Boolean).length;
     const lines = content.length === 0 ? 0 : content.split(/\n/).length;
     const paragraphs = content.length === 0 ? 0 : content.split(/\n\s*\n/).filter(p => p.trim().length > 0).length;
-    return { charCount, wordCount: wordCnt, lines, paragraphs };
+    const readingTimeMin = Math.max(1, Math.ceil(wordCnt / 500));
+    return { charCount, wordCount: wordCnt, lines, paragraphs, readingTimeMin };
   }, [activeDoc.content, activeDoc.mode, countWithSpaces]);
 
   // Document operations
