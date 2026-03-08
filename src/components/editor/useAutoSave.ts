@@ -11,7 +11,7 @@ export interface AutoSaveData {
 export interface DocumentData {
   id: string;
   name: string;
-  mode: "markdown" | "latex" | "html";
+  mode: "markdown" | "latex" | "html" | "json" | "yaml";
   content: string;
   createdAt: number;
   updatedAt: number;
