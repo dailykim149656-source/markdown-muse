@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FileText, FilePlus, Trash2, Pencil, Check, X, FileCode, FileType, FolderOpen, Clock, FileJson, Braces } from "lucide-react";
+import { FileText, FilePlus, Trash2, Pencil, Check, X, FileCode, FileType, FolderOpen, Clock, FileJson, Braces, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
