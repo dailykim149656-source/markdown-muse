@@ -114,7 +114,7 @@ export function createTurndownService(): TurndownService {
  * Create a configured marked instance with custom extensions.
  */
 export function createMarkedInstance(): typeof marked {
-  const extensions: marked.TokenizerAndRendererExtension[] = [];
+  const extensions: any[] = [];
 
   // Block math: $$\n...\n$$
   extensions.push({
