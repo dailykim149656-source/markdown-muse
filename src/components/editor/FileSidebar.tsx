@@ -201,6 +201,26 @@ const FileSidebar = ({ documents, activeDocId, onSelectDoc, onNewDoc, onDeleteDo
             <FileType className="h-3.5 w-3.5" />
             <span className="group-data-[collapsible=icon]:hidden">새 HTML</span>
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
+            onClick={() => onNewDoc("json")}
+            title="새 JSON"
+          >
+            <FileJson className="h-3.5 w-3.5" />
+            <span className="group-data-[collapsible=icon]:hidden">새 JSON</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 justify-start text-xs gap-1.5 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
+            onClick={() => onNewDoc("yaml")}
+            title="새 YAML"
+          >
+            <Braces className="h-3.5 w-3.5" />
+            <span className="group-data-[collapsible=icon]:hidden">새 YAML</span>
+          </Button>
         </div>
       </SidebarFooter>
     </Sidebar>
