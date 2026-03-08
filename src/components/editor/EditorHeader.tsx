@@ -16,6 +16,7 @@ interface EditorHeaderProps {
   onSaveJson: () => void;
   onSaveYaml: () => void;
   onSaveTypst: () => void;
+  onSaveAdoc: () => void;
   onSavePdf: () => void;
   onPrint: () => void;
   onLoad: () => void;
