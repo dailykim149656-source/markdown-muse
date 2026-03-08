@@ -290,14 +290,14 @@ const ColorPicker = ({ editor }: { editor: Editor }) => {
 };
 
 const FontFamilySelect = ({ editor }: { editor: Editor }) => {
-  const currentFont = editor.getAttributes("textStyle").fontFamily || "";
+  const currentFont = editor.getAttributes("textStyle").fontFamily || "__default__";
   const categories = [...new Set(FONT_FAMILIES.map((f) => f.category))];
 
   return (
     <Select
       value={currentFont}
       onValueChange={(val) => {
-        if (val === "") {
+        if (val === "__default__") {
           editor.chain().focus().unsetFontFamily().run();
         } else {
           editor.chain().focus().setFontFamily(val).run();
