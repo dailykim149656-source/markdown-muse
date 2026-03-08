@@ -1,8 +1,9 @@
-import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown, Maximize, Minimize, Keyboard } from "lucide-react";
+import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown, Maximize, Minimize, Keyboard, PanelLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import docslyLogo from "@/assets/docsly-logo.png";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { useSidebar } from "@/components/ui/sidebar";
 
 export type EditorMode = "markdown" | "latex" | "html";
 
@@ -44,10 +45,14 @@ const EditorHeader = ({
   onOpenShortcuts,
 }: EditorHeaderProps) => {
   const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : ".md";
+  const { toggleSidebar } = useSidebar();
 
   return (
     <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background">
       <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={toggleSidebar} title="파일 탐색기">
+          <PanelLeft className="h-4 w-4" />
+        </Button>
         <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
           <img src={docslyLogo} alt="Docsy" className="h-6 w-6" />
           <span className="text-sm font-bold text-foreground mr-1">Docsy</span>
