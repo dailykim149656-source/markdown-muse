@@ -20,10 +20,9 @@ export function htmlToAsciidoc(html: string): string {
       return `${anchor}.${clean}`;
     });
 
-  // Cross references
+  // Cross references — use placeholder to avoid stripping by HTML tag remover
   s = s.replace(/<span[^>]*data-type="cross-ref"[^>]*data-target="([^"]*)"[^>]*>[^<]*<\/span>/gi,
-    (_, target) => `<<${target}>>`);
-
+    (_, target) => `\x00XREF_START\x00${target}\x00XREF_END\x00`);
   // Admonitions
   s = s.replace(/<div[^>]*data-type="admonition"[^>]*data-admonition-type="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi,
     (_, type, content) => {
