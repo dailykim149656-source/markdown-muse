@@ -29,6 +29,8 @@ interface EditorHeaderProps {
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
   onOpenShortcuts: () => void;
+  previewOpen?: boolean;
+  onTogglePreview?: () => void;
 }
 
 const EditorHeader = ({
