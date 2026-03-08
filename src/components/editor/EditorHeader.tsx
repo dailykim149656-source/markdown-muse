@@ -1,4 +1,5 @@
 import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown } from "lucide-react";
+import docslyLogo from "@/assets/docsly-logo.png";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
@@ -36,7 +37,9 @@ const EditorHeader = ({
   return (
     <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background">
       <div className="flex items-center gap-2">
-        <FileText className="h-5 w-5 text-muted-foreground" />
+        <img src={docslyLogo} alt="Docsly" className="h-6 w-6" />
+        <span className="text-sm font-bold text-foreground mr-1">Docsly</span>
+        <span className="text-muted-foreground">|</span>
         <input
           value={fileName}
           onChange={(e) => onFileNameChange(e.target.value)}
