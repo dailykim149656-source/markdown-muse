@@ -1,10 +1,10 @@
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import * as yaml from "js-yaml";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import {
   Plus, Trash2, ChevronDown, ChevronRight, ArrowRightLeft,
   Braces, FileJson, FileText, AlertCircle, GripVertical,
-  ToggleLeft, Hash, Type, List, Box
+  ToggleLeft, Hash, Type, List, Box, Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import SchemaValidator from "./SchemaValidator";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -65,6 +66,107 @@ const typeIcon = (type: string) => {
   }
 };
 
+// Schema field suggestion types
+interface SchemaProperty {
+  key: string;
+  type: string;
+  description?: string;
+  required?: boolean;
+}
+
+// Extract suggested fields from a JSON Schema for a given path
+const extractSchemaFields = (schema: any, path: string): SchemaProperty[] => {
+  if (!schema) return [];
+
+  // Navigate schema to match current path
+  let currentSchema = schema;
+
+  if (path !== "$") {
+    const segments = path.replace(/^\$\.?/, "").split(/\.|\[(\d+)\]/).filter(Boolean);
+    for (const seg of segments) {
+      if (!currentSchema) break;
+      if (currentSchema.type === "object" && currentSchema.properties?.[seg]) {
+        currentSchema = currentSchema.properties[seg];
+      } else if (currentSchema.type === "array" && currentSchema.items) {
+        currentSchema = currentSchema.items;
+      } else {
+        currentSchema = null;
+      }
+    }
+  }
+
+  if (!currentSchema?.properties) return [];
+
+  const required = currentSchema.required || [];
+  return Object.entries(currentSchema.properties).map(([key, prop]: [string, any]) => ({
+    key,
+    type: prop.type || "string",
+    description: prop.description,
+    required: required.includes(key),
+  }));
+};
+
+const getDefaultForType = (type: string): JsonValue => {
+  switch (type) {
+    case "string": return "";
+    case "number": case "integer": return 0;
+    case "boolean": return false;
+    case "array": return [];
+    case "object": return {};
+    default: return "";
+  }
+};
+
+// ─── Schema Suggest Button ───
+interface SchemaSuggestProps {
+  existingKeys: string[];
+  suggestions: SchemaProperty[];
+  onAdd: (key: string, value: JsonValue) => void;
+}
+
+const SchemaSuggestButton = ({ existingKeys, suggestions, onAdd }: SchemaSuggestProps) => {
+  const available = suggestions.filter(s => !existingKeys.includes(s.key));
+  if (available.length === 0) return null;
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 ml-2 py-1 transition-colors">
+          <Sparkles className="h-3 w-3" /> 스키마 필드 추가 ({available.length})
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-1" align="start">
+        <ScrollArea className="max-h-48">
+          {available.map((field) => (
+            <button
+              key={field.key}
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-secondary/80 transition-colors text-left"
+              onClick={() => onAdd(field.key, getDefaultForType(field.type))}
+            >
+              <span className="shrink-0">{typeIcon(field.type)}</span>
+              <span className="font-medium truncate">{field.key}</span>
+              {field.required && (
+                <span className="text-[9px] px-1 py-0.5 rounded bg-destructive/10 text-destructive shrink-0">필수</span>
+              )}
+              <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{field.type}</span>
+            </button>
+          ))}
+        </ScrollArea>
+        <div className="border-t border-border mt-1 pt-1 px-2">
+          <button
+            className="w-full text-xs text-primary hover:text-primary/80 py-1 transition-colors"
+            onClick={() => {
+              available.filter(f => f.required).forEach(f => onAdd(f.key, getDefaultForType(f.type)));
+            }}
+          >
+            필수 필드 모두 추가
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 // ─── Value Editor ───
 interface ValueEditorProps {
   value: JsonValue;
@@ -74,12 +176,22 @@ interface ValueEditorProps {
   onKeyChange?: (newKey: string) => void;
   depth: number;
   path: string;
+  // Drag-and-drop for arrays
+  isDraggable?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  // Schema
+  schema?: any;
 }
 
-const ValueEditor = ({ value, onChange, onDelete, keyName, onKeyChange, depth, path }: ValueEditorProps) => {
+const ValueEditor = ({ value, onChange, onDelete, keyName, onKeyChange, depth, path, isDraggable, onDragStart, onDragEnd, schema }: ValueEditorProps) => {
   const type = getValueType(value);
   const [collapsed, setCollapsed] = useState(depth > 2);
   const isComplex = type === "object" || type === "array";
+
+  // Drag state for array children
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragItemIndex = useRef<number | null>(null);
 
   const changeType = useCallback((newType: string) => {
     switch (newType) {
@@ -92,16 +204,68 @@ const ValueEditor = ({ value, onChange, onDelete, keyName, onKeyChange, depth, p
     }
   }, [onChange]);
 
+  // Array drag handlers
+  const handleArrayDragStart = useCallback((index: number) => (e: React.DragEvent) => {
+    dragItemIndex.current = index;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(index));
+    (e.currentTarget as HTMLElement).style.opacity = "0.4";
+  }, []);
+
+  const handleArrayDragEnd = useCallback((e: React.DragEvent) => {
+    (e.currentTarget as HTMLElement).style.opacity = "1";
+    dragItemIndex.current = null;
+    setDragOverIndex(null);
+  }, []);
+
+  const handleArrayDragOver = useCallback((index: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(index);
+  }, []);
+
+  const handleArrayDrop = useCallback((targetIndex: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    const sourceIndex = dragItemIndex.current;
+    if (sourceIndex === null || sourceIndex === targetIndex) {
+      setDragOverIndex(null);
+      return;
+    }
+    const arr = [...(value as JsonValue[])];
+    const [moved] = arr.splice(sourceIndex, 1);
+    arr.splice(targetIndex, 0, moved);
+    onChange(arr);
+    setDragOverIndex(null);
+    dragItemIndex.current = null;
+  }, [value, onChange]);
+
+  // Schema suggestions for object children
+  const schemaSuggestions = type === "object" && schema
+    ? extractSchemaFields(schema, path)
+    : [];
+
   return (
     <div className={`${depth > 0 ? "ml-4 border-l border-border/50 pl-3" : ""}`}>
       <div className="flex items-center gap-1.5 py-1 group min-h-[32px]">
+        {/* Drag handle for array items */}
+        {isDraggable && (
+          <span
+            className="cursor-grab active:cursor-grabbing shrink-0 text-muted-foreground hover:text-foreground"
+            draggable
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+          >
+            <GripVertical className="h-3 w-3" />
+          </span>
+        )}
+
         {/* Collapse toggle for objects/arrays */}
         {isComplex ? (
           <button onClick={() => setCollapsed(c => !c)} className="h-5 w-5 flex items-center justify-center rounded hover:bg-secondary/80 shrink-0">
             {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </button>
         ) : (
-          <span className="w-5 shrink-0" />
+          !isDraggable && <span className="w-5 shrink-0" />
         )}
 
         {/* Type icon */}
@@ -212,28 +376,49 @@ const ValueEditor = ({ value, onChange, onDelete, keyName, onKeyChange, depth, p
               }}
               depth={depth + 1}
               path={`${path}.${k}`}
+              schema={schema}
             />
           ))}
-          <button
-            className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 ml-9 py-1 transition-colors"
-            onClick={() => {
-              const obj = value as Record<string, JsonValue>;
-              let newKey = "newKey";
-              let i = 1;
-              while (newKey in obj) { newKey = `newKey${i++}`; }
-              onChange({ ...obj, [newKey]: "" });
-            }}
-          >
-            <Plus className="h-3 w-3" /> 필드 추가
-          </button>
+          <div className="flex items-center">
+            <button
+              className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 ml-9 py-1 transition-colors"
+              onClick={() => {
+                const obj = value as Record<string, JsonValue>;
+                let newKey = "newKey";
+                let i = 1;
+                while (newKey in obj) { newKey = `newKey${i++}`; }
+                onChange({ ...obj, [newKey]: "" });
+              }}
+            >
+              <Plus className="h-3 w-3" /> 필드 추가
+            </button>
+            {schemaSuggestions.length > 0 && (
+              <SchemaSuggestButton
+                existingKeys={Object.keys(value as Record<string, JsonValue>)}
+                suggestions={schemaSuggestions}
+                onAdd={(key, val) => {
+                  onChange({ ...(value as Record<string, JsonValue>), [key]: val });
+                }}
+              />
+            )}
+          </div>
         </div>
       )}
 
-      {/* Children for arrays */}
+      {/* Children for arrays — with drag-and-drop */}
       {type === "array" && !collapsed && (
         <div className="mt-0.5">
           {(value as JsonValue[]).map((item, i) => (
-            <div key={`${path}[${i}]`} className="flex items-start">
+            <div
+              key={`${path}[${i}]`}
+              className={`flex items-start transition-all ${
+                dragOverIndex === i ? "border-t-2 border-primary" : ""
+              }`}
+              draggable={false}
+              onDragOver={handleArrayDragOver(i)}
+              onDrop={handleArrayDrop(i)}
+              onDragLeave={() => setDragOverIndex(null)}
+            >
               <span className="text-[10px] text-muted-foreground w-5 text-right mr-1 mt-2 shrink-0">{i}</span>
               <div className="flex-1">
                 <ValueEditor
@@ -250,6 +435,10 @@ const ValueEditor = ({ value, onChange, onDelete, keyName, onKeyChange, depth, p
                   }}
                   depth={depth + 1}
                   path={`${path}[${i}]`}
+                  isDraggable
+                  onDragStart={handleArrayDragStart(i)}
+                  onDragEnd={handleArrayDragEnd}
+                  schema={schema}
                 />
               </div>
             </div>
@@ -280,6 +469,7 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
   const [sourceLeft, setSourceLeft] = useState(false);
   const suppressSync = useRef(false);
   const [showSchema, setShowSchema] = useState(false);
+  const [schemaObj, setSchemaObj] = useState<any>(null);
 
   // Source → Form sync
   const handleSourceChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -314,7 +504,6 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
       onModeChange(targetMode as "json" | "yaml");
       toast.success(`${mode.toUpperCase()} → ${targetMode.toUpperCase()} 변환 완료`);
     } else {
-      // Try parse current source first
       const { data: parsed, error } = parseContent(source, mode);
       if (parsed !== undefined) {
         const newSource = serializeContent(parsed, targetMode as "json" | "yaml");
@@ -335,7 +524,7 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
       const ta = e.currentTarget;
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
-      const indent = mode === "yaml" ? "  " : "  ";
+      const indent = "  ";
       const newVal = ta.value.substring(0, start) + indent + ta.value.substring(end);
       setSource(newVal);
       onContentChange(newVal);
@@ -343,7 +532,7 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
         ta.selectionStart = ta.selectionEnd = start + indent.length;
       });
     }
-  }, [mode, onContentChange]);
+  }, [onContentChange]);
 
   const handleInitEmpty = useCallback((type: "object" | "array") => {
     const initial: JsonValue = type === "object" ? {} : [];
@@ -390,7 +579,7 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
         {/* Schema Validator */}
         {showSchema && data !== undefined && (
           <div className="mb-4">
-            <SchemaValidator data={data} onClose={() => setShowSchema(false)} />
+            <SchemaValidator data={data} onClose={() => { setShowSchema(false); setSchemaObj(null); }} onSchemaChange={setSchemaObj} />
           </div>
         )}
 
@@ -426,6 +615,7 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
             onChange={(v) => setData(v)}
             depth={0}
             path="$"
+            schema={schemaObj}
           />
         )}
       </div>

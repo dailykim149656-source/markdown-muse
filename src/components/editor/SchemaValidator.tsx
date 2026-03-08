@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import Ajv, { ErrorObject } from "ajv";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,15 +8,24 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 interface SchemaValidatorProps {
   data: unknown;
   onClose: () => void;
+  onSchemaChange?: (schema: any) => void;
 }
 
 const SAMPLE_SCHEMA = JSON.stringify(
   {
     type: "object",
     properties: {
-      name: { type: "string" },
+      name: { type: "string", description: "사용자 이름" },
       age: { type: "number", minimum: 0 },
       email: { type: "string", format: "email" },
+      tags: { type: "array", items: { type: "string" } },
+      address: {
+        type: "object",
+        properties: {
+          city: { type: "string" },
+          zip: { type: "string" },
+        },
+      },
     },
     required: ["name", "email"],
   },
@@ -24,7 +33,7 @@ const SAMPLE_SCHEMA = JSON.stringify(
   2
 );
 
-const SchemaValidator = ({ data, onClose }: SchemaValidatorProps) => {
+const SchemaValidator = ({ data, onClose, onSchemaChange }: SchemaValidatorProps) => {
   const [schemaText, setSchemaText] = useState("");
   const [errors, setErrors] = useState<ErrorObject[] | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);
@@ -32,6 +41,20 @@ const SchemaValidator = ({ data, onClose }: SchemaValidatorProps) => {
   const [open, setOpen] = useState(true);
 
   const ajv = useMemo(() => new Ajv({ allErrors: true, verbose: true }), []);
+
+  // Parse and notify parent of schema changes for autocomplete
+  useEffect(() => {
+    if (!schemaText.trim()) {
+      onSchemaChange?.(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(schemaText);
+      onSchemaChange?.(parsed);
+    } catch {
+      onSchemaChange?.(null);
+    }
+  }, [schemaText, onSchemaChange]);
 
   const validate = useCallback(() => {
     if (!schemaText.trim()) {
