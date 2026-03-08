@@ -157,8 +157,16 @@ const LinkDialog = ({ editor }: { editor: Editor }) => {
 const TableMenu = ({ editor }: { editor: Editor }) => {
   const [open, setOpen] = useState(false);
 
+  const [rows, setRows] = useState(3);
+  const [cols, setCols] = useState(3);
+  const [hoverRow, setHoverRow] = useState(0);
+  const [hoverCol, setHoverCol] = useState(0);
+
+  const maxRows = 8;
+  const maxCols = 8;
+
   const insertTable = () => {
-    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+    editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run();
     setOpen(false);
   };
 
@@ -170,9 +178,47 @@ const TableMenu = ({ editor }: { editor: Editor }) => {
             <Table className="h-4 w-4" />
           </Toggle>
         </PopoverTrigger>
-        <PopoverContent className="w-48 space-y-2">
+        <PopoverContent className="w-auto p-3 space-y-3" align="start">
           <p className="text-sm font-medium">테이블 삽입</p>
-          <Button size="sm" onClick={insertTable} className="w-full h-8 text-sm">3×3 테이블 삽입</Button>
+          {/* Grid selector */}
+          <div>
+            <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${maxCols}, 1fr)` }}>
+              {Array.from({ length: maxRows * maxCols }).map((_, i) => {
+                const r = Math.floor(i / maxCols) + 1;
+                const c = (i % maxCols) + 1;
+                const isActive = r <= hoverRow && c <= hoverCol;
+                return (
+                  <div
+                    key={i}
+                    className={`w-5 h-5 rounded-sm border cursor-pointer transition-colors ${
+                      isActive ? "bg-primary/30 border-primary/50" : "border-border hover:border-muted-foreground/50"
+                    }`}
+                    onMouseEnter={() => { setHoverRow(r); setHoverCol(c); }}
+                    onClick={() => { setRows(r); setCols(c);
+                      editor.chain().focus().insertTable({ rows: r, cols: c, withHeaderRow: true }).run();
+                      setOpen(false);
+                    }}
+                  />
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              {hoverRow > 0 ? `${hoverRow} × ${hoverCol}` : "크기를 선택하세요"}
+            </p>
+          </div>
+          {/* Manual input */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 space-y-0.5">
+              <Label className="text-[10px] text-muted-foreground">행</Label>
+              <Input type="number" min={1} max={20} value={rows} onChange={(e) => setRows(parseInt(e.target.value) || 1)} className="h-7 text-xs text-center" />
+            </div>
+            <span className="text-xs text-muted-foreground mt-4">×</span>
+            <div className="flex-1 space-y-0.5">
+              <Label className="text-[10px] text-muted-foreground">열</Label>
+              <Input type="number" min={1} max={20} value={cols} onChange={(e) => setCols(parseInt(e.target.value) || 1)} className="h-7 text-xs text-center" />
+            </div>
+          </div>
+          <Button size="sm" onClick={insertTable} className="w-full h-8 text-sm">{rows} × {cols} 테이블 삽입</Button>
         </PopoverContent>
       </Popover>
     );
