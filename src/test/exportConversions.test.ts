@@ -259,6 +259,17 @@ describe("htmlToTypst", () => {
     expect(r).toContain("#super[2]");
     expect(r).toContain("#sub[2]");
   });
+  it("converts mermaid to commented code block", () => {
+    const r = htmlToTypst('<div data-type="mermaid" code="graph TD\n    A-->B"></div>');
+    expect(r).toContain("// Mermaid diagram");
+    expect(r).toContain("A-->B");
+  });
+
+  it("preserves admonition type and content", () => {
+    const r = htmlToTypst('<div data-type="admonition" data-admonition-type="tip"><p>유용한 팁</p></div>');
+    expect(r).toContain('#admonition(title: "Tip"');
+    expect(r).toContain("유용한 팁");
+  });
 });
 
 // ═══════════════════════════════════════════
