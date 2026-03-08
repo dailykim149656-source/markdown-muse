@@ -114,6 +114,9 @@ export function createTurndownService(): TurndownService {
     codeBlockStyle: "fenced",
   });
 
+  // Enable GFM tables, strikethrough, task lists
+  td.use(gfm);
+
   // Admonition: <div data-type="admonition" ...> → > [!type] title\n> content
   // (Admonitions have content so Turndown processes them normally)
   td.addRule("admonition", {
