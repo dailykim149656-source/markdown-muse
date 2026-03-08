@@ -196,3 +196,40 @@
 .tiptap-editor .ProseMirror s {
   @apply line-through;
 }
+
+/* Table styles */
+.tiptap-editor .ProseMirror table {
+  @apply border-collapse w-full my-4 rounded-lg overflow-hidden;
+}
+
+.tiptap-editor .ProseMirror th,
+.tiptap-editor .ProseMirror td {
+  @apply border border-border px-3 py-2 text-sm min-w-[80px] relative;
+}
+
+.tiptap-editor .ProseMirror th {
+  @apply bg-secondary font-semibold text-left;
+}
+
+.tiptap-editor .ProseMirror td {
+  @apply bg-background;
+}
+
+.tiptap-editor .ProseMirror .selectedCell {
+  @apply bg-accent;
+}
+
+/* Image styles */
+.tiptap-editor .ProseMirror img {
+  @apply max-w-full h-auto rounded-lg my-4 mx-auto block;
+}
+
+/* Highlight */
+.tiptap-editor .ProseMirror mark {
+  @apply bg-yellow-200 dark:bg-yellow-800 rounded-sm px-0.5;
+}
+
+/* Link */
+.tiptap-editor .ProseMirror a {
+  @apply text-blue-600 dark:text-blue-400 underline cursor-pointer;
+}
