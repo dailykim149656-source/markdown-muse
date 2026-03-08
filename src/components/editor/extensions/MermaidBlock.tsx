@@ -21,6 +21,8 @@ const MermaidNodeView = ({ node, updateAttributes, selected }: any) => {
   const [error, setError] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const isDark = useCallback(() => document.documentElement.classList.contains("dark"), []);
+
   const renderDiagram = useCallback(async (source: string) => {
     if (!source.trim()) {
       setSvg("");
@@ -28,6 +30,7 @@ const MermaidNodeView = ({ node, updateAttributes, selected }: any) => {
       return;
     }
     try {
+      initMermaid(isDark());
       const id = `mermaid-${++mermaidId}`;
       const { svg: rendered } = await mermaid.render(id, source);
       setSvg(rendered);
@@ -36,6 +39,16 @@ const MermaidNodeView = ({ node, updateAttributes, selected }: any) => {
       setSvg("");
       setError(err instanceof Error ? err.message : "렌더링 오류");
     }
+  }, [isDark]);
+
+  // Re-render on dark mode change
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      if (!editing && node.attrs.code) renderDiagram(node.attrs.code);
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [editing, node.attrs.code, renderDiagram]);
   }, []);
 
   useEffect(() => {
