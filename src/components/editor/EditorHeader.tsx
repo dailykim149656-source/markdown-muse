@@ -1,10 +1,13 @@
-import { Download, Upload, Moon, Sun, FileText } from "lucide-react";
+import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 
 interface EditorHeaderProps {
   isDark: boolean;
   onToggleTheme: () => void;
-  onSave: () => void;
+  onSaveMd: () => void;
+  onSavePdf: () => void;
+  onPrint: () => void;
   onLoad: () => void;
   fileName: string;
   onFileNameChange: (name: string) => void;
@@ -14,7 +17,9 @@ interface EditorHeaderProps {
 const EditorHeader = ({
   isDark,
   onToggleTheme,
-  onSave,
+  onSaveMd,
+  onSavePdf,
+  onPrint,
   onLoad,
   fileName,
   onFileNameChange,
@@ -40,9 +45,31 @@ const EditorHeader = ({
         <Button variant="ghost" size="sm" onClick={onLoad} title="불러오기" className="h-8 w-8 p-0">
           <Upload className="h-4 w-4" />
         </Button>
-        <Button variant="ghost" size="sm" onClick={onSave} title="저장하기" className="h-8 w-8 p-0">
-          <Download className="h-4 w-4" />
-        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" title="저장하기" className="h-8 gap-1 px-2">
+              <Download className="h-4 w-4" />
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={onSaveMd} className="text-sm gap-2">
+              <FileDown className="h-4 w-4" />
+              마크다운 (.md)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
+              <FileText className="h-4 w-4" />
+              PDF로 저장
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onPrint} className="text-sm gap-2">
+              <Printer className="h-4 w-4" />
+              인쇄
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         <Button variant="ghost" size="sm" onClick={onToggleTheme} title="테마 전환" className="h-8 w-8 p-0">
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
