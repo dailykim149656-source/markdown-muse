@@ -1,6 +1,6 @@
 /**
  * Markdown round-trip utilities.
- * Custom Turndown rules (HTML→MD) and marked extensions (MD→HTML)
+ * Custom Turndown pre/post-processing (HTML→MD) and marked extensions (MD→HTML)
  * for Tiptap custom nodes: math, mermaid, admonition, footnotes.
  */
 
@@ -9,46 +9,101 @@ import { marked } from "marked";
 
 // ─── Turndown: HTML → Markdown ───────────────────────────────────
 
+const PLACEHOLDER_PREFIX = "\x00CUSTOM_";
+const PLACEHOLDER_SUFFIX = "\x00";
+
+/**
+ * Pre-process HTML to replace custom Tiptap nodes with placeholders
+ * that Turndown won't strip (since they're empty/atom elements).
+ */
+function preProcessHtml(html: string): { html: string; replacements: Map<string, string> } {
+  const replacements = new Map<string, string>();
+  let counter = 0;
+
+  const makeKey = () => `${PLACEHOLDER_PREFIX}${counter++}${PLACEHOLDER_SUFFIX}`;
+
+  let processed = html;
+
+  // Inline math: <span data-type="math" latex="..." display="inline"></span>
+  processed = processed.replace(
+    /<span[^>]*data-type="math"[^>]*><\/span>/g,
+    (match) => {
+      const latex = match.match(/latex="([^"]*)"/)?.[1] || "";
+      if (!latex) return match;
+      const key = makeKey();
+      const decoded = latex.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
+      replacements.set(key, `$${decoded}$`);
+      return key;
+    }
+  );
+
+  // Block math: <div data-type="math-block" latex="..." display="block"></div>
+  processed = processed.replace(
+    /<div[^>]*data-type="math-block"[^>]*><\/div>/g,
+    (match) => {
+      const latex = match.match(/latex="([^"]*)"/)?.[1] || "";
+      if (!latex) return match;
+      const key = makeKey();
+      const decoded = latex.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
+      replacements.set(key, `\n\n$$\n${decoded}\n$$\n\n`);
+      return `<p>${key}</p>`;
+    }
+  );
+
+  // Mermaid: <div data-type="mermaid" code="..."></div>
+  processed = processed.replace(
+    /<div[^>]*data-type="mermaid"[^>]*><\/div>/g,
+    (match) => {
+      const code = match.match(/code="([^"]*)"/)?.[1] || "";
+      if (!code) return match;
+      const key = makeKey();
+      const decoded = code.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
+      replacements.set(key, `\n\n\`\`\`mermaid\n${decoded}\n\`\`\`\n\n`);
+      return `<p>${key}</p>`;
+    }
+  );
+
+  // Footnote ref: <span data-type="footnote-ref" data-footnote-id="...">...</span>
+  processed = processed.replace(
+    /<span[^>]*data-type="footnote-ref"[^>]*data-footnote-id="([^"]*)"[^>]*>[^<]*<\/span>/g,
+    (_match, id) => {
+      const key = makeKey();
+      replacements.set(key, `[^${id}]`);
+      return key;
+    }
+  );
+
+  // Footnote item: <div data-type="footnote-item" data-footnote-id="...">text</div>
+  processed = processed.replace(
+    /<div[^>]*data-type="footnote-item"[^>]*data-footnote-id="([^"]*)"[^>]*>([^<]*)<\/div>/g,
+    (_match, id, text) => {
+      const key = makeKey();
+      replacements.set(key, `\n[^${id}]: ${text.trim()}\n`);
+      return `<p>${key}</p>`;
+    }
+  );
+
+  return { html: processed, replacements };
+}
+
+/** Post-process markdown to restore placeholders to proper syntax */
+function postProcessMd(md: string, replacements: Map<string, string>): string {
+  let result = md;
+  for (const [key, value] of replacements) {
+    result = result.replace(key, value);
+  }
+  // Clean up excessive blank lines
+  return result.replace(/\n{3,}/g, "\n\n");
+}
+
 export function createTurndownService(): TurndownService {
   const td = new TurndownService({
     headingStyle: "atx",
     codeBlockStyle: "fenced",
   });
 
-  // Inline math: <span data-type="math" latex="..."> → $...$
-  td.addRule("inlineMath", {
-    filter(node) {
-      return node.nodeName === "SPAN" && node.getAttribute("data-type") === "math";
-    },
-    replacement(_content, node) {
-      const latex = (node as HTMLElement).getAttribute("latex") || "";
-      return latex ? `$${latex}$` : "";
-    },
-  });
-
-  // Block math: <div data-type="math-block" latex="..."> → $$...$$
-  td.addRule("blockMath", {
-    filter(node) {
-      return node.nodeName === "DIV" && node.getAttribute("data-type") === "math-block";
-    },
-    replacement(_content, node) {
-      const latex = (node as HTMLElement).getAttribute("latex") || "";
-      return latex ? `\n\n$$\n${latex}\n$$\n\n` : "";
-    },
-  });
-
-  // Mermaid: <div data-type="mermaid" code="..."> → ```mermaid\n...\n```
-  td.addRule("mermaid", {
-    filter(node) {
-      return node.nodeName === "DIV" && node.getAttribute("data-type") === "mermaid";
-    },
-    replacement(_content, node) {
-      const code = (node as HTMLElement).getAttribute("code") || "";
-      return code ? `\n\n\`\`\`mermaid\n${code}\n\`\`\`\n\n` : "";
-    },
-  });
-
   // Admonition: <div data-type="admonition" ...> → > [!type] title\n> content
+  // (Admonitions have content so Turndown processes them normally)
   td.addRule("admonition", {
     filter(node) {
       return node.nodeName === "DIV" && node.getAttribute("data-type") === "admonition";
@@ -60,59 +115,44 @@ export function createTurndownService(): TurndownService {
       const color = el.getAttribute("data-admonition-color") || "";
       const icon = el.getAttribute("data-admonition-icon") || "";
 
-      // Build metadata for custom attrs
       let meta = type.toUpperCase();
       if (title) meta += ` ${title}`;
 
       // Store color/icon as HTML comment for lossless round-trip
       let extraMeta = "";
-      if ((color && color !== "blue") || (icon && icon !== "info")) {
+      const defaultMap: Record<string, { color: string; icon: string }> = {
+        note: { color: "blue", icon: "info" },
+        warning: { color: "yellow", icon: "alert-triangle" },
+        tip: { color: "green", icon: "lightbulb" },
+        danger: { color: "red", icon: "shield-alert" },
+      };
+      const defaults = defaultMap[type] || { color: "blue", icon: "info" };
+      if ((color && color !== defaults.color) || (icon && icon !== defaults.icon)) {
         const parts: string[] = [];
         if (color) parts.push(`color=${color}`);
         if (icon) parts.push(`icon=${icon}`);
         extraMeta = ` <!-- ${parts.join(" ")} -->`;
       }
 
-      // Convert inner content to blockquote lines
-      const innerMd = td.turndown(el.innerHTML).trim();
-      const lines = innerMd.split("\n").map((l) => `> ${l}`).join("\n");
-
+      const lines = content.trim().split("\n").map((l) => `> ${l}`).join("\n");
       return `\n\n> [!${meta}]${extraMeta}\n${lines}\n\n`;
     },
   });
 
-  // Footnote ref: <span data-type="footnote-ref" data-footnote-id="..."> → [^id]
-  td.addRule("footnoteRef", {
-    filter(node) {
-      return node.nodeName === "SPAN" && node.getAttribute("data-type") === "footnote-ref";
-    },
-    replacement(_content, node) {
-      const id = (node as HTMLElement).getAttribute("data-footnote-id") || "";
-      return `[^${id}]`;
-    },
-  });
-
-  // Footnote item: <div data-type="footnote-item" data-footnote-id="..." text> → [^id]: text
-  td.addRule("footnoteItem", {
-    filter(node) {
-      return node.nodeName === "DIV" && node.getAttribute("data-type") === "footnote-item";
-    },
-    replacement(_content, node) {
-      const el = node as HTMLElement;
-      const id = el.getAttribute("data-footnote-id") || "";
-      const text = el.textContent?.trim() || "";
-      return `\n[^${id}]: ${text}\n`;
-    },
-  });
+  // Wrap the turndown method to add pre/post processing
+  const originalTurndown = td.turndown.bind(td);
+  td.turndown = function (input: string | TurndownService.Node): string {
+    if (typeof input !== "string") return originalTurndown(input);
+    const { html, replacements } = preProcessHtml(input);
+    const md = originalTurndown(html);
+    return postProcessMd(md, replacements);
+  };
 
   return td;
 }
 
 // ─── Marked: Markdown → HTML ─────────────────────────────────────
 
-/**
- * Create a configured marked instance with custom extensions.
- */
 export function createMarkedInstance(): typeof marked {
   const extensions: any[] = [];
 
@@ -126,11 +166,7 @@ export function createMarkedInstance(): typeof marked {
     tokenizer(src: string) {
       const match = src.match(/^\$\$\n([\s\S]+?)\n\$\$/);
       if (match) {
-        return {
-          type: "blockMath",
-          raw: match[0],
-          latex: match[1].trim(),
-        };
+        return { type: "blockMath", raw: match[0], latex: match[1].trim() };
       }
       return undefined;
     },
@@ -149,11 +185,7 @@ export function createMarkedInstance(): typeof marked {
     tokenizer(src: string) {
       const match = src.match(/^\$([^\$\n]+?)\$/);
       if (match) {
-        return {
-          type: "inlineMath",
-          raw: match[0],
-          latex: match[1],
-        };
+        return { type: "inlineMath", raw: match[0], latex: match[1] };
       }
       return undefined;
     },
@@ -162,8 +194,7 @@ export function createMarkedInstance(): typeof marked {
     },
   });
 
-  // Mermaid code blocks: ```mermaid\n...\n```
-  // Override the default code renderer
+  // Mermaid code blocks - handled via renderer override
   const originalRenderer = new marked.Renderer();
   const customRenderer = new marked.Renderer();
   customRenderer.code = function ({ text, lang }: { text: string; lang?: string }) {
@@ -194,7 +225,6 @@ export function createMarkedInstance(): typeof marked {
           .join("\n")
           .trim();
 
-        // Parse metadata from comment
         let color = "";
         let icon = "";
         if (metaComment) {
@@ -238,14 +268,9 @@ export function createMarkedInstance(): typeof marked {
       return idx >= 0 ? idx : -1;
     },
     tokenizer(src: string) {
-      // Don't match footnote definitions (those start at line beginning with [^id]:)
       const match = src.match(/^\[\^([^\]]+)\](?!:)/);
       if (match) {
-        return {
-          type: "footnoteRef",
-          raw: match[0],
-          id: match[1],
-        };
+        return { type: "footnoteRef", raw: match[0], id: match[1] };
       }
       return undefined;
     },
@@ -264,12 +289,7 @@ export function createMarkedInstance(): typeof marked {
     tokenizer(src: string) {
       const match = src.match(/^\[\^([^\]]+)\]:\s*(.+)$/m);
       if (match) {
-        return {
-          type: "footnoteItem",
-          raw: match[0],
-          id: match[1],
-          text: match[2].trim(),
-        };
+        return { type: "footnoteItem", raw: match[0], id: match[1], text: match[2].trim() };
       }
       return undefined;
     },
@@ -278,11 +298,7 @@ export function createMarkedInstance(): typeof marked {
     },
   });
 
-  marked.use({
-    extensions,
-    renderer: customRenderer,
-  });
-
+  marked.use({ extensions, renderer: customRenderer });
   return marked;
 }
 
