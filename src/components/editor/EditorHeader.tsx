@@ -13,6 +13,8 @@ interface EditorHeaderProps {
   onSaveMd: () => void;
   onSaveTex: () => void;
   onSaveHtml: () => void;
+  onSaveJson: () => void;
+  onSaveYaml: () => void;
   onSavePdf: () => void;
   onPrint: () => void;
   onLoad: () => void;
