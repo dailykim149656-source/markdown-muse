@@ -328,16 +328,25 @@ function processNode(node: ChildNode, state: ConversionState): string {
       if (dataType === "admonition") {
         state.usedFeatures.add("admonition");
         const type = el.getAttribute("data-admonition-type") || "note";
-        const colorKey = el.getAttribute("data-admonition-color") || "blue";
-        const latexColor = ADMONITION_COLOR_MAP[colorKey] || "blue";
+        const colorKey = el.getAttribute("data-admonition-color") || "";
+        const icon = el.getAttribute("data-admonition-icon") || "";
+        const titleAttr = el.getAttribute("title") || "";
+        const latexColor = ADMONITION_COLOR_MAP[colorKey] || ADMONITION_COLOR_MAP[
+          ({ note: "blue", warning: "yellow", tip: "green", danger: "red" } as Record<string, string>)[type] || "blue"
+        ] || "blue";
 
         const titleMap: Record<string, string> = {
           note: "노트", warning: "경고", tip: "팁", danger: "위험"
         };
-        const title = titleMap[type] || type;
+        const title = titleAttr || titleMap[type] || type;
         const content = children();
 
-        return `\\begin{admonitionbox}[${escapeLatex(title)}]{${latexColor}}\n${content.trim()}\n\\end{admonitionbox}\n\n`;
+        // Encode type, color, icon as comment for lossless round-trip
+        let metaComment = `% admonition-meta: type=${type}`;
+        if (colorKey) metaComment += ` color=${colorKey}`;
+        if (icon) metaComment += ` icon=${icon}`;
+
+        return `${metaComment}\n\\begin{admonitionbox}[${escapeLatex(title)}]{${latexColor}}\n${content.trim()}\n\\end{admonitionbox}\n\n`;
       }
 
       // Footnote item — collect for later
