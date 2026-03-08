@@ -315,7 +315,7 @@ const FontFamilySelect = ({ editor }: { editor: Editor }) => {
         <ScrollArea className="h-72">
           {categories.map((cat) => (
             <SelectGroup key={cat}>
-              <SelectLabel className="text-[10px] text-muted-foreground">{cat}</SelectLabel>
+              <SelectLabel className="text-[10px] text-muted-foreground bg-muted/50 rounded-sm mx-1 px-2 py-1">{cat}</SelectLabel>
               {FONT_FAMILIES.filter((f) => f.category === cat).map((font) => (
                 <SelectItem key={font.label} value={font.value || "__default__"} className="text-sm">
                   <span style={{ fontFamily: font.value || "inherit" }}>{font.label}</span>
