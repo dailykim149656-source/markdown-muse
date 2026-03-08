@@ -22,7 +22,7 @@ import FontSize from "./extensions/FontSize";
 import { MathExtension, MathBlockExtension } from "./extensions/MathExtension";
 import EditorToolbar from "./EditorToolbar";
 import { htmlToLatex, latexToHtml } from "./utils/htmlToLatex";
-import { Code2, PanelRightClose, PanelRightOpen } from "lucide-react";
+import { Code2, PanelRightClose, PanelRightOpen, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import LatexHighlightEditor from "./LatexHighlightEditor";
 
