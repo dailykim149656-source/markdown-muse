@@ -357,9 +357,11 @@ function processNode(node: ChildNode, state: ConversionState): string {
         return ""; // Don't output here — will be inlined via \footnote{}
       }
 
-      // Mermaid — comment out
-      if (dataType === "mermaidBlock") {
-        return `% [Mermaid 다이어그램 — LaTeX에서 지원되지 않음]\n`;
+      // Mermaid — store code as LaTeX comment for round-trip
+      if (dataType === "mermaid" || dataType === "mermaidBlock") {
+        const code = el.getAttribute("code") || el.textContent || "";
+        const encodedLines = code.split("\n").map((l: string) => `% mermaid: ${l}`).join("\n");
+        return `% begin-mermaid\n${encodedLines}\n% end-mermaid\n`;
       }
 
       return children();
