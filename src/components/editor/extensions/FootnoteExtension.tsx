@@ -199,8 +199,11 @@ const FootnoteItem = Node.create({
     return [{ tag: 'div[data-type="footnote-item"]' }];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    return ["div", mergeAttributes(HTMLAttributes, { "data-type": "footnote-item" })];
+  renderHTML({ node, HTMLAttributes }) {
+    return ["div", mergeAttributes(HTMLAttributes, {
+      "data-type": "footnote-item",
+      "data-footnote-id": node.attrs.id,
+    }), node.attrs.text || ""];
   },
 
   addNodeView() {
