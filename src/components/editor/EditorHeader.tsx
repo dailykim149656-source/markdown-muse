@@ -44,7 +44,7 @@ const EditorHeader = ({
   onToggleFullscreen,
   onOpenShortcuts,
 }: EditorHeaderProps) => {
-  const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : ".md";
+  const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : mode === "json" ? ".json" : mode === "yaml" ? ".yaml" : ".md";
   const { toggleSidebar } = useSidebar();
 
   return (
