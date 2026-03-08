@@ -1,22 +1,72 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import MarkdownEditor from "@/components/editor/MarkdownEditor";
 import LatexEditor from "@/components/editor/LatexEditor";
+import HtmlEditor from "@/components/editor/HtmlEditor";
 import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader";
+import FindReplaceBar from "@/components/editor/FindReplaceBar";
+import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
 
 const Index = () => {
   const [isDark, setIsDark] = useState(false);
   const [fileName, setFileName] = useState("Untitled");
   const [markdown, setMarkdown] = useState("");
   const [latexSource, setLatexSource] = useState("");
+  const [htmlSource, setHtmlSource] = useState("");
   const [wordCount, setWordCount] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   const [loadedContent, setLoadedContent] = useState<string | undefined>(undefined);
   const [editorKey, setEditorKey] = useState(0);
   const [mode, setMode] = useState<EditorMode>("markdown");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
   }, [isDark]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key === "f") {
+        e.preventDefault();
+        setFindReplaceOpen(true);
+      }
+      if (mod && e.key === "h") {
+        e.preventDefault();
+        setFindReplaceOpen(true);
+      }
+      if (mod && e.key === "/") {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      }
+      if (e.key === "F11") {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+      if (e.key === "Escape" && findReplaceOpen) {
+        setFindReplaceOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [findReplaceOpen]);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
 
   const handleContentChange = useCallback((md: string) => {
     setMarkdown(md);
@@ -28,6 +78,14 @@ const Index = () => {
     setLatexSource(tex);
     const text = tex.replace(/\\[a-zA-Z]+\{?[^}]*\}?/g, "").replace(/[{}\\$%&]/g, "").trim();
     setWordCount(text.length);
+  }, []);
+
+  const handleHtmlChange = useCallback((html: string) => {
+    setHtmlSource(html);
+    const tmp = document.createElement("div");
+    tmp.innerHTML = html;
+    const text = tmp.textContent || "";
+    setWordCount(text.trim().length);
   }, []);
 
   const handleSaveMd = useCallback(() => {
@@ -50,6 +108,17 @@ const Index = () => {
     a.click();
     URL.revokeObjectURL(url);
   }, [latexSource, markdown, fileName, mode]);
+
+  const handleSaveHtml = useCallback(() => {
+    const content = mode === "html" ? htmlSource : "";
+    const blob = new Blob([content], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${fileName || "Untitled"}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [htmlSource, fileName, mode]);
 
   const getEditorHtmlForPrint = useCallback(() => {
     if (mode === "latex") {
@@ -129,12 +198,16 @@ const Index = () => {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = ev.target?.result as string;
-      const name = file.name.replace(/\.(md|tex|txt)$/, "");
+      const name = file.name.replace(/\.(md|tex|txt|html)$/, "");
       setFileName(name);
 
       if (file.name.endsWith(".tex")) {
         setMode("latex");
         setLatexSource(content);
+      } else if (file.name.endsWith(".html") || file.name.endsWith(".htm")) {
+        setMode("html");
+        setHtmlSource(content);
+        setEditorKey((k) => k + 1);
       } else {
         setMode("markdown");
         setLoadedContent(content);
@@ -152,6 +225,7 @@ const Index = () => {
         onToggleTheme={() => setIsDark((d) => !d)}
         onSaveMd={handleSaveMd}
         onSaveTex={handleSaveTex}
+        onSaveHtml={handleSaveHtml}
         onSavePdf={handleSavePdf}
         onPrint={handlePrint}
         onLoad={handleLoad}
@@ -160,28 +234,43 @@ const Index = () => {
         wordCount={wordCount}
         mode={mode}
         onModeChange={setMode}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
       />
-      <div className="flex-1 overflow-hidden">
+      <FindReplaceBar
+        open={findReplaceOpen}
+        onClose={() => setFindReplaceOpen(false)}
+        containerRef={editorContainerRef}
+      />
+      <div className="flex-1 overflow-hidden" ref={editorContainerRef}>
         {mode === "markdown" ? (
           <MarkdownEditor
             key={editorKey}
             onContentChange={handleContentChange}
             initialContent={loadedContent}
           />
-        ) : (
+        ) : mode === "latex" ? (
           <LatexEditor
             initialContent={latexSource}
             onContentChange={handleLatexChange}
+          />
+        ) : (
+          <HtmlEditor
+            key={editorKey}
+            initialContent={htmlSource}
+            onContentChange={handleHtmlChange}
           />
         )}
       </div>
       <input
         ref={fileInputRef}
         type="file"
-        accept=".md,.markdown,.txt,.tex"
+        accept=".md,.markdown,.txt,.tex,.html,.htm"
         className="hidden"
         onChange={handleFileChange}
       />
+      <KeyboardShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     </div>
   );
 };

@@ -287,3 +287,15 @@
 .dark .latex-comment {
   color: hsl(0 0% 55%);
 }
+
+/* Find & Replace highlights */
+.find-highlight {
+  background: hsl(45 100% 70% / 0.5);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.find-highlight-current {
+  background: hsl(25 100% 55% / 0.7);
+  outline: 2px solid hsl(25 100% 55%);
+  border-radius: 2px;
+}
