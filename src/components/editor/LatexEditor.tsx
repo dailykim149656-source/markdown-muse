@@ -131,52 +131,52 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
   return (
     <div className="flex flex-col h-full">
       <EditorToolbar editor={editor} />
-      <div className={`flex flex-1 overflow-hidden relative ${sourceLeft ? "flex-row-reverse" : ""}`}>
-        {/* WYSIWYG Editor */}
-        <div className={`flex-1 overflow-y-auto tiptap-editor ${showPanel ? (sourceLeft ? "border-l border-border" : "border-r border-border") : ""}`}>
+      {showPanel ? (
+        <ResizablePanelGroup
+          direction="horizontal"
+          className="flex-1"
+        >
+          {sourceLeft ? (
+            <>
+              <ResizablePanel defaultSize={40} minSize={20} maxSize={70}>
+                <SourcePanel
+                  latexSource={latexSource}
+                  handleSourceChange={handleSourceChange}
+                  handleSourceKeyDown={handleSourceKeyDown}
+                  setSourceLeft={setSourceLeft}
+                  setShowPanel={setShowPanel}
+                />
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={60} minSize={20}>
+                <div className="h-full overflow-y-auto tiptap-editor">
+                  <EditorContent editor={editor} />
+                </div>
+              </ResizablePanel>
+            </>
+          ) : (
+            <>
+              <ResizablePanel defaultSize={60} minSize={20}>
+                <div className="h-full overflow-y-auto tiptap-editor">
+                  <EditorContent editor={editor} />
+                </div>
+              </ResizablePanel>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={40} minSize={20} maxSize={70}>
+                <SourcePanel
+                  latexSource={latexSource}
+                  handleSourceChange={handleSourceChange}
+                  handleSourceKeyDown={handleSourceKeyDown}
+                  setSourceLeft={setSourceLeft}
+                  setShowPanel={setShowPanel}
+                />
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
+      ) : (
+        <div className="flex-1 overflow-y-auto tiptap-editor relative">
           <EditorContent editor={editor} />
-        </div>
-
-        {/* LaTeX Source Panel (editable) */}
-        {showPanel && (
-          <div className="w-[420px] flex flex-col bg-background">
-            <div className="h-8 flex items-center justify-between px-3 bg-secondary/50 border-b border-border shrink-0">
-              <div className="flex items-center gap-1.5">
-                <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
-                <span className="text-xs font-medium text-muted-foreground">LaTeX 소스</span>
-                <span className="text-[10px] text-muted-foreground/60 ml-1">양방향 동기화</span>
-              </div>
-              <div className="flex items-center gap-0.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={() => setSourceLeft((v) => !v)}
-                  title="패널 위치 전환"
-                >
-                  <ArrowLeftRight className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={() => setShowPanel(false)}
-                >
-                  <PanelRightClose className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-            <LatexHighlightEditor
-              value={latexSource}
-              onChange={handleSourceChange}
-              onKeyDown={handleSourceKeyDown}
-              placeholder="// WYSIWYG 편집기에 내용을 입력하면&#10;// LaTeX 소스가 여기에 표시됩니다."
-            />
-          </div>
-        )}
-
-        {/* Toggle button when panel is hidden */}
-        {!showPanel && (
           <Button
             variant="ghost"
             size="sm"
@@ -186,8 +186,8 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
             <PanelRightOpen className="h-3.5 w-3.5" />
             소스
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
