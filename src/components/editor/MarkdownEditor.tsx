@@ -18,6 +18,7 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import FontFamily from "@tiptap/extension-font-family";
 import FontSize from "./extensions/FontSize";
+import { MathExtension, MathBlockExtension } from "./extensions/MathExtension";
 import EditorToolbar from "./EditorToolbar";
 import TurndownService from "turndown";
 import { marked } from "marked";
