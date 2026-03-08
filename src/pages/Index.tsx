@@ -151,8 +151,14 @@ const Index = () => {
 
   // Typst export
   const handleSaveTypst = useCallback(() => {
-    const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
-    const typstContent = htmlToTypst(editorHtml);
+    let typstContent: string;
+    if (activeDoc.mode === "latex") {
+      // Direct LaTeX → Typst conversion
+      typstContent = latexToTypst(activeDoc.content);
+    } else {
+      const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
+      typstContent = htmlToTypst(editorHtml);
+    }
     downloadFile(typstContent, ".typ", "text/plain");
     toast.success("Typst 파일로 내보냈습니다");
   }, [activeDoc, downloadFile]);
