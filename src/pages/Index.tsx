@@ -400,6 +400,7 @@ ${editorHtml}
             onChange={handleFileChange}
           />
           <KeyboardShortcutsModal open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+          <TemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} onSelect={handleTemplateSelect} />
         </div>
       </div>
     </SidebarProvider>
