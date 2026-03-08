@@ -233,3 +233,57 @@
 .tiptap-editor .ProseMirror a {
   @apply text-blue-600 dark:text-blue-400 underline cursor-pointer;
 }
+
+/* LaTeX Syntax Highlighting */
+.latex-highlight-pre {
+  @apply bg-transparent text-foreground;
+  font-family: 'Fira Code', 'JetBrains Mono', 'D2 Coding', monospace;
+}
+.latex-textarea {
+  font-family: 'Fira Code', 'JetBrains Mono', 'D2 Coding', monospace;
+}
+.latex-textarea::selection {
+  background: hsl(var(--primary) / 0.2);
+}
+.latex-comment {
+  color: hsl(0 0% 50%);
+  font-style: italic;
+}
+.latex-command {
+  color: hsl(210 80% 55%);
+}
+.latex-keyword {
+  color: hsl(280 70% 55%);
+  font-weight: 600;
+}
+.latex-env {
+  color: hsl(160 60% 45%);
+  font-weight: 500;
+}
+.latex-math {
+  color: hsl(30 80% 50%);
+}
+.latex-arg {
+  color: hsl(340 65% 55%);
+}
+.latex-brace {
+  color: hsl(var(--muted-foreground));
+}
+.dark .latex-command {
+  color: hsl(210 90% 70%);
+}
+.dark .latex-keyword {
+  color: hsl(280 80% 72%);
+}
+.dark .latex-env {
+  color: hsl(160 70% 60%);
+}
+.dark .latex-math {
+  color: hsl(35 90% 65%);
+}
+.dark .latex-arg {
+  color: hsl(340 75% 70%);
+}
+.dark .latex-comment {
+  color: hsl(0 0% 55%);
+}

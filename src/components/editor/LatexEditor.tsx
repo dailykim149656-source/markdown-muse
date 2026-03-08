@@ -153,12 +153,10 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
                 <PanelRightClose className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <textarea
+            <LatexHighlightEditor
               value={latexSource}
               onChange={handleSourceChange}
               onKeyDown={handleSourceKeyDown}
-              className="flex-1 w-full bg-background text-foreground font-mono text-xs p-4 outline-none resize-none leading-relaxed"
-              spellCheck={false}
               placeholder="// WYSIWYG 편집기에 내용을 입력하면&#10;// LaTeX 소스가 여기에 표시됩니다."
             />
           </div>
