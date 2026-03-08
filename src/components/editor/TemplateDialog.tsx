@@ -364,7 +364,7 @@ XYZ 솔루션즈\\\\
   },
 ];
 
-const CATEGORIES = [...new Set(TEMPLATES.map(t => t.category))];
+const CATEGORIES: string[] = Array.from(new Set(TEMPLATES.map(t => t.category)));
 
 interface TemplateDialogProps {
   open: boolean;
