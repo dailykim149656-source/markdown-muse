@@ -387,6 +387,76 @@ const FontSizeSelect = ({ editor }: { editor: Editor }) => {
   );
 };
 
+const MathMenu = ({ editor }: { editor: Editor }) => {
+  const [open, setOpen] = useState(false);
+  const [latex, setLatex] = useState("");
+  const [mode, setMode] = useState<"inline" | "block">("inline");
+
+  const insertMath = () => {
+    if (!latex) return;
+    if (mode === "inline") {
+      editor.chain().focus().insertContent({
+        type: "math",
+        attrs: { latex, display: "inline" },
+      }).run();
+    } else {
+      editor.chain().focus().insertContent({
+        type: "mathBlock",
+        attrs: { latex, display: "block" },
+      }).run();
+    }
+    setLatex("");
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Toggle size="sm" pressed={false} className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm" title="수식 삽입">
+          <Sigma className="h-4 w-4" />
+        </Toggle>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 space-y-3" align="start">
+        <p className="text-sm font-medium">수식 삽입 (LaTeX)</p>
+        <div className="flex gap-1 border-b border-border pb-2">
+          <Button variant={mode === "inline" ? "secondary" : "ghost"} size="sm" className="h-7 text-xs" onClick={() => setMode("inline")}>
+            인라인 수식
+          </Button>
+          <Button variant={mode === "block" ? "secondary" : "ghost"} size="sm" className="h-7 text-xs" onClick={() => setMode("block")}>
+            블록 수식
+          </Button>
+        </div>
+        <textarea
+          value={latex}
+          onChange={(e) => setLatex(e.target.value)}
+          placeholder={mode === "inline" ? "예: E = mc^2" : "예: \\int_0^\\infty e^{-x} dx = 1"}
+          className="w-full bg-secondary text-foreground text-sm font-mono p-2 rounded-md outline-none resize-none min-h-[60px] border border-border"
+          rows={3}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) insertMath();
+          }}
+        />
+        {latex && (
+          <div className="border border-border rounded-md p-3 bg-background flex justify-center min-h-[40px] items-center">
+            <MathPreview latex={latex} displayMode={mode === "block"} />
+          </div>
+        )}
+        <Button size="sm" onClick={insertMath} className="w-full h-8 text-sm" disabled={!latex}>삽입</Button>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const MathPreview = ({ latex, displayMode }: { latex: string; displayMode: boolean }) => {
+  try {
+    const katex = require("katex");
+    const html = katex.renderToString(latex, { displayMode, throwOnError: false });
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  } catch {
+    return <span className="text-destructive text-xs">렌더링 오류</span>;
+  }
+};
+
 const EditorToolbar = ({ editor }: EditorToolbarProps) => {
   if (!editor) return null;
 
