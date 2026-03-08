@@ -164,6 +164,12 @@ const EditorHeader = ({
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {mode !== "json" && mode !== "yaml" && onTogglePreview && (
+          <Button variant={previewOpen ? "secondary" : "ghost"} size="sm" onClick={onTogglePreview} title="내보내기 미리보기" className="h-8 w-8 p-0">
+            <Eye className="h-4 w-4" />
+          </Button>
+        )}
+
         <Button variant="ghost" size="sm" onClick={onOpenShortcuts} title="단축키 안내 (Ctrl+/)" className="h-8 w-8 p-0">
           <Keyboard className="h-4 w-4" />
         </Button>

@@ -361,7 +361,19 @@ ${editorHtml}
     }
   }, []);
 
-  return (
+  const renderEditor = useCallback(() => {
+    if (activeDoc.mode === "markdown") {
+      return <MarkdownEditor key={editorKey} onContentChange={handleContentChange} initialContent={activeDoc.content || undefined} />;
+    }
+    if (activeDoc.mode === "latex") {
+      return <LatexEditor key={editorKey} initialContent={activeDoc.content} onContentChange={handleContentChange} />;
+    }
+    if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
+      return <JsonYamlEditor key={editorKey} initialContent={activeDoc.content} onContentChange={handleContentChange} mode={activeDoc.mode} onModeChange={(m) => handleModeChange(m)} />;
+    }
+    return <HtmlEditor key={editorKey} initialContent={activeDoc.content} onContentChange={handleContentChange} />;
+  }, [activeDoc.mode, activeDoc.content, editorKey, handleContentChange, handleModeChange]);
+
     <SidebarProvider defaultOpen={false}>
       <div className="h-screen flex w-full">
         <FileSidebar
