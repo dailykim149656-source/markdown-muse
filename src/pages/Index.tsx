@@ -6,6 +6,7 @@ import JsonYamlEditor from "@/components/editor/JsonYamlEditor";
 import TemplateDialog, { type DocumentTemplate } from "@/components/editor/TemplateDialog";
 import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
+import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
 import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
