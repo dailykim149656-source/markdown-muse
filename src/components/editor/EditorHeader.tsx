@@ -138,7 +138,7 @@ const EditorHeader = ({
                   인쇄
                 </DropdownMenuItem>
               </>
-            )
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
