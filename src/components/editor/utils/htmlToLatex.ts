@@ -523,7 +523,30 @@ export function latexToHtml(latex: string): string {
   body = body.replace(/\\begin\{verbatim\}([\s\S]*?)\\end\{verbatim\}/g,
     '<pre><code>$1</code></pre>');
 
-  // Admonition tcolorbox
+  // Mermaid comments → Tiptap mermaid node
+  body = body.replace(/% begin-mermaid\n([\s\S]*?)% end-mermaid/g, (_, lines) => {
+    const code = lines
+      .split("\n")
+      .map((l: string) => l.replace(/^% mermaid: /, ""))
+      .filter((l: string) => l !== "")
+      .join("\n");
+    const escaped = code.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return `<div data-type="mermaid" code="${escaped}"></div>`;
+  });
+
+  // Admonition tcolorbox with metadata comment
+  body = body.replace(
+    /% admonition-meta: type=(\S+)(?: color=(\S+))?(?: icon=(\S+))?\n\\begin\{admonitionbox\}\[([^\]]*)\]\{[^}]*\}([\s\S]*?)\\end\{admonitionbox\}/g,
+    (_, type, color, icon, title, content) => {
+      const attrs = [`data-type="admonition"`, `data-admonition-type="${type}"`];
+      if (title) attrs.push(`title="${title}"`);
+      if (color) attrs.push(`data-admonition-color="${color}"`);
+      if (icon) attrs.push(`data-admonition-icon="${icon}"`);
+      return `<div ${attrs.join(" ")}>${content.trim()}</div>`;
+    }
+  );
+
+  // Fallback: Admonition tcolorbox without metadata comment
   body = body.replace(/\\begin\{admonitionbox\}\[([^\]]*)\]\{[^}]*\}([\s\S]*?)\\end\{admonitionbox\}/g,
     '<div data-type="admonition" data-admonition-type="note"><strong>$1</strong>$2</div>');
 
