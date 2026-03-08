@@ -130,9 +130,9 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
   return (
     <div className="flex flex-col h-full">
       <EditorToolbar editor={editor} />
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className={`flex flex-1 overflow-hidden relative ${sourceLeft ? "flex-row-reverse" : ""}`}>
         {/* WYSIWYG Editor */}
-        <div className={`flex-1 overflow-y-auto tiptap-editor ${showPanel ? "border-r border-border" : ""}`}>
+        <div className={`flex-1 overflow-y-auto tiptap-editor ${showPanel ? (sourceLeft ? "border-l border-border" : "border-r border-border") : ""}`}>
           <EditorContent editor={editor} />
         </div>
 
@@ -145,14 +145,25 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
                 <span className="text-xs font-medium text-muted-foreground">LaTeX 소스</span>
                 <span className="text-[10px] text-muted-foreground/60 ml-1">양방향 동기화</span>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0"
-                onClick={() => setShowPanel(false)}
-              >
-                <PanelRightClose className="h-3.5 w-3.5" />
-              </Button>
+              <div className="flex items-center gap-0.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => setSourceLeft((v) => !v)}
+                  title="패널 위치 전환"
+                >
+                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => setShowPanel(false)}
+                >
+                  <PanelRightClose className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
             <LatexHighlightEditor
               value={latexSource}
