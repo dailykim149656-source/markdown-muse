@@ -665,7 +665,7 @@ export function latexToHtml(latex: string): string {
     body = `<p>${body}</p>`;
   }
 
-  return body;
+  return titleHtml + body;
 }
 
 // Helper: parse LaTeX tabular content to HTML table
