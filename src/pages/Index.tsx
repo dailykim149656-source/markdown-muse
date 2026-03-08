@@ -5,6 +5,7 @@ import HtmlEditor from "@/components/editor/HtmlEditor";
 import JsonYamlEditor from "@/components/editor/JsonYamlEditor";
 import TemplateDialog, { type DocumentTemplate } from "@/components/editor/TemplateDialog";
 import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
+import { rstToHtml } from "@/components/editor/utils/rstToHtml";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
