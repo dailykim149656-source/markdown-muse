@@ -53,22 +53,31 @@ export function htmlToRst(html: string): string {
   );
 
   // Code blocks with language
+  // Code blocks - use placeholder to protect content from later tag stripping
+  let codeBlockIdx = 0;
+  const codeBlocks: string[] = [];
+
   s = s.replace(
     /<pre><code[^>]*class="language-([^"]*)"[^>]*>([\s\S]*?)<\/code><\/pre>/gi,
     (_, lang, code) => {
       const decoded = decodeEntities(stripHtml(code)).trim();
       const indented = decoded.split("\n").map((l) => `   ${l}`).join("\n");
-      return `\n.. code-block:: ${lang}\n\n${indented}\n`;
+      const placeholder = `\x00CODE_BLOCK_${codeBlockIdx}\x00`;
+      codeBlocks.push(`\n.. code-block:: ${lang}\n\n${indented}\n`);
+      codeBlockIdx++;
+      return placeholder;
     }
   );
 
-  // Code blocks without language
   s = s.replace(
     /<pre><code[^>]*>([\s\S]*?)<\/code><\/pre>/gi,
     (_, code) => {
       const decoded = decodeEntities(stripHtml(code)).trim();
       const indented = decoded.split("\n").map((l) => `   ${l}`).join("\n");
-      return `\n.. code-block::\n\n${indented}\n`;
+      const placeholder = `\x00CODE_BLOCK_${codeBlockIdx}\x00`;
+      codeBlocks.push(`\n.. code-block::\n\n${indented}\n`);
+      codeBlockIdx++;
+      return placeholder;
     }
   );
 
@@ -180,6 +189,9 @@ export function htmlToRst(html: string): string {
   // Resolve link placeholders
   s = s.replace(/\x00LT\x00/g, "<");
   s = s.replace(/\x00GT\x00/g, ">");
+
+  // Resolve code block placeholders
+  s = s.replace(/\x00CODE_BLOCK_(\d+)\x00/g, (_, idx) => codeBlocks[parseInt(idx)] || "");
 
   // Clean up excessive newlines
   s = s.replace(/\n{3,}/g, "\n\n").trim();
