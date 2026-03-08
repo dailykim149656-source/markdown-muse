@@ -99,6 +99,14 @@ describe("Markdown round-trip: marked custom extensions (MD→HTML)", () => {
     expect(md).toContain("| 홍길동 | 30 |");
     expect(md).toContain("---");
   });
+
+  it("converts Tiptap-style table HTML (with colspan/rowspan/p) to GFM table", () => {
+    const html = '<table style="min-width: 75px;"><colgroup><col style="min-width: 25px;"><col style="min-width: 25px;"><col style="min-width: 25px;"></colgroup><tbody><tr><th colspan="1" rowspan="1"><p>이름</p></th><th colspan="1" rowspan="1"><p>나이</p></th><th colspan="1" rowspan="1"><p>직업</p></th></tr><tr><td colspan="1" rowspan="1"><p>홍길동</p></td><td colspan="1" rowspan="1"><p>30</p></td><td colspan="1" rowspan="1"><p>개발자</p></td></tr></tbody></table>';
+    const md = htmlToMd(html);
+    expect(md).toContain("| 이름 | 나이 | 직업 |");
+    expect(md).toContain("| 홍길동 | 30 | 개발자 |");
+    expect(md).toContain("---");
+  });
 });
 
 describe("Markdown round-trip: MD→HTML tables", () => {
