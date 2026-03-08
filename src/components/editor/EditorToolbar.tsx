@@ -13,6 +13,7 @@ import {
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Palette, TableProperties, Plus, Trash2, ArrowUpDown, ArrowLeftRight, Sigma, GitBranch,
   MessageSquareWarning, FootprintsIcon,
+  ListTree, ImageIcon, Tag,
 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
@@ -497,6 +498,99 @@ const AdmonitionMenu = ({ editor }: { editor: Editor }) => {
   );
 };
 
+const CaptionMenu = ({ editor }: { editor: Editor }) => {
+  const [open, setOpen] = useState(false);
+  const [captionType, setCaptionType] = useState<"figure" | "table">("figure");
+  const [label, setLabel] = useState("");
+  const [captionText, setCaptionText] = useState("");
+
+  const insert = () => {
+    (editor.commands as any).insertFigureCaption({ captionType, label, captionText });
+    setLabel("");
+    setCaptionText("");
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Toggle size="sm" pressed={false} className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm" title="캡션 삽입">
+          <ImageIcon className="h-4 w-4" />
+        </Toggle>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 space-y-3" align="start">
+        <p className="text-sm font-medium">캡션 삽입</p>
+        <div className="flex gap-1 border-b border-border pb-2">
+          <Button variant={captionType === "figure" ? "secondary" : "ghost"} size="sm" className="h-7 text-xs" onClick={() => setCaptionType("figure")}>
+            그림
+          </Button>
+          <Button variant={captionType === "table" ? "secondary" : "ghost"} size="sm" className="h-7 text-xs" onClick={() => setCaptionType("table")}>
+            표
+          </Button>
+        </div>
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <Label className="text-xs">라벨 (교차 참조용)</Label>
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="예: fig:result" className="h-8 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">캡션 텍스트</Label>
+            <Input value={captionText} onChange={(e) => setCaptionText(e.target.value)} placeholder="캡션 내용" className="h-8 text-sm" onKeyDown={(e) => e.key === "Enter" && insert()} />
+          </div>
+        </div>
+        <Button size="sm" onClick={insert} className="w-full h-8 text-sm">삽입</Button>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const CrossRefMenu = ({ editor }: { editor: Editor }) => {
+  const [open, setOpen] = useState(false);
+  const [labels, setLabels] = useState<{ label: string; type: string }[]>([]);
+
+  const collectLabels = () => {
+    const items: { label: string; type: string }[] = [];
+    editor.state.doc.descendants((node: any) => {
+      if (node.type.name === "figureCaption" && node.attrs.label) {
+        items.push({ label: node.attrs.label, type: node.attrs.captionType });
+      }
+    });
+    setLabels(items);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) collectLabels(); }}>
+      <PopoverTrigger asChild>
+        <Toggle size="sm" pressed={false} className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm" title="교차 참조 삽입">
+          <Tag className="h-4 w-4" />
+        </Toggle>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-1" align="start">
+        <p className="text-sm font-medium px-2 py-1.5">교차 참조</p>
+        {labels.length === 0 ? (
+          <p className="text-xs text-muted-foreground px-2 py-2">
+            라벨이 있는 캡션이 없습니다. 먼저 캡션을 추가하세요.
+          </p>
+        ) : (
+          labels.map((item) => (
+            <button
+              key={item.label}
+              className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent text-left"
+              onClick={() => {
+                (editor.commands as any).insertCrossReference({ targetLabel: item.label });
+                setOpen(false);
+              }}
+            >
+              <span className="text-xs text-muted-foreground">{item.type === "table" ? "표" : "그림"}</span>
+              <span>{item.label}</span>
+            </button>
+          ))
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 const EditorToolbar = ({ editor }: EditorToolbarProps) => {
   if (!editor) return null;
 
@@ -600,6 +694,18 @@ const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         >
           <FootprintsIcon className="h-4 w-4" />
         </Toggle>
+        <Separator orientation="vertical" className="mx-1.5 h-5" />
+        <Toggle
+          size="sm"
+          pressed={false}
+          onPressedChange={() => (editor.commands as any).insertTableOfContents()}
+          title="목차 삽입"
+          className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm"
+        >
+          <ListTree className="h-4 w-4" />
+        </Toggle>
+        <CaptionMenu editor={editor} />
+        <CrossRefMenu editor={editor} />
       </div>
     </div>
   );

@@ -19,17 +19,20 @@ import FontFamily from "@tiptap/extension-font-family";
 import FontSize from "./extensions/FontSize";
 import { MathExtension, MathBlockExtension } from "./extensions/MathExtension";
 import MermaidBlock from "./extensions/MermaidBlock";
-import AdmonitionExtension from "./extensions/AdmonitionExtension";
-import { FootnoteRef, FootnoteItem } from "./extensions/FootnoteExtension";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
+import AdmonitionExtension from "./extensions/AdmonitionExtension";
+import { FootnoteRef, FootnoteItem } from "./extensions/FootnoteExtension";
+import TableOfContents from "./extensions/TableOfContents";
+import FigureCaption from "./extensions/FigureCaption";
+import CrossReference from "./extensions/CrossReference";
 
 const lowlight = createLowlight(common);
 
 export const createEditorExtensions = (placeholder: string) => [
   StarterKit.configure({
     heading: { levels: [1, 2, 3] },
-    codeBlock: false, // replaced by CodeBlockLowlight
+    codeBlock: false,
   }),
   CodeBlockLowlight.configure({ lowlight }),
   Placeholder.configure({ placeholder }),
@@ -59,6 +62,9 @@ export const createEditorExtensions = (placeholder: string) => [
   AdmonitionExtension,
   FootnoteRef,
   FootnoteItem,
+  TableOfContents,
+  FigureCaption,
+  CrossReference,
 ];
 
 export const editorPropsDefault = {
