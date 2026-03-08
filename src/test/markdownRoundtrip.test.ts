@@ -123,7 +123,7 @@ describe("Markdown round-trip: table full cycle", () => {
   });
 });
 
-
+describe("Markdown round-trip: full cycle", () => {
   it("preserves inline math through HTML→MD→HTML", () => {
     const originalHtml = '<p>수식 <span data-type="math" latex="a^2+b^2=c^2" display="inline"></span> 입니다</p>';
     const md = htmlToMd(originalHtml);
