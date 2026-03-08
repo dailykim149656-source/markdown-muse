@@ -24,6 +24,8 @@ interface EditorHeaderProps {
   fileName: string;
   onFileNameChange: (name: string) => void;
   wordCount: number;
+  countWithSpaces?: boolean;
+  onToggleCountMode?: () => void;
   mode: EditorMode;
   onModeChange: (mode: EditorMode) => void;
   isFullscreen: boolean;
@@ -50,6 +52,8 @@ const EditorHeader = ({
   fileName,
   onFileNameChange,
   wordCount,
+  countWithSpaces = true,
+  onToggleCountMode,
   mode,
   onModeChange,
   isFullscreen,
@@ -110,9 +114,13 @@ const EditorHeader = ({
       </div>
 
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-        <span className="text-xs text-muted-foreground mr-1 sm:mr-3 hidden sm:inline">
-          {wordCount}자
-        </span>
+        <button
+          onClick={onToggleCountMode}
+          className="text-xs text-muted-foreground mr-1 sm:mr-3 hidden sm:inline hover:text-foreground transition-colors cursor-pointer"
+          title={countWithSpaces ? "공백 포함 글자수 (클릭: 공백 제외로 전환)" : "공백 제외 글자수 (클릭: 공백 포함으로 전환)"}
+        >
+          {wordCount}자{countWithSpaces ? "" : " (공백제외)"}
+        </button>
         <Button variant="ghost" size="sm" onClick={onLoad} title="불러오기" className="h-8 w-8 p-0">
           <Upload className="h-4 w-4" />
         </Button>
