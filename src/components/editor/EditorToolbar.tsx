@@ -451,8 +451,7 @@ const MathMenu = ({ editor }: { editor: Editor }) => {
 
 const MathPreview = ({ latex, displayMode }: { latex: string; displayMode: boolean }) => {
   try {
-    const katex = require("katex");
-    const html = katex.renderToString(latex, { displayMode, throwOnError: false });
+    const html = katexLib.renderToString(latex, { displayMode, throwOnError: false });
     return <span dangerouslySetInnerHTML={{ __html: html }} />;
   } catch {
     return <span className="text-destructive text-xs">렌더링 오류</span>;
