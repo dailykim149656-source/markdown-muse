@@ -53,6 +53,7 @@ export const createEditorExtensions = (placeholder: string) => [
   FontSize,
   MathExtension,
   MathBlockExtension,
+  MermaidBlock,
 ];
 
 export const editorPropsDefault = {
