@@ -1,4 +1,5 @@
 import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown, Maximize, Minimize, Keyboard, PanelLeft, Eye } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link } from "react-router-dom";
 import docslyLogo from "@/assets/docsly-logo.png";
 import { Button } from "@/components/ui/button";
