@@ -25,6 +25,7 @@ interface FileSidebarProps {
   onNewDoc: (mode?: "markdown" | "latex" | "html" | "json" | "yaml") => void;
   onDeleteDoc: (id: string) => void;
   onRenameDoc: (id: string, name: string) => void;
+  onOpenTemplates?: () => void;
 }
 
 const modeIcon = (mode: string) => {
