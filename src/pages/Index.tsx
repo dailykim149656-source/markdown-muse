@@ -455,7 +455,7 @@ ${editorHtml}
             onLoad={handleLoad}
             fileName={activeDoc.name}
             onFileNameChange={handleFileNameChange}
-            wordCount={wordCount}
+            textStats={textStats}
             countWithSpaces={countWithSpaces}
             onToggleCountMode={() => setCountWithSpaces(p => !p)}
             mode={activeDoc.mode}
