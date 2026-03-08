@@ -443,12 +443,31 @@ export function htmlToLatex(html: string, includeWrapper = true, options?: Parti
 
 export function latexToHtml(latex: string): string {
   let body = latex;
+  let titleHtml = "";
+
+  // Extract title/author/date from preamble before stripping it
+  const titleMatch = latex.match(/\\title\{([^}]*)\}/);
+  const authorMatch = latex.match(/\\author\{([^}]*)\}/);
+  const dateMatch = latex.match(/\\date\{([^}]*)\}/);
 
   // Extract body from document environment
   const beginDoc = latex.indexOf("\\begin{document}");
   const endDoc = latex.indexOf("\\end{document}");
   if (beginDoc !== -1) {
     body = latex.substring(beginDoc + "\\begin{document}".length, endDoc !== -1 ? endDoc : undefined);
+  }
+
+  // Build title block HTML if \maketitle is present and title/author exist
+  const hasMaketitle = body.includes("\\maketitle");
+  if (hasMaketitle && (titleMatch || authorMatch)) {
+    const title = titleMatch ? titleMatch[1] : "";
+    const author = authorMatch ? authorMatch[1].replace(/\\\\/g, "<br/>") : "";
+    const date = dateMatch ? (dateMatch[1] === "\\today" ? new Date().toLocaleDateString("ko-KR") : dateMatch[1]) : "";
+    titleHtml = `<div style="text-align:center;margin-bottom:1.5em">`;
+    if (title) titleHtml += `<h1 style="margin-bottom:0.3em">${title}</h1>`;
+    if (author) titleHtml += `<p style="font-size:1.1em">${author}</p>`;
+    if (date) titleHtml += `<p style="color:#666">${date}</p>`;
+    titleHtml += `</div>`;
   }
 
   // Strip preamble-only commands
