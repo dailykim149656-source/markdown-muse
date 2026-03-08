@@ -1,4 +1,4 @@
-import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown, Maximize, Minimize, Keyboard, PanelLeft } from "lucide-react";
+import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown, Maximize, Minimize, Keyboard, PanelLeft, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
 import docslyLogo from "@/assets/docsly-logo.png";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,8 @@ interface EditorHeaderProps {
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
   onOpenShortcuts: () => void;
+  previewOpen?: boolean;
+  onTogglePreview?: () => void;
 }
 
 const EditorHeader = ({
@@ -53,6 +55,8 @@ const EditorHeader = ({
   isFullscreen,
   onToggleFullscreen,
   onOpenShortcuts,
+  previewOpen,
+  onTogglePreview,
 }: EditorHeaderProps) => {
   const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : mode === "json" ? ".json" : mode === "yaml" ? ".yaml" : ".md";
   const { toggleSidebar } = useSidebar();
@@ -159,6 +163,12 @@ const EditorHeader = ({
             )}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {mode !== "json" && mode !== "yaml" && onTogglePreview && (
+          <Button variant={previewOpen ? "secondary" : "ghost"} size="sm" onClick={onTogglePreview} title="내보내기 미리보기" className="h-8 w-8 p-0">
+            <Eye className="h-4 w-4" />
+          </Button>
+        )}
 
         <Button variant="ghost" size="sm" onClick={onOpenShortcuts} title="단축키 안내 (Ctrl+/)" className="h-8 w-8 p-0">
           <Keyboard className="h-4 w-4" />

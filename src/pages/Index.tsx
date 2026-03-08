@@ -16,6 +16,8 @@ import DocumentTabs from "@/components/editor/DocumentTabs";
 import FileSidebar from "@/components/editor/FileSidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { loadSavedData, saveData, useAutoSave, createNewDocument, type AutoSaveData, type DocumentData } from "@/components/editor/useAutoSave";
+import ExportPreviewPanel from "@/components/editor/ExportPreviewPanel";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { toast } from "sonner";
 
 const Index = () => {
@@ -27,6 +29,7 @@ const Index = () => {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [editorKey, setEditorKey] = useState(0);
   const [templateOpen, setTemplateOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Multi-document state
   const [documents, setDocuments] = useState<DocumentData[]>(() => {
@@ -358,6 +361,19 @@ ${editorHtml}
     }
   }, []);
 
+  const renderEditor = useCallback(() => {
+    if (activeDoc.mode === "markdown") {
+      return <MarkdownEditor key={editorKey} onContentChange={handleContentChange} initialContent={activeDoc.content || undefined} />;
+    }
+    if (activeDoc.mode === "latex") {
+      return <LatexEditor key={editorKey} initialContent={activeDoc.content} onContentChange={handleContentChange} />;
+    }
+    if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
+      return <JsonYamlEditor key={editorKey} initialContent={activeDoc.content} onContentChange={handleContentChange} mode={activeDoc.mode} onModeChange={(m) => handleModeChange(m)} />;
+    }
+    return <HtmlEditor key={editorKey} initialContent={activeDoc.content} onContentChange={handleContentChange} />;
+  }, [activeDoc.mode, activeDoc.content, editorKey, handleContentChange, handleModeChange]);
+
   return (
     <SidebarProvider defaultOpen={false}>
       <div className="h-screen flex w-full">
@@ -393,6 +409,8 @@ ${editorHtml}
             isFullscreen={isFullscreen}
             onToggleFullscreen={toggleFullscreen}
             onOpenShortcuts={() => setShortcutsOpen(true)}
+            previewOpen={previewOpen}
+            onTogglePreview={() => setPreviewOpen(p => !p)}
           />
           <DocumentTabs
             documents={documents}
@@ -407,32 +425,26 @@ ${editorHtml}
             containerRef={editorContainerRef}
           />
           <div className="flex-1 overflow-hidden" ref={editorContainerRef}>
-            {activeDoc.mode === "markdown" ? (
-              <MarkdownEditor
-                key={editorKey}
-                onContentChange={handleContentChange}
-                initialContent={activeDoc.content || undefined}
-              />
-            ) : activeDoc.mode === "latex" ? (
-              <LatexEditor
-                key={editorKey}
-                initialContent={activeDoc.content}
-                onContentChange={handleContentChange}
-              />
-            ) : activeDoc.mode === "json" || activeDoc.mode === "yaml" ? (
-              <JsonYamlEditor
-                key={editorKey}
-                initialContent={activeDoc.content}
-                onContentChange={handleContentChange}
-                mode={activeDoc.mode}
-                onModeChange={(m) => handleModeChange(m)}
-              />
+            {previewOpen && activeDoc.mode !== "json" && activeDoc.mode !== "yaml" ? (
+              <ResizablePanelGroup direction="horizontal" className="h-full">
+                <ResizablePanel defaultSize={60} minSize={30}>
+                  <div className="h-full overflow-y-auto">
+                    {renderEditor()}
+                  </div>
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={40} minSize={20} maxSize={60}>
+                  <ExportPreviewPanel
+                    editorHtml={document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content}
+                    editorMode={activeDoc.mode}
+                    rawContent={activeDoc.content}
+                    onClose={() => setPreviewOpen(false)}
+                    fileName={activeDoc.name}
+                  />
+                </ResizablePanel>
+              </ResizablePanelGroup>
             ) : (
-              <HtmlEditor
-                key={editorKey}
-                initialContent={activeDoc.content}
-                onContentChange={handleContentChange}
-              />
+              renderEditor()
             )}
           </div>
           <input
