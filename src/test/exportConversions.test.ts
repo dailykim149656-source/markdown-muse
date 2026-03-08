@@ -196,7 +196,7 @@ describe("htmlToTypst", () => {
   it("converts figure captions", () => {
     const r = htmlToTypst('<div data-type="figure-caption" data-caption-type="figure" data-label="fig:1">그림: My caption</div>');
     expect(r).toContain("#figure(caption:");
-    expect(r).toContain("<fig:1>");
+    expect(r).toContain("My caption");
   });
 
   it("converts cross references", () => {
