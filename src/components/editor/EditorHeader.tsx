@@ -130,6 +130,10 @@ const EditorHeader = ({
                   <FileDown className="h-4 w-4" />
                   HTML (.html)
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSaveTypst} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  Typst (.typ)
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
                   <FileText className="h-4 w-4" />
                   PDF로 저장
