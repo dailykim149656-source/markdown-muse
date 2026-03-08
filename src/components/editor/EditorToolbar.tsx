@@ -515,7 +515,7 @@ const CaptionMenu = ({ editor }: { editor: Editor }) => {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Toggle size="sm" pressed={false} className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm" title="캡션 삽입">
-          <ImageIcon className="h-4 w-4" />
+          <TextCursorInput className="h-4 w-4" />
         </Toggle>
       </PopoverTrigger>
       <PopoverContent className="w-64 space-y-3" align="start">
