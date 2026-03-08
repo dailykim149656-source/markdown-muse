@@ -1,4 +1,6 @@
 import { useState, useRef } from "react";
+import katexLib from "katex";
+import "katex/dist/katex.min.css";
 import { Editor } from "@tiptap/react";
 import {
   Bold, Italic, Underline, Strikethrough, Code, CodeSquare,
