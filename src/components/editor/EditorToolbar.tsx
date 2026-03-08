@@ -11,7 +11,7 @@ import {
   Table, Highlighter,
   Superscript, Subscript,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  Palette, TableProperties, Plus, Trash2, ArrowUpDown, ArrowLeftRight, Sigma,
+  Palette, TableProperties, Plus, Trash2, ArrowUpDown, ArrowLeftRight, Sigma, GitBranch,
 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
@@ -542,6 +542,15 @@ const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         <TableMenu editor={editor} />
         <ColorPicker editor={editor} />
         <MathMenu editor={editor} />
+        <Toggle
+          size="sm"
+          pressed={false}
+          onPressedChange={() => (editor.commands as any).insertMermaid()}
+          title="Mermaid 다이어그램"
+          className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm"
+        >
+          <GitBranch className="h-4 w-4" />
+        </Toggle>
       </div>
     </div>
   );
