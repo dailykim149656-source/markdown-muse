@@ -149,8 +149,11 @@ const FootnoteRef = Node.create({
     return [{ tag: 'span[data-type="footnote-ref"]' }];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    return ["span", mergeAttributes(HTMLAttributes, { "data-type": "footnote-ref" })];
+  renderHTML({ node, HTMLAttributes }) {
+    return ["span", mergeAttributes(HTMLAttributes, {
+      "data-type": "footnote-ref",
+      "data-footnote-id": node.attrs.id,
+    }), `[*]`];
   },
 
   addNodeView() {
