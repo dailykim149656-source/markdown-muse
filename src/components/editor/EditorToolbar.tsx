@@ -637,7 +637,7 @@ const EditorToolbar = ({ editor }: EditorToolbarProps) => {
   ];
 
   return (
-    <div className="flex items-center gap-0.5 px-3 py-1.5 bg-toolbar border-b border-toolbar-border overflow-x-auto flex-wrap">
+    <div className="flex items-center gap-0.5 px-2 sm:px-3 py-1.5 bg-toolbar border-b border-toolbar-border overflow-x-auto scrollbar-thin">
       {/* Font selects */}
       <FontFamilySelect editor={editor} />
       <FontSizeSelect editor={editor} />

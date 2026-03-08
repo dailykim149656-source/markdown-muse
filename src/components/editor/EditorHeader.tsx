@@ -62,26 +62,26 @@ const EditorHeader = ({
   const { toggleSidebar } = useSidebar();
 
   return (
-    <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={toggleSidebar} title="파일 탐색기">
+    <header className="flex items-center justify-between h-12 px-2 sm:px-4 border-b border-border bg-background gap-1">
+      <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={toggleSidebar} title="파일 탐색기">
           <PanelLeft className="h-4 w-4" />
         </Button>
-        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+        <Link to="/" className="hidden sm:flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0">
           <img src={docslyLogo} alt="Docsy" className="h-6 w-6" />
           <span className="text-sm font-bold text-foreground mr-1">Docsy</span>
         </Link>
-        <span className="text-muted-foreground">|</span>
+        <span className="text-muted-foreground hidden sm:inline">|</span>
         <input
           value={fileName}
           onChange={(e) => onFileNameChange(e.target.value)}
-          className="bg-transparent border-none outline-none text-sm font-medium text-foreground w-36 focus:ring-0"
+          className="bg-transparent border-none outline-none text-sm font-medium text-foreground w-20 sm:w-36 min-w-0 focus:ring-0"
           placeholder="Untitled"
         />
-        <span className="text-xs text-muted-foreground">{modeExt}</span>
+        <span className="text-xs text-muted-foreground shrink-0">{modeExt}</span>
 
-        {/* Mode tabs */}
-        <div className="flex items-center ml-3 bg-secondary rounded-md p-0.5">
+        {/* Mode tabs - dropdown on mobile, tabs on desktop */}
+        <div className="hidden lg:flex items-center ml-3 bg-secondary rounded-md p-0.5">
           {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((m) => (
             <button
               key={m}
@@ -92,10 +92,25 @@ const EditorHeader = ({
             </button>
           ))}
         </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="lg:hidden h-7 text-xs px-2 gap-1 shrink-0">
+              {mode === "markdown" ? "MD" : mode === "latex" ? "TeX" : mode.toUpperCase()}
+              <ChevronDown className="h-3 w-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-36">
+            {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((m) => (
+              <DropdownMenuItem key={m} onClick={() => onModeChange(m)} className={`text-xs ${mode === m ? "bg-accent" : ""}`}>
+                {m === "markdown" ? "Markdown" : m === "latex" ? "LaTeX" : m === "html" ? "HTML" : m === "json" ? "JSON" : "YAML"}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      <div className="flex items-center gap-1">
-        <span className="text-xs text-muted-foreground mr-3">
+      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+        <span className="text-xs text-muted-foreground mr-1 sm:mr-3 hidden sm:inline">
           {wordCount}자
         </span>
         <Button variant="ghost" size="sm" onClick={onLoad} title="불러오기" className="h-8 w-8 p-0">
@@ -170,11 +185,11 @@ const EditorHeader = ({
           </Button>
         )}
 
-        <Button variant="ghost" size="sm" onClick={onOpenShortcuts} title="단축키 안내 (Ctrl+/)" className="h-8 w-8 p-0">
+        <Button variant="ghost" size="sm" onClick={onOpenShortcuts} title="단축키 안내 (Ctrl+/)" className="h-8 w-8 p-0 hidden sm:flex">
           <Keyboard className="h-4 w-4" />
         </Button>
 
-        <Button variant="ghost" size="sm" onClick={onToggleFullscreen} title="전체화면 (F11)" className="h-8 w-8 p-0">
+        <Button variant="ghost" size="sm" onClick={onToggleFullscreen} title="전체화면 (F11)" className="h-8 w-8 p-0 hidden sm:flex">
           {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
         </Button>
 
