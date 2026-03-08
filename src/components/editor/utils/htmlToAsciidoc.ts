@@ -24,11 +24,11 @@ export function htmlToAsciidoc(html: string): string {
   s = s.replace(/<span[^>]*data-type="cross-ref"[^>]*data-target="([^"]*)"[^>]*>[^<]*<\/span>/gi,
     (_, target) => `\x00XREF_START\x00${target}\x00XREF_END\x00`);
   // Mermaid — output as code block with mermaid language
-  s = s.replace(/<div[^>]*data-type="mermaid(?:Block)?"[^>]*(?:code="([\s\S]*?)")?[^>]*>[\s\S]*?<\/div>/gi,
-    (match, code) => {
-      const mermaidCode = code || "";
-      const decoded = decodeEntities(mermaidCode);
-      return `[source,mermaid]\n----\n${decoded}\n----`;
+  s = s.replace(/<div[^>]*data-type="mermaid(?:Block)?"[^>]*>[\s\S]*?<\/div>/gi,
+    (match) => {
+      const codeMatch = match.match(/code="([\s\S]*?)"/);
+      const mermaidCode = codeMatch ? decodeEntities(codeMatch[1]) : "";
+      return `[source,mermaid]\n----\n${mermaidCode}\n----`;
     });
 
   // Admonitions

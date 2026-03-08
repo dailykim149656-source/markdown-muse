@@ -44,11 +44,11 @@ function processNode(html: string, features: Set<string>): string {
     (_, target) => `@${target}`);
 
   // Mermaid — preserve as comment with code
-  s = s.replace(/<div[^>]*data-type="mermaid(?:Block)?"[^>]*(?:code="([\s\S]*?)")?[^>]*>[\s\S]*?<\/div>/gi,
-    (match, code) => {
-      const mermaidCode = code || "";
-      const decoded = decodeHtmlEntities(mermaidCode);
-      return `// Mermaid diagram (not natively supported in Typst)\n// \`\`\`mermaid\n${decoded.split("\n").map((l: string) => `// ${l}`).join("\n")}\n// \`\`\``;
+  s = s.replace(/<div[^>]*data-type="mermaid(?:Block)?"[^>]*>[\s\S]*?<\/div>/gi,
+    (match) => {
+      const codeMatch = match.match(/code="([\s\S]*?)"/);
+      const mermaidCode = codeMatch ? decodeHtmlEntities(codeMatch[1]) : "";
+      return `// Mermaid diagram (not natively supported in Typst)\n// \`\`\`mermaid\n${mermaidCode.split("\n").map((l: string) => `// ${l}`).join("\n")}\n// \`\`\``;
     });
 
   // Admonitions
