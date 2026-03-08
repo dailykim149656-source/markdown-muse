@@ -4,6 +4,18 @@ import Placeholder from "@tiptap/extension-placeholder";
 import UnderlineExt from "@tiptap/extension-underline";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
+import ImageExt from "@tiptap/extension-image";
+import LinkExt from "@tiptap/extension-link";
+import TableExt from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+import Highlight from "@tiptap/extension-highlight";
+import SubscriptExt from "@tiptap/extension-subscript";
+import SuperscriptExt from "@tiptap/extension-superscript";
+import TextAlign from "@tiptap/extension-text-align";
+import TextStyle from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
 import EditorToolbar from "./EditorToolbar";
 import TurndownService from "turndown";
 import { marked } from "marked";
@@ -30,6 +42,21 @@ const MarkdownEditor = ({ onContentChange, initialContent }: MarkdownEditorProps
       UnderlineExt,
       TaskList,
       TaskItem.configure({ nested: true }),
+      ImageExt.configure({ inline: false, allowBase64: true }),
+      LinkExt.configure({
+        openOnClick: false,
+        HTMLAttributes: { class: "text-primary underline cursor-pointer" },
+      }),
+      TableExt.configure({ resizable: true }),
+      TableRow,
+      TableCell,
+      TableHeader,
+      Highlight.configure({ multicolor: false }),
+      SubscriptExt,
+      SuperscriptExt,
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      TextStyle,
+      Color,
     ],
     content: initialContent ? marked.parse(initialContent, { async: false }) as string : "",
     onUpdate: ({ editor }) => {
