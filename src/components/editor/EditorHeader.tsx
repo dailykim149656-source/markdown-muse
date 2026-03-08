@@ -37,8 +37,8 @@ const EditorHeader = ({
   return (
     <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background">
       <div className="flex items-center gap-2">
-        <img src={docslyLogo} alt="Docsly" className="h-6 w-6" />
-        <span className="text-sm font-bold text-foreground mr-1">Docsly</span>
+        <img src={docslyLogo} alt="Docsy" className="h-6 w-6" />
+        <span className="text-sm font-bold text-foreground mr-1">Docsy</span>
         <span className="text-muted-foreground">|</span>
         <input
           value={fileName}
