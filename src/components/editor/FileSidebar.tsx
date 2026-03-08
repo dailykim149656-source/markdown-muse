@@ -22,7 +22,7 @@ interface FileSidebarProps {
   documents: DocumentData[];
   activeDocId: string;
   onSelectDoc: (id: string) => void;
-  onNewDoc: (mode?: "markdown" | "latex" | "html") => void;
+  onNewDoc: (mode?: "markdown" | "latex" | "html" | "json" | "yaml") => void;
   onDeleteDoc: (id: string) => void;
   onRenameDoc: (id: string, name: string) => void;
 }
