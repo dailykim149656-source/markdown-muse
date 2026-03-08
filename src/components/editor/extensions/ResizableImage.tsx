@@ -1,17 +1,18 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
+import { AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 
-interface ResizableImageAttrs {
-  src: string;
-  alt: string;
-  title: string;
-  width: number | null;
-  height: number | null;
-}
+type ImageAlign = "left" | "center" | "right";
+
+const alignStyles: Record<ImageAlign, string> = {
+  left: "mr-auto ml-0",
+  center: "mx-auto",
+  right: "ml-auto mr-0",
+};
 
 const ResizableImageComponent = ({ node, updateAttributes, selected }: any) => {
-  const { src, alt, title, width, height } = node.attrs as ResizableImageAttrs;
+  const { src, alt, title, width, height, align } = node.attrs;
   const [isResizing, setIsResizing] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
   const startX = useRef(0);
@@ -43,8 +44,13 @@ const ResizableImageComponent = ({ node, updateAttributes, selected }: any) => {
     [width, updateAttributes]
   );
 
+  const currentAlign: ImageAlign = align || "center";
+
   return (
-    <NodeViewWrapper className="relative inline-block my-2 mx-auto" style={{ width: width ? `${width}px` : "auto" }}>
+    <NodeViewWrapper
+      className={`relative block my-2 ${alignStyles[currentAlign]}`}
+      style={{ width: width ? `${width}px` : "fit-content" }}
+    >
       <div className={`relative group ${selected ? "ring-2 ring-primary rounded" : ""}`}>
         <img
           ref={imgRef}
@@ -55,6 +61,28 @@ const ResizableImageComponent = ({ node, updateAttributes, selected }: any) => {
           style={{ width: width ? `${width}px` : "auto", height: height ? `${height}px` : "auto" }}
           draggable={false}
         />
+
+        {/* Alignment toolbar */}
+        <div className="absolute -top-9 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-popover border border-border rounded-lg shadow-md px-1 py-0.5 z-10">
+          {(["left", "center", "right"] as ImageAlign[]).map((a) => {
+            const Icon = a === "left" ? AlignLeft : a === "center" ? AlignCenter : AlignRight;
+            return (
+              <button
+                key={a}
+                onClick={() => updateAttributes({ align: a })}
+                className={`p-1 rounded transition-colors ${
+                  currentAlign === a
+                    ? "bg-accent text-foreground"
+                    : "text-muted-foreground hover:bg-accent/50"
+                }`}
+                title={a === "left" ? "왼쪽 정렬" : a === "center" ? "가운데 정렬" : "오른쪽 정렬"}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </button>
+            );
+          })}
+        </div>
+
         {/* Resize handles */}
         <div
           className="absolute top-0 right-0 w-2 h-full cursor-e-resize opacity-0 group-hover:opacity-100 hover:bg-primary/20 transition-opacity"
@@ -95,6 +123,7 @@ const ResizableImage = Node.create({
       title: { default: null },
       width: { default: null },
       height: { default: null },
+      align: { default: "center" },
     };
   },
 
@@ -103,7 +132,9 @@ const ResizableImage = Node.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    return ["img", mergeAttributes(HTMLAttributes)];
+    const { align, ...rest } = HTMLAttributes;
+    const style = align === "left" ? "margin-right:auto" : align === "right" ? "margin-left:auto" : "margin:0 auto";
+    return ["img", mergeAttributes(rest, { style, "data-align": align })];
   },
 
   addNodeView() {
@@ -113,7 +144,7 @@ const ResizableImage = Node.create({
   addCommands() {
     return {
       setImage:
-        (options: { src: string; alt?: string; title?: string; width?: number; height?: number }) =>
+        (options: { src: string; alt?: string; title?: string; width?: number; height?: number; align?: string }) =>
         ({ commands }: any) => {
           return commands.insertContent({
             type: this.name,
