@@ -11,7 +11,7 @@ import {
   Table, Highlighter,
   Superscript, Subscript,
   AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  Palette, TableProperties, Plus, Trash2, ArrowUpDown, ArrowLeftRight, Sigma,
+  Palette, TableProperties, Plus, Trash2, ArrowUpDown, ArrowLeftRight, Sigma, GitBranch,
 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
