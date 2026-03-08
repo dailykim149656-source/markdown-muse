@@ -1,5 +1,6 @@
 import { useEditor, EditorContent } from "@tiptap/react";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import UnderlineExt from "@tiptap/extension-underline";
