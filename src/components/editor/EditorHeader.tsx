@@ -94,7 +94,7 @@ const EditorHeader = ({
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="md:hidden h-7 text-xs px-2 gap-1 shrink-0">
+            <Button variant="outline" size="sm" className="lg:hidden h-7 text-xs px-2 gap-1 shrink-0">
               {mode === "markdown" ? "MD" : mode === "latex" ? "TeX" : mode.toUpperCase()}
               <ChevronDown className="h-3 w-3" />
             </Button>
