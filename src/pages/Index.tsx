@@ -5,6 +5,7 @@ import HtmlEditor from "@/components/editor/HtmlEditor";
 import JsonYamlEditor from "@/components/editor/JsonYamlEditor";
 import TemplateDialog, { type DocumentTemplate } from "@/components/editor/TemplateDialog";
 import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
+import { rstToHtml } from "@/components/editor/utils/rstToHtml";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
@@ -303,7 +304,7 @@ ${editorHtml}
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = ev.target?.result as string;
-      const name = file.name.replace(/\.(md|tex|txt|html|htm|json|yaml|yml|adoc|asciidoc)$/, "");
+      const name = file.name.replace(/\.(md|tex|txt|html|htm|json|yaml|yml|adoc|asciidoc|rst)$/, "");
       let mode: EditorMode = "markdown";
       let finalContent = content;
       if (file.name.endsWith(".tex")) mode = "latex";
@@ -314,6 +315,10 @@ ${editorHtml}
         mode = "html";
         finalContent = asciidocToHtml(content);
         toast.info("AsciiDoc → HTML로 변환되었습니다");
+      } else if (file.name.endsWith(".rst")) {
+        mode = "html";
+        finalContent = rstToHtml(content);
+        toast.info("RST → HTML로 변환되었습니다");
       }
       const newDoc = createNewDocument(name, mode);
       newDoc.content = finalContent;
@@ -450,7 +455,7 @@ ${editorHtml}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".md,.markdown,.txt,.tex,.html,.htm,.json,.yaml,.yml,.adoc,.asciidoc"
+            accept=".md,.markdown,.txt,.tex,.html,.htm,.json,.yaml,.yml,.adoc,.asciidoc,.rst"
             className="hidden"
             onChange={handleFileChange}
           />
