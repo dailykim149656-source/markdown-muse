@@ -267,12 +267,18 @@ ${editorHtml}
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = ev.target?.result as string;
-      const name = file.name.replace(/\.(md|tex|txt|html|htm|json|yaml|yml)$/, "");
+      const name = file.name.replace(/\.(md|tex|txt|html|htm|json|yaml|yml|adoc|asciidoc)$/, "");
       let mode: EditorMode = "markdown";
+      let finalContent = content;
       if (file.name.endsWith(".tex")) mode = "latex";
       else if (file.name.endsWith(".html") || file.name.endsWith(".htm")) mode = "html";
       else if (file.name.endsWith(".json")) mode = "json";
       else if (file.name.endsWith(".yaml") || file.name.endsWith(".yml")) mode = "yaml";
+      else if (file.name.endsWith(".adoc") || file.name.endsWith(".asciidoc")) {
+        mode = "html";
+        finalContent = asciidocToHtml(content);
+        toast.info("AsciiDoc → HTML로 변환되었습니다");
+      }
       const newDoc = createNewDocument(name, mode);
       newDoc.content = content;
       setDocuments(prev => [...prev, newDoc]);
