@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Editor } from "@tiptap/react";
 import {
   Bold, Italic, Underline, Strikethrough, Code, CodeSquare,
@@ -38,6 +38,8 @@ const ImageDialog = ({ editor }: { editor: Editor }) => {
   const [url, setUrl] = useState("");
   const [alt, setAlt] = useState("");
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"url" | "upload">("upload");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const insertImage = () => {
     if (url) {
@@ -46,6 +48,20 @@ const ImageDialog = ({ editor }: { editor: Editor }) => {
       setAlt("");
       setOpen(false);
     }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const base64 = ev.target?.result as string;
+      editor.chain().focus().setImage({ src: base64, alt: alt || file.name }).run();
+      setAlt("");
+      setOpen(false);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
   };
 
   return (
@@ -57,19 +73,65 @@ const ImageDialog = ({ editor }: { editor: Editor }) => {
       </PopoverTrigger>
       <PopoverContent className="w-72 space-y-3">
         <p className="text-sm font-medium">이미지 삽입</p>
-        <div className="space-y-2">
-          <Label className="text-xs">이미지 URL</Label>
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." className="h-8 text-sm" />
+        <div className="flex gap-1 border-b border-border pb-2">
+          <Button
+            variant={tab === "upload" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setTab("upload")}
+          >
+            파일 업로드
+          </Button>
+          <Button
+            variant={tab === "url" ? "secondary" : "ghost"}
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setTab("url")}
+          >
+            URL 입력
+          </Button>
         </div>
-        <div className="space-y-2">
-          <Label className="text-xs">대체 텍스트 (선택)</Label>
-          <Input value={alt} onChange={(e) => setAlt(e.target.value)} placeholder="이미지 설명" className="h-8 text-sm" />
-        </div>
-        <Button size="sm" onClick={insertImage} className="w-full h-8 text-sm">삽입</Button>
+        {tab === "upload" ? (
+          <div className="space-y-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileUpload}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full h-9 text-sm"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Image className="h-4 w-4 mr-2" />
+              이미지 파일 선택
+            </Button>
+            <div className="space-y-1">
+              <Label className="text-xs">대체 텍스트 (선택)</Label>
+              <Input value={alt} onChange={(e) => setAlt(e.target.value)} placeholder="이미지 설명" className="h-8 text-sm" />
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <Label className="text-xs">이미지 URL</Label>
+              <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." className="h-8 text-sm" onKeyDown={(e) => e.key === "Enter" && insertImage()} />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">대체 텍스트 (선택)</Label>
+              <Input value={alt} onChange={(e) => setAlt(e.target.value)} placeholder="이미지 설명" className="h-8 text-sm" />
+            </div>
+            <Button size="sm" onClick={insertImage} className="w-full h-8 text-sm">삽입</Button>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );
 };
+
 
 const LinkDialog = ({ editor }: { editor: Editor }) => {
   const [url, setUrl] = useState("");
