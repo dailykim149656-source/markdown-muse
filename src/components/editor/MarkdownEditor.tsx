@@ -4,7 +4,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import UnderlineExt from "@tiptap/extension-underline";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
-import ImageExt from "@tiptap/extension-image";
+import ResizableImage from "./extensions/ResizableImage";
 import LinkExt from "@tiptap/extension-link";
 import { Table as TableExt } from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
@@ -45,7 +45,7 @@ const MarkdownEditor = ({ onContentChange, initialContent }: MarkdownEditorProps
       UnderlineExt,
       TaskList,
       TaskItem.configure({ nested: true }),
-      ImageExt.configure({ inline: false, allowBase64: true }),
+      ResizableImage,
       LinkExt.configure({
         openOnClick: false,
         HTMLAttributes: { class: "text-primary underline cursor-pointer" },
