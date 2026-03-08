@@ -1,5 +1,5 @@
 import { useEditor, EditorContent } from "@tiptap/react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import UnderlineExt from "@tiptap/extension-underline";
@@ -31,14 +31,28 @@ interface LatexEditorProps {
 }
 
 const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
-  const [latexPreview, setLatexPreview] = useState("");
+  const [latexSource, setLatexSource] = useState(() =>
+    initialContent || ""
+  );
   const [showPanel, setShowPanel] = useState(true);
 
-  const handleUpdate = useCallback(
+  // Guards to prevent infinite sync loops
+  const syncingFromWysiwyg = useRef(false);
+  const syncingFromSource = useRef(false);
+  const sourceDebounce = useRef<ReturnType<typeof setTimeout>>();
+
+  // WYSIWYG → LaTeX source
+  const handleWysiwygUpdate = useCallback(
     (html: string) => {
+      if (syncingFromSource.current) return;
+      syncingFromWysiwyg.current = true;
       const latex = htmlToLatex(html);
-      setLatexPreview(latex);
+      setLatexSource(latex);
       onContentChange?.(latex);
+      // Reset guard after microtask
+      queueMicrotask(() => {
+        syncingFromWysiwyg.current = false;
+      });
     },
     [onContentChange]
   );
@@ -64,7 +78,7 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
       MathExtension, MathBlockExtension,
     ],
     content: initialContent ? latexToHtml(initialContent) : "",
-    onUpdate: ({ editor }) => handleUpdate(editor.getHTML()),
+    onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML()),
     editorProps: {
       attributes: {
         class: "prose prose-neutral dark:prose-invert max-w-none focus:outline-none",
@@ -72,22 +86,62 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
     },
   });
 
+  // LaTeX source → WYSIWYG (debounced)
+  const handleSourceChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const newLatex = e.target.value;
+      setLatexSource(newLatex);
+      onContentChange?.(newLatex);
+
+      if (sourceDebounce.current) clearTimeout(sourceDebounce.current);
+      sourceDebounce.current = setTimeout(() => {
+        if (!editor || syncingFromWysiwyg.current) return;
+        syncingFromSource.current = true;
+        const html = latexToHtml(newLatex);
+        editor.commands.setContent(html, false);
+        queueMicrotask(() => {
+          syncingFromSource.current = false;
+        });
+      }, 600);
+    },
+    [editor, onContentChange]
+  );
+
+  // Tab support in textarea
+  const handleSourceKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const ta = e.currentTarget;
+        const start = ta.selectionStart;
+        const end = ta.selectionEnd;
+        const newVal = latexSource.substring(0, start) + "  " + latexSource.substring(end);
+        setLatexSource(newVal);
+        setTimeout(() => {
+          ta.selectionStart = ta.selectionEnd = start + 2;
+        }, 0);
+      }
+    },
+    [latexSource]
+  );
+
   return (
     <div className="flex flex-col h-full">
       <EditorToolbar editor={editor} />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* WYSIWYG Editor */}
         <div className={`flex-1 overflow-y-auto tiptap-editor ${showPanel ? "border-r border-border" : ""}`}>
           <EditorContent editor={editor} />
         </div>
 
-        {/* LaTeX Source Preview Panel */}
+        {/* LaTeX Source Panel (editable) */}
         {showPanel && (
-          <div className="w-[400px] flex flex-col bg-background">
+          <div className="w-[420px] flex flex-col bg-background">
             <div className="h-8 flex items-center justify-between px-3 bg-secondary/50 border-b border-border shrink-0">
               <div className="flex items-center gap-1.5">
                 <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-xs font-medium text-muted-foreground">LaTeX 소스</span>
+                <span className="text-[10px] text-muted-foreground/60 ml-1">양방향 동기화</span>
               </div>
               <Button
                 variant="ghost"
@@ -98,9 +152,14 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
                 <PanelRightClose className="h-3.5 w-3.5" />
               </Button>
             </div>
-            <pre className="flex-1 overflow-auto p-4 text-xs font-mono text-foreground leading-relaxed whitespace-pre-wrap select-all">
-              {latexPreview || "// WYSIWYG 편집기에 내용을 입력하면\n// LaTeX 소스가 여기에 표시됩니다."}
-            </pre>
+            <textarea
+              value={latexSource}
+              onChange={handleSourceChange}
+              onKeyDown={handleSourceKeyDown}
+              className="flex-1 w-full bg-background text-foreground font-mono text-xs p-4 outline-none resize-none leading-relaxed"
+              spellCheck={false}
+              placeholder="// WYSIWYG 편집기에 내용을 입력하면&#10;// LaTeX 소스가 여기에 표시됩니다."
+            />
           </div>
         )}
 
@@ -109,7 +168,7 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
           <Button
             variant="ghost"
             size="sm"
-            className="absolute right-2 top-[calc(theme(spacing.12)+theme(spacing.8)+0.5rem)] h-7 gap-1 px-2 text-xs text-muted-foreground z-10"
+            className="absolute right-2 top-2 h-7 gap-1 px-2 text-xs text-muted-foreground z-10"
             onClick={() => setShowPanel(true)}
           >
             <PanelRightOpen className="h-3.5 w-3.5" />
