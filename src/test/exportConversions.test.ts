@@ -297,7 +297,7 @@ describe("htmlToAsciidoc", () => {
   });
 
   it("converts cross references", () => {
-    const r = htmlToAsciidoc('<span data-type="cross-ref" data-target="fig:1">그림 1</span>');
+    const r = htmlToAsciidoc('<p>See <span data-type="cross-ref" data-target="fig:1">그림 1</span> here</p>');
     expect(r).toContain("<<fig:1>>");
   });
 
