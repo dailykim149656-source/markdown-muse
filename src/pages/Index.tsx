@@ -374,6 +374,7 @@ ${editorHtml}
     return <HtmlEditor key={editorKey} initialContent={activeDoc.content} onContentChange={handleContentChange} />;
   }, [activeDoc.mode, activeDoc.content, editorKey, handleContentChange, handleModeChange]);
 
+  return (
     <SidebarProvider defaultOpen={false}>
       <div className="h-screen flex w-full">
         <FileSidebar
