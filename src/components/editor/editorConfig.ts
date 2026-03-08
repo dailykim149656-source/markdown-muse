@@ -18,6 +18,7 @@ import Color from "@tiptap/extension-color";
 import FontFamily from "@tiptap/extension-font-family";
 import FontSize from "./extensions/FontSize";
 import { MathExtension, MathBlockExtension } from "./extensions/MathExtension";
+import MermaidBlock from "./extensions/MermaidBlock";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 
