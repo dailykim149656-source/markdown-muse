@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, FileText, Code2, Printer, Moon, Sun, Sparkles, Zap, Shield } from "lucide-react";
+import { ArrowRight, FileText, Code2, Printer, Moon, Sun, Sparkles, Zap, Shield, FileCode, FileJson, Table, Layout, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
@@ -29,11 +29,14 @@ const Landing = () => {
 
   const features = [
     { icon: FileText, title: "Markdown WYSIWYG", desc: "마크다운 문법을 몰라도 괜찮아요. 보이는 그대로 편집하고, 깔끔한 .md 파일로 저장하세요." },
-    { icon: Code2, title: "LaTeX 편집기", desc: "수식이 포함된 학술 문서도 쉽게. 실시간 미리보기와 함께 LaTeX를 편집하세요." },
-    { icon: Sparkles, title: "수식 삽입", desc: "에디터 안에서 바로 수학 공식을 삽입하고 렌더링된 결과를 즉시 확인하세요." },
-    { icon: Printer, title: "PDF & 인쇄", desc: "작성한 문서를 깔끔한 PDF로 내보내거나 바로 인쇄할 수 있어요." },
+    { icon: Code2, title: "LaTeX & Typst", desc: "수식이 포함된 학술 문서를 LaTeX 또는 Typst로 작성하고 실시간 미리보기로 확인하세요." },
+    { icon: FileCode, title: "RST & AsciiDoc", desc: "reStructuredText와 AsciiDoc 형식을 지원해요. 가져오기와 내보내기 모두 가능합니다." },
+    { icon: Layout, title: "HTML 편집기", desc: "HTML 문서를 WYSIWYG으로 편집하고 Markdown, RST, LaTeX 등 다양한 형식으로 내보내세요." },
+    { icon: FileJson, title: "JSON & YAML", desc: "JSON/YAML 파일을 스키마 검증과 함께 편집하세요. 구조화된 데이터 관리가 쉬워집니다." },
+    { icon: Table, title: "표 & 다이어그램", desc: "표, Mermaid 다이어그램, 수식, 각주, 경고 상자 등 풍부한 콘텐츠를 삽입하세요." },
+    { icon: BookOpen, title: "템플릿 & 멀티탭", desc: "다양한 문서 템플릿으로 빠르게 시작하고, 여러 문서를 탭으로 동시에 편집하세요." },
+    { icon: Printer, title: "PDF & 다형식 내보내기", desc: "작성한 문서를 PDF, Markdown, LaTeX, RST, Typst, AsciiDoc 등으로 내보내세요." },
     { icon: Moon, title: "다크 모드", desc: "눈이 편한 다크 모드를 지원해요. 언제든 테마를 전환할 수 있습니다." },
-    { icon: Zap, title: "빠르고 가벼운", desc: "브라우저에서 바로 실행. 별도 설치 없이 즉시 문서 작성을 시작하세요." },
   ];
 
   return (
