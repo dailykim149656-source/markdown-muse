@@ -304,7 +304,7 @@ ${editorHtml}
     const reader = new FileReader();
     reader.onload = (ev) => {
       const content = ev.target?.result as string;
-      const name = file.name.replace(/\.(md|tex|txt|html|htm|json|yaml|yml|adoc|asciidoc)$/, "");
+      const name = file.name.replace(/\.(md|tex|txt|html|htm|json|yaml|yml|adoc|asciidoc|rst)$/, "");
       let mode: EditorMode = "markdown";
       let finalContent = content;
       if (file.name.endsWith(".tex")) mode = "latex";
@@ -315,6 +315,10 @@ ${editorHtml}
         mode = "html";
         finalContent = asciidocToHtml(content);
         toast.info("AsciiDoc → HTML로 변환되었습니다");
+      } else if (file.name.endsWith(".rst")) {
+        mode = "html";
+        finalContent = rstToHtml(content);
+        toast.info("RST → HTML로 변환되었습니다");
       }
       const newDoc = createNewDocument(name, mode);
       newDoc.content = finalContent;
