@@ -1,4 +1,5 @@
 import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown } from "lucide-react";
+import { Link } from "react-router-dom";
 import docslyLogo from "@/assets/docsly-logo.png";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
