@@ -443,20 +443,126 @@ export function htmlToLatex(html: string, includeWrapper = true, options?: Parti
 
 export function latexToHtml(latex: string): string {
   let body = latex;
+
+  // Extract body from document environment
   const beginDoc = latex.indexOf("\\begin{document}");
   const endDoc = latex.indexOf("\\end{document}");
   if (beginDoc !== -1) {
     body = latex.substring(beginDoc + "\\begin{document}".length, endDoc !== -1 ? endDoc : undefined);
   }
 
+  // Strip preamble-only commands
   body = body.replace(/\\maketitle/g, "");
+  body = body.replace(/\\pagestyle\{[^}]*\}/g, "");
+  body = body.replace(/\\thispagestyle\{[^}]*\}/g, "");
+  body = body.replace(/\\setlength\{[^}]*\}\{[^}]*\}/g, "");
+  body = body.replace(/\\newcommand\{[^}]*\}(?:\[\d+\])?\{[^}]*\}/g, "");
+
+  // Process environments FIRST (before inline replacements)
+
+  // Abstract
+  body = body.replace(/\\begin\{abstract\}([\s\S]*?)\\end\{abstract\}/g,
+    '<blockquote><em>Abstract:</em> $1</blockquote>');
+
+  // Center environment
+  body = body.replace(/\\begin\{center\}([\s\S]*?)\\end\{center\}/g,
+    '<div style="text-align:center">$1</div>');
+
+  // Flushleft / flushright
+  body = body.replace(/\\begin\{flushright\}([\s\S]*?)\\end\{flushright\}/g,
+    '<div style="text-align:right">$1</div>');
+  body = body.replace(/\\begin\{flushleft\}([\s\S]*?)\\end\{flushleft\}/g,
+    '<div style="text-align:left">$1</div>');
+
+  // Display math environments (before inline processing)
+  body = body.replace(/\\begin\{equation\*?\}([\s\S]*?)\\end\{equation\*?\}/g,
+    '<div data-type="mathBlock" data-latex="$1">$$$$$1$$$$</div>');
+  body = body.replace(/\\begin\{align\*?\}([\s\S]*?)\\end\{align\*?\}/g,
+    '<div data-type="mathBlock" data-latex="\\begin{aligned}$1\\end{aligned}">$$\\begin{aligned}$1\\end{aligned}$$</div>');
+
+  // Display math delimiters
+  body = body.replace(/\\\[([\s\S]*?)\\\]/g, '<div data-type="mathBlock" data-latex="$1">$$$$$1$$$$</div>');
+  body = body.replace(/\$\$([\s\S]*?)\$\$/g, '<div data-type="mathBlock" data-latex="$1">$$$$$1$$$$</div>');
+
+  // Inline math
+  body = body.replace(/\$([^$\n]+?)\$/g, '<span data-type="mathInline" data-latex="$1">$$$1$$</span>');
+
+  // Code blocks
+  body = body.replace(/\\begin\{lstlisting\}(?:\[[^\]]*\])?([\s\S]*?)\\end\{lstlisting\}/g,
+    '<pre><code>$1</code></pre>');
+  body = body.replace(/\\begin\{verbatim\}([\s\S]*?)\\end\{verbatim\}/g,
+    '<pre><code>$1</code></pre>');
+
+  // Admonition tcolorbox
+  body = body.replace(/\\begin\{admonitionbox\}\[([^\]]*)\]\{[^}]*\}([\s\S]*?)\\end\{admonitionbox\}/g,
+    '<div data-type="admonition" data-admonition-type="note"><strong>$1</strong>$2</div>');
+
+  // Lists (handle optional arguments like [leftmargin=...])
+  body = body.replace(/\\begin\{itemize\}(?:\[[^\]]*\])?([\s\S]*?)\\end\{itemize\}/g, (_, items) => {
+    const lis = items
+      .split(/\\item(?:\[[^\]]*\])?\s*/)
+      .filter((s: string) => s.trim())
+      .map((s: string) => `<li>${s.trim()}</li>`)
+      .join("\n");
+    return `<ul>\n${lis}\n</ul>`;
+  });
+  body = body.replace(/\\begin\{enumerate\}(?:\[[^\]]*\])?([\s\S]*?)\\end\{enumerate\}/g, (_, items) => {
+    const lis = items
+      .split(/\\item(?:\[[^\]]*\])?\s*/)
+      .filter((s: string) => s.trim())
+      .map((s: string) => `<li>${s.trim()}</li>`)
+      .join("\n");
+    return `<ol>\n${lis}\n</ol>`;
+  });
+
+  // Bibliography
+  body = body.replace(/\\begin\{thebibliography\}\{[^}]*\}([\s\S]*?)\\end\{thebibliography\}/g, (_, items) => {
+    const entries = items
+      .split(/\\bibitem\{[^}]*\}\s*/)
+      .filter((s: string) => s.trim())
+      .map((s: string) => `<li>${s.trim()}</li>`)
+      .join("\n");
+    return `<h2>참고문헌</h2>\n<ol>\n${entries}\n</ol>`;
+  });
+
+  // Letter environment
+  body = body.replace(/\\begin\{letter\}\{([^}]*)\}/g, '<p><strong>수신:</strong> $1</p>');
+  body = body.replace(/\\end\{letter\}/g, '');
+  body = body.replace(/\\opening\{([^}]*)\}/g, '<p>$1</p>');
+  body = body.replace(/\\closing\{([^}]*)\}/g, '<p>$1</p>');
+  body = body.replace(/\\signature\{([^}]*)\}/g, '');
+  body = body.replace(/\\address\{([^}]*)\}/g, '');
+
+  // Quotes
+  body = body.replace(/\\begin\{quote\}([\s\S]*?)\\end\{quote\}/g, "<blockquote>$1</blockquote>");
+
+  // Figures
+  body = body.replace(/\\begin\{figure\}[\s\S]*?\\includegraphics(?:\[[^\]]*\])?\{([^}]*)\}[\s\S]*?(?:\\caption\{([^}]*)\})?[\s\S]*?\\end\{figure\}/g,
+    '<img src="$1" alt="$2" />');
+
+  // Tables
+  body = body.replace(/\\begin\{table\}[\s\S]*?\\begin\{tabular\}\{[^}]*\}([\s\S]*?)\\end\{tabular\}[\s\S]*?\\end\{table\}/g,
+    (_, tableContent) => processLatexTable(tableContent));
+  // Standalone tabular
+  body = body.replace(/\\begin\{tabular\}\{[^}]*\}([\s\S]*?)\\end\{tabular\}/g,
+    (_, tableContent) => processLatexTable(tableContent));
 
   // Sections
-  body = body.replace(/\\section\{([^}]*)\}/g, "<h1>$1</h1>");
-  body = body.replace(/\\subsection\{([^}]*)\}/g, "<h2>$1</h2>");
-  body = body.replace(/\\subsubsection\{([^}]*)\}/g, "<h3>$1</h3>");
-  body = body.replace(/\\paragraph\{([^}]*)\}/g, "<h4>$1</h4>");
-  body = body.replace(/\\subparagraph\{([^}]*)\}/g, "<h5>$1</h5>");
+  body = body.replace(/\\section\*?\{([^}]*)\}/g, "<h1>$1</h1>");
+  body = body.replace(/\\subsection\*?\{([^}]*)\}/g, "<h2>$1</h2>");
+  body = body.replace(/\\subsubsection\*?\{([^}]*)\}/g, "<h3>$1</h3>");
+  body = body.replace(/\\paragraph\*?\{([^}]*)\}/g, "<h4>$1</h4>");
+  body = body.replace(/\\subparagraph\*?\{([^}]*)\}/g, "<h5>$1</h5>");
+
+  // Nested brace groups with size/style commands: {\Huge\bfseries text}
+  body = body.replace(/\{\\Huge\\bfseries\s+([^}]*)\}/g, '<span style="font-size:2em;font-weight:bold">$1</span>');
+  body = body.replace(/\{\\LARGE\\bfseries\s+([^}]*)\}/g, '<span style="font-size:1.7em;font-weight:bold">$1</span>');
+  body = body.replace(/\{\\Large\\bfseries\s+([^}]*)\}/g, '<span style="font-size:1.4em;font-weight:bold">$1</span>');
+  body = body.replace(/\{\\large\\bfseries\s+([^}]*)\}/g, '<span style="font-size:1.2em;font-weight:bold">$1</span>');
+  body = body.replace(/\{\\large\s+([^}]*)\}/g, '<span style="font-size:1.2em">$1</span>');
+  body = body.replace(/\{\\Huge\s+([^}]*)\}/g, '<span style="font-size:2em">$1</span>');
+  body = body.replace(/\{\\Large\s+([^}]*)\}/g, '<span style="font-size:1.4em">$1</span>');
+  body = body.replace(/\{\\small\s+([^}]*)\}/g, '<span style="font-size:0.85em">$1</span>');
 
   // Text formatting
   body = body.replace(/\\textbf\{([^}]*)\}/g, "<strong>$1</strong>");
@@ -465,74 +571,108 @@ export function latexToHtml(latex: string): string {
   body = body.replace(/\\emph\{([^}]*)\}/g, "<em>$1</em>");
   body = body.replace(/\\texttt\{([^}]*)\}/g, "<code>$1</code>");
   body = body.replace(/\\sout\{([^}]*)\}/g, "<s>$1</s>");
+  body = body.replace(/\\textsc\{([^}]*)\}/g, '<span style="font-variant:small-caps">$1</span>');
+  body = body.replace(/\\textsuperscript\{([^}]*)\}/g, "<sup>$1</sup>");
+  body = body.replace(/\\textsubscript\{([^}]*)\}/g, "<sub>$1</sub>");
 
-  // Footnotes → inline marker
+  // Footnotes
   body = body.replace(/\\footnote\{([^}]*)\}/g, '<sup class="footnote-ref">[$1]</sup>');
-
-  // Display math
-  body = body.replace(/\\\[([\s\S]*?)\\\]/g, '<div data-type="mathBlock" data-latex="$1">$$$$1$$</div>');
-  body = body.replace(/\$\$([\s\S]*?)\$\$/g, '<div data-type="mathBlock" data-latex="$1">$$$$1$$</div>');
-
-  // Inline math
-  body = body.replace(/\$([^$\n]+?)\$/g, '<span data-type="mathInline" data-latex="$1">$$$1$</span>');
-
-  // Environments
-  body = body.replace(/\\begin\{equation\}([\s\S]*?)\\end\{equation\}/g,
-    '<div data-type="mathBlock" data-latex="$1">$$$$1$$</div>');
-  body = body.replace(/\\begin\{align\*?\}([\s\S]*?)\\end\{align\*?\}/g,
-    '<div data-type="mathBlock" data-latex="\\begin{aligned}$1\\end{aligned}">$$\\begin{aligned}$1\\end{aligned}$$</div>');
-
-  // lstlisting → pre/code
-  body = body.replace(/\\begin\{lstlisting\}(?:\[.*?\])?([\s\S]*?)\\end\{lstlisting\}/g,
-    '<pre><code>$1</code></pre>');
-
-  // tcolorbox admonition
-  body = body.replace(/\\begin\{admonitionbox\}\[([^\]]*)\]\{[^}]*\}([\s\S]*?)\\end\{admonitionbox\}/g,
-    '<div data-type="admonition" data-admonition-type="note"><strong>$1</strong>$2</div>');
-
-  // Lists
-  body = body.replace(/\\begin\{itemize\}([\s\S]*?)\\end\{itemize\}/g, (_, items) => {
-    const lis = items.replace(/\\item\s*/g, "</li><li>").replace(/^<\/li>/, "");
-    return `<ul>${lis}</li></ul>`;
-  });
-  body = body.replace(/\\begin\{enumerate\}([\s\S]*?)\\end\{enumerate\}/g, (_, items) => {
-    const lis = items.replace(/\\item\s*/g, "</li><li>").replace(/^<\/li>/, "");
-    return `<ol>${lis}</li></ol>`;
-  });
-
-  // Quotes
-  body = body.replace(/\\begin\{quote\}([\s\S]*?)\\end\{quote\}/g, "<blockquote>$1</blockquote>");
-
-  // Verbatim
-  body = body.replace(/\\begin\{verbatim\}([\s\S]*?)\\end\{verbatim\}/g, "<pre><code>$1</code></pre>");
-
-  // Figures
-  body = body.replace(/\\begin\{figure\}[\s\S]*?\\includegraphics(?:\[.*?\])?\{([^}]*)\}[\s\S]*?(?:\\caption\{([^}]*)\})?[\s\S]*?\\end\{figure\}/g,
-    '<img src="$1" alt="$2" />');
-
-  // Tables (simplified)
-  body = body.replace(/\\begin\{table\}[\s\S]*?\\end\{table\}/g, "% [표]");
 
   // Links
   body = body.replace(/\\href\{([^}]*)\}\{([^}]*)\}/g, '<a href="$1">$2</a>');
+  body = body.replace(/\\url\{([^}]*)\}/g, '<a href="$1">$1</a>');
 
-  // Line breaks
-  body = body.replace(/\\\\/g, "<br/>");
-
-  // Rules
+  // Horizontal rules
+  body = body.replace(/\\rule\{\\textwidth\}\{[^}]*\}/g, "<hr/>");
   body = body.replace(/\\noindent\\rule\{\\textwidth\}\{[^}]*\}/g, "<hr/>");
   body = body.replace(/\\hrulefill/g, "<hr/>");
 
-  // Labels and refs (strip for HTML)
+  // Line breaks: \\ and \\[space]
+  body = body.replace(/\\\\(?:\[[^\]]*\])?/g, "<br/>");
+
+  // Spacing commands → whitespace
+  body = body.replace(/\\hfill/g, '<span style="float:right">');
+  // Fix hfill: find the next <br/> or newline and close the span
+  body = body.replace(/<span style="float:right">([^<]*?)(?:<br\/>|\n)/g,
+    '<span style="float:right">$1</span><br/>');
+
+  body = body.replace(/\\quad/g, "&emsp;");
+  body = body.replace(/\\qquad/g, "&emsp;&emsp;");
+  body = body.replace(/\\,/g, "&thinsp;");
+  body = body.replace(/\\;/g, "&ensp;");
+  body = body.replace(/\\hspace\{[^}]*\}/g, "&emsp;");
+  body = body.replace(/\\vspace\{[^}]*\}/g, "");
+
+  // Strip layout commands that don't affect content
+  body = body.replace(/\\noindent/g, "");
+  body = body.replace(/\\centering/g, "");
+  body = body.replace(/\\raggedright/g, "");
+  body = body.replace(/\\raggedleft/g, "");
+  body = body.replace(/\\clearpage/g, "");
+  body = body.replace(/\\newpage/g, "<hr/>");
+  body = body.replace(/\\tableofcontents/g, "<p><em>[목차]</em></p>");
+
+  // Labels and refs
   body = body.replace(/\\label\{[^}]*\}/g, "");
-  body = body.replace(/\\ref\{[^}]*\}/g, "[ref]");
+  body = body.replace(/\\ref\{([^}]*)\}/g, "[ref:$1]");
+  body = body.replace(/\\cite\{([^}]*)\}/g, "[$1]");
 
-  // Paragraphs
-  body = body.replace(/\n\n+/g, "</p><p>");
+  // Caption (standalone)
+  body = body.replace(/\\caption\{([^}]*)\}/g, '<p><em>$1</em></p>');
 
-  // Clean remaining commands
-  body = body.replace(/\\[a-zA-Z]+\{[^}]*\}/g, "");
-  body = body.replace(/\\[a-zA-Z]+/g, "");
+  // Strip remaining unknown environments
+  body = body.replace(/\\begin\{[^}]*\}(?:\[[^\]]*\])?/g, "");
+  body = body.replace(/\\end\{[^}]*\}/g, "");
 
-  return `<p>${body}</p>`;
+  // Strip remaining unknown commands with arguments (be conservative)
+  body = body.replace(/\\[a-zA-Z]+\*?\{([^}]*)\}/g, "$1");
+
+  // Strip remaining standalone commands
+  body = body.replace(/\\[a-zA-Z]+\*?/g, "");
+
+  // Clean up stray braces
+  body = body.replace(/\{([^{}]*)\}/g, "$1");
+
+  // Paragraphs: double newlines → paragraph breaks
+  body = body.replace(/\n{2,}/g, "</p><p>");
+
+  // Clean up empty paragraphs and whitespace
+  body = body.replace(/<p>\s*<\/p>/g, "");
+  body = body.replace(/^\s+|\s+$/g, "");
+
+  if (!body.startsWith("<")) {
+    body = `<p>${body}</p>`;
+  } else if (!body.startsWith("<p>") && !body.startsWith("<h") && !body.startsWith("<div") && !body.startsWith("<ul") && !body.startsWith("<ol") && !body.startsWith("<blockquote") && !body.startsWith("<pre") && !body.startsWith("<table") && !body.startsWith("<img") && !body.startsWith("<hr")) {
+    body = `<p>${body}</p>`;
+  }
+
+  return body;
+}
+
+// Helper: parse LaTeX tabular content to HTML table
+function processLatexTable(content: string): string {
+  // Remove \toprule, \midrule, \bottomrule, \hline
+  let cleaned = content
+    .replace(/\\toprule/g, "")
+    .replace(/\\midrule/g, "")
+    .replace(/\\bottomrule/g, "")
+    .replace(/\\hline/g, "")
+    .replace(/\\cline\{[^}]*\}/g, "")
+    .trim();
+
+  const rows = cleaned.split("\\\\").filter(r => r.trim());
+  if (rows.length === 0) return "";
+
+  let html = "<table>\n";
+  rows.forEach((row, i) => {
+    const cells = row.split("&").map(c => c.trim());
+    const tag = i === 0 ? "th" : "td";
+    html += "  <tr>\n";
+    cells.forEach(cell => {
+      html += `    <${tag}>${cell}</${tag}>\n`;
+    });
+    html += "  </tr>\n";
+  });
+  html += "</table>";
+  return html;
 }
