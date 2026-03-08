@@ -516,7 +516,7 @@ const CaptionMenu = ({ editor }: { editor: Editor }) => {
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) { setCaptionType("figure"); setLabel(""); setCaptionText(""); } }}>
       <PopoverTrigger asChild>
         <Toggle size="sm" pressed={false} className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm" title="캡션 삽입">
           <TextCursorInput className="h-4 w-4" />
