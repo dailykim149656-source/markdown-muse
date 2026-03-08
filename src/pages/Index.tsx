@@ -172,6 +172,14 @@ const Index = () => {
     toast.success("AsciiDoc 파일로 내보냈습니다");
   }, [activeDoc, downloadFile]);
 
+  // RST export
+  const handleSaveRst = useCallback(() => {
+    const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
+    const rstContent = htmlToRst(editorHtml);
+    downloadFile(rstContent, ".rst", "text/x-rst");
+    toast.success("reStructuredText 파일로 내보냈습니다");
+  }, [activeDoc, downloadFile]);
+
   const handleSaveHtml = useCallback(() => {
     const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
     const fullHtml = `<!DOCTYPE html>
