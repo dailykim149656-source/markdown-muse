@@ -136,7 +136,6 @@ describe("LaTeX round-trip: HTML→LaTeX→HTML", () => {
     const html = '<div data-type="mermaid" code="graph LR\n    A-->B"></div>';
     const latex = htmlToLatex(html, false);
     expect(latex).toContain("% begin-mermaid");
-    const { latexToHtml } = require("@/components/editor/utils/htmlToLatex");
     const restored = latexToHtml(latex);
     expect(restored).toContain('data-type="mermaid"');
     expect(restored).toContain("A--&gt;B");
@@ -147,7 +146,6 @@ describe("LaTeX round-trip: HTML→LaTeX→HTML", () => {
     const latex = htmlToLatex(html, false);
     expect(latex).toContain("type=tip");
     expect(latex).toContain("color=green");
-    const { latexToHtml } = require("@/components/editor/utils/htmlToLatex");
     const restored = latexToHtml(latex);
     expect(restored).toContain('data-admonition-type="tip"');
     expect(restored).toContain('data-admonition-color="green"');
