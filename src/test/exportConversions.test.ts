@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { htmlToLatex } from "@/components/editor/utils/htmlToLatex";
+import { htmlToLatex, latexToHtml } from "@/components/editor/utils/htmlToLatex";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
