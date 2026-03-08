@@ -24,7 +24,7 @@ interface EditorHeaderProps {
   onLoad: () => void;
   fileName: string;
   onFileNameChange: (name: string) => void;
-  wordCount: number;
+  textStats: { charCount: number; wordCount: number; lines: number; paragraphs: number };
   countWithSpaces?: boolean;
   onToggleCountMode?: () => void;
   mode: EditorMode;
