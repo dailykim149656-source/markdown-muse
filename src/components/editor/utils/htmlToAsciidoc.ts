@@ -23,6 +23,14 @@ export function htmlToAsciidoc(html: string): string {
   // Cross references — use placeholder to avoid stripping by HTML tag remover
   s = s.replace(/<span[^>]*data-type="cross-ref"[^>]*data-target="([^"]*)"[^>]*>[^<]*<\/span>/gi,
     (_, target) => `\x00XREF_START\x00${target}\x00XREF_END\x00`);
+  // Mermaid — output as code block with mermaid language
+  s = s.replace(/<div[^>]*data-type="mermaid(?:Block)?"[^>]*(?:code="([\s\S]*?)")?[^>]*>[\s\S]*?<\/div>/gi,
+    (match, code) => {
+      const mermaidCode = code || "";
+      const decoded = decodeEntities(mermaidCode);
+      return `[source,mermaid]\n----\n${decoded}\n----`;
+    });
+
   // Admonitions
   s = s.replace(/<div[^>]*data-type="admonition"[^>]*data-admonition-type="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi,
     (_, type, content) => {

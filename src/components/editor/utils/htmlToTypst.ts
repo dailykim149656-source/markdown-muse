@@ -43,6 +43,14 @@ function processNode(html: string, features: Set<string>): string {
   s = s.replace(/<span[^>]*data-type="cross-ref"[^>]*data-target="([^"]*)"[^>]*>[^<]*<\/span>/gi,
     (_, target) => `@${target}`);
 
+  // Mermaid — preserve as comment with code
+  s = s.replace(/<div[^>]*data-type="mermaid(?:Block)?"[^>]*(?:code="([\s\S]*?)")?[^>]*>[\s\S]*?<\/div>/gi,
+    (match, code) => {
+      const mermaidCode = code || "";
+      const decoded = decodeHtmlEntities(mermaidCode);
+      return `// Mermaid diagram (not natively supported in Typst)\n// \`\`\`mermaid\n${decoded.split("\n").map((l: string) => `// ${l}`).join("\n")}\n// \`\`\``;
+    });
+
   // Admonitions
   s = s.replace(/<div[^>]*data-type="admonition"[^>]*data-admonition-type="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi,
     (_, type, content) => {

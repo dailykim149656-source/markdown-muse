@@ -40,10 +40,15 @@ export function htmlToRst(html: string): string {
     }
   );
 
-  // Mermaid blocks — comment out
+  // Mermaid blocks — output as code block
   s = s.replace(
-    /<div[^>]*data-type="mermaidBlock"[^>]*>[\s\S]*?<\/div>/gi,
-    "\n.. comment:: Mermaid diagram (not supported in RST)\n"
+    /<div[^>]*data-type="mermaid(?:Block)?"[^>]*(?:code="([\s\S]*?)")?[^>]*>[\s\S]*?<\/div>/gi,
+    (match, code) => {
+      const mermaidCode = code || "";
+      const decoded = decodeEntities(mermaidCode);
+      const indented = decoded.split("\n").map((l) => `   ${l}`).join("\n");
+      return `\n.. code-block:: mermaid\n\n${indented}\n`;
+    }
   );
 
   // Math blocks
