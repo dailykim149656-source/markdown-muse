@@ -24,6 +24,7 @@ import EditorToolbar from "./EditorToolbar";
 import { htmlToLatex, latexToHtml } from "./utils/htmlToLatex";
 import { Code2, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import LatexHighlightEditor from "./LatexHighlightEditor";
 
 interface LatexEditorProps {
   initialContent?: string;
