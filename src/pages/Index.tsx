@@ -412,32 +412,26 @@ ${editorHtml}
             containerRef={editorContainerRef}
           />
           <div className="flex-1 overflow-hidden" ref={editorContainerRef}>
-            {activeDoc.mode === "markdown" ? (
-              <MarkdownEditor
-                key={editorKey}
-                onContentChange={handleContentChange}
-                initialContent={activeDoc.content || undefined}
-              />
-            ) : activeDoc.mode === "latex" ? (
-              <LatexEditor
-                key={editorKey}
-                initialContent={activeDoc.content}
-                onContentChange={handleContentChange}
-              />
-            ) : activeDoc.mode === "json" || activeDoc.mode === "yaml" ? (
-              <JsonYamlEditor
-                key={editorKey}
-                initialContent={activeDoc.content}
-                onContentChange={handleContentChange}
-                mode={activeDoc.mode}
-                onModeChange={(m) => handleModeChange(m)}
-              />
+            {previewOpen && activeDoc.mode !== "json" && activeDoc.mode !== "yaml" ? (
+              <ResizablePanelGroup direction="horizontal" className="h-full">
+                <ResizablePanel defaultSize={60} minSize={30}>
+                  <div className="h-full overflow-y-auto">
+                    {renderEditor()}
+                  </div>
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel defaultSize={40} minSize={20} maxSize={60}>
+                  <ExportPreviewPanel
+                    editorHtml={document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content}
+                    editorMode={activeDoc.mode}
+                    rawContent={activeDoc.content}
+                    onClose={() => setPreviewOpen(false)}
+                    fileName={activeDoc.name}
+                  />
+                </ResizablePanel>
+              </ResizablePanelGroup>
             ) : (
-              <HtmlEditor
-                key={editorKey}
-                initialContent={activeDoc.content}
-                onContentChange={handleContentChange}
-              />
+              renderEditor()
             )}
           </div>
           <input
