@@ -185,11 +185,11 @@ const EditorHeader = ({
           </Button>
         )}
 
-        <Button variant="ghost" size="sm" onClick={onOpenShortcuts} title="단축키 안내 (Ctrl+/)" className="h-8 w-8 p-0">
+        <Button variant="ghost" size="sm" onClick={onOpenShortcuts} title="단축키 안내 (Ctrl+/)" className="h-8 w-8 p-0 hidden sm:flex">
           <Keyboard className="h-4 w-4" />
         </Button>
 
-        <Button variant="ghost" size="sm" onClick={onToggleFullscreen} title="전체화면 (F11)" className="h-8 w-8 p-0">
+        <Button variant="ghost" size="sm" onClick={onToggleFullscreen} title="전체화면 (F11)" className="h-8 w-8 p-0 hidden sm:flex">
           {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
         </Button>
 
