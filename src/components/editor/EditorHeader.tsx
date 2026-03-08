@@ -16,6 +16,7 @@ interface EditorHeaderProps {
   onSaveJson: () => void;
   onSaveYaml: () => void;
   onSaveTypst: () => void;
+  onSaveAdoc: () => void;
   onSavePdf: () => void;
   onPrint: () => void;
   onLoad: () => void;
@@ -38,6 +39,7 @@ const EditorHeader = ({
   onSaveJson,
   onSaveYaml,
   onSaveTypst,
+  onSaveAdoc,
   onSavePdf,
   onPrint,
   onLoad,
@@ -133,6 +135,10 @@ const EditorHeader = ({
                 <DropdownMenuItem onClick={onSaveTypst} className="text-sm gap-2">
                   <FileDown className="h-4 w-4" />
                   Typst (.typ)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onSaveAdoc} className="text-sm gap-2">
+                  <FileDown className="h-4 w-4" />
+                  AsciiDoc (.adoc)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
                   <FileText className="h-4 w-4" />

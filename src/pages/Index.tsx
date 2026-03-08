@@ -6,6 +6,7 @@ import JsonYamlEditor from "@/components/editor/JsonYamlEditor";
 import TemplateDialog, { type DocumentTemplate } from "@/components/editor/TemplateDialog";
 import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
+import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
 import EditorHeader, { type EditorMode } from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
@@ -153,6 +154,14 @@ const Index = () => {
     const typstContent = htmlToTypst(editorHtml);
     downloadFile(typstContent, ".typ", "text/plain");
     toast.success("Typst 파일로 내보냈습니다");
+  }, [activeDoc, downloadFile]);
+
+  // AsciiDoc export
+  const handleSaveAdoc = useCallback(() => {
+    const editorHtml = document.querySelector(".tiptap-editor .ProseMirror")?.innerHTML || activeDoc.content;
+    const adocContent = htmlToAsciidoc(editorHtml);
+    downloadFile(adocContent, ".adoc", "text/plain");
+    toast.success("AsciiDoc 파일로 내보냈습니다");
   }, [activeDoc, downloadFile]);
 
   const handleSaveHtml = useCallback(() => {
@@ -355,6 +364,7 @@ ${editorHtml}
             onSaveJson={handleSaveJson}
             onSaveYaml={handleSaveYaml}
             onSaveTypst={handleSaveTypst}
+            onSaveAdoc={handleSaveAdoc}
             onSavePdf={handleSavePdf}
             onPrint={handlePrint}
             onLoad={handleLoad}
