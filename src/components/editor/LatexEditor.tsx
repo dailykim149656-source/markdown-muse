@@ -36,6 +36,7 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
     initialContent || ""
   );
   const [showPanel, setShowPanel] = useState(true);
+  const [sourceLeft, setSourceLeft] = useState(false);
 
   // Guards to prevent infinite sync loops
   const syncingFromWysiwyg = useRef(false);
