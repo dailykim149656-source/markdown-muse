@@ -23,17 +23,6 @@ interface EditorToolbarProps {
   editor: Editor | null;
 }
 
-const COLORS = [
-  { label: "기본", value: "inherit" },
-  { label: "빨강", value: "#e03131" },
-  { label: "주황", value: "#e8590c" },
-  { label: "노랑", value: "#f08c00" },
-  { label: "초록", value: "#2f9e44" },
-  { label: "파랑", value: "#1971c2" },
-  { label: "보라", value: "#7048e8" },
-  { label: "분홍", value: "#c2255c" },
-  { label: "회색", value: "#868e96" },
-];
 
 const ImageDialog = ({ editor }: { editor: Editor }) => {
   const [url, setUrl] = useState("");
