@@ -1,27 +1,8 @@
 import { useEditor, EditorContent } from "@tiptap/react";
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
-import UnderlineExt from "@tiptap/extension-underline";
-import TaskList from "@tiptap/extension-task-list";
-import TaskItem from "@tiptap/extension-task-item";
-import ResizableImage from "./extensions/ResizableImage";
-import LinkExt from "@tiptap/extension-link";
-import { Table as TableExt } from "@tiptap/extension-table";
-import TableRow from "@tiptap/extension-table-row";
-import TableCell from "@tiptap/extension-table-cell";
-import TableHeader from "@tiptap/extension-table-header";
-import Highlight from "@tiptap/extension-highlight";
-import SubscriptExt from "@tiptap/extension-subscript";
-import SuperscriptExt from "@tiptap/extension-superscript";
-import TextAlign from "@tiptap/extension-text-align";
-import { TextStyle } from "@tiptap/extension-text-style";
-import Color from "@tiptap/extension-color";
-import FontFamily from "@tiptap/extension-font-family";
-import FontSize from "./extensions/FontSize";
-import { MathExtension, MathBlockExtension } from "./extensions/MathExtension";
 import EditorToolbar from "./EditorToolbar";
+import { createEditorExtensions, editorPropsDefault } from "./editorConfig";
 import { htmlToLatex, latexToHtml } from "./utils/htmlToLatex";
 import { Code2, PanelRightClose, PanelRightOpen, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -67,18 +48,14 @@ const SourcePanel = ({ latexSource, handleSourceChange, handleSourceKeyDown, set
 );
 
 const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
-  const [latexSource, setLatexSource] = useState(() =>
-    initialContent || ""
-  );
+  const [latexSource, setLatexSource] = useState(initialContent || "");
   const [showPanel, setShowPanel] = useState(true);
   const [sourceLeft, setSourceLeft] = useState(false);
 
-  // Guards to prevent infinite sync loops
   const syncingFromWysiwyg = useRef(false);
   const syncingFromSource = useRef(false);
   const sourceDebounce = useRef<ReturnType<typeof setTimeout>>();
 
-  // WYSIWYG → LaTeX source
   const handleWysiwygUpdate = useCallback(
     (html: string) => {
       if (syncingFromSource.current) return;
@@ -86,65 +63,35 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
       const latex = htmlToLatex(html);
       setLatexSource(latex);
       onContentChange?.(latex);
-      // Reset guard after microtask
-      queueMicrotask(() => {
-        syncingFromWysiwyg.current = false;
-      });
+      queueMicrotask(() => { syncingFromWysiwyg.current = false; });
     },
     [onContentChange]
   );
 
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
-      Placeholder.configure({ placeholder: "LaTeX 문서를 WYSIWYG으로 작성하세요..." }),
-      UnderlineExt,
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      ResizableImage,
-      LinkExt.configure({
-        openOnClick: false,
-        HTMLAttributes: { class: "text-primary underline cursor-pointer" },
-      }),
-      TableExt.configure({ resizable: true }),
-      TableRow, TableCell, TableHeader,
-      Highlight.configure({ multicolor: false }),
-      SubscriptExt, SuperscriptExt,
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      TextStyle, Color, FontFamily, FontSize,
-      MathExtension, MathBlockExtension,
-    ],
+    extensions: createEditorExtensions("LaTeX 문서를 WYSIWYG으로 작성하세요..."),
     content: initialContent ? latexToHtml(initialContent) : "",
     onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML()),
-    editorProps: {
-      attributes: {
-        class: "prose prose-neutral dark:prose-invert max-w-none focus:outline-none",
-      },
-    },
+    editorProps: editorPropsDefault,
   });
 
-  // LaTeX source → WYSIWYG (debounced)
   const handleSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newLatex = e.target.value;
       setLatexSource(newLatex);
       onContentChange?.(newLatex);
-
       if (sourceDebounce.current) clearTimeout(sourceDebounce.current);
       sourceDebounce.current = setTimeout(() => {
         if (!editor || syncingFromWysiwyg.current) return;
         syncingFromSource.current = true;
         const html = latexToHtml(newLatex);
         editor.commands.setContent(html, { emitUpdate: false });
-        queueMicrotask(() => {
-          syncingFromSource.current = false;
-        });
+        queueMicrotask(() => { syncingFromSource.current = false; });
       }, 600);
     },
     [editor, onContentChange]
   );
 
-  // Tab support in textarea
   const handleSourceKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Tab") {
@@ -154,9 +101,7 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
         const end = ta.selectionEnd;
         const newVal = latexSource.substring(0, start) + "  " + latexSource.substring(end);
         setLatexSource(newVal);
-        setTimeout(() => {
-          ta.selectionStart = ta.selectionEnd = start + 2;
-        }, 0);
+        setTimeout(() => { ta.selectionStart = ta.selectionEnd = start + 2; }, 0);
       }
     },
     [latexSource]
@@ -166,44 +111,25 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
     <div className="flex flex-col h-full">
       <EditorToolbar editor={editor} />
       {showPanel ? (
-        <ResizablePanelGroup
-          direction="horizontal"
-          className="flex-1"
-        >
+        <ResizablePanelGroup direction="horizontal" className="flex-1">
           {sourceLeft ? (
             <>
               <ResizablePanel defaultSize={40} minSize={20} maxSize={70}>
-                <SourcePanel
-                  latexSource={latexSource}
-                  handleSourceChange={handleSourceChange}
-                  handleSourceKeyDown={handleSourceKeyDown}
-                  setSourceLeft={setSourceLeft}
-                  setShowPanel={setShowPanel}
-                />
+                <SourcePanel latexSource={latexSource} handleSourceChange={handleSourceChange} handleSourceKeyDown={handleSourceKeyDown} setSourceLeft={setSourceLeft} setShowPanel={setShowPanel} />
               </ResizablePanel>
               <ResizableHandle withHandle />
               <ResizablePanel defaultSize={60} minSize={20}>
-                <div className="h-full overflow-y-auto tiptap-editor">
-                  <EditorContent editor={editor} />
-                </div>
+                <div className="h-full overflow-y-auto tiptap-editor"><EditorContent editor={editor} /></div>
               </ResizablePanel>
             </>
           ) : (
             <>
               <ResizablePanel defaultSize={60} minSize={20}>
-                <div className="h-full overflow-y-auto tiptap-editor">
-                  <EditorContent editor={editor} />
-                </div>
+                <div className="h-full overflow-y-auto tiptap-editor"><EditorContent editor={editor} /></div>
               </ResizablePanel>
               <ResizableHandle withHandle />
               <ResizablePanel defaultSize={40} minSize={20} maxSize={70}>
-                <SourcePanel
-                  latexSource={latexSource}
-                  handleSourceChange={handleSourceChange}
-                  handleSourceKeyDown={handleSourceKeyDown}
-                  setSourceLeft={setSourceLeft}
-                  setShowPanel={setShowPanel}
-                />
+                <SourcePanel latexSource={latexSource} handleSourceChange={handleSourceChange} handleSourceKeyDown={handleSourceKeyDown} setSourceLeft={setSourceLeft} setShowPanel={setShowPanel} />
               </ResizablePanel>
             </>
           )}
@@ -211,12 +137,7 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
       ) : (
         <div className="flex-1 overflow-y-auto tiptap-editor relative">
           <EditorContent editor={editor} />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="absolute right-2 top-2 h-7 gap-1 px-2 text-xs text-muted-foreground z-10"
-            onClick={() => setShowPanel(true)}
-          >
+          <Button variant="ghost" size="sm" className="absolute right-2 top-2 h-7 gap-1 px-2 text-xs text-muted-foreground z-10" onClick={() => setShowPanel(true)}>
             <PanelRightOpen className="h-3.5 w-3.5" />
             소스
           </Button>

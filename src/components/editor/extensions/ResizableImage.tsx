@@ -3,6 +3,14 @@ import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
 import { useState, useCallback, useRef } from "react";
 import { AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    image: {
+      setImage: (options: { src: string; alt?: string; title?: string; width?: number; height?: number; align?: string }) => ReturnType;
+    };
+  }
+}
+
 type ImageAlign = "left" | "center" | "right";
 
 const alignStyles: Record<ImageAlign, string> = {
