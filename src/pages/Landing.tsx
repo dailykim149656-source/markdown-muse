@@ -3,7 +3,6 @@ import { ArrowRight, FileText, Code2, Printer, Moon, Sun, Sparkles, Zap, Shield 
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
 import docslyLogo from "@/assets/docsly-logo.png";
-import editorPreview from "@/assets/editor-preview.png";
 
 const Landing = () => {
   const navigate = useNavigate();
