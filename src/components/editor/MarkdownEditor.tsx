@@ -59,6 +59,8 @@ const MarkdownEditor = ({ onContentChange, initialContent }: MarkdownEditorProps
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       TextStyle,
       Color,
+      FontFamily,
+      FontSize,
     ],
     content: initialContent ? marked.parse(initialContent, { async: false }) as string : "",
     onUpdate: ({ editor }) => {
