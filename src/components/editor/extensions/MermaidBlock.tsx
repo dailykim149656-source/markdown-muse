@@ -49,7 +49,7 @@ const MermaidNodeView = ({ node, updateAttributes, selected }: any) => {
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
   }, [editing, node.attrs.code, renderDiagram]);
-  }, []);
+  
 
   useEffect(() => {
     if (!editing) renderDiagram(node.attrs.code);
