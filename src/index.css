@@ -335,3 +335,52 @@
 .dark .hljs-attr, .dark .hljs-attribute { color: hsl(35 80% 65%); }
 .dark .hljs-tag { color: hsl(350 80% 65%); }
 .dark .hljs-name { color: hsl(350 80% 65%); }
+
+/* Admonition / Callout styles */
+.admonition-note .admonition-container {
+  border-left-color: hsl(210 80% 55%);
+  background: hsl(210 80% 55% / 0.06);
+}
+.admonition-note .admonition-header { color: hsl(210 80% 45%); }
+.admonition-note .admonition-icon-btn { color: hsl(210 80% 55%); }
+
+.admonition-tip .admonition-container {
+  border-left-color: hsl(145 65% 42%);
+  background: hsl(145 65% 42% / 0.06);
+}
+.admonition-tip .admonition-header { color: hsl(145 65% 35%); }
+.admonition-tip .admonition-icon-btn { color: hsl(145 65% 42%); }
+
+.admonition-warning .admonition-container {
+  border-left-color: hsl(38 90% 50%);
+  background: hsl(38 90% 50% / 0.06);
+}
+.admonition-warning .admonition-header { color: hsl(38 80% 40%); }
+.admonition-warning .admonition-icon-btn { color: hsl(38 90% 50%); }
+
+.admonition-danger .admonition-container {
+  border-left-color: hsl(0 72% 51%);
+  background: hsl(0 72% 51% / 0.06);
+}
+.admonition-danger .admonition-header { color: hsl(0 72% 45%); }
+.admonition-danger .admonition-icon-btn { color: hsl(0 72% 51%); }
+
+/* Dark mode admonitions */
+.dark .admonition-note .admonition-header { color: hsl(210 80% 70%); }
+.dark .admonition-tip .admonition-header { color: hsl(145 65% 60%); }
+.dark .admonition-warning .admonition-header { color: hsl(38 90% 65%); }
+.dark .admonition-danger .admonition-header { color: hsl(0 72% 65%); }
+
+.dark .admonition-note .admonition-container { background: hsl(210 80% 55% / 0.1); }
+.dark .admonition-tip .admonition-container { background: hsl(145 65% 42% / 0.1); }
+.dark .admonition-warning .admonition-container { background: hsl(38 90% 50% / 0.1); }
+.dark .admonition-danger .admonition-container { background: hsl(0 72% 51% / 0.1); }
+
+/* Footnote styles */
+.footnote-item {
+  border-top: 1px solid hsl(var(--border));
+  padding: 0.25rem 0;
+}
+.footnote-item:first-of-type {
+  margin-top: 1rem;
+}
