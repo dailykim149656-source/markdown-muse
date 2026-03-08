@@ -7,18 +7,40 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Node / TypeScript
 node_modules
 dist
 dist-ssr
-*.local
+.vite
+coverage
+*.tsbuildinfo
+*.d.ts.map
 
-# Editor directories and files
+# Package manager caches
+.npm
+.yarn
+.pnpm-store
+
+# Environment/config
+.env
+.env.*
+!.env.example
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Editors / IDE
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Local/temporary files
+*.local
+*.tmp
+*.temp

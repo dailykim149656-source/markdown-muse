@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import SchemaValidator from "./SchemaValidator";
+import StructuredDataHighlightEditor from "./StructuredDataHighlightEditor";
+import type { PlainTextFindReplaceAdapter } from "./findReplaceTypes";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -22,6 +24,7 @@ interface JsonYamlEditorProps {
   onContentChange: (content: string) => void;
   mode: "json" | "yaml";
   onModeChange: (mode: "json" | "yaml") => void;
+  onPlainTextSearchAdapterReady?: (adapter: PlainTextFindReplaceAdapter | null) => void;
 }
 
 // Parse content to object
@@ -458,7 +461,13 @@ const ValueEditor = ({ value, onChange, onDelete, keyName, onKeyChange, depth, p
 };
 
 // ─── Main Editor ───
-const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }: JsonYamlEditorProps) => {
+const JsonYamlEditor = ({
+  initialContent,
+  onContentChange,
+  mode,
+  onModeChange,
+  onPlainTextSearchAdapterReady,
+}: JsonYamlEditorProps) => {
   const [source, setSource] = useState(initialContent || "");
   const [data, setData] = useState<JsonValue | undefined>(() => {
     const { data } = parseContent(initialContent, mode);
@@ -470,14 +479,19 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
   const suppressSync = useRef(false);
   const [showSchema, setShowSchema] = useState(false);
   const [schemaObj, setSchemaObj] = useState<any>(null);
+  const [searchText, setSearchText] = useState("");
+  const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
+  const sourceRef = useRef(initialContent || "");
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  // Source → Form sync
-  const handleSourceChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setSource(val);
-    onContentChange(val);
-    const { data: parsed, error } = parseContent(val, mode);
+  const applySourceValue = useCallback((nextSource: string, nextMode: "json" | "yaml" = mode) => {
+    sourceRef.current = nextSource;
+    setSource(nextSource);
+    onContentChange(nextSource);
+
+    const { data: parsed, error } = parseContent(nextSource, nextMode);
     setParseError(error);
+
     if (parsed !== undefined) {
       suppressSync.current = true;
       setData(parsed);
@@ -485,20 +499,76 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
     }
   }, [mode, onContentChange]);
 
+  const focusSourceTextarea = useCallback((selection?: { from: number; to: number }) => {
+    const applySelection = () => {
+      const textarea = textareaRef.current;
+
+      if (!textarea) {
+        return;
+      }
+
+      textarea.focus();
+
+      if (selection) {
+        textarea.setSelectionRange(selection.from, selection.to);
+      }
+    };
+
+    if (showSource && textareaRef.current) {
+      applySelection();
+      return;
+    }
+
+    setShowSource(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(applySelection);
+    });
+  }, [showSource]);
+
+  // Source → Form sync
+  const handleSourceChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    applySourceValue(e.target.value);
+  }, [applySourceValue]);
+
   // Form → Source sync
   useEffect(() => {
     if (suppressSync.current || data === undefined) return;
     const newSource = serializeContent(data, mode);
+    sourceRef.current = newSource;
     setSource(newSource);
     onContentChange(newSource);
     setParseError(null);
-  }, [data, mode]);
+  }, [data, mode, onContentChange]);
+
+  useEffect(() => {
+    sourceRef.current = source;
+  }, [source]);
+
+  useEffect(() => {
+    const adapter: PlainTextFindReplaceAdapter = {
+      focus: () => focusSourceTextarea(),
+      getText: () => sourceRef.current,
+      setSelection: (from, to) => focusSourceTextarea({ from, to }),
+      setSearchState: (nextSearchText, nextCurrentIndex) => {
+        setSearchText(nextSearchText);
+        setCurrentSearchIndex(nextCurrentIndex);
+      },
+      updateText: (nextText) => applySourceValue(nextText),
+    };
+
+    onPlainTextSearchAdapterReady?.(adapter);
+
+    return () => {
+      onPlainTextSearchAdapterReady?.(null);
+    };
+  }, [applySourceValue, focusSourceTextarea, onPlainTextSearchAdapterReady]);
 
   // Convert between JSON ↔ YAML
   const handleConvert = useCallback(() => {
     const targetMode = mode === "json" ? "yaml" : "json";
     if (data !== undefined) {
       const newSource = serializeContent(data, targetMode as "json" | "yaml");
+      sourceRef.current = newSource;
       setSource(newSource);
       onContentChange(newSource);
       onModeChange(targetMode as "json" | "yaml");
@@ -507,6 +577,7 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
       const { data: parsed, error } = parseContent(source, mode);
       if (parsed !== undefined) {
         const newSource = serializeContent(parsed, targetMode as "json" | "yaml");
+        sourceRef.current = newSource;
         setSource(newSource);
         setData(parsed);
         onContentChange(newSource);
@@ -526,18 +597,18 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
       const end = ta.selectionEnd;
       const indent = "  ";
       const newVal = ta.value.substring(0, start) + indent + ta.value.substring(end);
-      setSource(newVal);
-      onContentChange(newVal);
+      applySourceValue(newVal);
       requestAnimationFrame(() => {
         ta.selectionStart = ta.selectionEnd = start + indent.length;
       });
     }
-  }, [onContentChange]);
+  }, [applySourceValue]);
 
   const handleInitEmpty = useCallback((type: "object" | "array") => {
     const initial: JsonValue = type === "object" ? {} : [];
     setData(initial);
     const newSource = serializeContent(initial, mode);
+    sourceRef.current = newSource;
     setSource(newSource);
     onContentChange(newSource);
   }, [mode, onContentChange]);
@@ -631,7 +702,18 @@ const JsonYamlEditor = ({ initialContent, onContentChange, mode, onModeChange }:
       onSwap={() => setSourceLeft(s => !s)}
       onClose={() => setShowSource(false)}
       placeholder={mode === "json" ? '{\n  "key": "value"\n}' : "key: value\nlist:\n  - item1\n  - item2"}
-    />
+    >
+      <StructuredDataHighlightEditor
+        currentMatchIndex={currentSearchIndex}
+        mode={mode}
+        value={source}
+        onChange={handleSourceChange}
+        onKeyDown={handleKeyDown}
+        placeholder={mode === "json" ? '{\n  "key": "value"\n}' : "key: value\nlist:\n  - item1\n  - item2"}
+        searchText={searchText}
+        textareaRef={textareaRef}
+      />
+    </SourcePanel>
   );
 
   return (

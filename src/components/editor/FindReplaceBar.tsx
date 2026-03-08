@@ -1,153 +1,357 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import type { Editor } from "@tiptap/react";
+import { TextSelection } from "@tiptap/pm/state";
 import { X, ChevronUp, ChevronDown, Replace, ReplaceAll } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  clearFindReplaceHighlights,
+  getFindReplaceHighlightState,
+  updateFindReplaceHighlights,
+  type FindReplaceMatch,
+} from "./extensions/FindReplaceHighlight";
+import type { PlainTextFindReplaceAdapter } from "./findReplaceTypes";
+import { getPlainTextMatches as getPlainTextSearchMatches, normalizeMatchIndex } from "./utils/structuredDataHighlight";
 
 interface FindReplaceBarProps {
+  editor: Editor | null;
+  plainTextAdapter?: PlainTextFindReplaceAdapter | null;
   open: boolean;
   onClose: () => void;
-  containerRef: React.RefObject<HTMLElement | null>;
 }
 
-const FindReplaceBar = ({ open, onClose, containerRef }: FindReplaceBarProps) => {
+const replacePlainTextRange = (text: string, match: FindReplaceMatch, replacement: string) => {
+  return `${text.slice(0, match.from)}${replacement}${text.slice(match.to)}`;
+};
+
+const replaceAllPlainTextMatches = (text: string, matchList: FindReplaceMatch[], replacement: string) => {
+  let nextText = text;
+
+  for (let index = matchList.length - 1; index >= 0; index -= 1) {
+    nextText = replacePlainTextRange(nextText, matchList[index], replacement);
+  }
+
+  return nextText;
+};
+
+const FindReplaceBar = ({ editor, plainTextAdapter, open, onClose }: FindReplaceBarProps) => {
   const [findText, setFindText] = useState("");
   const [replaceText, setReplaceText] = useState("");
   const [showReplace, setShowReplace] = useState(false);
   const [matchCount, setMatchCount] = useState(0);
   const [currentMatch, setCurrentMatch] = useState(0);
   const findInputRef = useRef<HTMLInputElement>(null);
-  const highlightsRef = useRef<HTMLElement[]>([]);
 
-  const clearHighlights = useCallback(() => {
-    highlightsRef.current.forEach((el) => {
-      const parent = el.parentNode;
-      if (parent) {
-        parent.replaceChild(document.createTextNode(el.textContent || ""), el);
-        parent.normalize();
-      }
-    });
-    highlightsRef.current = [];
+  const clearMatches = useCallback(() => {
     setMatchCount(0);
     setCurrentMatch(0);
   }, []);
 
-  const highlightMatches = useCallback(
-    (searchText: string) => {
-      clearHighlights();
-      if (!searchText || !containerRef.current) return;
+  const applyPluginState = useCallback((pluginState: ReturnType<typeof getFindReplaceHighlightState>) => {
+    const matches = pluginState?.matches ?? [];
+    setMatchCount(matches.length);
+    setCurrentMatch(matches.length > 0 ? pluginState!.currentIndex + 1 : 0);
+  }, []);
 
-      const container = containerRef.current.querySelector(".ProseMirror");
-      if (!container) return;
+  const applyPlainTextState = useCallback((matchList: FindReplaceMatch[], preferredIndex = 0) => {
+    setMatchCount(matchList.length);
 
-      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
-      const textNodes: Text[] = [];
-      while (walker.nextNode()) {
-        textNodes.push(walker.currentNode as Text);
+    const nextIndex = normalizeMatchIndex(preferredIndex, matchList.length);
+    setCurrentMatch(matchList.length > 0 ? nextIndex + 1 : 0);
+
+    return nextIndex;
+  }, []);
+
+  const focusRichTextMatch = useCallback((index: number, matchList: FindReplaceMatch[]) => {
+    if (!editor || !matchList[index]) {
+      return;
+    }
+
+    const match = matchList[index];
+    editor.commands.focus();
+
+    const transaction = editor.state.tr
+      .setSelection(TextSelection.create(editor.state.doc, match.from, match.to))
+      .scrollIntoView();
+
+    editor.view.dispatch(transaction);
+    setCurrentMatch(index + 1);
+  }, [editor]);
+
+  const focusPlainTextMatch = useCallback((index: number, matchList: FindReplaceMatch[]) => {
+    if (!plainTextAdapter || !matchList[index]) {
+      return;
+    }
+
+    const match = matchList[index];
+    plainTextAdapter.setSelection(match.from, match.to);
+    setCurrentMatch(index + 1);
+  }, [plainTextAdapter]);
+
+  const syncMatches = useCallback((searchText: string, preferredIndex?: number) => {
+    if (!searchText.trim()) {
+      if (editor) {
+        clearFindReplaceHighlights(editor);
+      }
+      plainTextAdapter?.setSearchState?.("", 0);
+      clearMatches();
+      return;
+    }
+
+    if (editor) {
+      const pluginState = updateFindReplaceHighlights(editor, searchText, preferredIndex ?? 0);
+      applyPluginState(pluginState);
+
+      if (pluginState && pluginState.matches.length > 0) {
+        focusRichTextMatch(pluginState.currentIndex, pluginState.matches);
       }
 
-      const matches: HTMLElement[] = [];
-      const lowerSearch = searchText.toLowerCase();
+      return;
+    }
 
-      textNodes.forEach((node) => {
-        const text = node.textContent || "";
-        const lowerText = text.toLowerCase();
-        let idx = lowerText.indexOf(lowerSearch);
-        if (idx === -1) return;
+    if (!plainTextAdapter) {
+      clearMatches();
+      return;
+    }
 
-        const frag = document.createDocumentFragment();
-        let lastIdx = 0;
+    const matchList = getPlainTextSearchMatches(plainTextAdapter.getText(), searchText) as FindReplaceMatch[];
+    const nextIndex = applyPlainTextState(matchList, preferredIndex ?? 0);
+    plainTextAdapter.setSearchState?.(searchText, nextIndex);
 
-        while (idx !== -1) {
-          if (idx > lastIdx) {
-            frag.appendChild(document.createTextNode(text.substring(lastIdx, idx)));
-          }
-          const mark = document.createElement("mark");
-          mark.className = "find-highlight";
-          mark.textContent = text.substring(idx, idx + searchText.length);
-          frag.appendChild(mark);
-          matches.push(mark);
-          lastIdx = idx + searchText.length;
-          idx = lowerText.indexOf(lowerSearch, lastIdx);
-        }
+    if (matchList.length > 0) {
+      focusPlainTextMatch(nextIndex, matchList);
+    }
+  }, [
+    applyPlainTextState,
+    applyPluginState,
+    clearMatches,
+    editor,
+    focusPlainTextMatch,
+    focusRichTextMatch,
+    plainTextAdapter,
+  ]);
 
-        if (lastIdx < text.length) {
-          frag.appendChild(document.createTextNode(text.substring(lastIdx)));
-        }
+  const navigateMatch = useCallback((direction: "next" | "prev") => {
+    if (editor) {
+      const pluginState = getFindReplaceHighlightState(editor);
+      const matchList = pluginState?.matches ?? [];
 
-        node.parentNode?.replaceChild(frag, node);
-      });
-
-      highlightsRef.current = matches;
-      setMatchCount(matches.length);
-      if (matches.length > 0) {
-        setCurrentMatch(1);
-        matches[0].classList.add("find-highlight-current");
-        matches[0].scrollIntoView({ block: "center", behavior: "smooth" });
+      if (matchList.length === 0) {
+        return;
       }
-    },
-    [containerRef, clearHighlights]
-  );
 
-  const navigateMatch = useCallback(
-    (direction: "next" | "prev") => {
-      if (matchCount === 0) return;
-      const marks = highlightsRef.current;
-      marks.forEach((m) => m.classList.remove("find-highlight-current"));
+      const zeroBasedCurrent = pluginState?.currentIndex ?? Math.max(currentMatch - 1, 0);
+      const nextIndex = direction === "next"
+        ? (zeroBasedCurrent + 1) % matchList.length
+        : (zeroBasedCurrent - 1 + matchList.length) % matchList.length;
 
-      let next = direction === "next" ? currentMatch % matchCount : currentMatch - 2;
-      if (next < 0) next = matchCount - 1;
+      const nextState = updateFindReplaceHighlights(editor, findText, nextIndex);
+      applyPluginState(nextState);
 
-      setCurrentMatch(next + 1);
-      marks[next].classList.add("find-highlight-current");
-      marks[next].scrollIntoView({ block: "center", behavior: "smooth" });
-    },
-    [matchCount, currentMatch]
-  );
+      if (nextState && nextState.matches.length > 0) {
+        focusRichTextMatch(nextState.currentIndex, nextState.matches);
+      }
+
+      return;
+    }
+
+    if (!plainTextAdapter) {
+      return;
+    }
+
+    const matchList = getPlainTextSearchMatches(plainTextAdapter.getText(), findText) as FindReplaceMatch[];
+
+    if (matchList.length === 0) {
+      plainTextAdapter.setSearchState?.(findText, 0);
+      clearMatches();
+      return;
+    }
+
+    const zeroBasedCurrent = normalizeMatchIndex(currentMatch - 1, matchList.length);
+    const nextIndex = direction === "next"
+      ? (zeroBasedCurrent + 1) % matchList.length
+      : (zeroBasedCurrent - 1 + matchList.length) % matchList.length;
+
+    applyPlainTextState(matchList, nextIndex);
+    plainTextAdapter.setSearchState?.(findText, nextIndex);
+    focusPlainTextMatch(nextIndex, matchList);
+  }, [
+    applyPlainTextState,
+    applyPluginState,
+    clearMatches,
+    currentMatch,
+    editor,
+    findText,
+    focusPlainTextMatch,
+    focusRichTextMatch,
+    plainTextAdapter,
+  ]);
 
   const handleReplace = useCallback(() => {
-    if (matchCount === 0 || !highlightsRef.current.length) return;
-    const mark = highlightsRef.current[currentMatch - 1];
-    if (!mark) return;
-    const textNode = document.createTextNode(replaceText);
-    mark.parentNode?.replaceChild(textNode, mark);
-    highlightsRef.current.splice(currentMatch - 1, 1);
-    setMatchCount((c) => c - 1);
-    if (highlightsRef.current.length > 0) {
-      const newIdx = Math.min(currentMatch - 1, highlightsRef.current.length - 1);
-      setCurrentMatch(newIdx + 1);
-      highlightsRef.current[newIdx]?.classList.add("find-highlight-current");
-    } else {
-      setCurrentMatch(0);
+    if (editor) {
+      const pluginState = getFindReplaceHighlightState(editor);
+
+      if (!pluginState || pluginState.matches.length === 0) {
+        return;
+      }
+
+      const activeIndex = pluginState.currentIndex;
+      const match = pluginState.matches[activeIndex];
+
+      if (!match) {
+        return;
+      }
+
+      const transaction = editor.state.tr.insertText(replaceText, match.from, match.to).scrollIntoView();
+      editor.view.dispatch(transaction);
+      const nextState = getFindReplaceHighlightState(editor);
+      applyPluginState(nextState);
+
+      if (nextState && nextState.matches.length > 0) {
+        focusRichTextMatch(nextState.currentIndex, nextState.matches);
+      }
+
+      return;
     }
-  }, [matchCount, currentMatch, replaceText]);
+
+    if (!plainTextAdapter) {
+      return;
+    }
+
+    const currentTextValue = plainTextAdapter.getText();
+    const matchList = getPlainTextSearchMatches(currentTextValue, findText) as FindReplaceMatch[];
+
+    if (matchList.length === 0) {
+      plainTextAdapter.setSearchState?.(findText, 0);
+      clearMatches();
+      return;
+    }
+
+    const activeIndex = normalizeMatchIndex(currentMatch - 1, matchList.length);
+    const match = matchList[activeIndex];
+
+    if (!match) {
+      return;
+    }
+
+    const nextText = replacePlainTextRange(currentTextValue, match, replaceText);
+    plainTextAdapter.updateText(nextText);
+
+    const nextMatchList = getPlainTextSearchMatches(nextText, findText) as FindReplaceMatch[];
+    const nextIndex = normalizeMatchIndex(activeIndex, nextMatchList.length);
+
+    applyPlainTextState(nextMatchList, nextIndex);
+    plainTextAdapter.setSearchState?.(findText, nextIndex);
+
+    if (nextMatchList.length > 0) {
+      focusPlainTextMatch(nextIndex, nextMatchList);
+    } else {
+      plainTextAdapter.focus();
+    }
+  }, [
+    applyPlainTextState,
+    applyPluginState,
+    clearMatches,
+    currentMatch,
+    editor,
+    findText,
+    focusPlainTextMatch,
+    focusRichTextMatch,
+    plainTextAdapter,
+    replaceText,
+  ]);
 
   const handleReplaceAll = useCallback(() => {
-    highlightsRef.current.forEach((mark) => {
-      const textNode = document.createTextNode(replaceText);
-      mark.parentNode?.replaceChild(textNode, mark);
-    });
-    highlightsRef.current = [];
-    setMatchCount(0);
-    setCurrentMatch(0);
-  }, [replaceText]);
+    if (editor) {
+      const pluginState = getFindReplaceHighlightState(editor);
+
+      if (!pluginState || pluginState.matches.length === 0) {
+        return;
+      }
+
+      const transaction = editor.state.tr;
+
+      for (let index = pluginState.matches.length - 1; index >= 0; index -= 1) {
+        const match = pluginState.matches[index];
+        transaction.insertText(replaceText, match.from, match.to);
+      }
+
+      editor.view.dispatch(transaction.scrollIntoView());
+      applyPluginState(getFindReplaceHighlightState(editor));
+      return;
+    }
+
+    if (!plainTextAdapter) {
+      return;
+    }
+
+    const currentTextValue = plainTextAdapter.getText();
+    const matchList = getPlainTextSearchMatches(currentTextValue, findText) as FindReplaceMatch[];
+
+    if (matchList.length === 0) {
+      plainTextAdapter.setSearchState?.(findText, 0);
+      clearMatches();
+      return;
+    }
+
+    const nextText = replaceAllPlainTextMatches(currentTextValue, matchList, replaceText);
+    plainTextAdapter.updateText(nextText);
+
+    const nextMatchList = getPlainTextSearchMatches(nextText, findText) as FindReplaceMatch[];
+    applyPlainTextState(nextMatchList, 0);
+    plainTextAdapter.setSearchState?.(findText, 0);
+
+    if (nextMatchList.length > 0) {
+      focusPlainTextMatch(0, nextMatchList);
+    } else {
+      plainTextAdapter.focus();
+    }
+  }, [
+    applyPlainTextState,
+    applyPluginState,
+    clearMatches,
+    editor,
+    findText,
+    focusPlainTextMatch,
+    plainTextAdapter,
+    replaceText,
+  ]);
 
   useEffect(() => {
     if (open) {
       findInputRef.current?.focus();
-    } else {
-      clearHighlights();
-      setFindText("");
-      setReplaceText("");
-      setShowReplace(false);
+      return;
     }
-  }, [open, clearHighlights]);
+
+    if (editor) {
+      clearFindReplaceHighlights(editor);
+    }
+
+    plainTextAdapter?.setSearchState?.("", 0);
+
+    clearMatches();
+    setFindText("");
+    setReplaceText("");
+    setShowReplace(false);
+  }, [clearMatches, editor, open, plainTextAdapter]);
 
   useEffect(() => {
-    const timer = setTimeout(() => highlightMatches(findText), 200);
-    return () => clearTimeout(timer);
-  }, [findText, highlightMatches]);
+    if (!open) {
+      return;
+    }
 
-  if (!open) return null;
+    const timer = setTimeout(() => {
+      syncMatches(findText);
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [editor, findText, open, plainTextAdapter, syncMatches]);
+
+  if (!open) {
+    return null;
+  }
+
+  const isSearchAvailable = Boolean(editor || plainTextAdapter);
 
   return (
     <div className="flex items-start gap-2 px-3 py-2 bg-secondary/50 border-b border-border">
@@ -156,43 +360,85 @@ const FindReplaceBar = ({ open, onClose, containerRef }: FindReplaceBarProps) =>
           <Input
             ref={findInputRef}
             value={findText}
-            onChange={(e) => setFindText(e.target.value)}
-            placeholder="찾기..."
+            onChange={(event) => setFindText(event.target.value)}
+            placeholder={isSearchAvailable ? "Find..." : "Search unavailable"}
             className="h-7 text-xs flex-1 max-w-xs"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") navigateMatch(e.shiftKey ? "prev" : "next");
-              if (e.key === "Escape") onClose();
+            disabled={!isSearchAvailable}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                navigateMatch(event.shiftKey ? "prev" : "next");
+              }
+              if (event.key === "Escape") {
+                onClose();
+              }
             }}
           />
-          <span className="text-[10px] text-muted-foreground min-w-[50px]">
-            {matchCount > 0 ? `${currentMatch}/${matchCount}` : "결과 없음"}
+          <span className="text-[10px] text-muted-foreground min-w-[70px]">
+            {isSearchAvailable ? (matchCount > 0 ? `${currentMatch}/${matchCount}` : "No matches") : "Search unavailable"}
           </span>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => navigateMatch("prev")} disabled={matchCount === 0}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => navigateMatch("prev")}
+            disabled={!isSearchAvailable || matchCount === 0}
+          >
             <ChevronUp className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => navigateMatch("next")} disabled={matchCount === 0}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => navigateMatch("next")}
+            disabled={!isSearchAvailable || matchCount === 0}
+          >
             <ChevronDown className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]" onClick={() => setShowReplace((v) => !v)}>
-            바꾸기
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-1.5 text-[10px]"
+            onClick={() => setShowReplace((value) => !value)}
+            disabled={!isSearchAvailable}
+          >
+            Replace
           </Button>
         </div>
         {showReplace && (
           <div className="flex items-center gap-1.5">
             <Input
               value={replaceText}
-              onChange={(e) => setReplaceText(e.target.value)}
-              placeholder="바꿀 내용..."
+              onChange={(event) => setReplaceText(event.target.value)}
+              placeholder="Replace with..."
               className="h-7 text-xs flex-1 max-w-xs"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleReplace();
-                if (e.key === "Escape") onClose();
+              disabled={!isSearchAvailable}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleReplace();
+                }
+                if (event.key === "Escape") {
+                  onClose();
+                }
               }}
             />
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleReplace} disabled={matchCount === 0} title="바꾸기">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={handleReplace}
+              disabled={!isSearchAvailable || matchCount === 0}
+              title="Replace"
+            >
               <Replace className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleReplaceAll} disabled={matchCount === 0} title="모두 바꾸기">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={handleReplaceAll}
+              disabled={!isSearchAvailable || matchCount === 0}
+              title="Replace all"
+            >
               <ReplaceAll className="h-3.5 w-3.5" />
             </Button>
           </div>

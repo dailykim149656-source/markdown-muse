@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=D2+Coding&family=Do+Hyeon&family=Fira+Code:wght@400;600&family=Gaegu:wght@400;700&family=Gamja+Flower&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Jua&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@300;400;500;600;700&family=Noto+Serif+KR:wght@400;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=D2+Coding&family=Do+Hyeon&family=Fira+Code:wght@400;600&family=Gaegu:wght@400;700&family=Gamja+Flower&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Jua&family=Nanum+Gothic:wght@400;700&family=Nanum+Myeongjo:wght@400;700&family=Noto+Sans+KR:wght@300;400;500;600;700&family=Noto+Serif+KR:wght@400;600;700&display=swap');
 
 @layer base {
   :root {
@@ -229,6 +229,14 @@
   @apply bg-yellow-200 dark:bg-yellow-800 rounded-sm px-0.5;
 }
 
+.tiptap-editor .ProseMirror .find-replace-match {
+  @apply bg-amber-200/80 dark:bg-amber-700/50 rounded-sm;
+}
+
+.tiptap-editor .ProseMirror .find-replace-match-current {
+  @apply bg-orange-300 dark:bg-orange-500 text-black rounded-sm;
+}
+
 /* Link */
 .tiptap-editor .ProseMirror a {
   @apply text-blue-600 dark:text-blue-400 underline cursor-pointer;
@@ -285,6 +293,84 @@
   color: hsl(340 75% 70%);
 }
 .dark .latex-comment {
+  color: hsl(0 0% 55%);
+}
+
+.structured-data-highlight-pre {
+  @apply bg-transparent text-foreground;
+  font-family: 'Fira Code', 'JetBrains Mono', 'D2 Coding', monospace;
+}
+
+.structured-data-textarea {
+  font-family: 'Fira Code', 'JetBrains Mono', 'D2 Coding', monospace;
+}
+
+.structured-data-textarea::selection {
+  background: hsl(var(--primary) / 0.22);
+}
+
+.structured-data-key {
+  color: hsl(210 80% 55%);
+  font-weight: 600;
+}
+
+.structured-data-string {
+  color: hsl(145 60% 40%);
+}
+
+.structured-data-number {
+  color: hsl(25 90% 50%);
+}
+
+.structured-data-boolean {
+  color: hsl(280 70% 55%);
+  font-weight: 600;
+}
+
+.structured-data-null {
+  color: hsl(350 70% 55%);
+  font-weight: 600;
+}
+
+.structured-data-reference {
+  color: hsl(190 75% 45%);
+  font-weight: 600;
+}
+
+.structured-data-comment {
+  color: hsl(0 0% 50%);
+  font-style: italic;
+}
+
+.structured-data-punctuation {
+  color: hsl(var(--muted-foreground));
+}
+
+.dark .structured-data-key {
+  color: hsl(210 90% 72%);
+}
+
+.dark .structured-data-string {
+  color: hsl(145 60% 62%);
+}
+
+.dark .structured-data-number {
+  color: hsl(25 95% 65%);
+}
+
+.dark .structured-data-boolean {
+  color: hsl(280 80% 72%);
+}
+
+.dark .structured-data-null {
+  color: hsl(350 80% 72%);
+}
+
+.dark .structured-data-reference {
+  color: hsl(190 80% 68%);
+}
+
+.dark .structured-data-comment {
   color: hsl(0 0% 55%);
 }
 

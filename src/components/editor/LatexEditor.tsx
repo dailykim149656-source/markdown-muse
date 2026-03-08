@@ -1,5 +1,5 @@
-import { useEditor, EditorContent } from "@tiptap/react";
-import { useState, useCallback, useRef } from "react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import EditorToolbar from "./EditorToolbar";
 import { createEditorExtensions, editorPropsDefault } from "./editorConfig";
 import { htmlToLatex, latexToHtml } from "./utils/htmlToLatex";
@@ -9,9 +9,11 @@ import LatexHighlightEditor from "./LatexHighlightEditor";
 interface LatexEditorProps {
   initialContent?: string;
   onContentChange?: (content: string) => void;
+  onHtmlChange?: (html: string) => void;
+  onEditorReady?: (editor: Editor | null) => void;
 }
 
-const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
+const LatexEditor = ({ initialContent, onContentChange, onHtmlChange, onEditorReady }: LatexEditorProps) => {
   const [latexSource, setLatexSource] = useState(initialContent || "");
   const [showPanel, setShowPanel] = useState(true);
   const [sourceLeft, setSourceLeft] = useState(false);
@@ -19,6 +21,11 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
   const syncingFromWysiwyg = useRef(false);
   const syncingFromSource = useRef(false);
   const sourceDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const initialHtml = useMemo(() => initialContent ? latexToHtml(initialContent) : "", [initialContent]);
+
+  useEffect(() => {
+    onHtmlChange?.(initialHtml);
+  }, [initialHtml, onHtmlChange]);
 
   const handleWysiwygUpdate = useCallback(
     (html: string) => {
@@ -27,33 +34,43 @@ const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
       const latex = htmlToLatex(html);
       setLatexSource(latex);
       onContentChange?.(latex);
+      onHtmlChange?.(html);
       queueMicrotask(() => { syncingFromWysiwyg.current = false; });
     },
-    [onContentChange]
+    [onContentChange, onHtmlChange]
   );
 
   const editor = useEditor({
     extensions: createEditorExtensions("LaTeX 문서를 WYSIWYG으로 작성하세요..."),
-    content: initialContent ? latexToHtml(initialContent) : "",
+    content: initialHtml,
     onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML()),
     editorProps: editorPropsDefault,
   });
 
+  useEffect(() => {
+    onEditorReady?.(editor);
+
+    return () => {
+      onEditorReady?.(null);
+    };
+  }, [editor, onEditorReady]);
+
   const handleSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newLatex = e.target.value;
+      const html = latexToHtml(newLatex);
       setLatexSource(newLatex);
       onContentChange?.(newLatex);
+      onHtmlChange?.(html);
       if (sourceDebounce.current) clearTimeout(sourceDebounce.current);
       sourceDebounce.current = setTimeout(() => {
         if (!editor || syncingFromWysiwyg.current) return;
         syncingFromSource.current = true;
-        const html = latexToHtml(newLatex);
         editor.commands.setContent(html, { emitUpdate: false });
         queueMicrotask(() => { syncingFromSource.current = false; });
       }, 600);
     },
-    [editor, onContentChange]
+    [editor, onContentChange, onHtmlChange]
   );
 
   const handleSourceKeyDown = useCallback(

@@ -1,5 +1,5 @@
-import { useEditor, EditorContent } from "@tiptap/react";
-import { useState, useCallback, useRef } from "react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import EditorToolbar from "./EditorToolbar";
 import { createEditorExtensions, editorPropsDefault } from "./editorConfig";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
@@ -7,10 +7,13 @@ import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 interface HtmlEditorProps {
   initialContent?: string;
   onContentChange?: (content: string) => void;
+  onHtmlChange?: (html: string) => void;
+  onEditorReady?: (editor: Editor | null) => void;
 }
 
-const HtmlEditor = ({ initialContent, onContentChange }: HtmlEditorProps) => {
-  const [htmlSource, setHtmlSource] = useState(initialContent || "");
+const HtmlEditor = ({ initialContent, onContentChange, onHtmlChange, onEditorReady }: HtmlEditorProps) => {
+  const initialHtml = initialContent || "";
+  const [htmlSource, setHtmlSource] = useState(initialHtml);
   const [showPanel, setShowPanel] = useState(true);
   const [sourceLeft, setSourceLeft] = useState(false);
 
@@ -18,15 +21,20 @@ const HtmlEditor = ({ initialContent, onContentChange }: HtmlEditorProps) => {
   const syncingFromSource = useRef(false);
   const sourceDebounce = useRef<ReturnType<typeof setTimeout>>();
 
+  useEffect(() => {
+    onHtmlChange?.(initialHtml);
+  }, [initialHtml, onHtmlChange]);
+
   const handleWysiwygUpdate = useCallback(
     (html: string) => {
       if (syncingFromSource.current) return;
       syncingFromWysiwyg.current = true;
       setHtmlSource(html);
       onContentChange?.(html);
+      onHtmlChange?.(html);
       queueMicrotask(() => { syncingFromWysiwyg.current = false; });
     },
-    [onContentChange]
+    [onContentChange, onHtmlChange]
   );
 
   const editor = useEditor({
@@ -36,11 +44,20 @@ const HtmlEditor = ({ initialContent, onContentChange }: HtmlEditorProps) => {
     editorProps: editorPropsDefault,
   });
 
+  useEffect(() => {
+    onEditorReady?.(editor);
+
+    return () => {
+      onEditorReady?.(null);
+    };
+  }, [editor, onEditorReady]);
+
   const handleSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newHtml = e.target.value;
       setHtmlSource(newHtml);
       onContentChange?.(newHtml);
+      onHtmlChange?.(newHtml);
       if (sourceDebounce.current) clearTimeout(sourceDebounce.current);
       sourceDebounce.current = setTimeout(() => {
         if (!editor || syncingFromWysiwyg.current) return;
@@ -49,7 +66,7 @@ const HtmlEditor = ({ initialContent, onContentChange }: HtmlEditorProps) => {
         queueMicrotask(() => { syncingFromSource.current = false; });
       }, 600);
     },
-    [editor, onContentChange]
+    [editor, onContentChange, onHtmlChange]
   );
 
   const handleSourceKeyDown = useCallback(

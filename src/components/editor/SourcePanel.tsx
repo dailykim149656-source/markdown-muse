@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { Code2, PanelRightClose, PanelRightOpen, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,15 +35,17 @@ interface SourcePanelProps {
   onSwap: () => void;
   onClose: () => void;
   placeholder?: string;
+  textareaRef?: RefObject<HTMLTextAreaElement | null>;
   /** Optional custom editor component instead of textarea */
   children?: ReactNode;
 }
 
-const SourcePanel = ({ label, value, onChange, onKeyDown, onSwap, onClose, placeholder, children }: SourcePanelProps) => (
+const SourcePanel = ({ label, value, onChange, onKeyDown, onSwap, onClose, placeholder, textareaRef, children }: SourcePanelProps) => (
   <div className="h-full flex flex-col bg-background">
     <SourcePanelHeader label={label} onSwap={onSwap} onClose={onClose} />
     {children || (
       <textarea
+        ref={textareaRef}
         value={value}
         onChange={onChange}
         onKeyDown={onKeyDown}

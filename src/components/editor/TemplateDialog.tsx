@@ -1,6 +1,20 @@
 import { useState } from "react";
-import { FileText, FileCode, Braces, BookOpen, Briefcase, GraduationCap, Newspaper, ScrollText, LayoutTemplate } from "lucide-react";
+import {
+  BookOpen,
+  Bug,
+  ClipboardList,
+  FileCode,
+  FileText,
+  GraduationCap,
+  LayoutTemplate,
+  Newspaper,
+  ScrollText,
+  Wrench,
+  Braces,
+  Briefcase,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -17,6 +31,24 @@ export interface DocumentTemplate {
 }
 
 const today = new Date().toLocaleDateString("ko-KR");
+const todayIso = new Date().toISOString().slice(0, 10);
+
+const frontmatter = (title: string, docType: string) => [
+  "---",
+  `title: "${title}"`,
+  "category: 사내 위키형 기술 문서",
+  `docType: ${docType}`,
+  "status: draft",
+  `createdAt: ${todayIso}`,
+  `lastReviewedAt: ${todayIso}`,
+  "owner: ",
+  "reviewer: ",
+  "tags:",
+  "  - wiki",
+  `  - ${docType}`,
+  "---",
+  "",
+].join("\n");
 
 const ICON_MAP: Record<string, React.ReactNode> = {
   FileText: <FileText className="h-5 w-5" />,
@@ -27,6 +59,9 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   GraduationCap: <GraduationCap className="h-5 w-5" />,
   Newspaper: <Newspaper className="h-5 w-5" />,
   ScrollText: <ScrollText className="h-5 w-5" />,
+  Bug: <Bug className="h-5 w-5" />,
+  Wrench: <Wrench className="h-5 w-5" />,
+  ClipboardList: <ClipboardList className="h-5 w-5" />,
 };
 
 const TEMPLATES: DocumentTemplate[] = [
@@ -154,6 +189,242 @@ const TEMPLATES: DocumentTemplate[] = [
       "---",
       "",
       "*태그: #주제1 #주제2 #주제3*",
+    ].join("\n"),
+  },
+  {
+    id: "wiki-sop",
+    name: "사내 위키 SOP",
+    description: "표준 운영 절차(SOP) 문서 템플릿",
+    mode: "markdown",
+    iconName: "ScrollText",
+    category: "사내 위키",
+    content: [
+      ...frontmatter("사내 SOP 템플릿", "sop").split("\n"),
+      "# SOP (표준 운영 절차)",
+      "",
+      "## 1. 문서 정보",
+      "- 문서명:",
+      "- 문서 번호:",
+      "- 최종 버전: v1.0",
+      `- 작성일: ${today}`,
+      "- 작성자:",
+      "- 검토자:",
+      "",
+      "## 2. 목적",
+      "- 이 SOP의 목적을 한 줄로 정리한다.",
+      "",
+      "## 3. 적용 범위",
+      "- 적용 대상 시스템/팀:",
+      "- 적용 버전/환경:",
+      "",
+      "## 4. 선행 조건",
+      "- 권한:",
+      "- 사전 점검 항목:",
+      "",
+      "## 5. 절차",
+      "### 5.1 사전 준비",
+      "- [ ] 실행 전 점검",
+      "- [ ] 관련 권한 확인",
+      "",
+      "### 5.2 실행",
+      "1. ",
+      "2. ",
+      "3. ",
+      "",
+      "### 5.3 완료 확인",
+      "- [ ] 산출물 저장",
+      "- [ ] 승인 등록",
+      "",
+      "## 6. 확인 항목",
+      "- [ ] 목표 상태 달성",
+      "- [ ] 장애 로그 없음",
+      "- [ ] 변경 이력 기록",
+      "",
+      "## 7. 예외 및 이슈",
+      "-",
+      "",
+      "## 8. 변경 이력",
+      "| 날짜 | 버전 | 변경자 | 내용 |",
+      "| --- | --- | --- | --- |",
+      `| ${today} | v1.0 |  | 최초 작성 |`,
+      "",
+    ].join("\n"),
+  },
+  {
+    id: "wiki-operations",
+    name: "운영 매뉴얼",
+    description: "운영/점검/알림 대응 체크리스트 템플릿",
+    mode: "markdown",
+    iconName: "Wrench",
+    category: "사내 위키",
+    content: [
+      ...frontmatter("운영 매뉴얼", "operations-manual").split("\n"),
+      "# 운영 매뉴얼",
+      "",
+      "## 1. 시스템 개요",
+      "- 시스템명: ",
+      "- 목적:",
+      "- 운영 파트:",
+      "",
+      "## 2. 운영 시간 및 책임",
+      "| 항목 | 내용 |",
+      "| --- | --- |",
+      "| 운영 시간 | 24x7/주간 등 |",
+      "| 1차 책임자 |  |",
+      "| 2차 책임자 |  |",
+      "| 전달 채널 |  |",
+      "",
+      "## 3. 정기 점검",
+      "### 일일",
+      "- [ ] 헬스체크",
+      "- [ ] CPU/메모리 임계치 확인",
+      "- [ ] 에러 로그 추이 확인",
+      "### 주간",
+      "- [ ] 백업 성공 여부 확인",
+      "- [ ] 취약점 스캔 결과 확인",
+      "- [ ] 라이선스/시크릿 만료 점검",
+      "",
+      "## 4. 장애 대응",
+      "- 초기 대응 시간:",
+      "- 에스컬레이션 룰:",
+      "- 복구 종료 조건:",
+      "",
+      "## 5. 운영 기록",
+      "- 운영 일지 링크:",
+      "- 점검 리포트 링크:",
+      "- 변경 승인 링크:",
+      "",
+    ].join("\n"),
+  },
+  {
+    id: "wiki-equipment",
+    name: "실험/장비 문서",
+    description: "장비 운영·실험 재현성 확보용 템플릿",
+    mode: "markdown",
+    iconName: "BookOpen",
+    category: "사내 위키",
+    content: [
+      ...frontmatter("실험/장비 문서", "experiment-equipment").split("\n"),
+      "# 실험/장비 문서",
+      "",
+      "## 1. 문서 정보",
+      `- 작성일: ${today}`,
+      "- 장비명/ID:",
+      "- 위치:",
+      "- 담당자:",
+      "",
+      "## 2. 자산 정보",
+      "| 항목 | 값 |",
+      "| --- | --- |",
+      "| 모델 |  |",
+      "| 제조사 |  |",
+      "| 관리 책임자 |  |",
+      "| 점검 주기 |  |",
+      "",
+      "## 3. 실험/운영 절차",
+      "1. 사전 점검",
+      "2. 설정 적용",
+      "3. 실험/작업 실행",
+      "4. 결과 수집",
+      "5. 종료 정리",
+      "",
+      "## 4. 파라미터",
+      "- 기본 파라미터:",
+      "- 실험 조건:",
+      "- 환경 변수:",
+      "",
+      "## 5. 안전 및 주의사항",
+      "-",
+      "",
+      "## 6. 결과 기록",
+      "- 결과 저장 위치:",
+      "- 샘플 로그:",
+      "",
+    ].join("\n"),
+  },
+  {
+    id: "wiki-troubleshooting",
+    name: "트러블슈팅 가이드",
+    description: "증상-원인-조치 방식으로 정리한 대응 템플릿",
+    mode: "markdown",
+    iconName: "Bug",
+    category: "사내 위키",
+    content: [
+      ...frontmatter("트러블슈팅 가이드", "troubleshooting-guide").split("\n"),
+      "# 트러블슈팅 가이드",
+      "",
+      "## 1. 증상 수집",
+      "- 증상:",
+      "- 발생 시간:",
+      "- 영향 범위:",
+      "- 재현 여부:",
+      "",
+      "## 2. 원인 분석",
+      "| 증상 | 의심 원인 | 확인 방법 | 결과 |",
+      "| --- | --- | --- | --- |",
+      "| | | | |",
+      "",
+      "## 3. 조치",
+      "### 3.1 즉시 조치",
+      "- [ ] 임시 우회 조치",
+      "- [ ] 서비스 영향 최소화",
+      "",
+      "### 3.2 원인 제거",
+      "- ",
+      "",
+      "### 3.3 영구 대책",
+      "- ",
+      "",
+      "## 4. 복구 확인",
+      "- [ ] 지표 회복",
+      "- [ ] 재발 여부 모니터링",
+      "- [ ] 사용자 안내 완료",
+      "",
+      "## 5. 재발 방지",
+      "- 변경 항목:",
+      "- 다음 점검일:",
+      "",
+    ].join("\n"),
+  },
+  {
+    id: "wiki-handover",
+    name: "기술 인수인계 문서",
+    description: "온보딩·인수인계용 표준 템플릿",
+    mode: "markdown",
+    iconName: "ClipboardList",
+    category: "사내 위키",
+    content: [
+      ...frontmatter("기술 인수인계 문서", "handover").split("\n"),
+      "# 기술 인수인계 문서",
+      "",
+      "## 1. 개요",
+      "- 인수 대상:",
+      "- 인수일:",
+      "- 인계자:",
+      "- 인수자:",
+      "",
+      "## 2. 시스템 아키텍처 요약",
+      "- 핵심 컴포넌트:",
+      "- 의존성/연동:",
+      "- 배포 방식:",
+      "",
+      "## 3. 운영/운영 이력",
+      "- 현재 버전:",
+      "- 최근 배포 일자:",
+      "- 주요 이슈 현황:",
+      "",
+      "## 4. 인수인계 체크리스트",
+      "- [ ] 핵심 기능 데모",
+      "- [ ] 장애 대응 시나리오 리뷰",
+      "- [ ] 권한/접근 관리 점검",
+      "- [ ] 문서 링크 갱신",
+      "",
+      "## 5. 미해결 항목",
+      "-",
+      "",
+      "## 6. 후속 액션",
+      "-",
+      "",
     ].join("\n"),
   },
   {
@@ -304,6 +575,15 @@ const TEMPLATES: DocumentTemplate[] = [
 ];
 
 const CATEGORIES: string[] = Array.from(new Set(TEMPLATES.map(t => t.category)));
+const MODES: Array<TemplateMode | "all"> = ["all", "markdown", "latex", "html", "json", "yaml"];
+const MODE_LABELS: Record<TemplateMode | "all", string> = {
+  all: "전체",
+  markdown: "Markdown",
+  latex: "LaTeX",
+  html: "HTML",
+  json: "JSON",
+  yaml: "YAML",
+};
 
 interface TemplateDialogProps {
   open: boolean;
@@ -313,9 +593,20 @@ interface TemplateDialogProps {
 
 const TemplateDialog = ({ open, onOpenChange, onSelect }: TemplateDialogProps) => {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const filtered = selectedCategory
-    ? TEMPLATES.filter(t => t.category === selectedCategory)
-    : TEMPLATES;
+  const [selectedMode, setSelectedMode] = useState<TemplateMode | "all">("all");
+  const [searchKeyword, setSearchKeyword] = useState("");
+
+  const normalizedKeyword = searchKeyword.trim().toLowerCase();
+  const filtered = TEMPLATES.filter(template => {
+    const matchCategory = selectedCategory === null || template.category === selectedCategory;
+    const matchMode = selectedMode === "all" || template.mode === selectedMode;
+    const matchKeyword = !normalizedKeyword
+      || template.name.toLowerCase().includes(normalizedKeyword)
+      || template.description.toLowerCase().includes(normalizedKeyword)
+      || template.category.toLowerCase().includes(normalizedKeyword);
+
+    return matchCategory && matchMode && matchKeyword;
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -328,6 +619,29 @@ const TemplateDialog = ({ open, onOpenChange, onSelect }: TemplateDialogProps) =
         </DialogHeader>
 
         <div className="flex items-center gap-1.5 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => {
+              setSelectedCategory(null);
+              setSelectedMode("all");
+              setSearchKeyword("");
+            }}
+          >
+            필터 초기화
+          </Button>
+          <div className="w-64">
+            <Input
+              value={searchKeyword}
+              onChange={(event) => setSearchKeyword(event.target.value)}
+              placeholder="템플릿 이름/설명/카테고리 검색"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-muted-foreground px-2">카테고리</span>
           <Button
             variant={selectedCategory === null ? "default" : "outline"}
             size="sm"
@@ -349,8 +663,28 @@ const TemplateDialog = ({ open, onOpenChange, onSelect }: TemplateDialogProps) =
           ))}
         </div>
 
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs text-muted-foreground px-2">모드</span>
+          {MODES.map(mode => (
+            <Button
+              key={mode}
+              variant={selectedMode === mode ? "default" : "outline"}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setSelectedMode(mode)}
+            >
+              {MODE_LABELS[mode]}
+            </Button>
+          ))}
+        </div>
+
         <ScrollArea className="h-[50vh]">
           <div className="grid grid-cols-2 gap-3 pr-3">
+            {filtered.length === 0 && (
+              <div className="col-span-2 py-8 text-center text-sm text-muted-foreground">
+                검색 조건에 맞는 템플릿이 없습니다.
+              </div>
+            )}
             {filtered.map(template => (
               <button
                 key={template.id}

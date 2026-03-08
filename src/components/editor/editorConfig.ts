@@ -26,6 +26,7 @@ import { FootnoteRef, FootnoteItem } from "./extensions/FootnoteExtension";
 import TableOfContents from "./extensions/TableOfContents";
 import FigureCaption from "./extensions/FigureCaption";
 import CrossReference from "./extensions/CrossReference";
+import FindReplaceHighlight from "./extensions/FindReplaceHighlight";
 
 const lowlight = createLowlight(common);
 
@@ -65,6 +66,7 @@ export const createEditorExtensions = (placeholder: string) => [
   TableOfContents,
   FigureCaption,
   CrossReference,
+  FindReplaceHighlight,
 ];
 
 export const editorPropsDefault = {
