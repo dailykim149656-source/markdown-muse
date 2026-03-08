@@ -362,6 +362,14 @@ ${editorHtml}
                 initialContent={activeDoc.content}
                 onContentChange={handleContentChange}
               />
+            ) : activeDoc.mode === "json" || activeDoc.mode === "yaml" ? (
+              <JsonYamlEditor
+                key={editorKey}
+                initialContent={activeDoc.content}
+                onContentChange={handleContentChange}
+                mode={activeDoc.mode}
+                onModeChange={(m) => handleModeChange(m)}
+              />
             ) : (
               <HtmlEditor
                 key={editorKey}
@@ -373,7 +381,7 @@ ${editorHtml}
           <input
             ref={fileInputRef}
             type="file"
-            accept=".md,.markdown,.txt,.tex,.html,.htm"
+            accept=".md,.markdown,.txt,.tex,.html,.htm,.json,.yaml,.yml"
             className="hidden"
             onChange={handleFileChange}
           />
