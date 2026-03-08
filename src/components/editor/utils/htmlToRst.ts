@@ -177,6 +177,10 @@ export function htmlToRst(html: string): string {
     (_, target) => `:ref:\`${target}\``
   );
 
+  // Resolve link placeholders
+  s = s.replace(/\x00LT\x00/g, "<");
+  s = s.replace(/\x00GT\x00/g, ">");
+
   // Clean up excessive newlines
   s = s.replace(/\n{3,}/g, "\n\n").trim();
 
