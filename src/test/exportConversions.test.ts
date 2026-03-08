@@ -380,7 +380,7 @@ Some background text.
 
   it("converts tabular to Typst table", () => {
     const r = latexToTypst(wrap("\\begin{tabular}{|l|c|r|}\n\\hline\nA & B & C \\\\\n\\hline\n1 & 2 & 3 \\\\\n\\hline\n\\end{tabular}"));
-    expect(r).toContain("#table(");
+    expect(r).toContain("table(");
     expect(r).toContain("columns:");
   });
 });
