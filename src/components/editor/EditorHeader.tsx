@@ -52,7 +52,7 @@ const EditorHeader = ({
   onLoad,
   fileName,
   onFileNameChange,
-  wordCount,
+  textStats,
   countWithSpaces = true,
   onToggleCountMode,
   mode,
