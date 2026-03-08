@@ -119,18 +119,22 @@ const Index = () => {
     updateActiveDoc({ name });
   }, [updateActiveDoc]);
 
+  const [countWithSpaces, setCountWithSpaces] = useState(true);
+
   const wordCount = useMemo(() => {
+    let text = "";
     const content = activeDoc.content;
     if (activeDoc.mode === "latex") {
-      return content.replace(/\\[a-zA-Z]+\{?[^}]*\}?/g, "").replace(/[{}\\$%&]/g, "").trim().length;
-    }
-    if (activeDoc.mode === "html") {
+      text = content.replace(/\\[a-zA-Z]+\{?[^}]*\}?/g, "").replace(/[{}\\$%&]/g, "").trim();
+    } else if (activeDoc.mode === "html") {
       const tmp = document.createElement("div");
       tmp.innerHTML = content;
-      return (tmp.textContent || "").trim().length;
+      text = (tmp.textContent || "").trim();
+    } else {
+      text = content.replace(/[#*_~`>\-\[\]()!|]/g, "").trim();
     }
-    return content.replace(/[#*_~`>\-\[\]()!|]/g, "").trim().length;
-  }, [activeDoc.content, activeDoc.mode]);
+    return countWithSpaces ? text.length : text.replace(/\s/g, "").length;
+  }, [activeDoc.content, activeDoc.mode, countWithSpaces]);
 
   // Document operations
   const handleNewDoc = useCallback((mode: EditorMode = "markdown") => {
