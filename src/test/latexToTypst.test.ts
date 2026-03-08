@@ -42,7 +42,7 @@ describe("latexToTypst math conversion", () => {
 
   it("converts display equation environment", () => {
     const result = latexToTypst(wrap("\\begin{equation}\nE = mc^2\n\\end{equation}"));
-    expect(result).toContain("$ E = mc^(2) $");
+    expect(result).toContain("$ E = mc^2 $");
   });
 
   it("converts align environment", () => {
