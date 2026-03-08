@@ -32,6 +32,40 @@ interface LatexEditorProps {
   onContentChange?: (content: string) => void;
 }
 
+interface SourcePanelProps {
+  latexSource: string;
+  handleSourceChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  handleSourceKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  setSourceLeft: (fn: (v: boolean) => boolean) => void;
+  setShowPanel: (v: boolean) => void;
+}
+
+const SourcePanel = ({ latexSource, handleSourceChange, handleSourceKeyDown, setSourceLeft, setShowPanel }: SourcePanelProps) => (
+  <div className="h-full flex flex-col bg-background">
+    <div className="h-8 flex items-center justify-between px-3 bg-secondary/50 border-b border-border shrink-0">
+      <div className="flex items-center gap-1.5">
+        <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
+        <span className="text-xs font-medium text-muted-foreground">LaTeX 소스</span>
+        <span className="text-[10px] text-muted-foreground/60 ml-1">양방향 동기화</span>
+      </div>
+      <div className="flex items-center gap-0.5">
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setSourceLeft((v) => !v)} title="패널 위치 전환">
+          <ArrowLeftRight className="h-3.5 w-3.5" />
+        </Button>
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setShowPanel(false)}>
+          <PanelRightClose className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+    <LatexHighlightEditor
+      value={latexSource}
+      onChange={handleSourceChange}
+      onKeyDown={handleSourceKeyDown}
+      placeholder="// WYSIWYG 편집기에 내용을 입력하면&#10;// LaTeX 소스가 여기에 표시됩니다."
+    />
+  </div>
+);
+
 const LatexEditor = ({ initialContent, onContentChange }: LatexEditorProps) => {
   const [latexSource, setLatexSource] = useState(() =>
     initialContent || ""
