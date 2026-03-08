@@ -56,6 +56,9 @@ export const createEditorExtensions = (placeholder: string) => [
   MathExtension,
   MathBlockExtension,
   MermaidBlock,
+  AdmonitionExtension,
+  FootnoteRef,
+  FootnoteItem,
 ];
 
 export const editorPropsDefault = {

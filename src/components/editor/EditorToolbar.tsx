@@ -552,6 +552,16 @@ const EditorToolbar = ({ editor }: EditorToolbarProps) => {
         >
           <GitBranch className="h-4 w-4" />
         </Toggle>
+        <AdmonitionMenu editor={editor} />
+        <Toggle
+          size="sm"
+          pressed={false}
+          onPressedChange={() => (editor.commands as any).insertFootnote()}
+          title="각주 삽입"
+          className="h-8 w-8 p-0 hover:bg-toolbar-active/50 rounded-sm"
+        >
+          <FootprintsIcon className="h-4 w-4" />
+        </Toggle>
       </div>
     </div>
   );
