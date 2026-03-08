@@ -109,7 +109,7 @@
 
 /* Tiptap editor styles */
 .tiptap-editor .ProseMirror {
-  @apply outline-none min-h-[calc(100vh-8rem)] px-16 py-8 max-w-3xl mx-auto;
+  @apply outline-none min-h-[calc(100vh-8rem)] px-4 py-4;
 }
 
 .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
