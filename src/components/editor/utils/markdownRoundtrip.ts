@@ -52,10 +52,13 @@ function preProcessHtml(html: string): { html: string; replacements: Map<string,
   );
 
   // Mermaid: <div data-type="mermaid" code="..."></div>
+  // Mermaid: <div data-type="mermaid" code="..."></div>
+  // Use [\s\S] instead of [^"] for code attr since it may contain newlines
   processed = processed.replace(
     /<div[^>]*data-type="mermaid"[^>]*><\/div>/g,
     (match) => {
-      const code = match.match(/code="([^"]*)"/)?.[1] || "";
+      const codeMatch = match.match(/code="([\s\S]*?)"/);
+      const code = codeMatch?.[1] || "";
       if (!code) return match;
       const key = makeKey();
       const decoded = code.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
@@ -64,20 +67,25 @@ function preProcessHtml(html: string): { html: string; replacements: Map<string,
     }
   );
 
-  // Footnote ref: <span data-type="footnote-ref" data-footnote-id="...">...</span>
+  // Footnote ref: <span data-type="footnote-ref" ...>...</span>
+  // Handle any attribute order
   processed = processed.replace(
-    /<span[^>]*data-type="footnote-ref"[^>]*data-footnote-id="([^"]*)"[^>]*>[^<]*<\/span>/g,
-    (_match, id) => {
+    /<span[^>]*data-type="footnote-ref"[^>]*>[^<]*<\/span>/g,
+    (match) => {
+      const id = match.match(/data-footnote-id="([^"]*)"/)?.[1] || "";
+      if (!id) return match;
       const key = makeKey();
       replacements.set(key, `[^${id}]`);
       return key;
     }
   );
 
-  // Footnote item: <div data-type="footnote-item" data-footnote-id="...">text</div>
+  // Footnote item: <div data-type="footnote-item" ...>text</div>
   processed = processed.replace(
-    /<div[^>]*data-type="footnote-item"[^>]*data-footnote-id="([^"]*)"[^>]*>([^<]*)<\/div>/g,
-    (_match, id, text) => {
+    /<div[^>]*data-type="footnote-item"[^>]*>([^<]*)<\/div>/g,
+    (match, text) => {
+      const id = match.match(/data-footnote-id="([^"]*)"/)?.[1] || "";
+      if (!id) return match;
       const key = makeKey();
       replacements.set(key, `\n[^${id}]: ${text.trim()}\n`);
       return `<p>${key}</p>`;
