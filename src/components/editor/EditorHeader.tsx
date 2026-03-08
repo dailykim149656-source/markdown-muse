@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { useSidebar } from "@/components/ui/sidebar";
 
-export type EditorMode = "markdown" | "latex" | "html";
+export type EditorMode = "markdown" | "latex" | "html" | "json" | "yaml";
 
 interface EditorHeaderProps {
   isDark: boolean;
