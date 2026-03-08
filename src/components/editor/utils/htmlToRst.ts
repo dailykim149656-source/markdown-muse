@@ -190,6 +190,9 @@ export function htmlToRst(html: string): string {
   s = s.replace(/\x00LT\x00/g, "<");
   s = s.replace(/\x00GT\x00/g, ">");
 
+  // Resolve code block placeholders
+  s = s.replace(/\x00CODE_BLOCK_(\d+)\x00/g, (_, idx) => codeBlocks[parseInt(idx)] || "");
+
   // Clean up excessive newlines
   s = s.replace(/\n{3,}/g, "\n\n").trim();
 
