@@ -104,6 +104,7 @@ const Landing = () => {
             />
           </div>
         </div>
+      </section>
 
       {/* Features */}
       <section id="features" className="px-6 py-20 bg-secondary/40">
