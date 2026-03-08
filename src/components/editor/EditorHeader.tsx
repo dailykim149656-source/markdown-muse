@@ -68,13 +68,13 @@ const EditorHeader = ({
 
         {/* Mode tabs */}
         <div className="flex items-center ml-3 bg-secondary rounded-md p-0.5">
-          {(["markdown", "latex", "html"] as EditorMode[]).map((m) => (
+          {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((m) => (
             <button
               key={m}
               className={`px-3 py-1 text-xs rounded-sm transition-colors ${mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               onClick={() => onModeChange(m)}
             >
-              {m === "markdown" ? "Markdown" : m === "latex" ? "LaTeX" : "HTML"}
+              {m === "markdown" ? "Markdown" : m === "latex" ? "LaTeX" : m === "html" ? "HTML" : m === "json" ? "JSON" : "YAML"}
             </button>
           ))}
         </div>

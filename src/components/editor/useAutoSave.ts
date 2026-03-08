@@ -17,7 +17,7 @@ export interface DocumentData {
   updatedAt: number;
 }
 
-export const createNewDocument = (name = "Untitled", mode: "markdown" | "latex" | "html" = "markdown"): DocumentData => ({
+export const createNewDocument = (name = "Untitled", mode: "markdown" | "latex" | "html" | "json" | "yaml" = "markdown"): DocumentData => ({
   id: crypto.randomUUID(),
   name,
   mode,
