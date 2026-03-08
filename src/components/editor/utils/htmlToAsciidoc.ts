@@ -107,6 +107,9 @@ export function htmlToAsciidoc(html: string): string {
   // Clean up excessive newlines
   s = s.replace(/\n{3,}/g, "\n\n").trim();
 
+  // Resolve cross-reference placeholders
+  s = s.replace(/\x00XREF_START\x00([^\x00]*)\x00XREF_END\x00/g, (_, target) => `<<${target}>>`);
+
   return s + "\n";
 }
 
