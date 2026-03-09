@@ -1,3 +1,4 @@
+import type { JSONContent } from "@tiptap/core";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import { useState, useCallback, useRef, useEffect } from "react";
 import EditorToolbar from "./EditorToolbar";
@@ -6,12 +7,21 @@ import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 
 interface HtmlEditorProps {
   initialContent?: string;
+  initialTiptapDoc?: JSONContent;
   onContentChange?: (content: string) => void;
   onHtmlChange?: (html: string) => void;
   onEditorReady?: (editor: Editor | null) => void;
+  onTiptapChange?: (document: JSONContent | null) => void;
 }
 
-const HtmlEditor = ({ initialContent, onContentChange, onHtmlChange, onEditorReady }: HtmlEditorProps) => {
+const HtmlEditor = ({
+  initialContent,
+  initialTiptapDoc,
+  onContentChange,
+  onHtmlChange,
+  onEditorReady,
+  onTiptapChange,
+}: HtmlEditorProps) => {
   const initialHtml = initialContent || "";
   const [htmlSource, setHtmlSource] = useState(initialHtml);
   const [showPanel, setShowPanel] = useState(true);
@@ -21,36 +31,38 @@ const HtmlEditor = ({ initialContent, onContentChange, onHtmlChange, onEditorRea
   const syncingFromSource = useRef(false);
   const sourceDebounce = useRef<ReturnType<typeof setTimeout>>();
 
-  useEffect(() => {
-    onHtmlChange?.(initialHtml);
-  }, [initialHtml, onHtmlChange]);
-
   const handleWysiwygUpdate = useCallback(
-    (html: string) => {
+    (html: string, document: JSONContent) => {
       if (syncingFromSource.current) return;
       syncingFromWysiwyg.current = true;
       setHtmlSource(html);
       onContentChange?.(html);
       onHtmlChange?.(html);
+      onTiptapChange?.(document);
       queueMicrotask(() => { syncingFromWysiwyg.current = false; });
     },
-    [onContentChange, onHtmlChange]
+    [onContentChange, onHtmlChange, onTiptapChange]
   );
 
   const editor = useEditor({
-    extensions: createEditorExtensions("HTML 문서를 WYSIWYG으로 작성하세요..."),
-    content: initialContent || "",
-    onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML()),
+    extensions: createEditorExtensions("HTML 문서에서 WYSIWYG로 전환해 편집할 수 있습니다."),
+    content: initialTiptapDoc || initialHtml,
+    onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML(), editor.getJSON()),
     editorProps: editorPropsDefault,
   });
 
   useEffect(() => {
     onEditorReady?.(editor);
 
+    if (editor) {
+      onHtmlChange?.(editor.getHTML());
+      onTiptapChange?.(editor.getJSON());
+    }
+
     return () => {
       onEditorReady?.(null);
     };
-  }, [editor, onEditorReady]);
+  }, [editor, onEditorReady, onHtmlChange, onTiptapChange]);
 
   const handleSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -63,10 +75,11 @@ const HtmlEditor = ({ initialContent, onContentChange, onHtmlChange, onEditorRea
         if (!editor || syncingFromWysiwyg.current) return;
         syncingFromSource.current = true;
         editor.commands.setContent(newHtml, { emitUpdate: false });
+        onTiptapChange?.(editor.getJSON());
         queueMicrotask(() => { syncingFromSource.current = false; });
       }, 600);
     },
-    [editor, onContentChange, onHtmlChange]
+    [editor, onContentChange, onHtmlChange, onTiptapChange]
   );
 
   const handleSourceKeyDown = useCallback(
@@ -100,7 +113,7 @@ const HtmlEditor = ({ initialContent, onContentChange, onHtmlChange, onEditorRea
             onKeyDown={handleSourceKeyDown}
             onSwap={() => setSourceLeft(v => !v)}
             onClose={() => setShowPanel(false)}
-            placeholder={"<!-- WYSIWYG 편집기에 내용을 입력하면\n     HTML 소스가 여기에 표시됩니다. -->"}
+            placeholder={"<!-- WYSIWYG에서 작성한 내용은 HTML 소스와 동기화됩니다.\n     HTML 소스가 필요하면 이곳에 입력하세요. -->"}
           />
         }
       />

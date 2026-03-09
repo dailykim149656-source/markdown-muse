@@ -64,16 +64,36 @@ The PRD makes three commitments that must remain true together:
   - autosave
   - session restore
 - Structured JSON/YAML editor exists with source editing and schema validation.
+- Canonical `Document AST` types, serializer, hydrator, and round-trip fixtures now exist.
+- AST-native export paths now exist for:
+  - Markdown
+  - HTML
+  - LaTeX
+- Patch schema, patch review UI, decision flow, and AST patch apply engine now exist.
+- External ingestion normalization now exists for:
+  - Markdown
+  - HTML
+  - LaTeX
+- Deterministic retrieval layers now exist for:
+  - keyword retrieval
+  - semantic chunk schema
+  - in-memory vector search
+- AI workflow contracts now exist for:
+  - summarization
+  - document comparison
+  - section generation
+  - procedure extraction
+  - update suggestion patch generation
 
 ### Not yet aligned with PRD / architecture
 
-- No canonical `Document AST`.
-- Conversion pipeline is still centered on `HTML intermediate`.
-- No external document ingestion pipeline.
-- No chunking / metadata extraction layer.
-- No vector retrieval layer.
-- No LLM analysis workflow.
-- No patch review/apply system.
+- No production LLM provider or orchestration layer is connected yet.
+- Vector retrieval currently uses an in-memory store; persistent indexing is not wired.
+- AI workflows exist as deterministic/domain contracts, but are not yet surfaced as full end-user UI flows.
+- Future-extension items from the architecture document remain intentionally deferred:
+  - knowledge graph visualization
+  - collaborative editing
+  - AI-assisted structured writing
 
 ## 4. Planning Principles
 
@@ -315,26 +335,22 @@ This is the recommended order for the next implementation window.
 
 ### Now
 
-1. Shared document/domain types
-2. `EditorWorkspace` decomposition
-3. `Document AST` schema draft
-4. stable block id strategy
-5. TipTap -> AST serializer spike
+1. Connect AI workflows to user-facing commands/UI
+2. Persist semantic/vector indices beyond in-memory runtime
+3. Add provider-backed LLM orchestration for summary / comparison / update generation
+4. Expand patch preview UX with richer grouped diffs and source citations
 
 ### Next
 
-6. AST fixtures and round-trip tests
-7. AST -> Markdown/HTML export
-8. patch schema draft
-9. patch preview UI skeleton
-10. ingestion contract definitions
+5. Add richer ingestion support for AsciiDoc / RST normalization
+6. Add retrieval evaluation fixtures and ranking regression tests
+7. Harden patch conflict handling and merge diagnostics
 
 ### Later
 
-11. external document parsing pipeline
-12. patch apply engine
-13. AI summarization and comparison MVP
-14. semantic retrieval
+8. knowledge graph visualization
+9. collaborative editing
+10. AI-assisted structured writing
 
 ## 8. Risks
 
@@ -374,17 +390,18 @@ This plan is successful when:
 - AI suggestions become patch-based and reviewable,
 - ingestion and retrieval provide grounded context for document updates.
 
-## 10. Recommended Next Deliverable
+## 10. Current Status Snapshot
+
+As of `2026-03-09`, the non-deferred roadmap foundation is largely implemented:
+
+- editor foundation stabilization is complete
+- AST schema / serializer / hydrator / round-trip coverage is complete
+- AST-native Markdown / HTML / LaTeX export is complete
+- ingestion contracts and normalization are complete
+- patch review and patch apply flow are complete
+- retrieval foundations are complete
+- deterministic AI workflow contracts are complete
 
 The next concrete deliverable should be:
 
-- `Document AST Design Spec`
-
-That spec should define:
-
-- node types,
-- marks,
-- ids,
-- metadata fields,
-- conversion boundaries,
-- and patch target semantics.
+- provider-backed AI integration that consumes the existing retrieval, patch, and ingestion contracts without bypassing reviewable patch flow

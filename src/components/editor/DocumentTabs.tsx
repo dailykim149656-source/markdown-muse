@@ -1,53 +1,65 @@
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import type { DocumentData } from "./useAutoSave";
+import { useI18n } from "@/i18n/useI18n";
+import type { DocumentData } from "@/types/document";
 
 interface DocumentTabsProps {
-  documents: DocumentData[];
   activeDocId: string;
-  onSelectDoc: (id: string) => void;
+  documents: DocumentData[];
   onCloseDoc: (id: string) => void;
   onNewDoc: () => void;
+  onSelectDoc: (id: string) => void;
 }
 
 const modeLabel = (mode: string) => {
   switch (mode) {
-    case "latex": return ".tex";
-    case "html": return ".html";
-    case "json": return ".json";
-    case "yaml": return ".yaml";
-    default: return ".md";
+    case "latex":
+      return ".tex";
+    case "html":
+      return ".html";
+    case "json":
+      return ".json";
+    case "yaml":
+      return ".yaml";
+    default:
+      return ".md";
   }
 };
 
-const DocumentTabs = ({ documents, activeDocId, onSelectDoc, onCloseDoc, onNewDoc }: DocumentTabsProps) => {
-  if (documents.length <= 1) return null;
+const DocumentTabs = ({ activeDocId, documents, onCloseDoc, onNewDoc, onSelectDoc }: DocumentTabsProps) => {
+  const { t } = useI18n();
+
+  if (documents.length <= 1) {
+    return null;
+  }
 
   return (
-    <div className="flex items-center bg-secondary/30 border-b border-border h-8 px-1">
+    <div className="flex h-8 items-center border-b border-border bg-secondary/30 px-1">
       <ScrollArea className="flex-1">
         <div className="flex items-center gap-0.5">
-          {documents.map((doc) => {
-            const isActive = doc.id === activeDocId;
+          {documents.map((document) => {
+            const isActive = document.id === activeDocId;
+
             return (
               <button
-                key={doc.id}
-                className={`group flex items-center gap-1 px-2.5 py-1 text-xs rounded-t-md transition-colors shrink-0 max-w-[160px] ${
+                key={document.id}
+                className={`group flex max-w-[160px] shrink-0 items-center gap-1 rounded-t-md px-2.5 py-1 text-xs transition-colors ${
                   isActive
-                    ? "bg-background text-foreground border-b-2 border-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                    ? "border-b-2 border-primary bg-background text-foreground"
+                    : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
                 }`}
-                onClick={() => onSelectDoc(doc.id)}
+                onClick={() => onSelectDoc(document.id)}
+                type="button"
               >
-                <span className="truncate">{doc.name || "Untitled"}</span>
-                <span className="text-[9px] text-muted-foreground/60">{modeLabel(doc.mode)}</span>
+                <span className="truncate">{document.name || t("common.untitled")}</span>
+                <span className="text-[9px] text-muted-foreground/60">{modeLabel(document.mode)}</span>
                 {documents.length > 1 && (
                   <span
-                    className="ml-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onCloseDoc(doc.id);
+                    className="ml-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onCloseDoc(document.id);
                     }}
                   >
                     <X className="h-3 w-3" />
@@ -57,9 +69,15 @@ const DocumentTabs = ({ documents, activeDocId, onSelectDoc, onCloseDoc, onNewDo
             );
           })}
         </div>
-        <ScrollBar orientation="horizontal" className="h-1" />
+        <ScrollBar className="h-1" orientation="horizontal" />
       </ScrollArea>
-      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-1 shrink-0" onClick={onNewDoc} title="새 문서">
+      <Button
+        className="ml-1 h-6 w-6 shrink-0 p-0"
+        onClick={onNewDoc}
+        size="sm"
+        title={t("tabs.newDocument")}
+        variant="ghost"
+      >
         <Plus className="h-3.5 w-3.5" />
       </Button>
     </div>

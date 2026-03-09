@@ -1,18 +1,27 @@
 import { useCallback, useMemo, useState } from "react";
+import type { AutoSaveData, CreateDocumentOptions, DocumentData } from "@/types/document";
 import {
   createNewDocument,
   loadSavedData,
   saveData,
   useAutoSave,
-  type AutoSaveData,
-  type DocumentData,
 } from "@/components/editor/useAutoSave";
 
-interface CreateDocumentOptions {
-  content?: string;
-  mode?: DocumentData["mode"];
-  name?: string;
-}
+const areValuesEqual = (left: unknown, right: unknown) => {
+  if (Object.is(left, right)) {
+    return true;
+  }
+
+  if (typeof left !== typeof right || !left || !right || typeof left !== "object") {
+    return false;
+  }
+
+  try {
+    return JSON.stringify(left) === JSON.stringify(right);
+  } catch {
+    return false;
+  }
+};
 
 export const useDocumentManager = () => {
   const initialSavedData = useMemo(() => loadSavedData(), []);
@@ -38,6 +47,7 @@ export const useDocumentManager = () => {
   );
 
   const autoSaveData = useMemo<AutoSaveData>(() => ({
+    version: 2,
     documents,
     activeDocId,
     lastSaved: Date.now(),
@@ -46,7 +56,7 @@ export const useDocumentManager = () => {
   useAutoSave(autoSaveData);
 
   const saveImmediate = useCallback(() => {
-    saveData({ documents, activeDocId, lastSaved: Date.now() });
+    saveData({ version: 2, documents, activeDocId, lastSaved: Date.now() });
   }, [documents, activeDocId]);
 
   const bumpEditorKey = useCallback(() => {
@@ -55,23 +65,87 @@ export const useDocumentManager = () => {
 
   const updateActiveDoc = useCallback((patch: Partial<DocumentData>) => {
     setDocuments((previousDocuments) =>
-      previousDocuments.map((doc) => doc.id === activeDocId ? { ...doc, ...patch, updatedAt: Date.now() } : doc)
+      previousDocuments.map((doc) => {
+        if (doc.id !== activeDocId) {
+          return doc;
+        }
+
+        const hasChanges = Object.entries(patch).some(([key, value]) => !areValuesEqual(doc[key as keyof DocumentData], value));
+
+        if (!hasChanges) {
+          return doc;
+        }
+
+        return {
+          ...doc,
+          ...patch,
+          updatedAt: patch.updatedAt ?? Date.now(),
+        };
+      })
     );
   }, [activeDocId]);
 
   const handleContentChange = useCallback((content: string) => {
-    updateActiveDoc({ content });
-  }, [updateActiveDoc]);
+    setDocuments((previousDocuments) =>
+      previousDocuments.map((doc) => {
+        if (doc.id !== activeDocId) {
+          return doc;
+        }
+
+        const sourceSnapshots = {
+          ...(doc.sourceSnapshots || {}),
+          [doc.mode]: content,
+        };
+
+        if (doc.content === content && areValuesEqual(doc.sourceSnapshots, sourceSnapshots)) {
+          return doc;
+        }
+
+        return {
+          ...doc,
+          content,
+          sourceSnapshots,
+          storageKind: doc.storageKind ?? "docsy",
+          updatedAt: Date.now(),
+        };
+      })
+    );
+  }, [activeDocId]);
 
   const createDocument = useCallback((options: CreateDocumentOptions = {}) => {
     const {
+      ast = null,
       content = "",
+      createdAt,
+      id,
+      metadata = {},
       mode = "markdown",
       name = "Untitled",
+      sourceSnapshots,
+      storageKind = "docsy",
+      tiptapJson = null,
+      updatedAt,
     } = options;
 
-    const newDoc = createNewDocument(name, mode);
-    newDoc.content = content;
+    const baseDocument = createNewDocument(name, mode);
+    const newDoc: DocumentData = {
+      ...baseDocument,
+      ast,
+      content,
+      createdAt: createdAt ?? baseDocument.createdAt,
+      id: id ?? baseDocument.id,
+      metadata,
+      mode,
+      name,
+      sourceSnapshots: {
+        ...(baseDocument.sourceSnapshots || {}),
+        ...(sourceSnapshots || {}),
+        [mode]: content,
+      },
+      storageKind,
+      tiptapJson,
+      updatedAt: updatedAt ?? Date.now(),
+    };
 
     setDocuments((previousDocuments) => [...previousDocuments, newDoc]);
     setActiveDocId(newDoc.id);

@@ -27,6 +27,7 @@ import TableOfContents from "./extensions/TableOfContents";
 import FigureCaption from "./extensions/FigureCaption";
 import CrossReference from "./extensions/CrossReference";
 import FindReplaceHighlight from "./extensions/FindReplaceHighlight";
+import NodeIdExtension from "./extensions/NodeIdExtension";
 
 const lowlight = createLowlight(common);
 
@@ -34,6 +35,8 @@ export const createEditorExtensions = (placeholder: string) => [
   StarterKit.configure({
     heading: { levels: [1, 2, 3] },
     codeBlock: false,
+    link: false,
+    underline: false,
   }),
   CodeBlockLowlight.configure({ lowlight }),
   Placeholder.configure({ placeholder }),
@@ -67,6 +70,7 @@ export const createEditorExtensions = (placeholder: string) => [
   FigureCaption,
   CrossReference,
   FindReplaceHighlight,
+  NodeIdExtension,
 ];
 
 export const editorPropsDefault = {

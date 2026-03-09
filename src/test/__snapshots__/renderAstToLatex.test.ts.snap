@@ -1,0 +1,51 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderAstToLatex > renders the representative technical document fixture 1`] = `
+"\\section{System Overview}
+
+See Figure~\\ref{fig:system} and visit \\href{https://example.com}{\\textbf{Docsy}} with formula $E=mc^2$.
+
+% admonition-meta: type=warning color=yellow icon=alert-triangle
+\\begin{admonitionbox}[Review]{yellow!80!black}
+Use patch review before applying changes.
+\\end{admonitionbox}
+
+\\begin{itemize}
+  \\item Architecture first
+\\end{itemize}
+
+\\begin{itemize}
+  \\item[$\\\\boxtimes$] Baseline tests
+\\end{itemize}
+
+\\begin{lstlisting}[language=ts]
+const phase = 'ast';
+\\end{lstlisting}
+
+% begin-mermaid
+% mermaid: graph TD
+% mermaid: A-->B
+% end-mermaid
+
+\\[
+\\int_0^1 x^2 dx
+\\]
+
+\\begin{figure}[H]
+  \\centering
+  \\includegraphics[width=0.80\\textwidth]{diagram.png}
+  \\caption{System architecture}
+  \\label{fig:system}
+\\end{figure}
+
+\\tableofcontents
+
+\\begin{tabular}{| l | l |}
+\\hline
+Name & Value \\\\ \\hline
+Phase & AST \\\\ \\hline
+\\end{tabular}
+
+Detailed note\\footnote{Footnote text}
+"
+`;

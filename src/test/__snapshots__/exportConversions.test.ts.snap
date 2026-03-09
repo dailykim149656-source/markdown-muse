@@ -1,0 +1,146 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`technical document export fixture > locks AsciiDoc export for technical blocks 1`] = `
+"== System Overview
+See <<fig:system>>
+  and inline math stem:[E=mc^2].
+
+[WARNING]
+====
+Use patch review before applying changes.
+====
+[source,ts]
+----
+const phase = "ast";
+----
+[source,mermaid]
+----
+graph TD
+A-->B
+----
+[stem]
+++++
+\\int_0^1 x^2 dx
+++++
+image::diagram.png[system diagram]
+[[fig:system]]
+.System architecture
+Detailed note
+  footnote:[Footnote text]
+
+Footnote text
+"
+`;
+
+exports[`technical document export fixture > locks LaTeX export for technical blocks 1`] = `
+"\\section{System Overview}
+
+  See Figure 1
+  and inline math $E=mc^2$.
+
+% admonition-meta: type=warning color=yellow icon=alert-triangle
+\\begin{admonitionbox}[Warning]{yellow!80!black}
+Use patch review before applying changes.
+\\end{admonitionbox}
+
+\\begin{lstlisting}[language=ts]
+const phase = "ast";
+\\end{lstlisting}
+
+% begin-mermaid
+% mermaid: graph TD
+% mermaid: A-->B
+% end-mermaid
+
+\\[
+\\int_0^1 x^2 dx
+\\]
+
+\\begin{figure}[H]
+  \\centering
+  \\includegraphics[width=0.8\\textwidth]{diagram.png}
+  \\caption{system diagram}
+  \\label{fig:figure1}
+\\end{figure}
+
+Figure 1: System architecture
+
+  Detailed note
+  \\footnote{Footnote text}"
+`;
+
+exports[`technical document export fixture > locks RST export for technical blocks 1`] = `
+"===============
+System Overview
+===============
+
+See :ref:\`fig:system\`
+  and inline math :math:\`E=mc^2\`.
+
+.. warning::
+
+   Use patch review before applying changes.
+
+.. code-block:: ts
+
+   const phase = "ast";
+
+.. code-block:: mermaid
+
+   graph TD
+   A-->B
+
+.. math::
+
+   \\int_0^1 x^2 dx
+
+.. image:: diagram.png
+   :alt: system diagram
+
+.. _fig:system:
+
+.. figure:: placeholder
+   :align: center
+
+   System architecture
+
+Detailed note
+  [#]_
+
+.. [#] Footnote text
+"
+`;
+
+exports[`technical document export fixture > locks Typst export for technical blocks 1`] = `
+"// Admonition helper
+#let admonition(title: "", color: blue, body) = block(
+  fill: color.lighten(90%),
+  stroke: (left: 3pt + color),
+  inset: 10pt,
+  radius: (right: 4pt),
+  width: 100%,
+  [*#title* \\ #body]
+)
+
+= System Overview
+See @fig:system
+  and inline math $E=mc^2$.
+
+#admonition(title: "Warning", color: yellow)[Use patch review before applying changes.]
+\`\`\`ts
+const phase = "ast";
+\`\`\`
+// Mermaid diagram (not natively supported in Typst)
+// \`\`\`mermaid
+// graph TD
+// A-->B
+// \`\`\`
+$ \\int_0^1 x^2 dx $
+#image("diagram.png", alt: "system diagram")
+#figure(caption: [System architecture]) 
+Detailed note
+  #footnote[Footnote text]
+
+Footnote text
+"
+`;

@@ -1,0 +1,348 @@
+import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
+import { normalizeIngestionRequest } from "../src/lib/ingestion/normalizeIngestionRequest";
+import { keywordRetrieve } from "../src/lib/retrieval/keywordRetrieval";
+import {
+  buildSummaryRequestFromMatches,
+  validateSummaryResponse,
+  type SummaryRequest,
+  type SummaryResponse,
+} from "../src/lib/ai/summaryContracts";
+import { generateStructuredJson, getGeminiModel, schemaType } from "./geminiClient";
+import type {
+  GenerateSectionRequest,
+  GenerateSectionResponse,
+  SummarizeDocumentRequest,
+  SummarizeDocumentResponse,
+} from "../src/types/aiAssistant";
+
+const PORT = Number(process.env.AI_SERVER_PORT || 8787);
+const ALLOWED_ORIGIN = process.env.AI_ALLOWED_ORIGIN || "*";
+const MAX_CHUNKS = 8;
+
+class HttpError extends Error {
+  statusCode: number;
+
+  constructor(statusCode: number, message: string) {
+    super(message);
+    this.name = "HttpError";
+    this.statusCode = statusCode;
+  }
+}
+
+const json = (responseBody: unknown, statusCode = 200) => ({
+  body: JSON.stringify(responseBody),
+  headers: {
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+    "Content-Type": "application/json; charset=utf-8",
+  },
+  statusCode,
+});
+
+const parseRequestBody = async <TRequest>(request: import("node:http").IncomingMessage): Promise<TRequest> => {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of request) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  const rawBody = Buffer.concat(chunks).toString("utf8");
+
+  if (!rawBody) {
+    throw new HttpError(400, "Request body is required.");
+  }
+
+  return JSON.parse(rawBody) as TRequest;
+};
+
+const assertMarkdownDocument = (request: SummarizeDocumentRequest | GenerateSectionRequest) => {
+  if (!request.document?.markdown?.trim()) {
+    throw new HttpError(400, "Document markdown is required.");
+  }
+};
+
+const normalizeMarkdownDocument = (request: SummarizeDocumentRequest | GenerateSectionRequest) =>
+  normalizeIngestionRequest({
+    fileName: `${request.document.fileName}.md`,
+    importedAt: Date.now(),
+    ingestionId: request.document.documentId,
+    rawContent: request.document.markdown,
+    sourceFormat: "markdown",
+  });
+
+const buildFallbackSummaryRequest = (
+  normalizedDocument: ReturnType<typeof normalizeMarkdownDocument>,
+  objective: string,
+): SummaryRequest => ({
+  chunkInputs: normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk) => ({
+    chunkId: chunk.chunkId,
+    ingestionId: normalizedDocument.ingestionId,
+    metadata: chunk.metadata,
+    sectionId: chunk.sectionId,
+    text: chunk.text,
+    tokenEstimate: chunk.tokenEstimate,
+  })),
+  documents: [{
+    fileName: normalizedDocument.fileName,
+    ingestionId: normalizedDocument.ingestionId,
+    metadata: normalizedDocument.metadata,
+    sourceFormat: normalizedDocument.sourceFormat,
+  }],
+  maxWords: 180,
+  objective: objective || "Summarize the document.",
+  requestId: randomUUID(),
+  style: "bullets",
+});
+
+const buildGroundedSummaryRequest = (request: SummarizeDocumentRequest) => {
+  const normalizedDocument = normalizeMarkdownDocument(request);
+  const retrieval = request.objective.trim()
+    ? keywordRetrieve([normalizedDocument], { limit: MAX_CHUNKS, query: request.objective })
+    : { matches: [], normalizedQuery: "", terms: [], totalMatches: 0 };
+
+  if (retrieval.matches.length === 0) {
+    return buildFallbackSummaryRequest(normalizedDocument, request.objective.trim());
+  }
+
+  return buildSummaryRequestFromMatches(
+    request.objective.trim() || "Summarize the document.",
+    retrieval.matches.slice(0, MAX_CHUNKS),
+    [normalizedDocument],
+    {
+      maxWords: 180,
+      requestId: randomUUID(),
+      style: "bullets",
+    },
+  );
+};
+
+const summarizeResponseSchema = {
+  properties: {
+    attributions: {
+      items: {
+        properties: {
+          chunkId: { type: schemaType.STRING },
+          ingestionId: { type: schemaType.STRING },
+          rationale: { type: schemaType.STRING },
+          sectionId: { type: schemaType.STRING },
+        },
+        required: ["chunkId", "ingestionId", "rationale"],
+        type: schemaType.OBJECT,
+      },
+      type: schemaType.ARRAY,
+    },
+    bulletPoints: {
+      items: { type: schemaType.STRING },
+      type: schemaType.ARRAY,
+    },
+    summary: { type: schemaType.STRING },
+  },
+  required: ["summary", "bulletPoints", "attributions"],
+  type: schemaType.OBJECT,
+};
+
+const generateSectionResponseSchema = {
+  properties: {
+    attributions: {
+      items: {
+        properties: {
+          chunkId: { type: schemaType.STRING },
+          ingestionId: { type: schemaType.STRING },
+          rationale: { type: schemaType.STRING },
+          sectionId: { type: schemaType.STRING },
+        },
+        required: ["chunkId", "ingestionId", "rationale"],
+        type: schemaType.OBJECT,
+      },
+      type: schemaType.ARRAY,
+    },
+    body: { type: schemaType.STRING },
+    rationale: { type: schemaType.STRING },
+    title: { type: schemaType.STRING },
+  },
+  required: ["title", "body", "rationale", "attributions"],
+  type: schemaType.OBJECT,
+};
+
+const buildSummaryPrompt = (request: SummaryRequest) => `
+You are summarizing a technical document for an editor workflow.
+Use only the supplied chunk inputs.
+Return strict JSON that matches the provided schema.
+
+Rules:
+- Keep the summary concise and factual.
+- Use bulletPoints for actionable or high-signal takeaways.
+- Every factual statement must be backed by at least one attribution.
+- Every attribution must reference only the exact chunkId and ingestionId values from the provided inputs.
+- Do not invent chunk ids, section ids, or file names.
+
+Objective:
+${request.objective}
+
+Documents:
+${JSON.stringify(request.documents, null, 2)}
+
+Chunk Inputs:
+${JSON.stringify(request.chunkInputs, null, 2)}
+`.trim();
+
+const validateAttributions = (
+  allowedChunks: { chunkId: string; ingestionId: string }[],
+  attributions: { chunkId: string; ingestionId: string }[],
+) => {
+  const allowed = new Set(allowedChunks.map((chunk) => `${chunk.ingestionId}:${chunk.chunkId}`));
+  const invalid = attributions
+    .map((attribution) => `${attribution.ingestionId}:${attribution.chunkId}`)
+    .filter((key) => !allowed.has(key));
+
+  if (invalid.length > 0) {
+    throw new Error(`Gemini returned invalid chunk references: ${invalid.join(", ")}`);
+  }
+};
+
+const handleSummarize = async (request: SummarizeDocumentRequest): Promise<SummarizeDocumentResponse> => {
+  assertMarkdownDocument(request);
+  const summaryRequest = buildGroundedSummaryRequest(request);
+  const summaryResponse = await generateStructuredJson<Omit<SummaryResponse, "requestId">>({
+    prompt: buildSummaryPrompt(summaryRequest),
+    responseSchema: summarizeResponseSchema,
+  });
+  const hydratedResponse: SummarizeDocumentResponse = {
+    attributions: summaryResponse.attributions,
+    bulletPoints: summaryResponse.bulletPoints || [],
+    requestId: summaryRequest.requestId,
+    summary: summaryResponse.summary,
+  };
+  const validation = validateSummaryResponse(summaryRequest, hydratedResponse as SummaryResponse);
+
+  if (!validation.valid) {
+    throw new Error(`Gemini summary response referenced invalid chunks: ${validation.missingChunkReferences.join(", ")}`);
+  }
+
+  return hydratedResponse;
+};
+
+const buildSectionPrompt = (
+  request: GenerateSectionRequest,
+  chunks: { chunkId: string; ingestionId: string; sectionId?: string; text: string }[],
+) => `
+You are drafting a new section for an in-product documentation editor.
+Use only the supplied chunk excerpts as factual grounding.
+Return strict JSON matching the requested schema.
+
+Rules:
+- Write a section that fits naturally into the existing document.
+- Avoid duplicating existing headings.
+- Keep the section practical and documentation-oriented.
+- Provide a short rationale describing why this section should exist.
+- Every attribution must reference only the supplied chunk ids.
+- Do not invent facts beyond the provided chunks.
+
+Existing headings:
+${JSON.stringify(request.existingHeadings, null, 2)}
+
+Prompt:
+${request.prompt}
+
+Grounding chunks:
+${JSON.stringify(chunks, null, 2)}
+`.trim();
+
+const buildSectionGrounding = (request: GenerateSectionRequest) => {
+  const normalizedDocument = normalizeMarkdownDocument(request);
+  const retrieval = keywordRetrieve([normalizedDocument], {
+    limit: MAX_CHUNKS,
+    query: request.prompt,
+  });
+
+  if (retrieval.matches.length > 0) {
+    return retrieval.matches.slice(0, MAX_CHUNKS).map((match) => ({
+      chunkId: match.chunk.chunkId,
+      ingestionId: match.documentId,
+      sectionId: match.chunk.sectionId,
+      text: match.chunk.text,
+    }));
+  }
+
+  return normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk) => ({
+    chunkId: chunk.chunkId,
+    ingestionId: normalizedDocument.ingestionId,
+    sectionId: chunk.sectionId,
+    text: chunk.text,
+  }));
+};
+
+const handleGenerateSection = async (request: GenerateSectionRequest): Promise<GenerateSectionResponse> => {
+  assertMarkdownDocument(request);
+
+  if (!request.prompt.trim()) {
+    throw new HttpError(400, "Section prompt is required.");
+  }
+
+  const groundingChunks = buildSectionGrounding(request);
+  const result = await generateStructuredJson<GenerateSectionResponse>({
+    prompt: buildSectionPrompt(request, groundingChunks),
+    responseSchema: generateSectionResponseSchema,
+  });
+
+  validateAttributions(groundingChunks, result.attributions);
+  return result;
+};
+
+const server = createServer(async (request, response) => {
+  try {
+    if (!request.url) {
+      throw new HttpError(404, "Unknown request.");
+    }
+
+    if (request.method === "OPTIONS") {
+      const result = json({ ok: true });
+      response.writeHead(result.statusCode, result.headers);
+      response.end(result.body);
+      return;
+    }
+
+    if (request.method === "GET" && request.url === "/api/ai/health") {
+      const result = json({
+        configured: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
+        model: getGeminiModel(),
+        ok: true,
+      });
+      response.writeHead(result.statusCode, result.headers);
+      response.end(result.body);
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/ai/summarize") {
+      const payload = await parseRequestBody<SummarizeDocumentRequest>(request);
+      const result = await handleSummarize(payload);
+      const output = json(result);
+      response.writeHead(output.statusCode, output.headers);
+      response.end(output.body);
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/ai/generate-section") {
+      const payload = await parseRequestBody<GenerateSectionRequest>(request);
+      const result = await handleGenerateSection(payload);
+      const output = json(result);
+      response.writeHead(output.statusCode, output.headers);
+      response.end(output.body);
+      return;
+    }
+
+    throw new HttpError(404, "Route not found.");
+  } catch (error) {
+    const statusCode = error instanceof HttpError ? error.statusCode : 500;
+    const message = error instanceof Error ? error.message : "Unexpected server error.";
+    const result = json({ error: message }, statusCode);
+    response.writeHead(result.statusCode, result.headers);
+    response.end(result.body);
+  }
+});
+
+server.listen(PORT, () => {
+  console.log(`Gemini AI server listening on http://localhost:${PORT}`);
+});

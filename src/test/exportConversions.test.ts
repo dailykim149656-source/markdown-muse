@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 import { htmlToLatex, latexToHtml } from "@/components/editor/utils/htmlToLatex";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
+import { htmlToRst } from "@/components/editor/utils/htmlToRst";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
+import { technicalDocumentExportFixture } from "@/test/fixtures/technicalDocumentExport.fixture";
 
 // ═══════════════════════════════════════════
 // HTML → LaTeX
@@ -105,6 +107,16 @@ describe("htmlToLatex", () => {
     expect(r).toContain("\\end{document}");
   });
 
+  it("generates xelatex font preamble when font family is used", () => {
+    const r = htmlToLatex('<p><span style="font-family: Inter">Styled</span></p>', true);
+    expect(r).toContain("% !TeX program = xelatex");
+    expect(r).toContain("\\usepackage{fontspec}");
+    expect(r).toContain("\\usepackage{xeCJK}");
+    expect(r).toContain("\\usepackage{etoolbox}");
+    expect(r).toContain("\\ifdefstrequal{#1}{Nanum Gothic}{\\def\\docsyresolvedfont{NanumGothic}}{}");
+    expect(r).toContain("\\IfFontExistsTF{\\docsyresolvedfont}{\\fontspec{\\docsyresolvedfont}}{}#2");
+  });
+
   it("escapes special LaTeX characters", () => {
     const r = convert("<p>Price: $10 & 20% off #sale</p>");
     expect(r).toContain("\\$");
@@ -117,6 +129,18 @@ describe("htmlToLatex", () => {
     const r = convert('<p style="text-align: center">Centered</p>');
     expect(r).toContain("\\begin{center}");
   });
+
+  it("converts font family and font size into source macros", () => {
+    const r = convert('<p><span style="font-family: \'Fira Code\'; font-size: 18px">Styled</span></p>');
+    expect(r).toContain("\\docsyfontfamily{Fira Code}{\\docsyfontsize{18px}{13.5pt}{Styled}}");
+  });
+
+  it("preserves the spaced Nanum font family name in source while adding latex aliases", () => {
+    const r = htmlToLatex('<p><span style="font-family: \'Nanum Gothic\'">Styled</span></p>', true);
+    expect(r).toContain("\\docsyfontfamily{Nanum Gothic}{Styled}");
+    expect(r).toContain("\\ifdefstrequal{#1}{Nanum Gothic}{\\def\\docsyresolvedfont{NanumGothic}}{}");
+  });
+
   it("converts mermaid to comment block", () => {
     const r = convert('<div data-type="mermaid" code="graph TD\n    A-->B"></div>');
     expect(r).toContain("% begin-mermaid");
@@ -150,6 +174,17 @@ describe("LaTeX round-trip: HTML→LaTeX→HTML", () => {
     expect(restored).toContain('data-admonition-type="tip"');
     expect(restored).toContain('data-admonition-color="green"');
     expect(restored).toContain('data-admonition-icon="lightbulb"');
+  });
+
+  it("preserves font family and font size through round-trip", () => {
+    const html = '<p><span style="font-family: \'Fira Code\'; font-size: 18px">Styled</span></p>';
+    const latex = htmlToLatex(html, false);
+    const restored = latexToHtml(latex);
+
+    expect(latex).toContain("\\docsyfontfamily{Fira Code}");
+    expect(latex).toContain("\\docsyfontsize{18px}{13.5pt}");
+    expect(restored).toContain("font-family: 'Fira Code'");
+    expect(restored).toContain("font-size: 18px");
   });
 });
 
@@ -439,5 +474,51 @@ Some background text.
     const r = latexToTypst(wrap("\\begin{tabular}{|l|c|r|}\n\\hline\nA & B & C \\\\\n\\hline\n1 & 2 & 3 \\\\\n\\hline\n\\end{tabular}"));
     expect(r).toContain("table(");
     expect(r).toContain("columns:");
+  });
+});
+
+describe("technical document export fixture", () => {
+  it("locks LaTeX export for technical blocks", () => {
+    const result = htmlToLatex(technicalDocumentExportFixture, false);
+
+    expect(result).toContain("\\footnote{Footnote text}");
+    expect(result).toContain("% begin-mermaid");
+    expect(result).toContain("\\includegraphics");
+    expect(result).toContain("Figure 1: System architecture");
+    expect(result).toContain("\\[");
+    expect(result).toMatchSnapshot();
+  });
+
+  it("locks Typst export for technical blocks", () => {
+    const result = htmlToTypst(technicalDocumentExportFixture);
+
+    expect(result).toContain("#admonition(");
+    expect(result).toContain("#footnote[Footnote text]");
+    expect(result).toContain("@fig:system");
+    expect(result).toContain("// Mermaid diagram");
+    expect(result).toContain("#figure(");
+    expect(result).toMatchSnapshot();
+  });
+
+  it("locks AsciiDoc export for technical blocks", () => {
+    const result = htmlToAsciidoc(technicalDocumentExportFixture);
+
+    expect(result).toContain("[WARNING]");
+    expect(result).toContain("footnote:[Footnote text]");
+    expect(result).toContain("<<fig:system>>");
+    expect(result).toContain("[source,mermaid]");
+    expect(result).toContain("[[fig:system]]");
+    expect(result).toMatchSnapshot();
+  });
+
+  it("locks RST export for technical blocks", () => {
+    const result = htmlToRst(technicalDocumentExportFixture);
+
+    expect(result).toContain(".. warning::");
+    expect(result).toContain(".. [#] Footnote text");
+    expect(result).toContain(":ref:`fig:system`");
+    expect(result).toContain(".. code-block:: mermaid");
+    expect(result).toContain(".. _fig:system:");
+    expect(result).toMatchSnapshot();
   });
 });

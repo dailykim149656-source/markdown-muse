@@ -1,0 +1,42 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderAstToMarkdown > renders a technical AST fixture into readable markdown 1`] = `
+"# System Overview
+
+See [@fig:system] and visit [**Docsy**](https://example.com) with formula $E=mc^2$.
+
+> [!WARNING Review]
+> Use patch review before applying changes.
+
+- Architecture first
+
+- [x] Baseline tests
+
+\`\`\`ts
+const phase = 'ast';
+\`\`\`
+
+\`\`\`mermaid
+graph TD
+A-->B
+\`\`\`
+
+$$
+\\int_0^1 x^2 dx
+$$
+
+![diagram](diagram.png)
+
+*Figure: System architecture* {#fig:system}
+
+[[toc]]
+
+| Name | Value |
+| --- | --- |
+| Phase | AST |
+
+Detailed note[^fn-1]
+
+[^fn-1]: Footnote text
+"
+`;

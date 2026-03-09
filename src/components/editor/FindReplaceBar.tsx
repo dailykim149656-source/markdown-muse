@@ -1,16 +1,17 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
-import { X, ChevronUp, ChevronDown, Replace, ReplaceAll } from "lucide-react";
+import { ChevronDown, ChevronUp, Replace, ReplaceAll, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/i18n/useI18n";
+import type { PlainTextFindReplaceAdapter } from "./findReplaceTypes";
 import {
   clearFindReplaceHighlights,
   getFindReplaceHighlightState,
   updateFindReplaceHighlights,
   type FindReplaceMatch,
 } from "./extensions/FindReplaceHighlight";
-import type { PlainTextFindReplaceAdapter } from "./findReplaceTypes";
 import { getPlainTextMatches as getPlainTextSearchMatches, normalizeMatchIndex } from "./utils/structuredDataHighlight";
 
 interface FindReplaceBarProps {
@@ -35,6 +36,7 @@ const replaceAllPlainTextMatches = (text: string, matchList: FindReplaceMatch[],
 };
 
 const FindReplaceBar = ({ editor, plainTextAdapter, open, onClose }: FindReplaceBarProps) => {
+  const { t } = useI18n();
   const [findText, setFindText] = useState("");
   const [replaceText, setReplaceText] = useState("");
   const [showReplace, setShowReplace] = useState(false);
@@ -328,7 +330,6 @@ const FindReplaceBar = ({ editor, plainTextAdapter, open, onClose }: FindReplace
     }
 
     plainTextAdapter?.setSearchState?.("", 0);
-
     clearMatches();
     setFindText("");
     setReplaceText("");
@@ -361,7 +362,7 @@ const FindReplaceBar = ({ editor, plainTextAdapter, open, onClose }: FindReplace
             ref={findInputRef}
             value={findText}
             onChange={(event) => setFindText(event.target.value)}
-            placeholder={isSearchAvailable ? "Find..." : "Search unavailable"}
+            placeholder={isSearchAvailable ? t("findReplace.findPlaceholder") : t("findReplace.searchUnavailable")}
             className="h-7 text-xs flex-1 max-w-xs"
             disabled={!isSearchAvailable}
             onKeyDown={(event) => {
@@ -374,34 +375,18 @@ const FindReplaceBar = ({ editor, plainTextAdapter, open, onClose }: FindReplace
             }}
           />
           <span className="text-[10px] text-muted-foreground min-w-[70px]">
-            {isSearchAvailable ? (matchCount > 0 ? `${currentMatch}/${matchCount}` : "No matches") : "Search unavailable"}
+            {isSearchAvailable
+              ? (matchCount > 0 ? `${currentMatch}/${matchCount}` : t("findReplace.noMatches"))
+              : t("findReplace.searchUnavailable")}
           </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0"
-            onClick={() => navigateMatch("prev")}
-            disabled={!isSearchAvailable || matchCount === 0}
-          >
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => navigateMatch("prev")} disabled={!isSearchAvailable || matchCount === 0}>
             <ChevronUp className="h-3.5 w-3.5" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0"
-            onClick={() => navigateMatch("next")}
-            disabled={!isSearchAvailable || matchCount === 0}
-          >
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => navigateMatch("next")} disabled={!isSearchAvailable || matchCount === 0}>
             <ChevronDown className="h-3.5 w-3.5" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-1.5 text-[10px]"
-            onClick={() => setShowReplace((value) => !value)}
-            disabled={!isSearchAvailable}
-          >
-            Replace
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]" onClick={() => setShowReplace((value) => !value)} disabled={!isSearchAvailable}>
+            {t("findReplace.replace")}
           </Button>
         </div>
         {showReplace && (
@@ -409,7 +394,7 @@ const FindReplaceBar = ({ editor, plainTextAdapter, open, onClose }: FindReplace
             <Input
               value={replaceText}
               onChange={(event) => setReplaceText(event.target.value)}
-              placeholder="Replace with..."
+              placeholder={t("findReplace.replacePlaceholder")}
               className="h-7 text-xs flex-1 max-w-xs"
               disabled={!isSearchAvailable}
               onKeyDown={(event) => {
@@ -421,24 +406,10 @@ const FindReplaceBar = ({ editor, plainTextAdapter, open, onClose }: FindReplace
                 }
               }}
             />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0"
-              onClick={handleReplace}
-              disabled={!isSearchAvailable || matchCount === 0}
-              title="Replace"
-            >
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleReplace} disabled={!isSearchAvailable || matchCount === 0} title={t("findReplace.replace")}>
               <Replace className="h-3.5 w-3.5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0"
-              onClick={handleReplaceAll}
-              disabled={!isSearchAvailable || matchCount === 0}
-              title="Replace all"
-            >
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleReplaceAll} disabled={!isSearchAvailable || matchCount === 0} title={t("findReplace.replaceAll")}>
               <ReplaceAll className="h-3.5 w-3.5" />
             </Button>
           </div>

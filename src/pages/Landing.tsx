@@ -1,17 +1,35 @@
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, FileText, Code2, Printer, Moon, Sun, Sparkles, Zap, Shield, FileCode, FileJson, Table, Layout, BookOpen, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
+import {
+  ArrowRight,
+  BookOpen,
+  Code2,
+  FileCode,
+  FileJson,
+  FileText,
+  Languages,
+  Layout,
+  Moon,
+  Printer,
+  Shield,
+  Sparkles,
+  Sun,
+  Table,
+  Zap,
+} from "lucide-react";
 import docslyLogo from "@/assets/docsly-logo.png";
 import editorPreview from "@/assets/editor-preview.png";
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/useI18n";
+import type { Locale } from "@/i18n/types";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 30 },
-  visible: (i: number = 0) => ({
+  visible: (index: number = 0) => ({
     opacity: 1,
+    transition: { delay: index * 0.12, duration: 0.6, ease: "easeOut" as const },
     y: 0,
-    transition: { duration: 0.6, delay: i * 0.12, ease: "easeOut" as const },
   }),
 };
 
@@ -44,8 +62,11 @@ const iconColors = [
   "text-indigo-600 dark:text-indigo-400",
 ];
 
+const LOCALES: Locale[] = ["ko", "en"];
+
 const Landing = () => {
   const navigate = useNavigate();
+  const { locale, setLocale, t } = useI18n();
   const [isDark, setIsDark] = useState(false);
   const { scrollYProgress } = useScroll();
   const heroOpacity = useTransform(scrollYProgress, [0, 0.15], [1, 0]);
@@ -55,291 +76,289 @@ const Landing = () => {
     document.documentElement.classList.toggle("dark", isDark);
   }, [isDark]);
 
-  const features = [
-    { icon: FileText, title: "Markdown WYSIWYG", desc: "마크다운 문법을 몰라도 괜찮아요. 보이는 그대로 편집하고, 깔끔한 .md 파일로 저장하세요." },
-    { icon: Code2, title: "LaTeX & Typst", desc: "수식이 포함된 학술 문서를 LaTeX 또는 Typst로 작성하고 실시간 미리보기로 확인하세요." },
-    { icon: FileCode, title: "RST & AsciiDoc", desc: "reStructuredText와 AsciiDoc 형식을 지원해요. 가져오기와 내보내기 모두 가능합니다." },
-    { icon: Layout, title: "HTML 편집기", desc: "HTML 문서를 WYSIWYG으로 편집하고 Markdown, RST, LaTeX 등 다양한 형식으로 내보내세요." },
-    { icon: FileJson, title: "JSON & YAML", desc: "JSON/YAML 파일을 스키마 검증과 함께 편집하세요. 구조화된 데이터 관리가 쉬워집니다." },
-    { icon: Table, title: "표 & 다이어그램", desc: "표, Mermaid 다이어그램, 수식, 각주, 경고 상자 등 풍부한 콘텐츠를 삽입하세요." },
-    { icon: BookOpen, title: "템플릿 & 멀티탭", desc: "다양한 문서 템플릿으로 빠르게 시작하고, 여러 문서를 탭으로 동시에 편집하세요." },
-    { icon: Printer, title: "PDF & 다형식 내보내기", desc: "작성한 문서를 PDF, Markdown, LaTeX, RST, Typst, AsciiDoc 등으로 내보내세요." },
-    { icon: Moon, title: "다크 모드", desc: "눈이 편한 다크 모드를 지원해요. 언제든 테마를 전환할 수 있습니다." },
-  ];
+  const features = useMemo(() => ([
+    { description: t("landing.features.markdownDesc"), icon: FileText, title: t("landing.features.markdownTitle") },
+    { description: t("landing.features.latexDesc"), icon: Code2, title: t("landing.features.latexTitle") },
+    { description: t("landing.features.rstDesc"), icon: FileCode, title: t("landing.features.rstTitle") },
+    { description: t("landing.features.htmlDesc"), icon: Layout, title: t("landing.features.htmlTitle") },
+    { description: t("landing.features.jsonDesc"), icon: FileJson, title: t("landing.features.jsonTitle") },
+    { description: t("landing.features.tableDesc"), icon: Table, title: t("landing.features.tableTitle") },
+    { description: t("landing.features.templateDesc"), icon: BookOpen, title: t("landing.features.templateTitle") },
+    { description: t("landing.features.exportDesc"), icon: Printer, title: t("landing.features.exportTitle") },
+    { description: t("landing.features.themeDesc"), icon: Moon, title: t("landing.features.themeTitle") },
+  ]), [t]);
 
   const formats = ["Markdown", "LaTeX", "HTML", "Typst", "RST", "AsciiDoc", "JSON", "YAML", "PDF"];
 
   return (
-    <div className="min-h-screen bg-background text-foreground overflow-x-hidden">
-      {/* Nav */}
+    <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <motion.nav
-        initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
+        className="sticky top-0 z-50 flex items-center justify-between border-b border-border bg-background/80 px-6 py-4 backdrop-blur-xl sm:px-10"
+        initial={{ opacity: 0, y: -20 }}
         transition={{ duration: 0.4 }}
-        className="flex items-center justify-between px-6 sm:px-10 py-4 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-50"
       >
         <div className="flex items-center gap-2.5">
-          <img src={docslyLogo} alt="Docsy" className="h-8 w-8" />
-          <span className="text-lg font-bold tracking-tight">Docsy</span>
+          <img alt={t("common.appName")} className="h-8 w-8" src={docslyLogo} />
+          <span className="text-lg font-bold tracking-tight">{t("common.appName")}</span>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setIsDark((d) => !d)} className="h-8 w-8 p-0">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+            <Languages className="ml-1 h-4 w-4 text-muted-foreground" />
+            {LOCALES.map((nextLocale) => (
+              <Button
+                key={nextLocale}
+                className="h-7 px-2 text-xs uppercase"
+                onClick={() => setLocale(nextLocale)}
+                size="sm"
+                variant={locale === nextLocale ? "default" : "ghost"}
+              >
+                {nextLocale}
+              </Button>
+            ))}
+          </div>
+          <Button className="h-8 w-8 p-0" onClick={() => setIsDark((value) => !value)} size="sm" variant="ghost">
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
-          <Button onClick={() => navigate("/editor")} size="sm" className="gap-1.5 rounded-lg">
-            에디터 열기 <ArrowRight className="h-3.5 w-3.5" />
+          <Button className="gap-1.5 rounded-lg" onClick={() => navigate("/editor")} size="sm">
+            {t("landing.openEditor")}
+            <ArrowRight className="h-3.5 w-3.5" />
           </Button>
         </div>
       </motion.nav>
 
-      {/* Hero */}
       <motion.section
+        className="relative flex flex-col items-center justify-center px-6 pb-8 pt-20 text-center sm:pt-28"
         style={{ opacity: heroOpacity, scale: heroScale }}
-        className="relative flex flex-col items-center justify-center text-center px-6 pt-20 sm:pt-28 pb-8"
       >
-        {/* Background glow */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-gradient-to-br from-amber-500/8 via-orange-500/5 to-transparent rounded-full blur-3xl" />
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute left-1/2 top-20 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-gradient-to-br from-amber-500/8 via-orange-500/5 to-transparent blur-3xl" />
         </div>
 
         <motion.div
-          initial={{ opacity: 0, scale: 0.6, rotate: -10 }}
-          animate={{ opacity: 1, scale: 1, rotate: 0 }}
-          transition={{ duration: 0.7, type: "spring", bounce: 0.4 }}
+          animate={{ opacity: 1, rotate: 0, scale: 1 }}
           className="relative mb-8"
+          initial={{ opacity: 0, rotate: -10, scale: 0.6 }}
+          transition={{ bounce: 0.4, duration: 0.7, type: "spring" }}
         >
-          <img src={docslyLogo} alt="Docsy mascot" className="h-24 w-24 sm:h-32 sm:w-32 drop-shadow-xl" />
+          <img alt="Docsy mascot" className="h-24 w-24 drop-shadow-xl sm:h-32 sm:w-32" src={docslyLogo} />
           <motion.div
             animate={{ rotate: [0, 15, -15, 0], scale: [1, 1.2, 1] }}
+            className="absolute -right-1 -top-1 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 p-1.5 shadow-lg"
             transition={{ duration: 2, repeat: Infinity, repeatDelay: 4 }}
-            className="absolute -top-1 -right-1 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full p-1.5 shadow-lg"
           >
             <Sparkles className="h-4 w-4 text-white" />
           </motion.div>
         </motion.div>
 
         <motion.h1
-          variants={fadeUp}
-          initial="hidden"
           animate="visible"
+          className="max-w-4xl text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl"
           custom={1}
-          className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight leading-[1.1] max-w-4xl"
+          initial="hidden"
+          variants={fadeUp}
         >
-          개도 편집하는{" "}
+          {t("landing.hero.titleLead")}{" "}
           <span className="relative">
             <span className="bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 bg-clip-text text-transparent">
-              개발자 문서
+              {t("landing.hero.titleAccent")}
             </span>
             <motion.span
-              initial={{ scaleX: 0 }}
               animate={{ scaleX: 1 }}
+              className="absolute -bottom-1 left-0 right-0 h-1 origin-left rounded-full bg-gradient-to-r from-amber-500 to-orange-500"
+              initial={{ scaleX: 0 }}
               transition={{ delay: 0.8, duration: 0.6, ease: "easeOut" }}
-              className="absolute -bottom-1 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full origin-left"
             />
           </span>
         </motion.h1>
 
         <motion.p
-          variants={fadeUp}
-          initial="hidden"
           animate="visible"
+          className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground sm:text-xl"
           custom={2}
-          className="mt-6 text-lg sm:text-xl text-muted-foreground max-w-xl leading-relaxed"
+          initial="hidden"
+          variants={fadeUp}
         >
-          Markdown, LaTeX 등 개발자 친화적 문서 양식을
-          <br className="hidden sm:block" />
-          직관적인 WYSIWYG 편집기로 작성하세요.
+          {t("landing.hero.description")}
         </motion.p>
 
         <motion.div
-          variants={fadeUp}
-          initial="hidden"
           animate="visible"
-          custom={3}
           className="mt-8 flex flex-wrap items-center justify-center gap-3"
+          custom={3}
+          initial="hidden"
+          variants={fadeUp}
         >
           <Button
+            className="gap-2 rounded-xl border-0 bg-gradient-to-r from-amber-500 to-orange-500 px-8 py-6 text-base text-white shadow-lg transition-all hover:-translate-y-0.5 hover:from-amber-600 hover:to-orange-600 hover:shadow-xl"
             onClick={() => navigate("/editor")}
             size="lg"
-            className="gap-2 text-base px-8 py-6 rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white border-0"
           >
-            지금 시작하기 <ArrowRight className="h-4 w-4" />
+            {t("landing.hero.primaryCta")}
+            <ArrowRight className="h-4 w-4" />
           </Button>
           <Button
-            variant="outline"
-            size="lg"
-            className="text-base px-8 py-6 rounded-xl hover:-translate-y-0.5 transition-all"
+            className="rounded-xl px-8 py-6 text-base transition-all hover:-translate-y-0.5"
             onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
+            size="lg"
+            variant="outline"
           >
-            기능 살펴보기
+            {t("landing.hero.secondaryCta")}
           </Button>
         </motion.div>
 
         <motion.div
-          variants={fadeUp}
-          initial="hidden"
           animate="visible"
-          custom={4}
           className="mt-8 flex items-center gap-6 text-sm text-muted-foreground"
+          custom={4}
+          initial="hidden"
+          variants={fadeUp}
         >
-          <span className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" /> 무료 사용</span>
-          <span className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5" /> 설치 불필요</span>
-          <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> 로그인 불필요</span>
+          <span className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" /> {t("landing.hero.free")}</span>
+          <span className="flex items-center gap-1.5"><Zap className="h-3.5 w-3.5" /> {t("landing.hero.autosave")}</span>
+          <span className="flex items-center gap-1.5"><Sparkles className="h-3.5 w-3.5" /> {t("landing.hero.localFirst")}</span>
         </motion.div>
       </motion.section>
 
-      {/* Editor Preview */}
       <motion.section
-        variants={fadeUp}
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, margin: "-50px" }}
+        className="px-6 pb-20 pt-4 sm:px-10"
         custom={0}
-        className="px-6 sm:px-10 pb-20 pt-4"
+        initial="hidden"
+        variants={fadeUp}
+        viewport={{ margin: "-50px", once: true }}
+        whileInView="visible"
       >
-        <div className="max-w-5xl mx-auto">
+        <div className="mx-auto max-w-5xl">
           <motion.div
-            whileHover={{ y: -4 }}
+            className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-2xl shadow-black/10 dark:shadow-black/30"
             transition={{ duration: 0.3 }}
-            className="relative rounded-2xl overflow-hidden border border-border shadow-2xl shadow-black/10 dark:shadow-black/30 bg-card"
+            whileHover={{ y: -4 }}
           >
-            <div className="flex items-center gap-2 px-4 py-3 bg-muted/50 border-b border-border">
+            <div className="flex items-center gap-2 border-b border-border bg-muted/50 px-4 py-3">
               <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-red-400" />
-                <div className="w-3 h-3 rounded-full bg-yellow-400" />
-                <div className="w-3 h-3 rounded-full bg-green-400" />
+                <div className="h-3 w-3 rounded-full bg-red-400" />
+                <div className="h-3 w-3 rounded-full bg-yellow-400" />
+                <div className="h-3 w-3 rounded-full bg-green-400" />
               </div>
-              <span className="text-xs text-muted-foreground ml-2">docsy.app/editor</span>
+              <span className="ml-2 text-xs text-muted-foreground">docsy.app/editor</span>
             </div>
-            <img
-              src={editorPreview}
-              alt="Docsy 에디터 미리보기"
-              className="w-full"
-              loading="lazy"
-            />
+            <img alt={t("landing.previewAlt")} className="w-full" loading="lazy" src={editorPreview} />
           </motion.div>
         </div>
       </motion.section>
 
-      {/* Format ribbon */}
-      <section className="py-10 border-y border-border bg-muted/30">
-        <div className="max-w-5xl mx-auto px-6">
+      <section className="border-y border-border bg-muted/30 py-10">
+        <div className="mx-auto max-w-5xl px-6">
           <motion.p
-            variants={fadeUp}
+            className="mb-6 text-center text-sm text-muted-foreground"
             initial="hidden"
-            whileInView="visible"
+            variants={fadeUp}
             viewport={{ once: true }}
-            className="text-center text-sm text-muted-foreground mb-6"
+            whileInView="visible"
           >
-            지원하는 포맷
+            {t("landing.supportedFormats")}
           </motion.p>
           <motion.div
-            variants={staggerContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
             className="flex flex-wrap items-center justify-center gap-3"
+            initial="hidden"
+            variants={staggerContainer}
+            viewport={{ once: true }}
+            whileInView="visible"
           >
-            {formats.map((f, i) => (
+            {formats.map((format, index) => (
               <motion.span
-                key={f}
+                key={format}
+                className="rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm"
+                custom={index}
                 variants={fadeUp}
-                custom={i}
-                className="px-4 py-2 rounded-full bg-card border border-border text-sm font-medium text-foreground shadow-sm"
               >
-                {f}
+                {format}
               </motion.span>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="px-6 sm:px-10 py-24">
-        <div className="max-w-6xl mx-auto">
+      <section className="px-6 py-24 sm:px-10" id="features">
+        <div className="mx-auto max-w-6xl">
           <motion.div
-            variants={fadeUp}
+            className="mb-16 text-center"
             initial="hidden"
+            variants={fadeUp}
+            viewport={{ margin: "-80px", once: true }}
             whileInView="visible"
-            viewport={{ once: true, margin: "-80px" }}
-            className="text-center mb-16"
           >
-            <span className="inline-block px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-semibold tracking-wide uppercase mb-4">
-              Features
+            <span className="mb-4 inline-block rounded-full bg-amber-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+              {t("landing.featuresBadge")}
             </span>
-            <h2 className="text-3xl sm:text-4xl font-bold mb-4">왜 Docsy인가요?</h2>
-            <p className="text-muted-foreground max-w-lg mx-auto text-lg">
-              복잡한 문서 작성을 간단하게. 개발자와 비개발자 모두를 위한 편집기.
-            </p>
+            <h2 className="mb-4 text-3xl font-bold sm:text-4xl">{t("landing.featuresTitle")}</h2>
+            <p className="mx-auto max-w-lg text-lg text-muted-foreground">{t("landing.featuresDescription")}</p>
           </motion.div>
 
           <motion.div
-            variants={staggerContainer}
+            className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"
             initial="hidden"
+            variants={staggerContainer}
+            viewport={{ margin: "-60px", once: true }}
             whileInView="visible"
-            viewport={{ once: true, margin: "-60px" }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
           >
-            {features.map(({ icon: Icon, title, desc }, i) => (
+            {features.map(({ description, icon: Icon, title }, index) => (
               <motion.div
                 key={title}
+                className="group cursor-default rounded-2xl border border-border bg-card p-6 transition-all hover:border-border/80 hover:shadow-lg"
+                custom={index}
+                transition={{ duration: 0.2 }}
                 variants={fadeUp}
-                custom={i}
-                whileHover={{ y: -6, transition: { duration: 0.2 } }}
-                className="group bg-card border border-border rounded-2xl p-6 hover:shadow-lg hover:border-border/80 transition-all cursor-default"
+                whileHover={{ y: -6 }}
               >
-                <div className={`h-11 w-11 rounded-xl bg-gradient-to-br ${featureColors[i]} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                  <Icon className={`h-5 w-5 ${iconColors[i]}`} />
+                <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${featureColors[index]} transition-transform group-hover:scale-110`}>
+                  <Icon className={`h-5 w-5 ${iconColors[index]}`} />
                 </div>
-                <h3 className="font-semibold text-base mb-2">{title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{desc}</p>
+                <h3 className="mb-2 text-base font-semibold">{title}</h3>
+                <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>
               </motion.div>
             ))}
           </motion.div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="px-6 sm:px-10 py-24">
+      <section className="px-6 py-24 sm:px-10">
         <motion.div
-          variants={fadeUp}
+          className="relative mx-auto max-w-3xl text-center"
           initial="hidden"
+          variants={fadeUp}
+          viewport={{ margin: "-80px", once: true }}
           whileInView="visible"
-          viewport={{ once: true, margin: "-80px" }}
-          className="max-w-3xl mx-auto text-center relative"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-rose-500/5 rounded-3xl blur-2xl" />
-          <div className="relative bg-card border border-border rounded-3xl px-8 sm:px-16 py-16 shadow-sm">
+          <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-amber-500/5 via-orange-500/5 to-rose-500/5 blur-2xl" />
+          <div className="relative rounded-3xl border border-border bg-card px-8 py-16 shadow-sm sm:px-16">
             <motion.img
+              alt={t("common.appName")}
+              className="mx-auto mb-6 h-16 w-16"
               src={docslyLogo}
-              alt="Docsy"
-              className="h-16 w-16 mx-auto mb-6"
-              whileHover={{ rotate: [0, -10, 10, 0], transition: { duration: 0.5 } }}
+              transition={{ duration: 0.5 }}
+              whileHover={{ rotate: [0, -10, 10, 0] }}
             />
-            <h2 className="text-2xl sm:text-3xl font-bold mb-3">지금 바로 시작하세요</h2>
-            <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-              복잡한 문서 양식, Docsy와 함께라면 쉬워집니다.
-            </p>
+            <h2 className="mb-3 text-2xl font-bold sm:text-3xl">{t("landing.ctaTitle")}</h2>
+            <p className="mx-auto mb-8 max-w-md text-muted-foreground">{t("landing.ctaDescription")}</p>
             <Button
+              className="gap-2 rounded-xl border-0 bg-gradient-to-r from-amber-500 to-orange-500 px-8 py-6 text-base text-white shadow-lg transition-all hover:-translate-y-0.5 hover:from-amber-600 hover:to-orange-600 hover:shadow-xl"
               onClick={() => navigate("/editor")}
               size="lg"
-              className="gap-2 text-base px-8 py-6 rounded-xl shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white border-0"
             >
-              에디터 열기 <ArrowRight className="h-4 w-4" />
+              {t("landing.openEditor")}
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         </motion.div>
       </section>
 
-      {/* Footer */}
       <footer className="border-t border-border px-6 py-8 text-center">
-        <div className="flex items-center justify-center gap-2 mb-3">
-          <img src={docslyLogo} alt="Docsy" className="h-5 w-5" />
-          <span className="text-sm font-semibold">Docsy</span>
+        <div className="mb-3 flex items-center justify-center gap-2">
+          <img alt={t("common.appName")} className="h-5 w-5" src={docslyLogo} />
+          <span className="text-sm font-semibold">{t("common.appName")}</span>
         </div>
-        <p className="text-xs text-muted-foreground">
-          © 2026 Docsy. 누구나 쉽게 쓰는 문서 편집기.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("landing.footer")}</p>
       </footer>
     </div>
   );

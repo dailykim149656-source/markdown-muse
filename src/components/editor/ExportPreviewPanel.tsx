@@ -1,135 +1,148 @@
-import { useState, useMemo, useCallback } from "react";
-import { Copy, Download, X, Eye, ChevronDown } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useCallback, useMemo, useState } from "react";
+import { ChevronDown, Copy, Download, Eye, X } from "lucide-react";
 import { toast } from "sonner";
-import { htmlToLatex } from "./utils/htmlToLatex";
-import { htmlToTypst } from "./utils/htmlToTypst";
-import { htmlToAsciidoc } from "./utils/htmlToAsciidoc";
-import { htmlToRst } from "./utils/htmlToRst";
-import { latexToTypst } from "./utils/latexToTypst";
-import type { EditorMode } from "./EditorHeader";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
+import { htmlToRst } from "@/components/editor/utils/htmlToRst";
+import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
+import { latexToTypst } from "@/components/editor/utils/latexToTypst";
+import type { EditorMode } from "@/types/document";
 
-export type PreviewFormat = "latex" | "html" | "typst" | "asciidoc" | "rst" | "markdown";
+export type PreviewFormat = "asciidoc" | "html" | "latex" | "markdown" | "rst" | "typst";
 
 interface ExportPreviewPanelProps {
   editorHtml: string;
+  editorLatex: string;
+  editorMarkdown: string;
   editorMode: EditorMode;
-  rawContent: string;
-  onClose: () => void;
   fileName: string;
+  onClose: () => void;
+  rawContent: string;
 }
 
 const FORMAT_LABELS: Record<PreviewFormat, string> = {
-  latex: "LaTeX",
-  html: "HTML",
-  typst: "Typst",
   asciidoc: "AsciiDoc",
-  rst: "RST",
+  html: "HTML",
+  latex: "LaTeX",
   markdown: "Markdown",
+  rst: "RST",
+  typst: "Typst",
 };
 
-const FORMAT_EXT: Record<PreviewFormat, string> = {
-  latex: ".tex",
-  html: ".html",
-  typst: ".typ",
+const FORMAT_EXTENSIONS: Record<PreviewFormat, string> = {
   asciidoc: ".adoc",
-  rst: ".rst",
+  html: ".html",
+  latex: ".tex",
   markdown: ".md",
+  rst: ".rst",
+  typst: ".typ",
 };
 
-const getAvailableFormats = (mode: EditorMode): PreviewFormat[] => {
-  if (mode === "json" || mode === "yaml") return [];
-  // Don't show current mode's own format
-  const all: PreviewFormat[] = ["latex", "html", "typst", "asciidoc", "rst"];
-  if (mode === "markdown") return all;
-  return all.filter(f => f !== mode);
+const getDefaultFormat = (mode: EditorMode): PreviewFormat => {
+  if (mode === "markdown") {
+    return "latex";
+  }
+
+  if (mode === "latex") {
+    return "markdown";
+  }
+
+  return "markdown";
 };
 
-const ExportPreviewPanel = ({ editorHtml, editorMode, rawContent, onClose, fileName }: ExportPreviewPanelProps) => {
-  const available = useMemo(() => getAvailableFormats(editorMode), [editorMode]);
-  const [format, setFormat] = useState<PreviewFormat>(() => available[0] || "latex");
+const ExportPreviewPanel = ({
+  editorHtml,
+  editorLatex,
+  editorMarkdown,
+  editorMode,
+  fileName,
+  onClose,
+  rawContent,
+}: ExportPreviewPanelProps) => {
+  const [format, setFormat] = useState<PreviewFormat>(() => getDefaultFormat(editorMode));
 
-  const converted = useMemo(() => {
-    try {
-      if (editorMode === "latex" && format === "typst") {
-        return latexToTypst(rawContent);
-      }
-      const html = editorHtml;
-      switch (format) {
-        case "latex": return htmlToLatex(html, true);
-        case "typst": return htmlToTypst(html);
-        case "asciidoc": return htmlToAsciidoc(html);
-        case "rst": return htmlToRst(html);
-        case "html": return html;
-        default: return html;
-      }
-    } catch {
-      return "변환 중 오류가 발생했습니다.";
+  const content = useMemo(() => {
+    switch (format) {
+      case "html":
+        return editorHtml;
+      case "latex":
+        return editorLatex;
+      case "markdown":
+        return editorMarkdown;
+      case "typst":
+        return editorMode === "latex" ? latexToTypst(rawContent) : htmlToTypst(editorHtml);
+      case "asciidoc":
+        return htmlToAsciidoc(editorHtml);
+      case "rst":
+        return htmlToRst(editorHtml);
+      default:
+        return editorMarkdown;
     }
-  }, [editorHtml, rawContent, editorMode, format]);
+  }, [editorHtml, editorLatex, editorMarkdown, editorMode, format, rawContent]);
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(converted);
-    toast.success("클립보드에 복사되었습니다");
-  }, [converted]);
+  const handleCopy = useCallback(async () => {
+    await navigator.clipboard.writeText(content);
+    toast.success("미리보기 내용을 복사했습니다.");
+  }, [content]);
 
   const handleDownload = useCallback(() => {
-    const blob = new Blob([converted], { type: "text/plain" });
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${fileName || "Untitled"}${FORMAT_EXT[format]}`;
-    a.click();
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${fileName || "Untitled"}${FORMAT_EXTENSIONS[format]}`;
+    anchor.click();
     URL.revokeObjectURL(url);
-    toast.success(`${FORMAT_LABELS[format]} 파일로 내보냈습니다`);
-  }, [converted, fileName, format]);
-
-  if (!available.length) return null;
+  }, [content, fileName, format]);
 
   return (
-    <div className="h-full flex flex-col bg-background border-l border-border">
-      {/* Header */}
-      <div className="h-8 flex items-center justify-between px-3 bg-secondary/50 border-b border-border shrink-0">
-        <div className="flex items-center gap-1.5">
-          <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground">미리보기</span>
+    <div className="flex h-full flex-col border-l border-border bg-background">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="flex items-center gap-2">
+          <Eye className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">내보내기 미리보기</span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-5 gap-1 px-1.5 text-xs font-semibold text-foreground">
+              <Button className="h-7 gap-1 px-2" size="sm" type="button" variant="ghost">
                 {FORMAT_LABELS[format]}
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-36">
-              {available.map(f => (
-                <DropdownMenuItem
-                  key={f}
-                  onClick={() => setFormat(f)}
-                  className={`text-xs ${f === format ? "bg-accent" : ""}`}
-                >
-                  {FORMAT_LABELS[f]} ({FORMAT_EXT[f]})
+            <DropdownMenuContent align="start">
+              {(Object.keys(FORMAT_LABELS) as PreviewFormat[]).map((option) => (
+                <DropdownMenuItem key={option} onClick={() => setFormat(option)}>
+                  {FORMAT_LABELS[option]}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="flex items-center gap-0.5">
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleCopy} title="복사">
-            <Copy className="h-3.5 w-3.5" />
+
+        <div className="flex items-center gap-1">
+          <Button className="h-7 px-2" onClick={() => void handleCopy()} size="sm" type="button" variant="ghost">
+            <Copy className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleDownload} title="다운로드">
-            <Download className="h-3.5 w-3.5" />
+          <Button className="h-7 px-2" onClick={handleDownload} size="sm" type="button" variant="ghost">
+            <Download className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={onClose} title="닫기">
-            <X className="h-3.5 w-3.5" />
+          <Button className="h-7 px-2" onClick={onClose} size="sm" type="button" variant="ghost">
+            <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
-      {/* Content */}
-      <pre className="flex-1 overflow-auto p-4 text-xs font-mono text-foreground leading-relaxed whitespace-pre-wrap break-words select-all">
-        {converted}
-      </pre>
+
+      <ScrollArea className="h-full">
+        <pre className="whitespace-pre-wrap break-words p-4 text-xs leading-6 text-foreground">
+          {content}
+        </pre>
+      </ScrollArea>
     </div>
   );
 };

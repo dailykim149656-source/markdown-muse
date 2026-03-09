@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
-import type { DocumentData } from "@/components/editor/useAutoSave";
-import type { EditorMode } from "@/components/editor/EditorHeader";
+import type { DocumentData, EditorMode } from "@/types/document";
 import { htmlToLatex, latexToHtml } from "@/components/editor/utils/htmlToLatex";
 import { createMarkedInstance, createTurndownService } from "@/components/editor/utils/markdownRoundtrip";
+import { getRenderableHtml } from "@/lib/ast/getRenderableHtml";
+import { getRenderableLatex } from "@/lib/ast/getRenderableLatex";
+import { getRenderableMarkdown } from "@/lib/ast/getRenderableMarkdown";
 
 interface UseFormatConversionOptions {
+  activeEditor: TiptapEditor | null;
   activeDoc: DocumentData;
   activeDocId: string;
   bumpEditorKey: () => void;
@@ -24,7 +28,12 @@ export interface TextStats {
 
 const getReadableText = (mode: EditorMode, content: string) => {
   if (mode === "latex") {
-    return content.replace(/\\[a-zA-Z]+\{?[^}]*\}?/g, "").replace(/[{}\\$%&]/g, "").trim();
+    return content
+      .replace(/\\docsyfontfamily\{[^}]*\}\{/g, "")
+      .replace(/\\docsyfontsize\{[^}]*\}\{[^}]*\}\{/g, "")
+      .replace(/\\[a-zA-Z]+\{?[^}]*\}?/g, "")
+      .replace(/[{}\\$%&]/g, "")
+      .trim();
   }
 
   if (mode === "html") {
@@ -37,6 +46,7 @@ const getReadableText = (mode: EditorMode, content: string) => {
 };
 
 export const useFormatConversion = ({
+  activeEditor,
   activeDoc,
   activeDocId,
   bumpEditorKey,
@@ -46,6 +56,7 @@ export const useFormatConversion = ({
 }: UseFormatConversionOptions) => {
   const turndownService = useMemo(() => createTurndownService(), []);
   const markedInstance = useMemo(() => createMarkedInstance(), []);
+  const currentTiptapDocument = activeEditor?.getJSON() || activeDoc.tiptapJson || undefined;
 
   const getDocumentHtml = useCallback((mode: EditorMode, content: string) => {
     if (!content) {
@@ -70,9 +81,35 @@ export const useFormatConversion = ({
   const [liveEditorHtml, setLiveEditorHtml] = useState<string>(() => getDocumentHtml(activeDoc.mode, activeDoc.content));
 
   const currentEditorHtml = useMemo(
-    () => liveEditorHtml || getDocumentHtml(activeDoc.mode, activeDoc.content),
-    [activeDoc.content, activeDoc.mode, getDocumentHtml, liveEditorHtml]
+    () => liveEditorHtml
+      || activeDoc.sourceSnapshots?.html
+      || getDocumentHtml(activeDoc.mode, activeDoc.content),
+    [activeDoc.content, activeDoc.mode, activeDoc.sourceSnapshots, getDocumentHtml, liveEditorHtml]
   );
+  const currentRenderableHtml = useMemo(
+    () => getRenderableHtml(currentTiptapDocument, currentEditorHtml),
+    [currentEditorHtml, currentTiptapDocument]
+  );
+  const currentRenderableMarkdown = useMemo(() => {
+    if (activeDoc.mode === "markdown") {
+      return activeDoc.content;
+    }
+
+    return getRenderableMarkdown(
+      currentTiptapDocument,
+      activeDoc.sourceSnapshots?.markdown || turndownService.turndown(currentRenderableHtml),
+    );
+  }, [activeDoc.content, activeDoc.mode, activeDoc.sourceSnapshots, currentRenderableHtml, currentTiptapDocument, turndownService]);
+  const currentRenderableLatex = useMemo(() => getRenderableLatex(
+    currentTiptapDocument,
+    activeDoc.sourceSnapshots?.latex || htmlToLatex(currentRenderableHtml, false),
+    { includeWrapper: false },
+  ), [activeDoc.sourceSnapshots, currentRenderableHtml, currentTiptapDocument]);
+  const currentRenderableLatexDocument = useMemo(() => getRenderableLatex(
+    currentTiptapDocument,
+    htmlToLatex(currentRenderableHtml, true),
+    { includeWrapper: true, title: activeDoc.name || "Untitled" },
+  ), [activeDoc.name, currentEditorHtml, currentRenderableHtml, currentTiptapDocument]);
 
   useEffect(() => {
     setLiveEditorHtml(getDocumentHtml(activeDoc.mode, activeDoc.content));
@@ -95,11 +132,11 @@ export const useFormatConversion = ({
 
     try {
       if (newMode === "markdown") {
-        convertedContent = turndownService.turndown(currentEditorHtml);
+        convertedContent = currentRenderableMarkdown;
       } else if (newMode === "latex") {
-        convertedContent = htmlToLatex(currentEditorHtml, false);
+        convertedContent = currentRenderableLatex;
       } else if (newMode === "html") {
-        convertedContent = currentEditorHtml;
+        convertedContent = currentRenderableHtml;
       }
     } catch (error) {
       console.error("Mode conversion error:", error);
@@ -109,7 +146,7 @@ export const useFormatConversion = ({
     updateActiveDoc({ mode: newMode, content: convertedContent });
     bumpEditorKey();
     toast.success(`${oldMode.toUpperCase()} -> ${newMode.toUpperCase()} converted.`);
-  }, [activeDoc.content, activeDoc.mode, bumpEditorKey, currentEditorHtml, turndownService, updateActiveDoc]);
+  }, [activeDoc.content, activeDoc.mode, bumpEditorKey, currentRenderableHtml, currentRenderableLatex, currentRenderableMarkdown, updateActiveDoc]);
 
   const textStats = useMemo<TextStats>(() => {
     const text = getReadableText(activeDoc.mode, activeDoc.content);
@@ -131,6 +168,10 @@ export const useFormatConversion = ({
 
   return {
     currentEditorHtml,
+    currentRenderableHtml,
+    currentRenderableLatex,
+    currentRenderableLatexDocument,
+    currentRenderableMarkdown,
     handleModeChange,
     setLiveEditorHtml,
     textStats,

@@ -99,4 +99,10 @@ describe("latexToTypst math conversion", () => {
     expect(result).toContain("arrow.r");
     expect(result).toContain("arrow.r.double");
   });
+
+  it("converts docsy font macros", () => {
+    const result = latexToTypst(wrap("\\docsyfontfamily{Fira Code}{\\docsyfontsize{18px}{13.5pt}{Styled}}"));
+    expect(result).toContain('#text(font: "Fira Code")');
+    expect(result).toContain("#text(size: 13.5pt)[Styled]");
+  });
 });

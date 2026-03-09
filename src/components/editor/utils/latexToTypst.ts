@@ -201,7 +201,148 @@ export function latexToTypst(latex: string): string {
   return preamble + (preamble ? "\n" : "") + s + "\n";
 }
 
+function readBalancedArgument(source: string, startIndex: number): { endIndex: number; value: string } | null {
+  if (source[startIndex] !== "{") {
+    return null;
+  }
+
+  let depth = 0;
+  let valueStart = startIndex + 1;
+
+  for (let index = startIndex; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+      if (depth === 1) {
+        valueStart = index + 1;
+      }
+      continue;
+    }
+
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          endIndex: index + 1,
+          value: source.slice(valueStart, index),
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function replaceLatexCommandOnce(
+  source: string,
+  commandName: string,
+  argCount: number,
+  render: (args: string[]) => string,
+): { changed: boolean; output: string } {
+  const commandToken = `\\${commandName}`;
+  let changed = false;
+  let result = "";
+  let index = 0;
+
+  while (index < source.length) {
+    const commandIndex = source.indexOf(commandToken, index);
+    if (commandIndex === -1) {
+      result += source.slice(index);
+      break;
+    }
+
+    result += source.slice(index, commandIndex);
+
+    const nextChar = source[commandIndex + commandToken.length];
+    if (nextChar && nextChar !== "{" && !/\s/.test(nextChar)) {
+      result += commandToken;
+      index = commandIndex + commandToken.length;
+      continue;
+    }
+
+    let cursor = commandIndex + commandToken.length;
+    while (cursor < source.length && /\s/.test(source[cursor])) {
+      cursor += 1;
+    }
+
+    const args: string[] = [];
+    let failed = false;
+
+    for (let argIndex = 0; argIndex < argCount; argIndex += 1) {
+      const parsed = readBalancedArgument(source, cursor);
+      if (!parsed) {
+        failed = true;
+        break;
+      }
+
+      args.push(parsed.value);
+      cursor = parsed.endIndex;
+      while (cursor < source.length && /\s/.test(source[cursor])) {
+        cursor += 1;
+      }
+    }
+
+    if (failed) {
+      result += commandToken;
+      index = commandIndex + commandToken.length;
+      continue;
+    }
+
+    result += render(args);
+    index = cursor;
+    changed = true;
+  }
+
+  return { changed, output: result };
+}
+
+function replaceLatexCommandRepeated(
+  source: string,
+  commandName: string,
+  argCount: number,
+  render: (args: string[]) => string,
+): string {
+  let current = source;
+
+  for (let iteration = 0; iteration < 50; iteration += 1) {
+    const { changed, output } = replaceLatexCommandOnce(current, commandName, argCount, render);
+    current = output;
+    if (!changed) {
+      break;
+    }
+  }
+
+  return current;
+}
+
+function escapeTypstString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function cssSizeToTypst(size: string): string {
+  const normalized = size.trim().toLowerCase();
+  const pxMatch = normalized.match(/^(\d+(?:\.\d+)?)px$/);
+  if (pxMatch) {
+    return `${Number((Number(pxMatch[1]) * 0.75).toFixed(2)).toString()}pt`;
+  }
+
+  return size.trim();
+}
+
 function convertInline(s: string): string {
+  s = replaceLatexCommandRepeated(s, "docsyfontfamily", 2, ([fontFamily, content]) => (
+    `#text(font: "${escapeTypstString(fontFamily.trim())}")[${content}]`
+  ));
+  s = replaceLatexCommandRepeated(s, "docsyfontsize", 3, ([fontSize, _ptSize, content]) => (
+    `#text(size: ${cssSizeToTypst(fontSize)})[${content}]`
+  ));
+
   // Bold
   s = s.replace(/\\textbf\{([^}]*)\}/g, (_, c) => `*${c}*`);
   s = s.replace(/\{\\bf\s+([^}]*)\}/g, (_, c) => `*${c}*`);

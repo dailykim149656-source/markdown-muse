@@ -1,16 +1,40 @@
-import { Download, Upload, Moon, Sun, FileText, Printer, FileDown, ChevronDown, Maximize, Minimize, Keyboard, PanelLeft, Eye } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  ChevronDown,
+  Download,
+  Eye,
+  FileDown,
+  FileText,
+  Keyboard,
+  Languages,
+  Maximize,
+  Minimize,
+  Moon,
+  PanelLeft,
+  Printer,
+  Sparkles,
+  Sun,
+  Upload,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import docslyLogo from "@/assets/docsly-logo.png";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useSidebar } from "@/components/ui/sidebar";
-
-export type EditorMode = "markdown" | "latex" | "html" | "json" | "yaml";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useI18n } from "@/i18n/useI18n";
+import type { Locale } from "@/i18n/types";
+import type { EditorMode } from "@/types/document";
 
 interface EditorHeaderProps {
   isDark: boolean;
   onToggleTheme: () => void;
+  onSaveDocsy: () => void;
   onSaveMd: () => void;
   onSaveTex: () => void;
   onSaveHtml: () => void;
@@ -31,14 +55,20 @@ interface EditorHeaderProps {
   onModeChange: (mode: EditorMode) => void;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
+  onOpenPatchReview?: () => void;
+  onOpenAiAssistant?: () => void;
   onOpenShortcuts: () => void;
+  patchCount?: number;
   previewOpen?: boolean;
   onTogglePreview?: () => void;
 }
 
+const LOCALES: Locale[] = ["ko", "en"];
+
 const EditorHeader = ({
   isDark,
   onToggleTheme,
+  onSaveDocsy,
   onSaveMd,
   onSaveTex,
   onSaveHtml,
@@ -59,41 +89,59 @@ const EditorHeader = ({
   onModeChange,
   isFullscreen,
   onToggleFullscreen,
+  onOpenPatchReview,
+  onOpenAiAssistant,
   onOpenShortcuts,
+  patchCount = 0,
   previewOpen,
   onTogglePreview,
 }: EditorHeaderProps) => {
-  const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : mode === "json" ? ".json" : mode === "yaml" ? ".yaml" : ".md";
+  const { locale, setLocale, t } = useI18n();
   const { toggleSidebar } = useSidebar();
+  const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : mode === "json" ? ".json" : mode === "yaml" ? ".yaml" : ".md";
 
   return (
     <header className="flex items-center justify-between h-12 px-2 sm:px-4 border-b border-border bg-background gap-1">
       <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={toggleSidebar} title="파일 탐색기">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 w-8 p-0 shrink-0"
+          onClick={toggleSidebar}
+          title={t("header.toggleSidebar")}
+        >
           <PanelLeft className="h-4 w-4" />
         </Button>
         <Link to="/" className="hidden sm:flex items-center gap-2 hover:opacity-80 transition-opacity shrink-0">
-          <img src={docslyLogo} alt="Docsy" className="h-6 w-6" />
-          <span className="text-sm font-bold text-foreground mr-1">Docsy</span>
+          <img src={docslyLogo} alt={t("common.appName")} className="h-6 w-6" />
+          <span className="text-sm font-bold text-foreground mr-1">{t("common.appName")}</span>
         </Link>
         <span className="text-muted-foreground hidden sm:inline">|</span>
         <input
           value={fileName}
-          onChange={(e) => onFileNameChange(e.target.value)}
+          onChange={(event) => onFileNameChange(event.target.value)}
           className="bg-transparent border-none outline-none text-sm font-medium text-foreground w-20 sm:w-36 min-w-0 focus:ring-0"
-          placeholder="Untitled"
+          placeholder={t("common.untitled")}
         />
         <span className="text-xs text-muted-foreground shrink-0">{modeExt}</span>
 
-        {/* Mode tabs - dropdown on mobile, tabs on desktop */}
         <div className="hidden lg:flex items-center ml-3 bg-secondary rounded-md p-0.5">
-          {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((m) => (
+          {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((editorMode) => (
             <button
-              key={m}
-              className={`px-3 py-1 text-xs rounded-sm transition-colors ${mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-              onClick={() => onModeChange(m)}
+              key={editorMode}
+              className={`px-3 py-1 text-xs rounded-sm transition-colors ${mode === editorMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              onClick={() => onModeChange(editorMode)}
+              type="button"
             >
-              {m === "markdown" ? "Markdown" : m === "latex" ? "LaTeX" : m === "html" ? "HTML" : m === "json" ? "JSON" : "YAML"}
+              {editorMode === "markdown"
+                ? "Markdown"
+                : editorMode === "latex"
+                  ? "LaTeX"
+                  : editorMode === "html"
+                    ? "HTML"
+                    : editorMode === "json"
+                      ? "JSON"
+                      : "YAML"}
             </button>
           ))}
         </div>
@@ -105,9 +153,21 @@ const EditorHeader = ({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-36">
-            {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((m) => (
-              <DropdownMenuItem key={m} onClick={() => onModeChange(m)} className={`text-xs ${mode === m ? "bg-accent" : ""}`}>
-                {m === "markdown" ? "Markdown" : m === "latex" ? "LaTeX" : m === "html" ? "HTML" : m === "json" ? "JSON" : "YAML"}
+            {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((editorMode) => (
+              <DropdownMenuItem
+                key={editorMode}
+                onClick={() => onModeChange(editorMode)}
+                className={`text-xs ${mode === editorMode ? "bg-accent" : ""}`}
+              >
+                {editorMode === "markdown"
+                  ? "Markdown"
+                  : editorMode === "latex"
+                    ? "LaTeX"
+                    : editorMode === "html"
+                      ? "HTML"
+                      : editorMode === "json"
+                        ? "JSON"
+                        : "YAML"}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -121,43 +181,55 @@ const EditorHeader = ({
               <button
                 onClick={onToggleCountMode}
                 className="text-xs text-muted-foreground mr-1 sm:mr-3 hidden sm:inline-flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer"
-                title=""
+                title={t("header.stats.hint")}
+                type="button"
               >
-                <span>{textStats.charCount}자</span>
-                <span className="text-muted-foreground/60">·</span>
-                <span>{textStats.wordCount}단어</span>
-                <span className="text-muted-foreground/60">·</span>
-                <span>{textStats.lines}줄</span>
+                <span>{textStats.charCount}{t("header.stats.chars")}</span>
+                <span className="text-muted-foreground/60">/</span>
+                <span>{textStats.wordCount}{t("header.stats.words")}</span>
+                <span className="text-muted-foreground/60">/</span>
+                <span>{textStats.lines}{t("header.stats.lines")}</span>
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="text-xs">
               <div className="flex flex-col gap-0.5">
-                <span>글자수: {textStats.charCount}{countWithSpaces ? " (공백 포함)" : " (공백 제외)"}</span>
-                <span>단어수: {textStats.wordCount}</span>
-                <span>줄수: {textStats.lines}</span>
-                <span>문단수: {textStats.paragraphs}</span>
-                <span>읽기 시간: 약 {textStats.readingTimeMin}분</span>
-                <span className="text-muted-foreground mt-1">클릭하여 공백 포함/제외 전환</span>
+                <span>
+                  {t("header.stats.charCount", { count: textStats.charCount })}
+                  {countWithSpaces
+                    ? ` (${t("header.stats.withSpaces")})`
+                    : ` (${t("header.stats.withoutSpaces")})`}
+                </span>
+                <span>{t("header.stats.wordCount", { count: textStats.wordCount })}</span>
+                <span>{t("header.stats.lineCount", { count: textStats.lines })}</span>
+                <span>{t("header.stats.paragraphCount", { count: textStats.paragraphs })}</span>
+                <span>{t("header.stats.readingTimeValue", { minutes: textStats.readingTimeMin })}</span>
+                <span className="text-muted-foreground mt-1">{t("header.stats.hint")}</span>
               </div>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        <Button variant="ghost" size="sm" onClick={onLoad} title="불러오기" className="h-8 w-8 p-0">
+
+        <Button variant="ghost" size="sm" onClick={onLoad} title={t("header.loadFile")} className="h-8 w-8 p-0">
           <Upload className="h-4 w-4" />
         </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" title="저장하기" className="h-8 gap-1 px-2">
+            <Button variant="ghost" size="sm" title={t("header.export")} className="h-8 gap-1 px-2">
               <Download className="h-4 w-4" />
               <ChevronDown className="h-3 w-3" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuItem onClick={onSaveDocsy} className="text-sm gap-2">
+              <FileDown className="h-4 w-4" />
+              Docsy (.docsy)
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             {mode === "markdown" && (
               <DropdownMenuItem onClick={onSaveMd} className="text-sm gap-2">
                 <FileDown className="h-4 w-4" />
-                마크다운 (.md)
+                {t("header.downloads.markdown")}
               </DropdownMenuItem>
             )}
             {(mode === "json" || mode === "yaml") && (
@@ -174,34 +246,40 @@ const EditorHeader = ({
             )}
             {mode !== "json" && mode !== "yaml" && (
               <>
+                {mode !== "markdown" && (
+                  <DropdownMenuItem onClick={onSaveMd} className="text-sm gap-2">
+                    <FileDown className="h-4 w-4" />
+                    {t("header.downloads.markdown")}
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={onSaveTex} className="text-sm gap-2">
                   <FileDown className="h-4 w-4" />
-                  LaTeX (.tex)
+                  {t("header.downloads.latex")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onSaveHtml} className="text-sm gap-2">
                   <FileDown className="h-4 w-4" />
-                  HTML (.html)
+                  {t("header.downloads.html")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onSaveTypst} className="text-sm gap-2">
                   <FileDown className="h-4 w-4" />
-                  Typst (.typ)
+                  {t("header.downloads.typst")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onSaveAdoc} className="text-sm gap-2">
                   <FileDown className="h-4 w-4" />
-                  AsciiDoc (.adoc)
+                  {t("header.downloads.asciidoc")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onSaveRst} className="text-sm gap-2">
                   <FileDown className="h-4 w-4" />
-                  RST (.rst)
+                  {t("header.downloads.rst")}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onSavePdf} className="text-sm gap-2">
                   <FileText className="h-4 w-4" />
-                  PDF로 저장
+                  {t("header.downloads.pdf")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onPrint} className="text-sm gap-2">
                   <Printer className="h-4 w-4" />
-                  인쇄
+                  {t("header.downloads.print")}
                 </DropdownMenuItem>
               </>
             )}
@@ -209,22 +287,79 @@ const EditorHeader = ({
         </DropdownMenu>
 
         {mode !== "json" && mode !== "yaml" && onTogglePreview && (
-          <Button variant={previewOpen ? "secondary" : "ghost"} size="sm" onClick={onTogglePreview} title="내보내기 미리보기" className="h-8 w-8 p-0">
+          <Button
+            variant={previewOpen ? "secondary" : "ghost"}
+            size="sm"
+            onClick={onTogglePreview}
+            title={t("header.preview")}
+            className="h-8 w-8 p-0"
+          >
             <Eye className="h-4 w-4" />
           </Button>
         )}
 
-        <Button variant="ghost" size="sm" onClick={onOpenShortcuts} title="단축키 안내 (Ctrl+/)" className="h-8 w-8 p-0 hidden sm:flex">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onOpenShortcuts}
+          title={t("header.shortcuts")}
+          className="h-8 w-8 p-0 hidden sm:flex"
+        >
           <Keyboard className="h-4 w-4" />
         </Button>
 
-        <Button variant="ghost" size="sm" onClick={onToggleFullscreen} title="전체화면 (F11)" className="h-8 w-8 p-0 hidden sm:flex">
+        {mode !== "json" && mode !== "yaml" && onOpenAiAssistant && (
+          <Button variant="ghost" size="sm" onClick={onOpenAiAssistant} title={t("header.aiAssistant")} className="h-8 w-8 p-0">
+            <Sparkles className="h-4 w-4" />
+          </Button>
+        )}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" title={t("common.language.menu")} className="h-8 gap-1 px-2">
+              <Languages className="h-4 w-4" />
+              <span className="text-[10px] font-semibold uppercase">{locale}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-32">
+            {LOCALES.map((nextLocale) => (
+              <DropdownMenuItem
+                key={nextLocale}
+                className={locale === nextLocale ? "bg-accent" : ""}
+                onClick={() => setLocale(nextLocale)}
+              >
+                {t(`common.language.${nextLocale}`)}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onToggleFullscreen}
+          title={t("header.fullscreen")}
+          className="h-8 w-8 p-0 hidden sm:flex"
+        >
           {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
         </Button>
 
-        <Button variant="ghost" size="sm" onClick={onToggleTheme} title="테마 전환" className="h-8 w-8 p-0">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onToggleTheme}
+          title={isDark ? t("header.lightMode") : t("header.darkMode")}
+          className="h-8 w-8 p-0"
+        >
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
+
+        {mode !== "json" && mode !== "yaml" && onOpenPatchReview && (
+          <Button className="h-8 px-2 text-xs" onClick={onOpenPatchReview} size="sm" type="button" variant="ghost">
+            {t("header.patchReview")}
+            {patchCount > 0 ? ` (${patchCount})` : ""}
+          </Button>
+        )}
       </div>
     </header>
   );

@@ -6,6 +6,10 @@ Source Documents:
 - `PRD/docsy_prd_v0.2.docx`
 - `PRD/docsy_system_architecture_v0.2.docx`
 
+Current Snapshot:
+- All non-deferred backlog items are implemented in the current codebase and covered by targeted validation.
+- Remaining roadmap items are intentionally deferred in `EPIC-H`.
+
 ## 1. Backlog Rules
 
 ### Priority
@@ -18,6 +22,7 @@ Source Documents:
 ### Status
 
 - `Ready`: can be started now
+- `Completed`: implemented and validated
 - `Blocked`: depends on another item
 - `Later`: intentionally deferred
 
@@ -32,13 +37,13 @@ Source Documents:
 - `EPIC-G`: Retrieval Layer
 - `EPIC-H`: Future Extensions
 
-## 3. Ready Now
+## 3. Completed Foundations
 
 ### DOC-001 - Centralize shared document types
 
 - Epic: `EPIC-A`
 - Priority: `P0`
-- Status: `Ready`
+- Status: `Completed`
 - Summary: Move `DocumentData`, mode types, conversion-related shared types, and patch-ready identifiers into a central domain module.
 - Why now: Current types are still distributed across editor-focused files.
 - Acceptance criteria:
@@ -50,7 +55,7 @@ Source Documents:
 
 - Epic: `EPIC-A`
 - Priority: `P0`
-- Status: `Ready`
+- Status: `Completed`
 - Depends on: `DOC-001`
 - Summary: Move editor layout orchestration out of `src/pages/Index.tsx`.
 - Acceptance criteria:
@@ -62,7 +67,7 @@ Source Documents:
 
 - Epic: `EPIC-A`
 - Priority: `P0`
-- Status: `Ready`
+- Status: `Completed`
 - Summary: Expand converter tests to lock current behavior before AST migration.
 - Acceptance criteria:
   - export coverage includes rich blocks:
@@ -78,7 +83,7 @@ Source Documents:
 
 - Epic: `EPIC-B`
 - Priority: `P0`
-- Status: `Ready`
+- Status: `Completed`
 - Summary: Define the canonical node model and metadata contract.
 - Acceptance criteria:
   - AST spec covers all currently supported technical blocks
@@ -90,7 +95,7 @@ Source Documents:
 
 - Epic: `EPIC-B`
 - Priority: `P0`
-- Status: `Ready`
+- Status: `Completed`
 - Depends on: `AST-001`
 - Summary: Specify how block ids are created, persisted, and updated.
 - Acceptance criteria:
@@ -102,7 +107,7 @@ Source Documents:
 
 - Epic: `EPIC-B`
 - Priority: `P1`
-- Status: `Ready`
+- Status: `Completed`
 - Depends on: `AST-001`, `AST-002`
 - Summary: Convert current editor state into canonical AST.
 - Acceptance criteria:
@@ -110,13 +115,13 @@ Source Documents:
   - serializer output is covered by fixtures/tests
   - unsupported nodes fail predictably, not silently
 
-## 4. Next Queue
+## 4. Completed Platform Work
 
 ### AST-004 - Build AST -> TipTap hydrator
 
 - Epic: `EPIC-B`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `AST-003`
 - Summary: Reconstruct editor documents from AST.
 - Acceptance criteria:
@@ -127,7 +132,7 @@ Source Documents:
 
 - Epic: `EPIC-B`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `AST-003`, `AST-004`
 - Summary: Create representative technical document fixtures for serializer/hydrator validation.
 - Acceptance criteria:
@@ -139,7 +144,7 @@ Source Documents:
 
 - Epic: `EPIC-C`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `AST-003`
 - Summary: Start AST-native export path with Markdown.
 - Acceptance criteria:
@@ -151,7 +156,7 @@ Source Documents:
 
 - Epic: `EPIC-C`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `AST-003`
 - Summary: Provide canonical HTML rendering from AST.
 - Acceptance criteria:
@@ -162,7 +167,7 @@ Source Documents:
 
 - Epic: `EPIC-C`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `AST-003`
 - Summary: Move LaTeX export away from direct HTML conversion where possible.
 - Acceptance criteria:
@@ -173,7 +178,7 @@ Source Documents:
 
 - Epic: `EPIC-E`
 - Priority: `P1`
-- Status: `Ready`
+- Status: `Completed`
 - Depends on: `AST-001`, `AST-002`
 - Summary: Define a structured patch object for AI suggestions.
 - Acceptance criteria:
@@ -189,7 +194,7 @@ Source Documents:
 
 - Epic: `EPIC-E`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `PATCH-001`
 - Summary: UI for reviewing patch proposals before application.
 - Acceptance criteria:
@@ -201,7 +206,7 @@ Source Documents:
 
 - Epic: `EPIC-D`
 - Priority: `P1`
-- Status: `Ready`
+- Status: `Completed`
 - Summary: Create interface contracts for external document ingestion.
 - Acceptance criteria:
   - input contract supports PRD-listed formats
@@ -215,7 +220,7 @@ Source Documents:
 
 - Epic: `EPIC-D`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `ING-001`
 - Summary: Extract analyzable structure from external files.
 - Acceptance criteria:
@@ -229,7 +234,7 @@ Source Documents:
 
 - Epic: `EPIC-F`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `ING-001`, `ING-002`
 - Summary: Define summary request/response format grounded on chunks and metadata.
 - Acceptance criteria:
@@ -240,7 +245,7 @@ Source Documents:
 
 - Epic: `EPIC-F`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `ING-002`, `PATCH-001`
 - Summary: Compare two documents and emit reviewable deltas.
 - Acceptance criteria:
@@ -255,7 +260,7 @@ Source Documents:
 
 - Epic: `EPIC-F`
 - Priority: `P2`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `PATCH-001`
 - Summary: Generate new section drafts as insertable patches.
 - Acceptance criteria:
@@ -266,7 +271,7 @@ Source Documents:
 
 - Epic: `EPIC-F`
 - Priority: `P2`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `ING-002`
 - Summary: Extract SOP-style steps from source documents.
 - Acceptance criteria:
@@ -277,7 +282,7 @@ Source Documents:
 
 - Epic: `EPIC-F`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `PATCH-001`, `PATCH-002`, `ING-002`
 - Summary: Generate suggested document updates as explicit patches.
 - Acceptance criteria:
@@ -290,7 +295,7 @@ Source Documents:
 
 - Epic: `EPIC-G`
 - Priority: `P1`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `ING-002`
 - Summary: Add deterministic retrieval before semantic search.
 - Acceptance criteria:
@@ -301,7 +306,7 @@ Source Documents:
 
 - Epic: `EPIC-G`
 - Priority: `P2`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `ING-002`
 - Summary: Define embedding-ready chunk structure.
 - Acceptance criteria:
@@ -311,7 +316,7 @@ Source Documents:
 
 - Epic: `EPIC-G`
 - Priority: `P2`
-- Status: `Blocked`
+- Status: `Completed`
 - Depends on: `RET-002`
 - Summary: Add semantic retrieval storage and query path.
 - Acceptance criteria:

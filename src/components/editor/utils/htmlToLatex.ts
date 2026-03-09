@@ -25,9 +25,37 @@ const DEFAULT_OPTIONS: LatexExportOptions = {
   includeWrapper: true,
 };
 
+function buildFontEnginePreamble(usedFeatures: Set<string>): string {
+  if (!usedFeatures.has("docsy-font-family")) {
+    return "";
+  }
+
+  return [
+    "% !TeX program = xelatex",
+    "% Compile with XeLaTeX for Docsy font support.",
+    "\\usepackage{fontspec}",
+    "\\usepackage{xeCJK}",
+    "\\usepackage{etoolbox}",
+    "\\defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}",
+    "\\IfFontExistsTF{Inter}{\\setmainfont{Inter}\\setsansfont{Inter}}{",
+    "  \\IfFontExistsTF{Noto Sans KR}{\\setmainfont{Noto Sans KR}\\setsansfont{Noto Sans KR}}{}",
+    "}",
+    "\\IfFontExistsTF{Noto Sans KR}{\\setCJKmainfont{Noto Sans KR}\\setCJKsansfont{Noto Sans KR}}{",
+    "  \\IfFontExistsTF{NanumGothic}{\\setCJKmainfont{NanumGothic}\\setCJKsansfont{NanumGothic}}{}",
+    "}",
+    "\\IfFontExistsTF{Fira Code}{\\setmonofont{Fira Code}}{",
+    "  \\IfFontExistsTF{JetBrains Mono}{\\setmonofont{JetBrains Mono}}{",
+    "    \\IfFontExistsTF{D2Coding}{\\setmonofont{D2Coding}}{}",
+    "  }",
+    "}",
+    "\\IfFontExistsTF{D2Coding}{\\setCJKmonofont{D2Coding}}{",
+    "  \\IfFontExistsTF{NanumGothicCoding}{\\setCJKmonofont{NanumGothicCoding}}{}",
+    "}",
+  ].join("\n");
+}
+
 function buildPreamble(opts: LatexExportOptions, usedFeatures: Set<string>): string {
   const packages = [
-    "[utf8]{inputenc}",
     "{amsmath}",
     "{amssymb}",
     "{graphicx}",
@@ -36,6 +64,10 @@ function buildPreamble(opts: LatexExportOptions, usedFeatures: Set<string>): str
     "{xcolor}",
     "{soul}",
   ];
+
+  if (!usedFeatures.has("docsy-font-family")) {
+    packages.unshift("[utf8]{inputenc}");
+  }
 
   if (usedFeatures.has("table")) packages.push("{array}", "{booktabs}");
   if (usedFeatures.has("code")) packages.push("{listings}", "{xcolor}");
@@ -47,7 +79,8 @@ function buildPreamble(opts: LatexExportOptions, usedFeatures: Set<string>): str
     opts.extraPackages.forEach(p => packages.push(`{${p}}`));
   }
 
-  let preamble = `\\documentclass[${opts.fontSize || "11pt"}]{${opts.documentClass || "article"}}\n`;
+  const fontEnginePreamble = buildFontEnginePreamble(usedFeatures);
+  let preamble = `${fontEnginePreamble ? `${fontEnginePreamble}\n` : ""}\\documentclass[${opts.fontSize || "11pt"}]{${opts.documentClass || "article"}}\n`;
   packages.forEach(p => {
     preamble += `\\usepackage${p}\n`;
   });
@@ -75,6 +108,24 @@ function buildPreamble(opts: LatexExportOptions, usedFeatures: Set<string>): str
   fonttitle=\\bfseries, title={#1},
   sharp corners, boxrule=0.8pt, left=6pt, right=6pt, top=4pt, bottom=4pt
 }\n`;
+  }
+
+  if (usedFeatures.has("docsy-font-size")) {
+    preamble += `
+\\newcommand{\\docsyfontsize}[3]{{
+  \\fontsize{#2}{\\dimexpr #2 + 2pt\\relax}\\selectfont #3
+}}\n`;
+  }
+
+  if (usedFeatures.has("docsy-font-family")) {
+    preamble += `
+\\newcommand{\\docsyfontfamily}[2]{{
+  \\def\\docsyresolvedfont{#1}
+  \\ifdefstrequal{#1}{Nanum Gothic}{\\def\\docsyresolvedfont{NanumGothic}}{}
+  \\ifdefstrequal{#1}{Nanum Myeongjo}{\\def\\docsyresolvedfont{NanumMyeongjo}}{}
+  \\ifdefstrequal{#1}{Nanum Gothic Coding}{\\def\\docsyresolvedfont{NanumGothicCoding}}{}
+  \\IfFontExistsTF{\\docsyresolvedfont}{\\fontspec{\\docsyresolvedfont}}{}#2
+}}\n`;
   }
 
   preamble += `\n\\title{${escapeLatex(opts.title || "문서 제목")}}`;
@@ -131,6 +182,61 @@ function cssColorToLatex(color: string): string {
     white: "white", yellow: "yellow", orange: "orange", purple: "purple",
   };
   return colorMap[color] || "black";
+}
+
+function sanitizeStyleArg(value: string): string {
+  return value.replace(/[{}\\]/g, "").trim();
+}
+
+function normalizeFontFamily(value: string): string {
+  const firstFamily = value.split(",")[0]?.trim() || "";
+  return firstFamily.replace(/^['"]+|['"]+$/g, "").trim();
+}
+
+function normalizeFontSize(value: string): string {
+  return value.trim();
+}
+
+function formatPt(value: number): string {
+  return `${Number(value.toFixed(2)).toString()}pt`;
+}
+
+function cssFontSizeToLatexPt(value: string): string {
+  const normalized = normalizeFontSize(value).toLowerCase();
+  const pxMatch = normalized.match(/^(\d+(?:\.\d+)?)px$/);
+  if (pxMatch) {
+    return formatPt(Number(pxMatch[1]) * 0.75);
+  }
+
+  const ptMatch = normalized.match(/^(\d+(?:\.\d+)?)pt$/);
+  if (ptMatch) {
+    return formatPt(Number(ptMatch[1]));
+  }
+
+  return sanitizeStyleArg(value);
+}
+
+function applyInlineTextStyles(content: string, el: HTMLElement, state: ConversionState): string {
+  let styled = content;
+
+  const color = el.style.color.trim();
+  if (color) {
+    styled = `\\textcolor{${cssColorToLatex(color)}}{${styled}}`;
+  }
+
+  const fontSize = normalizeFontSize(el.style.fontSize);
+  if (fontSize) {
+    state.usedFeatures.add("docsy-font-size");
+    styled = `\\docsyfontsize{${sanitizeStyleArg(fontSize)}}{${sanitizeStyleArg(cssFontSizeToLatexPt(fontSize))}}{${styled}}`;
+  }
+
+  const fontFamily = normalizeFontFamily(el.style.fontFamily);
+  if (fontFamily) {
+    state.usedFeatures.add("docsy-font-family");
+    styled = `\\docsyfontfamily{${sanitizeStyleArg(fontFamily)}}{${styled}}`;
+  }
+
+  return styled;
 }
 
 // ─── Footnote tracking ───
@@ -305,13 +411,7 @@ function processNode(node: ChildNode, state: ConversionState): string {
         return `%%FOOTNOTE_REF:${fnId}:${num}%%`;
       }
 
-      // Font color
-      const color = el.style.color;
-      if (color) {
-        return `\\textcolor{${cssColorToLatex(color)}}{${children()}}`;
-      }
-
-      return children();
+      return applyInlineTextStyles(children(), el, state);
     }
 
     // ─── Div (math block, admonition, footnote-item, mermaid) ───
@@ -450,6 +550,143 @@ export function htmlToLatex(html: string, includeWrapper = true, options?: Parti
     return buildPreamble(opts, state.usedFeatures) + cleaned + POSTAMBLE;
   }
   return cleaned;
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function toCssFontFamily(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  return /\s/.test(trimmed) ? `'${trimmed}'` : trimmed;
+}
+
+function readBalancedLatexArgument(source: string, startIndex: number): { endIndex: number; value: string } | null {
+  if (source[startIndex] !== "{") {
+    return null;
+  }
+
+  let depth = 0;
+  let argStart = startIndex + 1;
+
+  for (let index = startIndex; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+
+    if (char === "{") {
+      depth += 1;
+      if (depth === 1) {
+        argStart = index + 1;
+      }
+      continue;
+    }
+
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          endIndex: index + 1,
+          value: source.slice(argStart, index),
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+function replaceLatexCommandOnce(
+  source: string,
+  commandName: string,
+  argCount: number,
+  render: (args: string[]) => string,
+): { changed: boolean; output: string } {
+  const commandToken = `\\${commandName}`;
+  let changed = false;
+  let result = "";
+  let index = 0;
+
+  while (index < source.length) {
+    const commandIndex = source.indexOf(commandToken, index);
+    if (commandIndex === -1) {
+      result += source.slice(index);
+      break;
+    }
+
+    result += source.slice(index, commandIndex);
+
+    const nextChar = source[commandIndex + commandToken.length];
+    if (nextChar && nextChar !== "{" && !/\s/.test(nextChar)) {
+      result += commandToken;
+      index = commandIndex + commandToken.length;
+      continue;
+    }
+
+    let cursor = commandIndex + commandToken.length;
+    while (cursor < source.length && /\s/.test(source[cursor])) {
+      cursor += 1;
+    }
+
+    const args: string[] = [];
+    let failed = false;
+
+    for (let argIndex = 0; argIndex < argCount; argIndex += 1) {
+      const parsed = readBalancedLatexArgument(source, cursor);
+      if (!parsed) {
+        failed = true;
+        break;
+      }
+
+      args.push(parsed.value);
+      cursor = parsed.endIndex;
+      while (cursor < source.length && /\s/.test(source[cursor])) {
+        cursor += 1;
+      }
+    }
+
+    if (failed) {
+      result += commandToken;
+      index = commandIndex + commandToken.length;
+      continue;
+    }
+
+    result += render(args);
+    index = cursor;
+    changed = true;
+  }
+
+  return { changed, output: result };
+}
+
+function replaceLatexCommandRepeated(
+  source: string,
+  commandName: string,
+  argCount: number,
+  render: (args: string[]) => string,
+): string {
+  let current = source;
+
+  for (let iteration = 0; iteration < 50; iteration += 1) {
+    const { changed, output } = replaceLatexCommandOnce(current, commandName, argCount, render);
+    current = output;
+    if (!changed) {
+      break;
+    }
+  }
+
+  return current;
 }
 
 export function latexToHtml(latex: string): string {
@@ -606,6 +843,13 @@ export function latexToHtml(latex: string): string {
   body = body.replace(/\\subsubsection\*?\{([^}]*)\}/g, "<h3>$1</h3>");
   body = body.replace(/\\paragraph\*?\{([^}]*)\}/g, "<h4>$1</h4>");
   body = body.replace(/\\subparagraph\*?\{([^}]*)\}/g, "<h5>$1</h5>");
+
+  body = replaceLatexCommandRepeated(body, "docsyfontfamily", 2, ([fontFamily, content]) => (
+    `<span style="font-family: ${escapeHtmlAttribute(toCssFontFamily(fontFamily))}">${content}</span>`
+  ));
+  body = replaceLatexCommandRepeated(body, "docsyfontsize", 3, ([fontSize, _ptSize, content]) => (
+    `<span style="font-size: ${escapeHtmlAttribute(fontSize.trim())}">${content}</span>`
+  ));
 
   // Nested brace groups with size/style commands: {\Huge\bfseries text}
   body = body.replace(/\{\\Huge\\bfseries\s+([^}]*)\}/g, '<span style="font-size:2em;font-weight:bold">$1</span>');

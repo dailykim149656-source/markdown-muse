@@ -1,3 +1,4 @@
+import type { JSONContent } from "@tiptap/core";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import EditorToolbar from "./EditorToolbar";
@@ -8,12 +9,21 @@ import LatexHighlightEditor from "./LatexHighlightEditor";
 
 interface LatexEditorProps {
   initialContent?: string;
+  initialTiptapDoc?: JSONContent;
   onContentChange?: (content: string) => void;
   onHtmlChange?: (html: string) => void;
   onEditorReady?: (editor: Editor | null) => void;
+  onTiptapChange?: (document: JSONContent | null) => void;
 }
 
-const LatexEditor = ({ initialContent, onContentChange, onHtmlChange, onEditorReady }: LatexEditorProps) => {
+const LatexEditor = ({
+  initialContent,
+  initialTiptapDoc,
+  onContentChange,
+  onHtmlChange,
+  onEditorReady,
+  onTiptapChange,
+}: LatexEditorProps) => {
   const [latexSource, setLatexSource] = useState(initialContent || "");
   const [showPanel, setShowPanel] = useState(true);
   const [sourceLeft, setSourceLeft] = useState(false);
@@ -23,37 +33,39 @@ const LatexEditor = ({ initialContent, onContentChange, onHtmlChange, onEditorRe
   const sourceDebounce = useRef<ReturnType<typeof setTimeout>>();
   const initialHtml = useMemo(() => initialContent ? latexToHtml(initialContent) : "", [initialContent]);
 
-  useEffect(() => {
-    onHtmlChange?.(initialHtml);
-  }, [initialHtml, onHtmlChange]);
-
   const handleWysiwygUpdate = useCallback(
-    (html: string) => {
+    (html: string, document: JSONContent) => {
       if (syncingFromSource.current) return;
       syncingFromWysiwyg.current = true;
       const latex = htmlToLatex(html);
       setLatexSource(latex);
       onContentChange?.(latex);
       onHtmlChange?.(html);
+      onTiptapChange?.(document);
       queueMicrotask(() => { syncingFromWysiwyg.current = false; });
     },
-    [onContentChange, onHtmlChange]
+    [onContentChange, onHtmlChange, onTiptapChange]
   );
 
   const editor = useEditor({
-    extensions: createEditorExtensions("LaTeX 문서를 WYSIWYG으로 작성하세요..."),
-    content: initialHtml,
-    onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML()),
+    extensions: createEditorExtensions("LaTeX 문서에서 WYSIWYG로 전환해 편집할 수 있습니다."),
+    content: initialTiptapDoc || initialHtml,
+    onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML(), editor.getJSON()),
     editorProps: editorPropsDefault,
   });
 
   useEffect(() => {
     onEditorReady?.(editor);
 
+    if (editor) {
+      onHtmlChange?.(editor.getHTML());
+      onTiptapChange?.(editor.getJSON());
+    }
+
     return () => {
       onEditorReady?.(null);
     };
-  }, [editor, onEditorReady]);
+  }, [editor, onEditorReady, onHtmlChange, onTiptapChange]);
 
   const handleSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -67,10 +79,11 @@ const LatexEditor = ({ initialContent, onContentChange, onHtmlChange, onEditorRe
         if (!editor || syncingFromWysiwyg.current) return;
         syncingFromSource.current = true;
         editor.commands.setContent(html, { emitUpdate: false });
+        onTiptapChange?.(editor.getJSON());
         queueMicrotask(() => { syncingFromSource.current = false; });
       }, 600);
     },
-    [editor, onContentChange, onHtmlChange]
+    [editor, onContentChange, onHtmlChange, onTiptapChange]
   );
 
   const handleSourceKeyDown = useCallback(
@@ -104,13 +117,13 @@ const LatexEditor = ({ initialContent, onContentChange, onHtmlChange, onEditorRe
             onKeyDown={handleSourceKeyDown}
             onSwap={() => setSourceLeft(v => !v)}
             onClose={() => setShowPanel(false)}
-            placeholder="// WYSIWYG 편집기에 내용을 입력하면&#10;// LaTeX 소스가 여기에 표시됩니다."
+            placeholder="// WYSIWYG에서 작성한 내용은 LaTeX 소스와 동기화됩니다.&#10;// LaTeX 소스를 직접 편집하려면 이곳에 입력하세요."
           >
             <LatexHighlightEditor
               value={latexSource}
               onChange={handleSourceChange}
               onKeyDown={handleSourceKeyDown}
-              placeholder="// WYSIWYG 편집기에 내용을 입력하면&#10;// LaTeX 소스가 여기에 표시됩니다."
+              placeholder="// WYSIWYG에서 작성한 내용은 LaTeX 소스와 동기화됩니다.&#10;// LaTeX 소스를 직접 편집하려면 이곳에 입력하세요."
             />
           </SourcePanel>
         }
