@@ -12,8 +12,13 @@ interface LatexExportOptions {
   documentClass?: string;
   fontSize?: string;
   includeWrapper?: boolean;
+  includeMetadata?: boolean;
   /** Extra packages to include */
   extraPackages?: string[];
+}
+
+interface LatexToHtmlOptions {
+  includeMetadata?: boolean;
 }
 
 const DEFAULT_OPTIONS: LatexExportOptions = {
@@ -23,6 +28,7 @@ const DEFAULT_OPTIONS: LatexExportOptions = {
   documentClass: "article",
   fontSize: "11pt",
   includeWrapper: true,
+  includeMetadata: false,
 };
 
 function buildFontEnginePreamble(usedFeatures: Set<string>): string {
@@ -128,10 +134,14 @@ function buildPreamble(opts: LatexExportOptions, usedFeatures: Set<string>): str
 }}\n`;
   }
 
-  preamble += `\n\\title{${escapeLatex(opts.title || "문서 제목")}}`;
-  preamble += `\n\\author{${escapeLatex(opts.author || "저자")}}`;
-  preamble += `\n\\date{${opts.date || "\\today"}}`;
-  preamble += `\n\n\\begin{document}\n\n\\maketitle\n\n`;
+  if (opts.includeMetadata === true) {
+    preamble += `\n\\title{${escapeLatex(opts.title || "문서 제목")}}`;
+    preamble += `\n\\author{${escapeLatex(opts.author || "저자")}}`;
+    preamble += `\n\\date{${opts.date || "\\today"}}`;
+    preamble += `\n\n\\begin{document}\n\n\\maketitle\n\n`;
+  } else {
+    preamble += "\n\\begin{document}\n";
+  }
 
   return preamble;
 }
@@ -689,14 +699,19 @@ function replaceLatexCommandRepeated(
   return current;
 }
 
-export function latexToHtml(latex: string): string {
+export function latexToHtml(latex: string, options?: LatexToHtmlOptions): string {
+  const opts = {
+    includeMetadata: false,
+    ...options,
+  };
+
   let body = latex;
   let titleHtml = "";
 
   // Extract title/author/date from preamble before stripping it
-  const titleMatch = latex.match(/\\title\{([^}]*)\}/);
-  const authorMatch = latex.match(/\\author\{([^}]*)\}/);
-  const dateMatch = latex.match(/\\date\{([^}]*)\}/);
+  const titleMatch = opts.includeMetadata ? latex.match(/\\title\{([^}]*)\}/) : null;
+  const authorMatch = opts.includeMetadata ? latex.match(/\\author\{([^}]*)\}/) : null;
+  const dateMatch = opts.includeMetadata ? latex.match(/\\date\{([^}]*)\}/) : null;
 
   // Extract body from document environment
   const beginDoc = latex.indexOf("\\begin{document}");
@@ -706,7 +721,7 @@ export function latexToHtml(latex: string): string {
   }
 
   // Build title block HTML if \maketitle is present and title/author exist
-  const hasMaketitle = body.includes("\\maketitle");
+  const hasMaketitle = opts.includeMetadata && body.includes("\\maketitle");
   if (hasMaketitle && (titleMatch || authorMatch)) {
     const title = titleMatch ? titleMatch[1] : "";
     const author = authorMatch ? authorMatch[1].replace(/\\\\/g, "<br/>") : "";

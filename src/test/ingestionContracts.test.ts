@@ -19,6 +19,7 @@ describe("createEmptyIngestionDocument", () => {
       metadata: {},
       sections: [],
       chunks: [],
+      images: [],
       importedAt: 123456789,
     });
   });

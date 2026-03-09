@@ -1,6 +1,4 @@
 import { useRef, useState } from "react";
-import katexLib from "katex";
-import "katex/dist/katex.min.css";
 import { Editor } from "@tiptap/react";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import type { LucideIcon } from "lucide-react";
@@ -59,6 +57,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { useI18n } from "@/i18n/useI18n";
 import AdvancedColorPicker from "./AdvancedColorPicker";
 import { FONT_FAMILIES, FONT_SIZES } from "./fonts";
+import MathRender from "./MathRender";
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -284,7 +283,7 @@ const TableMenu = ({ editor }: { editor: Editor }) => {
               })}
             </div>
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              {hoverRow > 0 ? `${hoverRow} ? ${hoverCol}` : t("toolbar.table.selectSize")}
+              {hoverRow > 0 ? `${hoverRow} × ${hoverCol}` : t("toolbar.table.selectSize")}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -292,7 +291,7 @@ const TableMenu = ({ editor }: { editor: Editor }) => {
               <Label className="text-[10px] text-muted-foreground">{t("toolbar.table.rows")}</Label>
               <Input className="h-7 text-center text-xs" max={20} min={1} onChange={(event) => setRows(parseInt(event.target.value, 10) || 1)} type="number" value={rows} />
             </div>
-            <span className="mt-4 text-xs text-muted-foreground">?</span>
+            <span className="mt-4 text-xs text-muted-foreground">×</span>
             <div className="flex-1 space-y-0.5">
               <Label className="text-[10px] text-muted-foreground">{t("toolbar.table.columns")}</Label>
               <Input className="h-7 text-center text-xs" max={20} min={1} onChange={(event) => setCols(parseInt(event.target.value, 10) || 1)} type="number" value={cols} />
@@ -466,17 +465,6 @@ const FontSizeSelect = ({ editor }: { editor: Editor }) => {
   );
 };
 
-const MathPreview = ({ displayMode, latex }: { displayMode: boolean; latex: string }) => {
-  const { t } = useI18n();
-
-  try {
-    const html = katexLib.renderToString(latex, { displayMode, throwOnError: false });
-    return <span dangerouslySetInnerHTML={{ __html: html }} />;
-  } catch {
-    return <span className="text-xs text-destructive">{t("toolbar.math.renderError")}</span>;
-  }
-};
-
 const MathMenu = ({ editor }: { editor: Editor }) => {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -525,7 +513,11 @@ const MathMenu = ({ editor }: { editor: Editor }) => {
         />
         {latex && (
           <div className="flex min-h-[40px] items-center justify-center rounded-md border border-border bg-background p-3">
-            <MathPreview displayMode={mode === "block"} latex={latex} />
+            <MathRender
+              displayMode={mode === "block"}
+              latex={latex}
+              renderErrorLabel={t("toolbar.math.renderError")}
+            />
           </div>
         )}
         <Button className="h-8 w-full text-sm" disabled={!latex} onClick={insertMath} size="sm">
@@ -538,10 +530,10 @@ const MathMenu = ({ editor }: { editor: Editor }) => {
 const AdmonitionMenu = ({ editor }: { editor: Editor }) => {
   const { t } = useI18n();
   const types = [
-    { icon: "??", label: t("toolbar.admonition.note"), type: "note" },
-    { icon: "??", label: t("toolbar.admonition.tip"), type: "tip" },
-    { icon: "??", label: t("toolbar.admonition.warning"), type: "warning" },
-    { icon: "??", label: t("toolbar.admonition.danger"), type: "danger" },
+    { icon: "[note]", label: t("toolbar.admonition.note"), type: "note" },
+    { icon: "[tip]", label: t("toolbar.admonition.tip"), type: "tip" },
+    { icon: "[warn]", label: t("toolbar.admonition.warning"), type: "warning" },
+    { icon: "[danger]", label: t("toolbar.admonition.danger"), type: "danger" },
   ] as const;
 
   return (
@@ -822,3 +814,5 @@ const EditorToolbar = ({ editor }: EditorToolbarProps) => {
 };
 
 export default EditorToolbar;
+
+

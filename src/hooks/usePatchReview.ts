@@ -8,6 +8,11 @@ import { renderAstToLatex } from "@/lib/ast/renderAstToLatex";
 import { renderAstToMarkdown } from "@/lib/ast/renderAstToMarkdown";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
 import { validateDocumentAst } from "@/lib/ast/validateDocumentAst";
+import {
+  applyStructuredPatchSet,
+  parseStructuredPatchDocument,
+  serializeStructuredContent,
+} from "@/lib/patches/applyStructuredPatchSet";
 import { applyPatchDecision } from "@/lib/patches/reviewPatchSet";
 import type { DocumentData } from "@/types/document";
 import type { DocumentPatch, DocumentPatchSet } from "@/types/documentPatch";
@@ -32,6 +37,9 @@ const getContentForMode = (mode: DocumentData["mode"], html: string, markdown: s
       return "";
   }
 };
+
+const isStructuredPatchSet = (patchSet: DocumentPatchSet) =>
+  patchSet.patches.every((patch) => patch.target.targetType === "structured_path");
 
 export const usePatchReview = ({
   activeDoc,
@@ -68,7 +76,12 @@ export const usePatchReview = ({
   }, []);
 
   const loadPatchSet = useCallback((nextPatchSet: DocumentPatchSet) => {
-    if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
+    if ((activeDoc.mode === "json" || activeDoc.mode === "yaml") && !isStructuredPatchSet(nextPatchSet)) {
+      toast.error(t("hooks.patchReview.structuredOnly"));
+      return;
+    }
+
+    if ((activeDoc.mode === "markdown" || activeDoc.mode === "latex" || activeDoc.mode === "html") && isStructuredPatchSet(nextPatchSet)) {
       toast.error(t("hooks.patchReview.richTextOnly"));
       return;
     }
@@ -115,7 +128,50 @@ export const usePatchReview = ({
     }
 
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
-      toast.error(t("hooks.patchReview.richTextOnly"));
+      if (!isStructuredPatchSet(patchSet)) {
+        toast.error(t("hooks.patchReview.structuredOnly"));
+        return;
+      }
+
+      let structuredDocument: unknown;
+
+      try {
+        structuredDocument = parseStructuredPatchDocument(activeDoc.content, activeDoc.mode);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t("hooks.patchReview.structuredParseFailed");
+        toast.error(message);
+        return;
+      }
+
+      const result = applyStructuredPatchSet(structuredDocument, patchSet);
+
+      if (result.appliedPatchIds.length === 0 && result.failures.length === 0) {
+        toast.info(t("hooks.patchReview.nothingToApply"));
+        return;
+      }
+
+      if (result.appliedPatchIds.length > 0) {
+        updateActiveDoc({
+          content: serializeStructuredContent(result.value, activeDoc.mode),
+        });
+        bumpEditorKey();
+      }
+
+      if (result.warnings.length > 0) {
+        toast.warning(result.warnings[0] || t("hooks.patchReview.appliedWithWarnings"));
+      }
+
+      if (result.failures.length > 0) {
+        toast.warning(t("hooks.patchReview.appliedWithFailures", {
+          applied: result.appliedPatchIds.length,
+          failed: result.failures.length,
+        }));
+        return;
+      }
+
+      setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
+      setPatchReviewOpen(false);
+      toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
       return;
     }
 
@@ -176,7 +232,7 @@ export const usePatchReview = ({
     setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
     setPatchReviewOpen(false);
     toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
-  }, [activeDoc.id, activeDoc.mode, activeEditor, bumpEditorKey, patchSet, setLiveEditorHtml, t, updateActiveDoc]);
+  }, [activeDoc.content, activeDoc.id, activeDoc.mode, activeEditor, bumpEditorKey, patchSet, setLiveEditorHtml, t, updateActiveDoc]);
 
   return {
     acceptedPatchCount,

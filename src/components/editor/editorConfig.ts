@@ -28,6 +28,7 @@ import FigureCaption from "./extensions/FigureCaption";
 import CrossReference from "./extensions/CrossReference";
 import FindReplaceHighlight from "./extensions/FindReplaceHighlight";
 import NodeIdExtension from "./extensions/NodeIdExtension";
+import { DEFAULT_MARKDOWN_TAB_SIZE } from "./utils/markdownTabIndent";
 
 const lowlight = createLowlight(common);
 
@@ -76,5 +77,40 @@ export const createEditorExtensions = (placeholder: string) => [
 export const editorPropsDefault = {
   attributes: {
     class: "prose prose-neutral dark:prose-invert max-w-none focus:outline-none",
+  },
+  handleDOMEvents: {
+    keydown: (view, event: KeyboardEvent) => {
+      if (event.key !== "Tab") {
+        return false;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const { state, dispatch } = view;
+      const tabText = " ".repeat(DEFAULT_MARKDOWN_TAB_SIZE);
+
+      if (event.shiftKey) {
+        if (state.selection.from !== state.selection.to || state.selection.$from.depth === 0) {
+          return true;
+        }
+
+        const from = state.selection.from;
+        const lineStart = state.selection.$from.start();
+        const prefix = state.doc.textBetween(lineStart, from, "", "\n");
+        const match = prefix.match(/[ \t]+$/);
+
+        if (!match) {
+          return true;
+        }
+
+        const removeCount = Math.min(DEFAULT_MARKDOWN_TAB_SIZE, match[0].length);
+        dispatch(state.tr.delete(from - removeCount, from).scrollIntoView());
+        return true;
+      }
+
+      dispatch(state.tr.insertText(tabText, state.selection.from, state.selection.to).scrollIntoView());
+      return true;
+    },
   },
 };

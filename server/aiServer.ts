@@ -15,10 +15,15 @@ import type {
   SummarizeDocumentRequest,
   SummarizeDocumentResponse,
 } from "../src/types/aiAssistant";
+import type { Locale } from "../src/i18n/types";
 
 const PORT = Number(process.env.AI_SERVER_PORT || 8787);
 const ALLOWED_ORIGIN = process.env.AI_ALLOWED_ORIGIN || "*";
 const MAX_CHUNKS = 8;
+
+const resolveAiLocale = (value: string | undefined): Locale => (value === "ko" ? "ko" : "en");
+
+const localePromptSuffix = (locale: Locale) => (locale === "ko" ? "Respond in Korean." : "Respond in English.");
 
 class HttpError extends Error {
   statusCode: number;
@@ -166,10 +171,11 @@ const generateSectionResponseSchema = {
   type: schemaType.OBJECT,
 };
 
-const buildSummaryPrompt = (request: SummaryRequest) => `
+const buildSummaryPrompt = (request: SummaryRequest, locale: Locale) => `
 You are summarizing a technical document for an editor workflow.
 Use only the supplied chunk inputs.
 Return strict JSON that matches the provided schema.
+${localePromptSuffix(locale)}
 
 Rules:
 - Keep the summary concise and factual.
@@ -204,9 +210,10 @@ const validateAttributions = (
 
 const handleSummarize = async (request: SummarizeDocumentRequest): Promise<SummarizeDocumentResponse> => {
   assertMarkdownDocument(request);
+  const locale = resolveAiLocale(request.locale);
   const summaryRequest = buildGroundedSummaryRequest(request);
   const summaryResponse = await generateStructuredJson<Omit<SummaryResponse, "requestId">>({
-    prompt: buildSummaryPrompt(summaryRequest),
+    prompt: buildSummaryPrompt(summaryRequest, locale),
     responseSchema: summarizeResponseSchema,
   });
   const hydratedResponse: SummarizeDocumentResponse = {
@@ -227,10 +234,12 @@ const handleSummarize = async (request: SummarizeDocumentRequest): Promise<Summa
 const buildSectionPrompt = (
   request: GenerateSectionRequest,
   chunks: { chunkId: string; ingestionId: string; sectionId?: string; text: string }[],
+  locale: Locale,
 ) => `
 You are drafting a new section for an in-product documentation editor.
 Use only the supplied chunk excerpts as factual grounding.
 Return strict JSON matching the requested schema.
+${localePromptSuffix(locale)}
 
 Rules:
 - Write a section that fits naturally into the existing document.
@@ -283,7 +292,7 @@ const handleGenerateSection = async (request: GenerateSectionRequest): Promise<G
 
   const groundingChunks = buildSectionGrounding(request);
   const result = await generateStructuredJson<GenerateSectionResponse>({
-    prompt: buildSectionPrompt(request, groundingChunks),
+    prompt: buildSectionPrompt(request, groundingChunks, resolveAiLocale(request.locale)),
     responseSchema: generateSectionResponseSchema,
   });
 

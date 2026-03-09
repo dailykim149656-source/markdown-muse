@@ -54,7 +54,7 @@ describe("docsy file format", () => {
     expect(restored.name).toBe("Spec");
     expect(restored.mode).toBe("markdown");
     expect(restored.tiptapJson).toEqual(richTextTiptapDoc);
-    expect(restored.sourceSnapshots?.markdown).toBe("# Docsy Title\n");
+    expect(restored.sourceSnapshots?.markdown).toBe("# Docsy Title\n\nFormula $e^{i\\pi}+1=0$\n");
   });
 
   it("wraps structured documents without losing the raw source snapshot", () => {

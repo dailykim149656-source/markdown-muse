@@ -56,6 +56,10 @@ const rewritePatchNodeText = (node: PatchAstNode, text: string): PatchAstNode | 
 };
 
 export const canApplyEditedSuggestedText = (patch: DocumentPatch) => {
+  if (patch.target.targetType === "structured_path") {
+    return false;
+  }
+
   if (!patch.payload) {
     return false;
   }

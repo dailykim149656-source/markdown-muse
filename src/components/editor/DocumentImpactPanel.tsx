@@ -1,0 +1,140 @@
+import { ArrowUpRight, FileSearch, GitCompareArrows, Link2, ShieldAlert } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useI18n } from "@/i18n/useI18n";
+import type { KnowledgeDocumentImpact, KnowledgeRelatedDocument } from "@/lib/knowledge/workspaceInsights";
+
+interface DocumentImpactPanelProps {
+  impact: KnowledgeDocumentImpact | null;
+  onOpenDocument: (documentId: string) => void;
+  onSuggestUpdates: (documentId: string) => void;
+  suggestableDocumentIds: string[];
+}
+
+const relationLabelKey = (relation: KnowledgeRelatedDocument["relationKinds"][number]) => {
+  switch (relation) {
+    case "references":
+      return "knowledge.relationReferences";
+    case "referenced_by":
+      return "knowledge.relationReferencedBy";
+    case "similar":
+      return "knowledge.relationSimilar";
+    case "duplicate":
+      return "knowledge.relationDuplicate";
+    default:
+      return "knowledge.relationSimilar";
+  }
+};
+
+const DocumentImpactPanel = ({
+  impact,
+  onOpenDocument,
+  onSuggestUpdates,
+  suggestableDocumentIds,
+}: DocumentImpactPanelProps) => {
+  const { t } = useI18n();
+
+  return (
+    <div className="space-y-3 group-data-[collapsible=icon]:hidden">
+      <div className="space-y-1">
+        <div className="flex items-center gap-1.5">
+          <FileSearch className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs font-medium text-foreground">{t("knowledge.impactTitle")}</span>
+        </div>
+        <p className="text-[11px] leading-4 text-muted-foreground">
+          {t("knowledge.impactDescription")}
+        </p>
+      </div>
+
+      {!impact ? (
+        <div className="rounded-md border border-dashed border-border px-2 py-3 text-[11px] leading-4 text-muted-foreground">
+          {t("knowledge.impactEmpty")}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-md border border-border/60 px-2 py-1.5">
+              <div className="text-[10px] text-muted-foreground">{t("knowledge.impactInbound")}</div>
+              <div className="mt-1 text-sm font-semibold text-foreground">{impact.inboundReferenceCount}</div>
+            </div>
+            <div className="rounded-md border border-border/60 px-2 py-1.5">
+              <div className="text-[10px] text-muted-foreground">{t("knowledge.impactOutbound")}</div>
+              <div className="mt-1 text-sm font-semibold text-foreground">{impact.outboundReferenceCount}</div>
+            </div>
+            <div className="rounded-md border border-border/60 px-2 py-1.5">
+              <div className="text-[10px] text-muted-foreground">{t("knowledge.impactIssues")}</div>
+              <div className="mt-1 text-sm font-semibold text-foreground">{impact.issues.length}</div>
+            </div>
+          </div>
+
+          {impact.relatedDocuments.length === 0 ? (
+            <div className="rounded-md border border-dashed border-border px-2 py-3 text-[11px] leading-4 text-muted-foreground">
+              {t("knowledge.relatedEmpty")}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {impact.relatedDocuments.slice(0, 5).map((document) => {
+                const canSuggestUpdates = suggestableDocumentIds.includes(document.documentId);
+
+                return (
+                  <div className="rounded-md border border-border/60 px-2 py-2" key={document.documentId}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-xs font-medium text-foreground">{document.name}</div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {document.relationKinds.map((relation) => (
+                          <Badge className="h-5 rounded-full px-1.5 text-[10px]" key={`${document.documentId}-${relation}`} variant="secondary">
+                            {t(relationLabelKey(relation))}
+                          </Badge>
+                        ))}
+                        {document.issueCount > 0 && (
+                          <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant="outline">
+                            <ShieldAlert className="mr-1 h-3 w-3" />
+                            {t("knowledge.issueCount", { count: document.issueCount })}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        className="h-6 px-2 text-[10px]"
+                        onClick={() => onOpenDocument(document.documentId)}
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <ArrowUpRight className="mr-1 h-3 w-3" />
+                        {t("knowledge.open")}
+                      </Button>
+                      <Button
+                        className="h-6 px-2 text-[10px]"
+                        disabled={!canSuggestUpdates}
+                        onClick={() => onSuggestUpdates(document.documentId)}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <GitCompareArrows className="mr-1 h-3 w-3" />
+                        {t("knowledge.suggest")}
+                      </Button>
+                    </div>
+                  </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {impact.issues.length > 0 && (
+            <div className="rounded-md border border-dashed border-border px-2 py-2">
+              <div className="flex items-center gap-1 text-[11px] font-medium text-foreground">
+                <Link2 className="h-3 w-3 text-muted-foreground" />
+                {t("knowledge.impactNeedsAttention", { count: impact.impactedDocumentCount })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+export default DocumentImpactPanel;

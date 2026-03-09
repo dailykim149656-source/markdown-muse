@@ -48,10 +48,10 @@ const normalizeSourceSnapshots = (
 });
 
 const buildRichTextSnapshots = (document: RichTextDocument, snapshots?: SourceSnapshots): SourceSnapshots => ({
+  ...(snapshots || {}),
   html: renderAstToHtml(document.ast),
   latex: renderAstToLatex(document.ast, { includeWrapper: false }),
   markdown: renderAstToMarkdown(document.ast),
-  ...(snapshots || {}),
 });
 
 const toStructuredValue = (value: unknown): StructuredValue => {

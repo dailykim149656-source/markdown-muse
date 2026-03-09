@@ -14,9 +14,12 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import DocumentImpactPanel from "@/components/editor/DocumentImpactPanel";
+import KnowledgeIndexPanel from "@/components/editor/KnowledgeIndexPanel";
+import KnowledgeInsightsPanel from "@/components/editor/KnowledgeInsightsPanel";
+import KnowledgeSearchPanel from "@/components/editor/KnowledgeSearchPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
@@ -31,16 +34,39 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/i18n/useI18n";
+import type { KnowledgeDocumentRecord, KnowledgeSearchResult } from "@/lib/knowledge/knowledgeIndex";
+import type { KnowledgeDocumentImpact, KnowledgeWorkspaceInsights } from "@/lib/knowledge/workspaceInsights";
 import type { DocumentData, EditorMode } from "@/types/document";
 
 interface FileSidebarProps {
   activeDocId: string;
   documents: DocumentData[];
+  knowledgeActiveImpact: KnowledgeDocumentImpact | null;
+  knowledgeDocumentCount: number;
+  knowledgeFreshCount: number;
+  knowledgeImageCount: number;
+  knowledgeInsights: KnowledgeWorkspaceInsights;
+  knowledgeLastIndexedAt: number | null;
+  knowledgeQuery: string;
+  knowledgeReady: boolean;
+  knowledgeResults: KnowledgeSearchResult[];
+  knowledgeStaleCount: number;
+  knowledgeSyncing: boolean;
   onDeleteDoc: (id: string) => void;
+  onOpenKnowledgeRecord: (record: KnowledgeDocumentRecord) => void;
+  onOpenKnowledgeResult: (result: KnowledgeSearchResult) => void;
+  onOpenRelatedKnowledgeDocument: (documentId: string) => void;
   onNewDoc: (mode?: EditorMode) => void;
   onOpenTemplates?: () => void;
+  onRebuildKnowledgeBase: () => void;
+  onReindexKnowledgeDocument: (documentId: string) => void;
   onRenameDoc: (id: string, name: string) => void;
+  onResetKnowledgeBase: () => void;
   onSelectDoc: (id: string) => void;
+  onSuggestKnowledgeUpdates: (documentId: string) => void;
+  recentKnowledgeRecords: KnowledgeDocumentRecord[];
+  setKnowledgeQuery: (value: string) => void;
+  suggestableKnowledgeDocumentIds: string[];
 }
 
 const modeIcon = (mode: string) => {
@@ -76,11 +102,32 @@ const modeExtension = (mode: string) => {
 const FileSidebar = ({
   activeDocId,
   documents,
+  knowledgeActiveImpact,
+  knowledgeDocumentCount,
+  knowledgeFreshCount,
+  knowledgeImageCount,
+  knowledgeInsights,
+  knowledgeLastIndexedAt,
+  knowledgeQuery,
+  knowledgeReady,
+  knowledgeResults,
+  knowledgeStaleCount,
+  knowledgeSyncing,
   onDeleteDoc,
+  onOpenKnowledgeRecord,
+  onOpenKnowledgeResult,
+  onOpenRelatedKnowledgeDocument,
   onNewDoc,
   onOpenTemplates,
+  onRebuildKnowledgeBase,
+  onReindexKnowledgeDocument,
   onRenameDoc,
+  onResetKnowledgeBase,
   onSelectDoc,
+  onSuggestKnowledgeUpdates,
+  recentKnowledgeRecords,
+  setKnowledgeQuery,
+  suggestableKnowledgeDocumentIds,
 }: FileSidebarProps) => {
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -142,92 +189,141 @@ const FileSidebar = ({
             {t("sidebar.documents")} ({documents.length})
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <ScrollArea className="h-[calc(100vh-200px)]">
-              <SidebarMenu>
-                {sortedDocuments.map((document) => {
-                  const Icon = modeIcon(document.mode);
-                  const isActive = document.id === activeDocId;
-                  const isEditing = editingId === document.id;
+            <SidebarMenu>
+              {sortedDocuments.map((document) => {
+                const Icon = modeIcon(document.mode);
+                const isActive = document.id === activeDocId;
+                const isEditing = editingId === document.id;
 
-                  return (
-                    <SidebarMenuItem key={document.id}>
-                      <SidebarMenuButton
-                        className={`group/item w-full ${isActive ? "bg-accent text-accent-foreground" : ""}`}
-                        onClick={() => !isEditing && onSelectDoc(document.id)}
-                      >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                          {isEditing ? (
-                            <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
-                              <Input
-                                autoFocus
-                                className="h-5 px-1 text-xs"
-                                onChange={(event) => setEditName(event.target.value)}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    confirmRename();
-                                  }
+                return (
+                  <SidebarMenuItem key={document.id}>
+                    <SidebarMenuButton
+                      className={`group/item w-full ${isActive ? "bg-accent text-accent-foreground" : ""}`}
+                      onClick={() => !isEditing && onSelectDoc(document.id)}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                        {isEditing ? (
+                          <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                            <Input
+                              autoFocus
+                              className="h-5 px-1 text-xs"
+                              onChange={(event) => setEditName(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  confirmRename();
+                                }
 
-                                  if (event.key === "Escape") {
-                                    setEditingId(null);
-                                  }
-                                }}
-                                value={editName}
-                              />
-                              <Button className="h-5 w-5 p-0" onClick={confirmRename} size="sm" variant="ghost">
-                                <Check className="h-3 w-3" />
-                              </Button>
-                              <Button className="h-5 w-5 p-0" onClick={() => setEditingId(null)} size="sm" variant="ghost">
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0">
-                                <div className="truncate text-xs font-medium">
-                                  {document.name || t("common.untitled")}
-                                  <span className="ml-0.5 text-muted-foreground/60">{modeExtension(document.mode)}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                  <Clock className="h-2.5 w-2.5" />
-                                  {formatDate(document.updatedAt)}
-                                </div>
+                                if (event.key === "Escape") {
+                                  setEditingId(null);
+                                }
+                              }}
+                              value={editName}
+                            />
+                            <Button className="h-5 w-5 p-0" onClick={confirmRename} size="sm" variant="ghost">
+                              <Check className="h-3 w-3" />
+                            </Button>
+                            <Button className="h-5 w-5 p-0" onClick={() => setEditingId(null)} size="sm" variant="ghost">
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <div className="min-w-0">
+                              <div className="truncate text-xs font-medium">
+                                {document.name || t("common.untitled")}
+                                <span className="ml-0.5 text-muted-foreground/60">{modeExtension(document.mode)}</span>
                               </div>
-                              <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
+                              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                <Clock className="h-2.5 w-2.5" />
+                                {formatDate(document.updatedAt)}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
+                              <button
+                                className="rounded p-0.5 hover:bg-secondary"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  startRename(document);
+                                }}
+                                title={t("sidebar.rename")}
+                                type="button"
+                              >
+                                <Pencil className="h-3 w-3 text-muted-foreground" />
+                              </button>
+                              {documents.length > 1 && (
                                 <button
-                                  className="rounded p-0.5 hover:bg-secondary"
+                                  className="rounded p-0.5 hover:bg-destructive/10"
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    startRename(document);
+                                    onDeleteDoc(document.id);
                                   }}
-                                  title={t("sidebar.rename")}
+                                  title={t("sidebar.delete")}
                                   type="button"
                                 >
-                                  <Pencil className="h-3 w-3 text-muted-foreground" />
+                                  <Trash2 className="h-3 w-3 text-destructive" />
                                 </button>
-                                {documents.length > 1 && (
-                                  <button
-                                    className="rounded p-0.5 hover:bg-destructive/10"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      onDeleteDoc(document.id);
-                                    }}
-                                    title={t("sidebar.delete")}
-                                    type="button"
-                                  >
-                                    <Trash2 className="h-3 w-3 text-destructive" />
-                                  </button>
-                                )}
-                              </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </ScrollArea>
+                          </div>
+                        )}
+                      </div>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroupContent>
+            <KnowledgeIndexPanel
+              freshCount={knowledgeFreshCount}
+              imageCount={knowledgeImageCount}
+              isSyncing={knowledgeSyncing}
+              lastIndexedAt={knowledgeLastIndexedAt}
+              onRebuild={onRebuildKnowledgeBase}
+              onReindexActive={() => onReindexKnowledgeDocument(activeDocId)}
+              onReset={onResetKnowledgeBase}
+              staleCount={knowledgeStaleCount}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroupContent>
+            <DocumentImpactPanel
+              impact={knowledgeActiveImpact}
+              onOpenDocument={onOpenRelatedKnowledgeDocument}
+              onSuggestUpdates={onSuggestKnowledgeUpdates}
+              suggestableDocumentIds={suggestableKnowledgeDocumentIds}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroupContent>
+            <KnowledgeInsightsPanel
+              issues={knowledgeInsights.issues}
+              summary={knowledgeInsights.summary}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroupContent>
+            <KnowledgeSearchPanel
+              indexedDocumentCount={knowledgeDocumentCount}
+              isReady={knowledgeReady}
+              isSyncing={knowledgeSyncing}
+              onOpenRecord={onOpenKnowledgeRecord}
+              onOpenResult={onOpenKnowledgeResult}
+              query={knowledgeQuery}
+              recentRecords={recentKnowledgeRecords}
+              results={knowledgeResults}
+              setQuery={setKnowledgeQuery}
+            />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

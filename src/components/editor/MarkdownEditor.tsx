@@ -1,10 +1,11 @@
 import type { JSONContent } from "@tiptap/core";
-import { useEditor, EditorContent, type Editor } from "@tiptap/react";
-import { useState, useCallback, useRef, useMemo, useEffect } from "react";
+import { EditorContent, type Editor, useEditor } from "@tiptap/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import EditorToolbar from "./EditorToolbar";
 import { createEditorExtensions, editorPropsDefault } from "./editorConfig";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
-import { createTurndownService, createMarkedInstance } from "./utils/markdownRoundtrip";
+import { createMarkedInstance, createTurndownService } from "./utils/markdownRoundtrip";
+import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
 
 interface MarkdownEditorProps {
   onContentChange?: (markdown: string) => void;
@@ -27,6 +28,8 @@ const MarkdownEditor = ({
   const [mdSource, setMdSource] = useState(initialMd);
   const [showPanel, setShowPanel] = useState(false);
   const [sourceLeft, setSourceLeft] = useState(false);
+  const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const sourcePanelRef = useRef<HTMLDivElement | null>(null);
 
   const syncingFromWysiwyg = useRef(false);
   const syncingFromSource = useRef(false);
@@ -54,7 +57,7 @@ const MarkdownEditor = ({
   );
 
   const editor = useEditor({
-    extensions: createEditorExtensions("Markdown 문서에서 WYSIWYG로 전환해 편집할 수 있습니다."),
+    extensions: createEditorExtensions("Markdown WYSIWYG with synced source mode."),
     content: initialTiptapDoc || initialHtml,
     onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML(), editor.getJSON()),
     editorProps: editorPropsDefault,
@@ -72,6 +75,40 @@ const MarkdownEditor = ({
       onEditorReady?.(null);
     };
   }, [editor, onEditorReady, onHtmlChange, onTiptapChange]);
+
+  const focusSourceTextarea = useCallback(() => {
+    const textarea = sourceTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+    });
+  }, []);
+
+  const applySourceTabIndent = useCallback((ta: HTMLTextAreaElement, shiftKey: boolean) => {
+    const start = ta.selectionStart ?? 0;
+    const end = ta.selectionEnd ?? 0;
+    const next = applyMarkdownTabIndent(ta.value, start, end, {
+      tabSize: DEFAULT_MARKDOWN_TAB_SIZE,
+      shiftKey,
+    });
+
+    setMdSource(next.value);
+
+    requestAnimationFrame(() => {
+      if (document.activeElement !== ta) {
+        ta.focus();
+      }
+      ta.setSelectionRange(next.selectionStart, next.selectionEnd);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!showPanel) return;
+    focusSourceTextarea();
+  }, [focusSourceTextarea, showPanel]);
 
   const handleSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -94,18 +131,51 @@ const MarkdownEditor = ({
 
   const handleSourceKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const ta = e.currentTarget;
-        const start = ta.selectionStart;
-        const end = ta.selectionEnd;
-        const newVal = mdSource.substring(0, start) + "  " + mdSource.substring(end);
-        setMdSource(newVal);
-        setTimeout(() => { ta.selectionStart = ta.selectionEnd = start + 2; }, 0);
+      if (e.key !== "Tab" || e.defaultPrevented) {
+        return;
       }
+
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+
+      const ta = e.currentTarget;
+      applySourceTabIndent(ta, e.shiftKey);
     },
-    [mdSource]
+    [applySourceTabIndent]
   );
+
+  const handleSourcePanelKeyDownCapture = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key !== "Tab" || e.defaultPrevented) {
+        return;
+      }
+
+      const textarea = sourceTextareaRef.current;
+      if (!textarea) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+
+      if (document.activeElement !== textarea) {
+        textarea.focus();
+      }
+
+      applySourceTabIndent(textarea, e.shiftKey);
+    },
+    [applySourceTabIndent]
+  );
+
+  useEffect(() => {
+    if (!showPanel) {
+      return;
+    }
+
+    focusSourceTextarea();
+  }, [focusSourceTextarea, showPanel]);
 
   return (
     <div className="flex flex-col h-full">
@@ -117,13 +187,17 @@ const MarkdownEditor = ({
         editorContent={<EditorContent editor={editor} />}
         sourcePanel={
           <SourcePanel
-            label="Markdown 소스"
+            label="Markdown Source"
+            rootRef={sourcePanelRef}
             value={mdSource}
             onChange={handleSourceChange}
             onKeyDown={handleSourceKeyDown}
+            onKeyDownCapture={handleSourceKeyDown}
+            onPanelKeyDownCapture={handleSourcePanelKeyDownCapture}
             onSwap={() => setSourceLeft(v => !v)}
             onClose={() => setShowPanel(false)}
-            placeholder="WYSIWYG에서 작성한 내용과 Markdown 소스는 동기화됩니다.&#10;Markdown 소스에 직접 입력해도 실시간으로 반영됩니다."
+            textareaRef={sourceTextareaRef}
+            placeholder="Write raw Markdown source here.\nChanges are synchronized with WYSIWYG and preview."
           />
         }
       />

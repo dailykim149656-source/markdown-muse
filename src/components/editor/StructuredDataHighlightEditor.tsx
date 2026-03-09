@@ -23,6 +23,7 @@ interface StructuredDataHighlightEditorProps {
   mode: "json" | "yaml";
   onChange: (e: ChangeEvent<HTMLTextAreaElement>) => void;
   onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onKeyDownCapture?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
   placeholder?: string;
   searchText?: string;
   textareaRef?: RefObject<HTMLTextAreaElement | null>;
@@ -34,6 +35,7 @@ const StructuredDataHighlightEditor = ({
   mode,
   onChange,
   onKeyDown,
+  onKeyDownCapture,
   placeholder,
   searchText = "",
   textareaRef,
@@ -152,6 +154,7 @@ const StructuredDataHighlightEditor = ({
         ref={textareaElementRef}
         value={value}
         onChange={onChange}
+        onKeyDownCapture={onKeyDownCapture}
         onKeyDown={onKeyDown}
         onScroll={syncScroll}
         spellCheck={false}

@@ -13,6 +13,7 @@ export interface AstLatexRenderOptions {
   date?: string;
   documentClass?: string;
   extraPackages?: string[];
+  includeMetadata?: boolean;
   fontSize?: string;
   includeWrapper?: boolean;
   title?: string;
@@ -29,6 +30,7 @@ const DEFAULT_OPTIONS: Required<AstLatexRenderOptions> = {
   date: "\\today",
   documentClass: "article",
   extraPackages: [],
+  includeMetadata: false,
   fontSize: "11pt",
   includeWrapper: false,
   title: "Untitled",
@@ -556,14 +558,20 @@ const buildPreamble = (context: RenderContext) => {
     admonitionConfig,
     docsyFontSizeConfig,
     docsyFontFamilyConfig,
-    `\\title{${escapeLatex(context.options.title)}}`,
-    `\\author{${escapeLatex(context.options.author)}}`,
-    `\\date{${context.options.date}}`,
-    "",
-    "\\begin{document}",
-    "",
-    "\\maketitle",
-    "",
+    ...(
+      context.options.includeMetadata === true
+        ? [
+          `\\title{${escapeLatex(context.options.title)}}`,
+          `\\author{${escapeLatex(context.options.author)}}`,
+          `\\date{${context.options.date}}`,
+          "",
+          "\\begin{document}",
+          "",
+          "\\maketitle",
+          "",
+        ]
+        : ["\\begin{document}"]
+    ),
   ].filter(Boolean).join("\n");
 };
 

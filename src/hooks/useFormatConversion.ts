@@ -68,7 +68,7 @@ export const useFormatConversion = ({
     }
 
     if (mode === "latex") {
-      return latexToHtml(content);
+      return latexToHtml(content, { includeMetadata: false });
     }
 
     if (mode === "html") {
@@ -103,12 +103,14 @@ export const useFormatConversion = ({
   const currentRenderableLatex = useMemo(() => getRenderableLatex(
     currentTiptapDocument,
     activeDoc.sourceSnapshots?.latex || htmlToLatex(currentRenderableHtml, false),
-    { includeWrapper: false },
+    { includeMetadata: false, includeWrapper: false },
   ), [activeDoc.sourceSnapshots, currentRenderableHtml, currentTiptapDocument]);
   const currentRenderableLatexDocument = useMemo(() => getRenderableLatex(
     currentTiptapDocument,
-    htmlToLatex(currentRenderableHtml, true),
-    { includeWrapper: true, title: activeDoc.name || "Untitled" },
+    htmlToLatex(currentRenderableHtml, true, {
+      includeMetadata: false,
+    }),
+    { includeWrapper: true, title: activeDoc.name || "Untitled", includeMetadata: false },
   ), [activeDoc.name, currentEditorHtml, currentRenderableHtml, currentTiptapDocument]);
 
   useEffect(() => {

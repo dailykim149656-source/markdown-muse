@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+﻿import { useState, useCallback, useEffect, useRef } from "react";
 import * as yaml from "js-yaml";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import {
@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import SchemaValidator from "./SchemaValidator";
 import StructuredDataHighlightEditor from "./StructuredDataHighlightEditor";
 import type { PlainTextFindReplaceAdapter } from "./findReplaceTypes";
+import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -38,7 +39,7 @@ const parseContent = (content: string, mode: "json" | "yaml"): { data: JsonValue
       return { data: result as JsonValue, error: null };
     }
   } catch (e: any) {
-    return { data: undefined, error: e.message || "파싱 에러" };
+    return { data: undefined, error: e.message || "Invalid JSON/YAML content." };
   }
 };
 
@@ -120,7 +121,7 @@ const getDefaultForType = (type: string): JsonValue => {
   }
 };
 
-// ─── Schema Suggest Button ───
+// Schema suggest button
 interface SchemaSuggestProps {
   existingKeys: string[];
   suggestions: SchemaProperty[];
@@ -135,7 +136,7 @@ const SchemaSuggestButton = ({ existingKeys, suggestions, onAdd }: SchemaSuggest
     <Popover>
       <PopoverTrigger asChild>
         <button className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 ml-2 py-1 transition-colors">
-          <Sparkles className="h-3 w-3" /> 스키마 필드 추가 ({available.length})
+          <Sparkles className="h-3 w-3" /> Suggest fields ({available.length})
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1" align="start">
@@ -149,7 +150,7 @@ const SchemaSuggestButton = ({ existingKeys, suggestions, onAdd }: SchemaSuggest
               <span className="shrink-0">{typeIcon(field.type)}</span>
               <span className="font-medium truncate">{field.key}</span>
               {field.required && (
-                <span className="text-[9px] px-1 py-0.5 rounded bg-destructive/10 text-destructive shrink-0">필수</span>
+                <span className="text-[9px] px-1 py-0.5 rounded bg-destructive/10 text-destructive shrink-0">required</span>
               )}
               <span className="text-[10px] text-muted-foreground ml-auto shrink-0">{field.type}</span>
             </button>
@@ -162,7 +163,7 @@ const SchemaSuggestButton = ({ existingKeys, suggestions, onAdd }: SchemaSuggest
               available.filter(f => f.required).forEach(f => onAdd(f.key, getDefaultForType(f.type)));
             }}
           >
-            필수 필드 모두 추가
+            Add all required fields
           </button>
         </div>
       </PopoverContent>
@@ -170,7 +171,7 @@ const SchemaSuggestButton = ({ existingKeys, suggestions, onAdd }: SchemaSuggest
   );
 };
 
-// ─── Value Editor ───
+// Value Editor
 interface ValueEditorProps {
   value: JsonValue;
   onChange: (v: JsonValue) => void;
@@ -393,7 +394,7 @@ const ValueEditor = ({ value, onChange, onDelete, keyName, onKeyChange, depth, p
                 onChange({ ...obj, [newKey]: "" });
               }}
             >
-              <Plus className="h-3 w-3" /> 필드 추가
+              <Plus className="h-3 w-3" /> Add key
             </button>
             {schemaSuggestions.length > 0 && (
               <SchemaSuggestButton
@@ -408,7 +409,7 @@ const ValueEditor = ({ value, onChange, onDelete, keyName, onKeyChange, depth, p
         </div>
       )}
 
-      {/* Children for arrays — with drag-and-drop */}
+              {/* Children for arrays */}
       {type === "array" && !collapsed && (
         <div className="mt-0.5">
           {(value as JsonValue[]).map((item, i) => (
@@ -452,7 +453,7 @@ const ValueEditor = ({ value, onChange, onDelete, keyName, onKeyChange, depth, p
               onChange([...(value as JsonValue[]), ""]);
             }}
           >
-            <Plus className="h-3 w-3" /> 항목 추가
+              <Plus className="h-3 w-3" /> Add item
           </button>
         </div>
       )}
@@ -460,7 +461,7 @@ const ValueEditor = ({ value, onChange, onDelete, keyName, onKeyChange, depth, p
   );
 };
 
-// ─── Main Editor ───
+// ??? Main Editor ???
 const JsonYamlEditor = ({
   initialContent,
   onContentChange,
@@ -482,6 +483,7 @@ const JsonYamlEditor = ({
   const [searchText, setSearchText] = useState("");
   const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
   const sourceRef = useRef(initialContent || "");
+  const sourcePanelRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const applySourceValue = useCallback((nextSource: string, nextMode: "json" | "yaml" = mode) => {
@@ -525,12 +527,12 @@ const JsonYamlEditor = ({
     });
   }, [showSource]);
 
-  // Source → Form sync
+  // Source ??Form sync
   const handleSourceChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     applySourceValue(e.target.value);
   }, [applySourceValue]);
 
-  // Form → Source sync
+  // Form ??Source sync
   useEffect(() => {
     if (suppressSync.current || data === undefined) return;
     const newSource = serializeContent(data, mode);
@@ -563,7 +565,7 @@ const JsonYamlEditor = ({
     };
   }, [applySourceValue, focusSourceTextarea, onPlainTextSearchAdapterReady]);
 
-  // Convert between JSON ↔ YAML
+  // Convert between JSON and YAML
   const handleConvert = useCallback(() => {
     const targetMode = mode === "json" ? "yaml" : "json";
     if (data !== undefined) {
@@ -572,7 +574,7 @@ const JsonYamlEditor = ({
       setSource(newSource);
       onContentChange(newSource);
       onModeChange(targetMode as "json" | "yaml");
-      toast.success(`${mode.toUpperCase()} → ${targetMode.toUpperCase()} 변환 완료`);
+      toast.success(`${mode.toUpperCase()} → ${targetMode.toUpperCase()} converted`);
     } else {
       const { data: parsed, error } = parseContent(source, mode);
       if (parsed !== undefined) {
@@ -582,26 +584,72 @@ const JsonYamlEditor = ({
         setData(parsed);
         onContentChange(newSource);
         onModeChange(targetMode as "json" | "yaml");
-        toast.success(`${mode.toUpperCase()} → ${targetMode.toUpperCase()} 변환 완료`);
+        toast.success(`${mode.toUpperCase()} → ${targetMode.toUpperCase()} converted`);
       } else {
-        toast.error(`변환 실패: ${error}`);
+        toast.error(`Conversion failed: ${error}`);
       }
     }
   }, [mode, data, source, onContentChange, onModeChange]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Tab") {
-      e.preventDefault();
-      const ta = e.currentTarget;
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const indent = "  ";
-      const newVal = ta.value.substring(0, start) + indent + ta.value.substring(end);
-      applySourceValue(newVal);
-      requestAnimationFrame(() => {
-        ta.selectionStart = ta.selectionEnd = start + indent.length;
-      });
+    if (e.key !== "Tab" || e.defaultPrevented) {
+      return;
     }
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.nativeEvent.stopImmediatePropagation();
+    const ta = e.currentTarget;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const next = applyMarkdownTabIndent(ta.value, start, end, {
+      tabSize: DEFAULT_MARKDOWN_TAB_SIZE,
+      shiftKey: e.shiftKey,
+    });
+
+    applySourceValue(next.value);
+
+    requestAnimationFrame(() => {
+      if (document.activeElement !== ta) {
+        ta.focus();
+      }
+      ta.setSelectionRange(next.selectionStart, next.selectionEnd);
+    });
+  }, [applySourceValue]);
+
+  const handleSourcePanelKeyDownCapture = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Tab" || e.defaultPrevented) {
+      return;
+    }
+
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.nativeEvent.stopImmediatePropagation();
+
+    if (document.activeElement !== textarea) {
+      textarea.focus();
+    }
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const next = applyMarkdownTabIndent(textarea.value, start, end, {
+      tabSize: DEFAULT_MARKDOWN_TAB_SIZE,
+      shiftKey: e.shiftKey,
+    });
+
+    applySourceValue(next.value);
+
+    requestAnimationFrame(() => {
+      if (document.activeElement !== textarea) {
+        textarea.focus();
+      }
+      textarea.setSelectionRange(next.selectionStart, next.selectionEnd);
+    });
   }, [applySourceValue]);
 
   const handleInitEmpty = useCallback((type: "object" | "array") => {
@@ -626,7 +674,7 @@ const JsonYamlEditor = ({
             onClick={handleConvert}
           >
             <ArrowRightLeft className="h-3.5 w-3.5" />
-            {mode === "json" ? "YAML로 변환" : "JSON으로 변환"}
+            {mode === "json" ? "Convert to YAML" : "Convert to JSON"}
           </Button>
           {parseError && (
             <div className="flex items-center gap-1 text-xs text-destructive">
@@ -637,12 +685,12 @@ const JsonYamlEditor = ({
           {!parseError && data !== undefined && (
             <span className="text-xs text-muted-foreground">
               {mode === "json" ? <FileJson className="h-3.5 w-3.5 inline mr-1" /> : <FileText className="h-3.5 w-3.5 inline mr-1" />}
-              유효한 {mode.toUpperCase()}
+              Source format: {mode.toUpperCase()}
             </span>
           )}
           {!showSchema && data !== undefined && (
             <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 ml-auto" onClick={() => setShowSchema(true)}>
-              스키마 검증
+              Schema
             </Button>
           )}
         </div>
@@ -658,7 +706,7 @@ const JsonYamlEditor = ({
         {data === undefined && !parseError && (
           <div className="flex flex-col items-center justify-center py-16 gap-4 text-muted-foreground">
             <Braces className="h-10 w-10" />
-            <p className="text-sm">빈 문서입니다. 시작할 루트 타입을 선택하세요.</p>
+            <p className="text-sm">No content yet. Please add JSON or YAML data to start.</p>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="gap-1.5" onClick={() => handleInitEmpty("object")}>
                 <Braces className="h-4 w-4" /> Object {"{}"}
@@ -674,7 +722,7 @@ const JsonYamlEditor = ({
         {parseError && data === undefined && (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground">
             <AlertCircle className="h-10 w-10 text-destructive" />
-            <p className="text-sm text-center">소스에 구문 오류가 있습니다.<br />소스 패널에서 직접 수정하세요.</p>
+            <p className="text-sm text-center">No data found. Parse source mode before editing.<br />Use the buttons above to initialize.</p>
             <p className="text-xs text-destructive max-w-md text-center break-words">{parseError}</p>
           </div>
         )}
@@ -695,10 +743,13 @@ const JsonYamlEditor = ({
 
   const sourcePanel = (
     <SourcePanel
-      label={`${mode.toUpperCase()} 소스`}
+      label={`${mode.toUpperCase()} Source`}
+      rootRef={sourcePanelRef}
       value={source}
       onChange={handleSourceChange}
       onKeyDown={handleKeyDown}
+      onKeyDownCapture={handleKeyDown}
+      onPanelKeyDownCapture={handleSourcePanelKeyDownCapture}
       onSwap={() => setSourceLeft(s => !s)}
       onClose={() => setShowSource(false)}
       placeholder={mode === "json" ? '{\n  "key": "value"\n}' : "key: value\nlist:\n  - item1\n  - item2"}
@@ -708,6 +759,7 @@ const JsonYamlEditor = ({
         mode={mode}
         value={source}
         onChange={handleSourceChange}
+        onKeyDownCapture={handleKeyDown}
         onKeyDown={handleKeyDown}
         placeholder={mode === "json" ? '{\n  "key": "value"\n}' : "key: value\nlist:\n  - item1\n  - item2"}
         searchText={searchText}
@@ -730,3 +782,4 @@ const JsonYamlEditor = ({
 };
 
 export default JsonYamlEditor;
+

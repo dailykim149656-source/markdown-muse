@@ -21,7 +21,7 @@ describe("renderAstToLatex", () => {
 
   it("can wrap the output in a full LaTeX document", () => {
     const ast = serializeTiptapToAst(technicalDocumentFixture, { documentNodeId: "doc_fixture" });
-    const result = renderAstToLatex(ast, { includeWrapper: true, title: "System Overview" });
+    const result = renderAstToLatex(ast, { includeWrapper: true, title: "System Overview", includeMetadata: true });
 
     expect(result).toContain("\\documentclass[11pt]{article}");
     expect(result).toContain("\\begin{document}");

@@ -1,17 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/useI18n";
 import { canApplyEditedSuggestedText } from "@/lib/patches/reviewPatchSet";
-import type { DocumentPatch, DocumentPatchSet } from "@/types/documentPatch";
+import type { DocumentPatch, DocumentPatchSet, PatchStatus } from "@/types/documentPatch";
 
 interface PatchReviewPanelProps {
   onAccept?: (patch: DocumentPatch) => void;
   onEdit?: (patch: DocumentPatch, suggestedText: string) => void;
   onReject?: (patch: DocumentPatch) => void;
   patchSet: DocumentPatchSet;
+}
+
+interface DiffRow {
+  kind: "added" | "removed" | "unchanged";
+  value: string;
 }
 
 const getPatchPreviewText = (patch: DocumentPatch) => {
@@ -37,6 +43,67 @@ const getPatchPreviewText = (patch: DocumentPatch) => {
   }
 };
 
+const splitLines = (value: string) => value.replace(/\r\n/g, "\n").split("\n");
+
+const buildLineDiff = (original: string, suggested: string): DiffRow[] => {
+  const left = splitLines(original);
+  const right = splitLines(suggested);
+  const lcs = Array.from({ length: left.length + 1 }, () => Array<number>(right.length + 1).fill(0));
+
+  for (let i = left.length - 1; i >= 0; i -= 1) {
+    for (let j = right.length - 1; j >= 0; j -= 1) {
+      lcs[i][j] = left[i] === right[j] ? 1 + lcs[i + 1][j + 1] : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    }
+  }
+
+  const rows: DiffRow[] = [];
+  let i = 0;
+  let j = 0;
+
+  while (i < left.length && j < right.length) {
+    if (left[i] === right[j]) {
+      rows.push({ kind: "unchanged", value: left[i] });
+      i += 1;
+      j += 1;
+      continue;
+    }
+
+    if (lcs[i + 1][j] >= lcs[i][j + 1]) {
+      rows.push({ kind: "removed", value: left[i] });
+      i += 1;
+      continue;
+    }
+
+    rows.push({ kind: "added", value: right[j] });
+    j += 1;
+  }
+
+  while (i < left.length) {
+    rows.push({ kind: "removed", value: left[i] });
+    i += 1;
+  }
+
+  while (j < right.length) {
+    rows.push({ kind: "added", value: right[j] });
+    j += 1;
+  }
+
+  return rows;
+};
+
+const getStatusVariant = (status: PatchStatus) => {
+  switch (status) {
+    case "accepted":
+      return "default";
+    case "edited":
+      return "secondary";
+    case "rejected":
+      return "destructive";
+    default:
+      return "outline";
+  }
+};
+
 const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewPanelProps) => {
   const { t } = useI18n();
   const [selectedPatchId, setSelectedPatchId] = useState<string>(patchSet.patches[0]?.patchId ?? "");
@@ -45,6 +112,13 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
     () => patchSet.patches.find((patch) => patch.patchId === selectedPatchId) ?? patchSet.patches[0] ?? null,
     [patchSet.patches, selectedPatchId],
   );
+
+  const statusCounts = useMemo(() => ({
+    accepted: patchSet.patches.filter((patch) => patch.status === "accepted").length,
+    edited: patchSet.patches.filter((patch) => patch.status === "edited").length,
+    pending: patchSet.patches.filter((patch) => patch.status === "pending").length,
+    rejected: patchSet.patches.filter((patch) => patch.status === "rejected").length,
+  }), [patchSet.patches]);
 
   useEffect(() => {
     setSelectedPatchId((currentPatchId) => {
@@ -66,6 +140,7 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
 
   const selectedIndex = patchSet.patches.findIndex((patch) => patch.patchId === selectedPatch.patchId);
   const isEditable = canApplyEditedSuggestedText(selectedPatch);
+  const diffRows = buildLineDiff(selectedPatch.originalText || "", editedText);
 
   const moveSelection = (direction: "prev" | "next") => {
     if (patchSet.patches.length === 0) {
@@ -81,40 +156,63 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-      <div className="rounded-lg border border-border">
-        <div className="flex items-center justify-between border-b border-border px-3 py-2">
-          <span className="text-sm font-medium">{t("patchReview.patchCount", { count: patchSet.patches.length })}</span>
-          <div className="flex items-center gap-1">
-            <Button className="h-7 w-7 p-0" onClick={() => moveSelection("prev")} size="sm" title={t("patchReview.previous")} variant="ghost">
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button className="h-7 w-7 p-0" onClick={() => moveSelection("next")} size="sm" title={t("patchReview.next")} variant="ghost">
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+    <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="space-y-4">
+        <div className="rounded-lg border border-border p-3">
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Badge variant="outline">{t("patchReview.pendingStatus", { count: statusCounts.pending })}</Badge>
+            <Badge variant="default">{t("patchReview.acceptedStatus", { count: statusCounts.accepted })}</Badge>
+            <Badge variant="secondary">{t("patchReview.editedStatus", { count: statusCounts.edited })}</Badge>
+            <Badge variant="destructive">{t("patchReview.rejectedStatus", { count: statusCounts.rejected })}</Badge>
           </div>
         </div>
-        <ScrollArea className="h-[420px]">
-          <div className="space-y-1 p-2">
-            {patchSet.patches.map((patch, index) => (
-              <button
-                key={patch.patchId}
-                className={`w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                  patch.patchId === selectedPatch.patchId ? "bg-accent text-accent-foreground" : "hover:bg-muted"
-                }`}
-                onClick={() => setSelectedPatchId(patch.patchId)}
-                type="button"
-              >
-                {index + 1}. {patch.title}
-              </button>
-            ))}
+
+        <div className="rounded-lg border border-border">
+          <div className="flex items-center justify-between border-b border-border px-3 py-2">
+            <span className="text-sm font-medium">{t("patchReview.patchCount", { count: patchSet.patches.length })}</span>
+            <div className="flex items-center gap-1">
+              <Button className="h-7 w-7 p-0" onClick={() => moveSelection("prev")} size="sm" title={t("patchReview.previous")} variant="ghost">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button className="h-7 w-7 p-0" onClick={() => moveSelection("next")} size="sm" title={t("patchReview.next")} variant="ghost">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </ScrollArea>
+          <ScrollArea className="h-[520px]">
+            <div className="space-y-1 p-2">
+              {patchSet.patches.map((patch, index) => (
+                <button
+                  key={patch.patchId}
+                  className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                    patch.patchId === selectedPatch.patchId
+                      ? "border-primary bg-accent text-accent-foreground"
+                      : "border-transparent hover:bg-muted"
+                  }`}
+                  onClick={() => setSelectedPatchId(patch.patchId)}
+                  type="button"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium">{index + 1}. {patch.title}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">{patch.operation}</div>
+                    </div>
+                    <Badge variant={getStatusVariant(patch.status)}>{t(`patchReview.status.${patch.status}`)}</Badge>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
       </div>
 
       <div className="space-y-4 rounded-lg border border-border p-4">
-        <div className="space-y-1">
-          <h3 className="text-base font-semibold">{selectedPatch.title}</h3>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold">{selectedPatch.title}</h3>
+            <Badge variant={getStatusVariant(selectedPatch.status)}>{t(`patchReview.status.${selectedPatch.status}`)}</Badge>
+            <Badge variant="outline">{t(`patchReview.operations.${selectedPatch.operation}`)}</Badge>
+          </div>
           <p className="text-sm text-muted-foreground">
             {selectedPatch.summary || selectedPatch.reason || patchSet.description || t("patchReview.descriptionFallback")}
           </p>
@@ -123,16 +221,24 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
             {typeof selectedPatch.confidence === "number" && (
               <span>{t("patchReview.confidence", { value: Math.round(selectedPatch.confidence * 100) })}</span>
             )}
-            {selectedPatch.sources && selectedPatch.sources.length > 0 && (
-              <span>{t("patchReview.sources", { count: selectedPatch.sources.length })}</span>
-            )}
+            <span>{t("patchReview.target", { target: selectedPatch.target.targetType === "node"
+              ? t("patchReview.targetNode", { nodeId: selectedPatch.target.nodeId })
+              : selectedPatch.target.targetType === "attribute"
+                ? t("patchReview.targetAttribute", { nodeId: selectedPatch.target.nodeId, path: selectedPatch.target.attributePath })
+                : selectedPatch.target.targetType === "text_range"
+                  ? t("patchReview.targetTextRange", {
+                    nodeId: selectedPatch.target.nodeId,
+                    start: selectedPatch.target.startOffset,
+                    end: selectedPatch.target.endOffset,
+                  })
+                  : t("patchReview.targetStructuredPath", { path: selectedPatch.target.path }) })}</span>
           </div>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 xl:grid-cols-2">
           <div className="space-y-2">
             <p className="text-sm font-medium">{t("patchReview.original")}</p>
-            <div className="min-h-[15rem] rounded-md border border-input bg-background px-3 py-2 text-sm whitespace-pre-wrap text-muted-foreground">
+            <div className="min-h-[12rem] rounded-md border border-input bg-background px-3 py-2 text-sm whitespace-pre-wrap text-muted-foreground">
               {selectedPatch.originalText || ""}
             </div>
           </div>
@@ -148,6 +254,49 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
               <p className="text-xs text-muted-foreground">{t("patchReview.nonEditable")}</p>
             )}
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t("patchReview.diffPreview")}</p>
+          <ScrollArea className="max-h-56 rounded-md border border-input bg-background">
+            <div className="space-y-1 p-3 font-mono text-xs">
+              {diffRows.map((row, index) => (
+                <div
+                  key={`${row.kind}-${index}`}
+                  className={
+                    row.kind === "added"
+                      ? "rounded bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-300"
+                      : row.kind === "removed"
+                        ? "rounded bg-destructive/10 px-2 py-1 text-destructive"
+                        : "rounded px-2 py-1 text-muted-foreground"
+                  }
+                >
+                  <span className="mr-2 inline-block w-4">
+                    {row.kind === "added" ? "+" : row.kind === "removed" ? "-" : " "}
+                  </span>
+                  <span>{row.value || " "}</span>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t("patchReview.sourceDetails")}</p>
+          {selectedPatch.sources && selectedPatch.sources.length > 0 ? (
+            <div className="grid gap-2 xl:grid-cols-2">
+              {selectedPatch.sources.map((source, index) => (
+                <div key={`${selectedPatch.patchId}-source-${index}`} className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  <div>{t("patchReview.sourceId", { sourceId: source.sourceId })}</div>
+                  {source.chunkId ? <div>{t("patchReview.chunkId", { chunkId: source.chunkId })}</div> : null}
+                  {source.sectionId ? <div>{t("patchReview.sectionId", { sectionId: source.sectionId })}</div> : null}
+                  {source.excerpt ? <div className="mt-1 whitespace-pre-wrap text-foreground">{source.excerpt}</div> : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">{t("patchReview.noSources")}</p>
+          )}
         </div>
 
         <div className="flex flex-wrap justify-end gap-2">

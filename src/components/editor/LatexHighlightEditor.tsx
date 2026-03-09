@@ -44,21 +44,23 @@ interface LatexHighlightEditorProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  textareaRef?: React.RefObject<HTMLTextAreaElement> | null;
   placeholder?: string;
 }
 
-const LatexHighlightEditor = ({ value, onChange, onKeyDown, placeholder }: LatexHighlightEditorProps) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+const LatexHighlightEditor = ({ value, onChange, onKeyDown, textareaRef, placeholder }: LatexHighlightEditorProps) => {
+  const internalRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const resolvedTextareaRef = textareaRef ?? internalRef;
 
   const highlighted = useMemo(() => highlightLatex(value), [value]);
 
   // Sync scroll
   const syncScroll = useCallback(() => {
-    if (textareaRef.current && highlightRef.current) {
-      highlightRef.current.scrollTop = textareaRef.current.scrollTop;
-      highlightRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    if (resolvedTextareaRef.current && highlightRef.current) {
+      highlightRef.current.scrollTop = resolvedTextareaRef.current.scrollTop;
+      highlightRef.current.scrollLeft = resolvedTextareaRef.current.scrollLeft;
     }
   }, []);
 
@@ -73,7 +75,7 @@ const LatexHighlightEditor = ({ value, onChange, onKeyDown, placeholder }: Latex
       />
       {/* Actual textarea (transparent text, handles input) */}
       <textarea
-        ref={textareaRef}
+        ref={resolvedTextareaRef}
         value={value}
         onChange={onChange}
         onKeyDown={onKeyDown}

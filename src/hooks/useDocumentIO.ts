@@ -1,7 +1,7 @@
 import { useCallback, useRef, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n/useI18n";
-import type { CreateDocumentOptions, DocumentData, EditorMode } from "@/types/document";
+import type { CreateDocumentOptions, DocumentData, EditorMode, SourceSnapshots } from "@/types/document";
 import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
 import { htmlToRst } from "@/components/editor/utils/htmlToRst";
@@ -17,6 +17,7 @@ import {
 } from "@/lib/docsy/fileFormat";
 import { isDocumentPatchSet } from "@/lib/patches/isDocumentPatchSet";
 import type { DocumentPatchSet } from "@/types/documentPatch";
+import type { SourceFileReference } from "@/types/documentAst";
 
 interface UseDocumentIOOptions {
   activeDoc: DocumentData;
@@ -153,6 +154,17 @@ export const useDocumentIO = ({
   const { locale, t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const buildSourceFileReference = useCallback((
+    fileName: string,
+    sourceFormat: string,
+    importedAt: number,
+  ): SourceFileReference => ({
+    fileName,
+    importedAt,
+    sourceFormat,
+    sourceId: `${fileName}:${importedAt}`,
+  }), []);
+
   const downloadFile = useCallback((content: string, ext: string, type: string) => {
     const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
@@ -259,8 +271,11 @@ export const useDocumentIO = ({
       const content = loadEvent.target?.result as string;
       const lowerName = file.name.toLowerCase();
       const name = file.name.replace(/\.(docsy|md|markdown|txt|tex|html|htm|json|yaml|yml|adoc|asciidoc|rst)$/i, "");
+      const importedAt = Date.now();
       let mode: EditorMode = "markdown";
       let finalContent = content;
+      let sourceFormat = "markdown";
+      let sourceSnapshots: SourceSnapshots | undefined;
 
       if (lowerName.endsWith(".docsy")) {
         try {
@@ -278,8 +293,10 @@ export const useDocumentIO = ({
 
       if (lowerName.endsWith(".tex")) {
         mode = "latex";
+        sourceFormat = "latex";
       } else if (lowerName.endsWith(".html") || lowerName.endsWith(".htm")) {
         mode = "html";
+        sourceFormat = "html";
       } else if (lowerName.endsWith(".json")) {
         try {
           const parsed = JSON.parse(content) as unknown;
@@ -294,25 +311,48 @@ export const useDocumentIO = ({
         }
 
         mode = "json";
+        sourceFormat = "json";
       } else if (lowerName.endsWith(".yaml") || lowerName.endsWith(".yml")) {
         mode = "yaml";
+        sourceFormat = "yaml";
       } else if (lowerName.endsWith(".adoc") || lowerName.endsWith(".asciidoc")) {
         mode = "html";
         finalContent = asciidocToHtml(content);
+        sourceFormat = "asciidoc";
+        sourceSnapshots = {
+          asciidoc: content,
+          html: finalContent,
+        };
         toast.info(t("hooks.io.adocConverted"));
       } else if (lowerName.endsWith(".rst")) {
         mode = "html";
         finalContent = rstToHtml(content);
+        sourceFormat = "rst";
+        sourceSnapshots = {
+          html: finalContent,
+          rst: content,
+        };
         toast.info(t("hooks.io.rstConverted"));
+      } else {
+        sourceFormat = "markdown";
       }
 
-      createDocument({ content: finalContent, mode, name });
+      createDocument({
+        content: finalContent,
+        metadata: {
+          sourceFiles: [buildSourceFileReference(file.name, sourceFormat, importedAt)],
+          title: name,
+        },
+        mode,
+        name,
+        sourceSnapshots,
+      });
       toast.success(t("hooks.io.loadedDocument", { name }));
     };
 
     reader.readAsText(file);
     event.target.value = "";
-  }, [createDocument, onPatchSetLoad, t]);
+  }, [buildSourceFileReference, createDocument, onPatchSetLoad, t]);
 
   return {
     fileInputRef,

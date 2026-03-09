@@ -12,48 +12,79 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type { DocumentComparisonResult } from "@/lib/ai/compareDocuments";
+import { useI18n } from "@/i18n/useI18n";
+import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
+import type { AiBusyAction, PatchPreviewResult } from "@/hooks/useAiAssistant";
 import type { SummarizeDocumentResponse } from "@/types/aiAssistant";
 import type { DocumentData } from "@/types/document";
 
-type BusyAction = "compare" | "generate-section" | "summarize" | null;
-
-interface ComparePreviewResult {
-  comparison: DocumentComparisonResult;
-  patchCount: number;
-  patchSetTitle: string;
-  targetDocumentName: string;
-}
-
 interface AiAssistantDialogProps {
-  busyAction: BusyAction;
+  busyAction: AiBusyAction;
   compareCandidates: DocumentData[];
-  comparePreview: ComparePreviewResult | null;
+  comparePreview: PatchPreviewResult | null;
   onCompare: (targetDocumentId: string) => Promise<unknown> | unknown;
+  onExtractProcedure: () => Promise<ProcedureExtractionResult | unknown> | unknown;
   onGenerateSection: (prompt: string) => Promise<unknown> | unknown;
   onOpenChange: (open: boolean) => void;
+  onSuggestUpdates: (targetDocumentId: string) => Promise<unknown> | unknown;
   onSummarize: (objective: string) => Promise<SummarizeDocumentResponse | unknown> | unknown;
   open: boolean;
+  procedureResult: ProcedureExtractionResult | null;
   richTextAvailable: boolean;
   summaryResult: SummarizeDocumentResponse | null;
+  updateSuggestionPreview: PatchPreviewResult | null;
 }
+
+const PreviewSummary = ({
+  comparison,
+  patchCount,
+  patchSetTitle,
+  targetDocumentName,
+  title,
+}: PatchPreviewResult & { title: string }) => {
+  const { t } = useI18n();
+
+  return (
+    <section className="rounded-lg border border-border p-4">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <div className="mt-3 space-y-2 text-sm">
+        <p>{t("aiDialog.compare.against", { name: targetDocumentName })}</p>
+        <p>{t("aiDialog.compare.loadedPatches", { count: patchCount })}</p>
+        <p><span className="font-medium">{t("aiDialog.update.patchSet")}</span> {patchSetTitle}</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <p className="text-muted-foreground">{t("aiDialog.compare.added", { count: comparison.counts.added })}</p>
+          <p className="text-muted-foreground">{t("aiDialog.compare.changed", { count: comparison.counts.changed })}</p>
+          <p className="text-muted-foreground">{t("aiDialog.compare.removed", { count: comparison.counts.removed })}</p>
+          <p className="text-muted-foreground">{t("aiDialog.compare.inconsistent", { count: comparison.counts.inconsistent })}</p>
+        </div>
+      </div>
+    </section>
+  );
+};
 
 const AiAssistantDialog = ({
   busyAction,
   compareCandidates,
   comparePreview,
   onCompare,
+  onExtractProcedure,
   onGenerateSection,
   onOpenChange,
+  onSuggestUpdates,
   onSummarize,
   open,
+  procedureResult,
   richTextAvailable,
   summaryResult,
+  updateSuggestionPreview,
 }: AiAssistantDialogProps) => {
+  const { t } = useI18n();
   const [summaryObjective, setSummaryObjective] = useState("");
   const [sectionPrompt, setSectionPrompt] = useState("");
   const [compareTargetId, setCompareTargetId] = useState("");
+  const [updateTargetId, setUpdateTargetId] = useState("");
 
   const isBusy = busyAction !== null;
   const compareOptions = useMemo(
@@ -63,144 +94,296 @@ const AiAssistantDialog = ({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
-            AI Assistant
+            {t("aiDialog.title")}
           </DialogTitle>
-          <DialogDescription>
-            문서 요약, 문서 비교, 새 섹션 초안을 생성합니다.
-          </DialogDescription>
+          <DialogDescription>{t("aiDialog.description")}</DialogDescription>
         </DialogHeader>
 
         {!richTextAvailable ? (
           <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            AI 기능은 Markdown, LaTeX, HTML 문서에서만 사용할 수 있습니다.
+            <p className="font-medium">{t("aiDialog.richTextOnlyTitle")}</p>
+            <p className="mt-2">{t("aiDialog.richTextOnlyDescription")}</p>
           </div>
         ) : (
-          <div className="grid gap-4 lg:grid-cols-3">
-            <section className="space-y-3 rounded-lg border border-border p-4">
-              <div>
-                <Label htmlFor="summary-objective">문서 요약</Label>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  요약 목적을 입력하면 핵심 내용을 정리합니다.
-                </p>
-              </div>
-              <Textarea
-                id="summary-objective"
-                onChange={(event) => setSummaryObjective(event.target.value)}
-                placeholder="예: 의사결정용 요약, 임원 보고용 요약"
-                value={summaryObjective}
-              />
-              <Button
-                className="w-full"
-                disabled={isBusy || !summaryObjective.trim()}
-                onClick={() => void onSummarize(summaryObjective)}
-                type="button"
-              >
-                {busyAction === "summarize" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                요약 실행
-              </Button>
-            </section>
+          <Tabs className="space-y-4" defaultValue="summary">
+            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 lg:grid-cols-5">
+              <TabsTrigger value="summary">{t("aiDialog.tabs.summary")}</TabsTrigger>
+              <TabsTrigger value="generate">{t("aiDialog.tabs.generate")}</TabsTrigger>
+              <TabsTrigger value="compare">{t("aiDialog.tabs.compare")}</TabsTrigger>
+              <TabsTrigger value="update">{t("aiDialog.tabs.update")}</TabsTrigger>
+              <TabsTrigger value="procedure">{t("aiDialog.tabs.procedure")}</TabsTrigger>
+            </TabsList>
 
-            <section className="space-y-3 rounded-lg border border-border p-4">
-              <div>
-                <Label htmlFor="compare-target">문서 비교</Label>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  다른 문서와 비교해 패치 후보를 생성합니다.
-                </p>
-              </div>
-              <Select onValueChange={setCompareTargetId} value={compareTargetId}>
-                <SelectTrigger id="compare-target">
-                  <SelectValue placeholder="비교 대상 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {compareOptions.map((option) => (
-                    <SelectItem key={option.id} value={option.id}>
-                      {option.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button
-                className="w-full"
-                disabled={isBusy || !compareTargetId}
-                onClick={() => void onCompare(compareTargetId)}
-                type="button"
-                variant="outline"
-              >
-                {busyAction === "compare" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                비교 실행
-              </Button>
-            </section>
+            <TabsContent value="summary">
+              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <section className="space-y-3 rounded-lg border border-border p-4">
+                  <div>
+                    <Label htmlFor="summary-objective">{t("aiDialog.summary.objective")}</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("aiDialog.summary.help")}
+                    </p>
+                  </div>
+                  <Textarea
+                    id="summary-objective"
+                    onChange={(event) => setSummaryObjective(event.target.value)}
+                    placeholder={t("aiDialog.summary.placeholder")}
+                    value={summaryObjective}
+                  />
+                  <Button
+                    className="w-full"
+                    disabled={isBusy || !summaryObjective.trim()}
+                    onClick={() => void onSummarize(summaryObjective)}
+                    type="button"
+                  >
+                    {busyAction === "summarize" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {busyAction === "summarize" ? t("aiDialog.summary.loading") : t("aiDialog.summary.action")}
+                  </Button>
+                </section>
 
-            <section className="space-y-3 rounded-lg border border-border p-4">
-              <div>
-                <Label htmlFor="section-prompt">섹션 생성</Label>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  추가할 섹션의 목적과 내용을 입력합니다.
-                </p>
+                <section className="rounded-lg border border-border p-4">
+                  <h3 className="text-sm font-semibold">{t("aiDialog.summary.result")}</h3>
+                  <ScrollArea className="mt-3 h-72 pr-3">
+                    {summaryResult ? (
+                      <div className="space-y-4 text-sm">
+                        <p className="whitespace-pre-wrap">{summaryResult.summary}</p>
+                        {summaryResult.bulletPoints.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">{t("aiDialog.summary.bullets")}</p>
+                            <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
+                              {summaryResult.bulletPoints.map((point, index) => (
+                                <li key={`${summaryResult.requestId}-${index}`}>{point}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {summaryResult.attributions.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">{t("aiDialog.summary.attributions")}</p>
+                            <ul className="space-y-2 text-xs text-muted-foreground">
+                              {summaryResult.attributions.map((attribution, index) => (
+                                <li key={`${summaryResult.requestId}-src-${index}`} className="rounded-md border border-border bg-muted/30 px-3 py-2">
+                                  <div>{t("aiDialog.summary.sourceLine", { sourceId: attribution.ingestionId, chunkId: attribution.chunkId })}</div>
+                                  {attribution.sectionId ? <div>{t("aiDialog.summary.sectionLine", { sectionId: attribution.sectionId })}</div> : null}
+                                  {attribution.rationale ? <div>{attribution.rationale}</div> : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t("aiDialog.summary.empty")}</p>
+                    )}
+                  </ScrollArea>
+                </section>
               </div>
-              <Input
-                id="section-prompt"
-                onChange={(event) => setSectionPrompt(event.target.value)}
-                placeholder="예: 운영 절차 섹션 추가"
-                value={sectionPrompt}
-              />
-              <Button
-                className="w-full"
-                disabled={isBusy || !sectionPrompt.trim()}
-                onClick={() => void onGenerateSection(sectionPrompt)}
-                type="button"
-                variant="secondary"
-              >
-                {busyAction === "generate-section" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                섹션 생성
-              </Button>
-            </section>
-          </div>
-        )}
+            </TabsContent>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <section className="rounded-lg border border-border p-4">
-            <h3 className="text-sm font-semibold">요약 결과</h3>
-            <ScrollArea className="mt-3 h-56">
-              {summaryResult ? (
-                <div className="space-y-3 text-sm">
-                  <p className="whitespace-pre-wrap">{summaryResult.summary}</p>
-                  {summaryResult.bulletPoints.length > 0 ? (
-                    <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-                      {summaryResult.bulletPoints.map((point, index) => (
-                        <li key={`${summaryResult.requestId}-${index}`}>{point}</li>
+            <TabsContent value="generate">
+              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <section className="space-y-3 rounded-lg border border-border p-4">
+                  <div>
+                    <Label htmlFor="section-prompt">{t("aiDialog.generate.brief")}</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("aiDialog.generate.help")}
+                    </p>
+                  </div>
+                  <Textarea
+                    id="section-prompt"
+                    onChange={(event) => setSectionPrompt(event.target.value)}
+                    placeholder={t("aiDialog.generate.placeholder")}
+                    rows={6}
+                    value={sectionPrompt}
+                  />
+                  <p className="text-xs text-muted-foreground">{t("aiDialog.generate.note")}</p>
+                  <Button
+                    className="w-full"
+                    disabled={isBusy || !sectionPrompt.trim()}
+                    onClick={() => void onGenerateSection(sectionPrompt)}
+                    type="button"
+                    variant="secondary"
+                  >
+                    {busyAction === "generate-section" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {busyAction === "generate-section" ? t("aiDialog.generate.loading") : t("aiDialog.generate.action")}
+                  </Button>
+                </section>
+
+                <section className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
+                  <h3 className="text-sm font-semibold text-foreground">{t("aiDialog.generate.reviewTitle")}</h3>
+                  <p className="mt-3">{t("aiDialog.generate.reviewDescription")}</p>
+                </section>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="compare">
+              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <section className="space-y-3 rounded-lg border border-border p-4">
+                  <div>
+                    <Label htmlFor="compare-target">{t("aiDialog.compare.target")}</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("aiDialog.compare.help")}
+                    </p>
+                  </div>
+                  <Select onValueChange={setCompareTargetId} value={compareTargetId}>
+                    <SelectTrigger id="compare-target">
+                      <SelectValue placeholder={t("aiDialog.compare.placeholder")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {compareOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.name}
+                        </SelectItem>
                       ))}
-                    </ul>
+                    </SelectContent>
+                  </Select>
+                  {!compareOptions.length ? (
+                    <p className="text-xs text-muted-foreground">{t("aiDialog.compare.noCandidates")}</p>
                   ) : null}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">아직 요약 결과가 없습니다.</p>
-              )}
-            </ScrollArea>
-          </section>
+                  <Button
+                    className="w-full"
+                    disabled={isBusy || !compareTargetId}
+                    onClick={() => void onCompare(compareTargetId)}
+                    type="button"
+                    variant="outline"
+                  >
+                    {busyAction === "compare" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {busyAction === "compare" ? t("aiDialog.compare.loading") : t("aiDialog.compare.action")}
+                  </Button>
+                </section>
 
-          <section className="rounded-lg border border-border p-4">
-            <h3 className="text-sm font-semibold">비교 결과</h3>
-            <ScrollArea className="mt-3 h-56">
-              {comparePreview ? (
-                <div className="space-y-2 text-sm">
-                  <p><span className="font-medium">대상:</span> {comparePreview.targetDocumentName}</p>
-                  <p><span className="font-medium">패치 수:</span> {comparePreview.patchCount}</p>
-                  <p><span className="font-medium">패치 세트:</span> {comparePreview.patchSetTitle}</p>
-                  <p className="text-muted-foreground">
-                    추가 {comparePreview.comparison.counts.added} / 변경 {comparePreview.comparison.counts.changed} / 제거 {comparePreview.comparison.counts.removed}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">아직 비교 결과가 없습니다.</p>
-              )}
-            </ScrollArea>
-          </section>
-        </div>
+                {comparePreview ? (
+                  <PreviewSummary {...comparePreview} title={t("aiDialog.compare.previewTitle")} />
+                ) : (
+                  <section className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
+                    {t("aiDialog.compare.empty")}
+                  </section>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="update">
+              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <section className="space-y-3 rounded-lg border border-border p-4">
+                  <div>
+                    <Label htmlFor="update-target">{t("aiDialog.update.target")}</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("aiDialog.update.help")}
+                    </p>
+                  </div>
+                  <Select onValueChange={setUpdateTargetId} value={updateTargetId}>
+                    <SelectTrigger id="update-target">
+                      <SelectValue placeholder={t("aiDialog.update.placeholder")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {compareOptions.map((option) => (
+                        <SelectItem key={option.id} value={option.id}>
+                          {option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!compareOptions.length ? (
+                    <p className="text-xs text-muted-foreground">{t("aiDialog.update.noCandidates")}</p>
+                  ) : null}
+                  <p className="text-xs text-muted-foreground">{t("aiDialog.update.note")}</p>
+                  <Button
+                    className="w-full"
+                    disabled={isBusy || !updateTargetId}
+                    onClick={() => void onSuggestUpdates(updateTargetId)}
+                    type="button"
+                  >
+                    {busyAction === "suggest-updates" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {busyAction === "suggest-updates" ? t("aiDialog.update.loading") : t("aiDialog.update.action")}
+                  </Button>
+                </section>
+
+                {updateSuggestionPreview ? (
+                  <PreviewSummary {...updateSuggestionPreview} title={t("aiDialog.update.previewTitle")} />
+                ) : (
+                  <section className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
+                    {t("aiDialog.update.empty")}
+                  </section>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="procedure">
+              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <section className="space-y-3 rounded-lg border border-border p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold">{t("aiDialog.procedure.title")}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("aiDialog.procedure.help")}
+                    </p>
+                  </div>
+                  <Button
+                    className="w-full"
+                    disabled={isBusy}
+                    onClick={() => void onExtractProcedure()}
+                    type="button"
+                    variant="outline"
+                  >
+                    {busyAction === "extract-procedure" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {busyAction === "extract-procedure" ? t("aiDialog.procedure.loading") : t("aiDialog.procedure.action")}
+                  </Button>
+                </section>
+
+                <section className="rounded-lg border border-border p-4">
+                  <h3 className="text-sm font-semibold">{t("aiDialog.procedure.result")}</h3>
+                  <ScrollArea className="mt-3 h-72 pr-3">
+                    {procedureResult ? (
+                      <div className="space-y-4 text-sm">
+                        <div>
+                          <p className="font-medium">{procedureResult.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {t("aiDialog.procedure.stepCount", { count: procedureResult.steps.length })}
+                          </p>
+                        </div>
+                        {procedureResult.warnings.length > 0 ? (
+                          <ul className="space-y-2 text-xs text-muted-foreground">
+                            {procedureResult.warnings.map((warning, index) => (
+                              <li key={`${procedureResult.procedureId}-warning-${index}`} className="rounded-md border border-dashed border-border px-3 py-2">
+                                {warning}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {procedureResult.steps.length > 0 ? (
+                          <ol className="space-y-3">
+                            {procedureResult.steps.map((step) => (
+                              <li key={step.stepId} className="rounded-md border border-border bg-muted/20 px-3 py-3">
+                                <div className="font-medium">
+                                  {step.order}. {step.text}
+                                </div>
+                                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                  {step.attributions.map((attribution, index) => (
+                                    <div key={`${step.stepId}-src-${index}`}>
+                                      {t("aiDialog.procedure.sourceLine", {
+                                        sourceId: attribution.ingestionId,
+                                        chunkId: attribution.chunkId,
+                                      })}
+                                      {attribution.sectionId ? ` · ${t("aiDialog.procedure.sectionLine", { sectionId: attribution.sectionId })}` : ""}
+                                    </div>
+                                  ))}
+                                </div>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t("aiDialog.procedure.empty")}</p>
+                    )}
+                  </ScrollArea>
+                </section>
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
       </DialogContent>
     </Dialog>
   );

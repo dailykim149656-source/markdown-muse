@@ -35,6 +35,18 @@ export interface IngestionChunk {
   metadata?: Record<string, string>;
 }
 
+export interface IngestionImage {
+  imageId: string;
+  order: number;
+  src: string;
+  alt?: string;
+  title?: string;
+  caption?: string;
+  sectionId?: string;
+  surroundingText?: string;
+  metadata?: Record<string, string>;
+}
+
 export interface NormalizedIngestionDocument {
   ingestionId: string;
   fileName: string;
@@ -43,6 +55,7 @@ export interface NormalizedIngestionDocument {
   metadata: IngestionMetadata;
   sections: IngestionSection[];
   chunks: IngestionChunk[];
+  images: IngestionImage[];
   importedAt: number;
 }
 
@@ -54,5 +67,6 @@ export const createEmptyIngestionDocument = (request: IngestionRequest): Normali
   metadata: {},
   sections: [],
   chunks: [],
+  images: [],
   importedAt: request.importedAt,
 });

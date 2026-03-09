@@ -1,9 +1,10 @@
 import type { JSONContent } from "@tiptap/core";
-import { useEditor, EditorContent, type Editor } from "@tiptap/react";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { EditorContent, type Editor, useEditor } from "@tiptap/react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import EditorToolbar from "./EditorToolbar";
 import { createEditorExtensions, editorPropsDefault } from "./editorConfig";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
+import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
 
 interface HtmlEditorProps {
   initialContent?: string;
@@ -27,9 +28,11 @@ const HtmlEditor = ({
   const [showPanel, setShowPanel] = useState(true);
   const [sourceLeft, setSourceLeft] = useState(false);
 
-  const syncingFromWysiwyg = useRef(false);
   const syncingFromSource = useRef(false);
+  const syncingFromWysiwyg = useRef(false);
   const sourceDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const sourcePanelRef = useRef<HTMLDivElement | null>(null);
+  const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const handleWysiwygUpdate = useCallback(
     (html: string, document: JSONContent) => {
@@ -45,11 +48,29 @@ const HtmlEditor = ({
   );
 
   const editor = useEditor({
-    extensions: createEditorExtensions("HTML 문서에서 WYSIWYG로 전환해 편집할 수 있습니다."),
+    extensions: createEditorExtensions("HTML WYSIWYG editor with synced source."),
     content: initialTiptapDoc || initialHtml,
     onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML(), editor.getJSON()),
     editorProps: editorPropsDefault,
   });
+
+  const applySourceTabIndent = useCallback((ta: HTMLTextAreaElement, shiftKey: boolean) => {
+    const start = ta.selectionStart ?? 0;
+    const end = ta.selectionEnd ?? 0;
+    const next = applyMarkdownTabIndent(ta.value, start, end, {
+      tabSize: DEFAULT_MARKDOWN_TAB_SIZE,
+      shiftKey,
+    });
+
+    setHtmlSource(next.value);
+
+    requestAnimationFrame(() => {
+      if (document.activeElement !== ta) {
+        ta.focus();
+      }
+      ta.setSelectionRange(next.selectionStart, next.selectionEnd);
+    });
+  }, []);
 
   useEffect(() => {
     onEditorReady?.(editor);
@@ -84,17 +105,42 @@ const HtmlEditor = ({
 
   const handleSourceKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const ta = e.currentTarget;
-        const start = ta.selectionStart;
-        const end = ta.selectionEnd;
-        const newVal = htmlSource.substring(0, start) + "  " + htmlSource.substring(end);
-        setHtmlSource(newVal);
-        setTimeout(() => { ta.selectionStart = ta.selectionEnd = start + 2; }, 0);
+      if (e.key !== "Tab" || e.defaultPrevented) {
+        return;
       }
+
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+
+      const ta = e.currentTarget;
+      applySourceTabIndent(ta, e.shiftKey);
     },
-    [htmlSource]
+    [applySourceTabIndent]
+  );
+
+  const handleSourcePanelKeyDownCapture = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key !== "Tab" || e.defaultPrevented) {
+        return;
+      }
+
+      const textarea = sourceTextareaRef.current;
+      if (!textarea) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+
+      if (document.activeElement !== textarea) {
+        textarea.focus();
+      }
+
+      applySourceTabIndent(textarea, e.shiftKey);
+    },
+    [applySourceTabIndent]
   );
 
   return (
@@ -107,13 +153,17 @@ const HtmlEditor = ({
         editorContent={<EditorContent editor={editor} />}
         sourcePanel={
           <SourcePanel
-            label="HTML 소스"
+            rootRef={sourcePanelRef}
+            label="HTML Source"
+            textareaRef={sourceTextareaRef}
             value={htmlSource}
             onChange={handleSourceChange}
             onKeyDown={handleSourceKeyDown}
+            onKeyDownCapture={handleSourceKeyDown}
+            onPanelKeyDownCapture={handleSourcePanelKeyDownCapture}
             onSwap={() => setSourceLeft(v => !v)}
             onClose={() => setShowPanel(false)}
-            placeholder={"<!-- WYSIWYG에서 작성한 내용은 HTML 소스와 동기화됩니다.\n     HTML 소스가 필요하면 이곳에 입력하세요. -->"}
+            placeholder="Edit raw HTML source. Use tab for indentation and Shift+Tab to outdent."
           />
         }
       />

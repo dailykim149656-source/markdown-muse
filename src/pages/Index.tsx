@@ -1,23 +1,31 @@
 import type { JSONContent } from "@tiptap/core";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
-import MarkdownEditor from "@/components/editor/MarkdownEditor";
-import LatexEditor from "@/components/editor/LatexEditor";
-import HtmlEditor from "@/components/editor/HtmlEditor";
-import JsonYamlEditor from "@/components/editor/JsonYamlEditor";
 import EditorWorkspace from "@/components/editor/EditorWorkspace";
-import TemplateDialog, { type DocumentTemplate } from "@/components/editor/TemplateDialog";
+import type { DocumentTemplate } from "@/components/editor/TemplateDialog";
 import type { PlainTextFindReplaceAdapter } from "@/components/editor/findReplaceTypes";
 import { useAiAssistant } from "@/hooks/useAiAssistant";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
 import { useDocumentIO } from "@/hooks/useDocumentIO";
 import { useEditorUiState } from "@/hooks/useEditorUiState";
 import { useFormatConversion } from "@/hooks/useFormatConversion";
+import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
 import { usePatchReview } from "@/hooks/usePatchReview";
 import { useI18n } from "@/i18n/useI18n";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
 import type { EditorMode } from "@/types/document";
 import { toast } from "sonner";
+
+const MarkdownEditor = lazy(() => import("@/components/editor/MarkdownEditor"));
+const LatexEditor = lazy(() => import("@/components/editor/LatexEditor"));
+const HtmlEditor = lazy(() => import("@/components/editor/HtmlEditor"));
+const JsonYamlEditor = lazy(() => import("@/components/editor/JsonYamlEditor"));
+
+const EditorFallback = () => (
+  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+    Loading editor...
+  </div>
+);
 
 const Index = () => {
   const { t } = useI18n();
@@ -100,11 +108,15 @@ const Index = () => {
     compareCandidates,
     comparePreview,
     compareWithDocument,
+    extractProcedureFromActiveDocument,
     generateSectionPatch,
+    procedureResult,
     richTextAvailable,
     setAssistantOpen,
+    suggestUpdatesFromDocument,
     summarizeActiveDocument,
     summaryResult,
+    updateSuggestionPreview,
   } = useAiAssistant({
     activeDoc,
     activeEditor,
@@ -134,6 +146,33 @@ const Index = () => {
     renderableEditorHtml: currentRenderableHtml,
     renderableLatexDocument: currentRenderableLatexDocument,
     renderableMarkdown: currentRenderableMarkdown,
+  });
+  const {
+    deleteKnowledgeDocument,
+    knowledgeActiveImpact,
+    knowledgeDocumentCount,
+    knowledgeFreshCount,
+    knowledgeImageCount,
+    knowledgeInsights,
+    knowledgeLastIndexedAt,
+    knowledgeQuery,
+    knowledgeReady,
+    knowledgeResults,
+    knowledgeStaleCount,
+    knowledgeSyncing,
+    openKnowledgeDocumentById,
+    openKnowledgeRecord,
+    openKnowledgeResult,
+    recentKnowledgeRecords,
+    rebuildKnowledgeBase,
+    reindexKnowledgeDocument,
+    resetKnowledgeBase,
+    setKnowledgeQuery,
+  } = useKnowledgeBase({
+    activeDocumentId: activeDocId,
+    createDocument,
+    documents,
+    selectDocument,
   });
 
   useEffect(() => {
@@ -175,6 +214,11 @@ const Index = () => {
   const handleNewDoc = useCallback((mode: EditorMode = "markdown") => {
     createDocument({ mode });
   }, [createDocument]);
+
+  const handleDeleteDoc = useCallback((id: string) => {
+    deleteDocument(id);
+    deleteKnowledgeDocument(id);
+  }, [deleteDocument, deleteKnowledgeDocument]);
 
   const handleTemplateSelect = useCallback((template: DocumentTemplate) => {
     createDocument({
@@ -226,21 +270,54 @@ const Index = () => {
   const renderEditor = useCallback(() => {
     if (activeDoc.mode === "markdown") {
       return (
-        <MarkdownEditor
-          key={editorKey}
-          initialContent={activeDoc.content || undefined}
-          initialTiptapDoc={activeDoc.tiptapJson || undefined}
-          onContentChange={handleContentChange}
-          onEditorReady={setActiveEditor}
-          onHtmlChange={setLiveEditorHtml}
-          onTiptapChange={handleTiptapChange}
-        />
+        <Suspense fallback={<EditorFallback />}>
+          <MarkdownEditor
+            key={editorKey}
+            initialContent={activeDoc.content || undefined}
+            initialTiptapDoc={activeDoc.tiptapJson || undefined}
+            onContentChange={handleContentChange}
+            onEditorReady={setActiveEditor}
+            onHtmlChange={setLiveEditorHtml}
+            onTiptapChange={handleTiptapChange}
+          />
+        </Suspense>
       );
     }
 
     if (activeDoc.mode === "latex") {
       return (
-        <LatexEditor
+        <Suspense fallback={<EditorFallback />}>
+          <LatexEditor
+            key={editorKey}
+            initialContent={activeDoc.content}
+            initialTiptapDoc={activeDoc.tiptapJson || undefined}
+            onContentChange={handleContentChange}
+            onEditorReady={setActiveEditor}
+            onHtmlChange={setLiveEditorHtml}
+            onTiptapChange={handleTiptapChange}
+          />
+        </Suspense>
+      );
+    }
+
+    if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
+      return (
+        <Suspense fallback={<EditorFallback />}>
+          <JsonYamlEditor
+            key={editorKey}
+            initialContent={activeDoc.content}
+            mode={activeDoc.mode}
+            onContentChange={handleContentChange}
+            onModeChange={handleModeChange}
+            onPlainTextSearchAdapterReady={setPlainTextSearchAdapter}
+          />
+        </Suspense>
+      );
+    }
+
+    return (
+      <Suspense fallback={<EditorFallback />}>
+        <HtmlEditor
           key={editorKey}
           initialContent={activeDoc.content}
           initialTiptapDoc={activeDoc.tiptapJson || undefined}
@@ -249,32 +326,7 @@ const Index = () => {
           onHtmlChange={setLiveEditorHtml}
           onTiptapChange={handleTiptapChange}
         />
-      );
-    }
-
-    if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
-      return (
-        <JsonYamlEditor
-          key={editorKey}
-          initialContent={activeDoc.content}
-          mode={activeDoc.mode}
-          onContentChange={handleContentChange}
-          onModeChange={handleModeChange}
-          onPlainTextSearchAdapterReady={setPlainTextSearchAdapter}
-        />
-      );
-    }
-
-    return (
-      <HtmlEditor
-        key={editorKey}
-        initialContent={activeDoc.content}
-        initialTiptapDoc={activeDoc.tiptapJson || undefined}
-        onContentChange={handleContentChange}
-        onEditorReady={setActiveEditor}
-        onHtmlChange={setLiveEditorHtml}
-        onTiptapChange={handleTiptapChange}
-      />
+      </Suspense>
     );
   }, [activeDoc.content, activeDoc.mode, activeDoc.tiptapJson, editorKey, handleContentChange, handleModeChange, handleTiptapChange, setLiveEditorHtml]);
 
@@ -286,12 +338,16 @@ const Index = () => {
         compareCandidates,
         comparePreview,
         onCompare: compareWithDocument,
+        onExtractProcedure: extractProcedureFromActiveDocument,
         onGenerateSection: generateSectionPatch,
         onOpenChange: setAssistantOpen,
+        onSuggestUpdates: suggestUpdatesFromDocument,
         onSummarize: summarizeActiveDocument,
         open: assistantOpen,
+        procedureResult,
         richTextAvailable,
         summaryResult,
+        updateSuggestionPreview,
       }}
       fileInputRef={fileInputRef}
       findReplaceProps={{
@@ -363,15 +419,40 @@ const Index = () => {
       }}
       renderEditor={renderEditor}
       shortcutsModalProps={{ onOpenChange: setShortcutsOpen, open: shortcutsOpen }}
-      sidebarProps={{
-        activeDocId,
-        documents,
-        onDeleteDoc: deleteDocument,
-        onNewDoc: handleNewDoc,
-        onOpenTemplates: openTemplateDialog,
-        onRenameDoc: renameDocument,
-        onSelectDoc: selectDocument,
-      }}
+        sidebarProps={{
+          activeDocId,
+          documents,
+          knowledgeActiveImpact,
+          knowledgeDocumentCount,
+          knowledgeFreshCount,
+          knowledgeImageCount,
+          knowledgeInsights,
+          knowledgeLastIndexedAt,
+          knowledgeQuery,
+          knowledgeReady,
+          knowledgeResults,
+          knowledgeStaleCount,
+          knowledgeSyncing,
+          onDeleteDoc: handleDeleteDoc,
+          onOpenKnowledgeRecord: openKnowledgeRecord,
+          onOpenKnowledgeResult: openKnowledgeResult,
+          onOpenRelatedKnowledgeDocument: openKnowledgeDocumentById,
+          onNewDoc: handleNewDoc,
+          onOpenTemplates: openTemplateDialog,
+          onRebuildKnowledgeBase: rebuildKnowledgeBase,
+          onReindexKnowledgeDocument: reindexKnowledgeDocument,
+          onRenameDoc: renameDocument,
+          onResetKnowledgeBase: resetKnowledgeBase,
+          onSelectDoc: selectDocument,
+          onSuggestKnowledgeUpdates: (documentId: string) => {
+            void suggestUpdatesFromDocument(documentId);
+          },
+          recentKnowledgeRecords,
+          setKnowledgeQuery,
+          suggestableKnowledgeDocumentIds: richTextAvailable
+            ? compareCandidates.map((document) => document.id)
+            : [],
+        }}
       tabsProps={{
         activeDocId,
         documents,

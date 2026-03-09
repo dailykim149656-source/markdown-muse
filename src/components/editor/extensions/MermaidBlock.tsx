@@ -1,15 +1,19 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
-import { useState, useCallback, useEffect, useRef } from "react";
-import mermaid from "mermaid";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { loadMermaid } from "@/lib/rendering/loadMermaid";
 
-const initMermaid = (dark: boolean) => {
+const initMermaid = async (dark: boolean) => {
+  const mermaid = await loadMermaid();
+
   mermaid.initialize({
     startOnLoad: false,
     theme: dark ? "dark" : "default",
     securityLevel: "loose",
     fontFamily: "inherit",
   });
+
+  return mermaid;
 };
 
 let mermaidId = 0;
@@ -20,55 +24,78 @@ const MermaidNodeView = ({ node, updateAttributes, selected }: any) => {
   const [svg, setSvg] = useState("");
   const [error, setError] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const renderRequestRef = useRef(0);
 
   const isDark = useCallback(() => document.documentElement.classList.contains("dark"), []);
 
   const renderDiagram = useCallback(async (source: string) => {
+    const requestId = ++renderRequestRef.current;
+
     if (!source.trim()) {
       setSvg("");
       setError("");
       return;
     }
+
     try {
-      initMermaid(isDark());
+      const mermaid = await initMermaid(isDark());
       const id = `mermaid-${++mermaidId}`;
       const { svg: rendered } = await mermaid.render(id, source);
+
+      if (requestId !== renderRequestRef.current) {
+        return;
+      }
+
       setSvg(rendered);
       setError("");
-    } catch (err) {
+    } catch (nextError) {
+      if (requestId !== renderRequestRef.current) {
+        return;
+      }
+
       setSvg("");
-      setError(err instanceof Error ? err.message : "렌더링 오류");
+      setError(nextError instanceof Error ? nextError.message : "Failed to render Mermaid diagram.");
     }
   }, [isDark]);
 
-  // Re-render on dark mode change
   useEffect(() => {
     const observer = new MutationObserver(() => {
-      if (!editing && node.attrs.code) renderDiagram(node.attrs.code);
+      if (!editing && node.attrs.code) {
+        void renderDiagram(node.attrs.code);
+      }
     });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+
+    observer.observe(document.documentElement, { attributeFilter: ["class"], attributes: true });
+
     return () => observer.disconnect();
   }, [editing, node.attrs.code, renderDiagram]);
-  
 
   useEffect(() => {
-    if (!editing) renderDiagram(node.attrs.code);
-  }, [node.attrs.code, editing, renderDiagram]);
+    if (!editing) {
+      void renderDiagram(node.attrs.code);
+    }
+  }, [editing, node.attrs.code, renderDiagram]);
 
-  // Live preview while editing
   useEffect(() => {
     if (editing && code.trim()) {
-      const timer = setTimeout(() => renderDiagram(code), 400);
-      return () => clearTimeout(timer);
+      const timer = window.setTimeout(() => {
+        void renderDiagram(code);
+      }, 400);
+
+      return () => window.clearTimeout(timer);
     }
   }, [code, editing, renderDiagram]);
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, [code, editing]);
+
+  useEffect(() => () => {
+    renderRequestRef.current += 1;
+  }, []);
 
   const handleSave = useCallback(() => {
     updateAttributes({ code });
@@ -78,40 +105,44 @@ const MermaidNodeView = ({ node, updateAttributes, selected }: any) => {
   if (editing) {
     return (
       <NodeViewWrapper className="my-4">
-        <div className={`border-2 border-primary/40 rounded-lg overflow-hidden shadow-sm`}>
-          <div className="bg-primary/5 px-3 py-1.5 text-[10px] text-muted-foreground border-b border-border flex justify-between items-center">
+        <div className="overflow-hidden rounded-lg border-2 border-primary/40 shadow-sm">
+          <div className="flex items-center justify-between border-b border-border bg-primary/5 px-3 py-1.5 text-[10px] text-muted-foreground">
             <div className="flex items-center gap-1.5">
-              <span className="font-mono text-primary/70">◇</span>
-              <span className="font-medium">Mermaid 다이어그램</span>
+              <span className="font-mono text-primary/70">MMD</span>
+              <span className="font-medium">Mermaid diagram</span>
             </div>
             <div className="flex items-center gap-1">
-              <kbd className="text-[9px] px-1 py-0.5 bg-secondary rounded border border-border">⌘+↵</kbd>
+              <kbd className="rounded border border-border bg-secondary px-1 py-0.5 text-[9px]">Cmd/Ctrl+Enter</kbd>
               <button
-                className="text-xs px-2.5 py-0.5 bg-primary text-primary-foreground rounded-md hover:opacity-90 font-medium"
+                className="rounded-md bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground hover:opacity-90"
                 onClick={handleSave}
+                type="button"
               >
-                완료
+                Save
               </button>
             </div>
           </div>
           <textarea
             ref={textareaRef}
             value={code}
-            onChange={(e) => setCode(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSave();
-              e.stopPropagation();
+            onChange={(event) => setCode(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                handleSave();
+              }
+
+              event.stopPropagation();
             }}
-            className="w-full bg-background text-foreground text-sm font-mono p-3 outline-none resize-none min-h-[60px] leading-relaxed"
             autoFocus
-            placeholder={`graph TD\n    A[시작] --> B[끝]`}
+            className="min-h-[60px] w-full resize-none bg-background p-3 font-mono text-sm leading-relaxed text-foreground outline-none"
+            placeholder={`graph TD\n    A[Start] --> B[Review]`}
           />
           {(svg || error) && (
-            <div className="border-t border-border p-4 bg-secondary/20 flex justify-center min-h-[60px] items-center">
+            <div className="flex min-h-[60px] items-center justify-center border-t border-border bg-secondary/20 p-4">
               {svg ? (
-                <div dangerouslySetInnerHTML={{ __html: svg }} className="mermaid-preview max-w-full overflow-auto" />
+                <div className="mermaid-preview max-w-full overflow-auto" dangerouslySetInnerHTML={{ __html: svg }} />
               ) : (
-                <span className="text-destructive text-xs font-mono">{error}</span>
+                <span className="font-mono text-xs text-destructive">{error}</span>
               )}
             </div>
           )}
@@ -122,21 +153,21 @@ const MermaidNodeView = ({ node, updateAttributes, selected }: any) => {
 
   return (
     <NodeViewWrapper
-      className={`my-4 cursor-pointer group/mermaid transition-all ${selected ? "ring-2 ring-primary/30 rounded-lg" : ""}`}
+      className={`my-4 cursor-pointer transition-all group/mermaid ${selected ? "rounded-lg ring-2 ring-primary/30" : ""}`}
       onClick={() => setEditing(true)}
-      title="클릭하여 편집"
+      title="Click to edit"
     >
-      <div className={`relative border border-border rounded-lg p-4 bg-card hover:bg-accent/30 transition-colors ${selected ? "bg-primary/5" : ""}`}>
-        <div className="absolute top-2 right-2 text-[9px] text-muted-foreground opacity-0 group-hover/mermaid:opacity-100 transition-opacity flex items-center gap-1">
-          <span>✏️ 편집</span>
+      <div className={`relative rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent/30 ${selected ? "bg-primary/5" : ""}`}>
+        <div className="absolute top-2 right-2 flex items-center gap-1 text-[9px] text-muted-foreground opacity-0 transition-opacity group-hover/mermaid:opacity-100">
+          <span>Click to edit</span>
         </div>
         {svg ? (
-          <div dangerouslySetInnerHTML={{ __html: svg }} className="mermaid-preview flex justify-center max-w-full overflow-auto" />
+          <div className="mermaid-preview flex max-w-full justify-center overflow-auto" dangerouslySetInnerHTML={{ __html: svg }} />
         ) : error ? (
-          <div className="text-destructive text-sm font-mono p-2">{error}</div>
+          <div className="p-2 font-mono text-sm text-destructive">{error}</div>
         ) : (
-          <div className="text-muted-foreground text-sm italic text-center py-4">
-            Mermaid 다이어그램을 입력하세요
+          <div className="py-4 text-center text-sm italic text-muted-foreground">
+            Enter Mermaid diagram code.
           </div>
         )}
       </div>

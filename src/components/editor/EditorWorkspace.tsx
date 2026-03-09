@@ -1,14 +1,11 @@
+import { Suspense, lazy } from "react";
 import type { ChangeEventHandler, ComponentProps, ReactNode, RefObject } from "react";
 import type { EditorMode } from "@/types/document";
-import AiAssistantDialog from "@/components/editor/AiAssistantDialog";
 import EditorHeader from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
 import DocumentTabs from "@/components/editor/DocumentTabs";
 import FileSidebar from "@/components/editor/FileSidebar";
-import ExportPreviewPanel from "@/components/editor/ExportPreviewPanel";
-import PatchReviewDialog from "@/components/editor/PatchReviewDialog";
-import TemplateDialog from "@/components/editor/TemplateDialog";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
@@ -16,11 +13,18 @@ type FileSidebarProps = ComponentProps<typeof FileSidebar>;
 type EditorHeaderProps = ComponentProps<typeof EditorHeader>;
 type DocumentTabsProps = ComponentProps<typeof DocumentTabs>;
 type FindReplaceBarProps = ComponentProps<typeof FindReplaceBar>;
-type ExportPreviewPanelProps = ComponentProps<typeof ExportPreviewPanel>;
 type KeyboardShortcutsModalProps = ComponentProps<typeof KeyboardShortcutsModal>;
-type TemplateDialogProps = ComponentProps<typeof TemplateDialog>;
-type PatchReviewDialogProps = ComponentProps<typeof PatchReviewDialog>;
-type AiAssistantDialogProps = ComponentProps<typeof AiAssistantDialog>;
+type ExportPreviewPanelProps = ComponentProps<(typeof import("@/components/editor/ExportPreviewPanel"))["default"]>;
+type TemplateDialogProps = ComponentProps<(typeof import("@/components/editor/TemplateDialog"))["default"]>;
+type PatchReviewDialogProps = ComponentProps<(typeof import("@/components/editor/PatchReviewDialog"))["default"]>;
+type AiAssistantDialogProps = ComponentProps<(typeof import("@/components/editor/AiAssistantDialog"))["default"]>;
+
+const AiAssistantDialog = lazy(() => import("@/components/editor/AiAssistantDialog"));
+const ExportPreviewPanel = lazy(() => import("@/components/editor/ExportPreviewPanel"));
+const PatchReviewDialog = lazy(() => import("@/components/editor/PatchReviewDialog"));
+const TemplateDialog = lazy(() => import("@/components/editor/TemplateDialog"));
+
+const PreviewFallback = () => <div className="h-full bg-background" />;
 
 interface EditorWorkspaceProps {
   activeMode: EditorMode;
@@ -72,7 +76,9 @@ const EditorWorkspace = ({
               </ResizablePanel>
               <ResizableHandle withHandle />
               <ResizablePanel defaultSize={40} minSize={20} maxSize={60}>
-                <ExportPreviewPanel {...previewProps} />
+                <Suspense fallback={<PreviewFallback />}>
+                  <ExportPreviewPanel {...previewProps} />
+                </Suspense>
               </ResizablePanel>
             </ResizablePanelGroup>
           ) : (
@@ -87,9 +93,21 @@ const EditorWorkspace = ({
           type="file"
         />
         <KeyboardShortcutsModal {...shortcutsModalProps} />
-        <AiAssistantDialog {...aiAssistantDialogProps} />
-        <PatchReviewDialog {...patchReviewDialogProps} />
-        <TemplateDialog {...templateDialogProps} />
+        {aiAssistantDialogProps.open && (
+          <Suspense fallback={null}>
+            <AiAssistantDialog {...aiAssistantDialogProps} />
+          </Suspense>
+        )}
+        {patchReviewDialogProps.open && (
+          <Suspense fallback={null}>
+            <PatchReviewDialog {...patchReviewDialogProps} />
+          </Suspense>
+        )}
+        {templateDialogProps.open && (
+          <Suspense fallback={null}>
+            <TemplateDialog {...templateDialogProps} />
+          </Suspense>
+        )}
       </div>
     </div>
   </SidebarProvider>

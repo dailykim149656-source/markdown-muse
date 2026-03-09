@@ -354,7 +354,7 @@ const EditorHeader = ({
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
-        {mode !== "json" && mode !== "yaml" && onOpenPatchReview && (
+        {onOpenPatchReview && (
           <Button className="h-8 px-2 text-xs" onClick={onOpenPatchReview} size="sm" type="button" variant="ghost">
             {t("header.patchReview")}
             {patchCount > 0 ? ` (${patchCount})` : ""}

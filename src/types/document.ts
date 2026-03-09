@@ -3,7 +3,8 @@ import type { DocumentAst, DocumentMetadata } from "./documentAst";
 
 export type EditorMode = "markdown" | "latex" | "html" | "json" | "yaml";
 export type StorageKind = "legacy" | "docsy";
-export type SourceSnapshots = Partial<Record<EditorMode, string>>;
+export type SourceSnapshotMode = EditorMode | "asciidoc" | "rst";
+export type SourceSnapshots = Partial<Record<SourceSnapshotMode, string>>;
 
 export interface DocumentData {
   id: string;

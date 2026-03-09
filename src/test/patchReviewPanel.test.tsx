@@ -22,6 +22,7 @@ const patchSetFixture: DocumentPatchSet = {
       payload: { kind: "replace_text", text: "New intro" },
       author: "ai",
       status: "pending",
+      sources: [{ sourceId: "doc-ref", chunkId: "chunk-1", sectionId: "sec-1" }],
     },
     {
       patchId: "patch-2",
@@ -69,6 +70,7 @@ describe("PatchReviewPanel", () => {
 
     expect(screen.getAllByText(/Update intro/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Add conclusion/)).toBeInTheDocument();
+    expect(screen.getByText("문서: doc-ref")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("2. Add conclusion"));
 

@@ -1,8 +1,9 @@
 import type { JSONContent } from "@tiptap/core";
-import { useEditor, EditorContent, type Editor } from "@tiptap/react";
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { EditorContent, type Editor, useEditor } from "@tiptap/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import EditorToolbar from "./EditorToolbar";
 import { createEditorExtensions, editorPropsDefault } from "./editorConfig";
+import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
 import { htmlToLatex, latexToHtml } from "./utils/htmlToLatex";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import LatexHighlightEditor from "./LatexHighlightEditor";
@@ -28,16 +29,36 @@ const LatexEditor = ({
   const [showPanel, setShowPanel] = useState(true);
   const [sourceLeft, setSourceLeft] = useState(false);
 
-  const syncingFromWysiwyg = useRef(false);
   const syncingFromSource = useRef(false);
+  const syncingFromWysiwyg = useRef(false);
   const sourceDebounce = useRef<ReturnType<typeof setTimeout>>();
-  const initialHtml = useMemo(() => initialContent ? latexToHtml(initialContent) : "", [initialContent]);
+  const initialHtml = useMemo(() => initialContent ? latexToHtml(initialContent, { includeMetadata: false }) : "", [initialContent]);
+  const sourcePanelRef = useRef<HTMLDivElement | null>(null);
+  const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const applySourceTabIndent = useCallback((ta: HTMLTextAreaElement, shiftKey: boolean) => {
+    const start = ta.selectionStart ?? 0;
+    const end = ta.selectionEnd ?? 0;
+    const next = applyMarkdownTabIndent(ta.value, start, end, {
+      tabSize: DEFAULT_MARKDOWN_TAB_SIZE,
+      shiftKey,
+    });
+
+    setLatexSource(next.value);
+
+    requestAnimationFrame(() => {
+      if (document.activeElement !== ta) {
+        ta.focus();
+      }
+      ta.setSelectionRange(next.selectionStart, next.selectionEnd);
+    });
+  }, []);
 
   const handleWysiwygUpdate = useCallback(
     (html: string, document: JSONContent) => {
       if (syncingFromSource.current) return;
       syncingFromWysiwyg.current = true;
-      const latex = htmlToLatex(html);
+      const latex = htmlToLatex(html, true, { includeMetadata: false });
       setLatexSource(latex);
       onContentChange?.(latex);
       onHtmlChange?.(html);
@@ -48,7 +69,7 @@ const LatexEditor = ({
   );
 
   const editor = useEditor({
-    extensions: createEditorExtensions("LaTeX 문서에서 WYSIWYG로 전환해 편집할 수 있습니다."),
+    extensions: createEditorExtensions("LaTeX WYSIWYG with synced source pane."),
     content: initialTiptapDoc || initialHtml,
     onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML(), editor.getJSON()),
     editorProps: editorPropsDefault,
@@ -70,7 +91,7 @@ const LatexEditor = ({
   const handleSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newLatex = e.target.value;
-      const html = latexToHtml(newLatex);
+      const html = latexToHtml(newLatex, { includeMetadata: false });
       setLatexSource(newLatex);
       onContentChange?.(newLatex);
       onHtmlChange?.(html);
@@ -88,17 +109,42 @@ const LatexEditor = ({
 
   const handleSourceKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const ta = e.currentTarget;
-        const start = ta.selectionStart;
-        const end = ta.selectionEnd;
-        const newVal = latexSource.substring(0, start) + "  " + latexSource.substring(end);
-        setLatexSource(newVal);
-        setTimeout(() => { ta.selectionStart = ta.selectionEnd = start + 2; }, 0);
+      if (e.key !== "Tab" || e.defaultPrevented) {
+        return;
       }
+
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+
+      const ta = e.currentTarget;
+      applySourceTabIndent(ta, e.shiftKey);
     },
-    [latexSource]
+    [applySourceTabIndent]
+  );
+
+  const handleSourcePanelKeyDownCapture = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key !== "Tab" || e.defaultPrevented) {
+        return;
+      }
+
+      const textarea = sourceTextareaRef.current;
+      if (!textarea) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent.stopImmediatePropagation();
+
+      if (document.activeElement !== textarea) {
+        textarea.focus();
+      }
+
+      applySourceTabIndent(textarea, e.shiftKey);
+    },
+    [applySourceTabIndent]
   );
 
   return (
@@ -111,19 +157,24 @@ const LatexEditor = ({
         editorContent={<EditorContent editor={editor} />}
         sourcePanel={
           <SourcePanel
-            label="LaTeX 소스"
+            rootRef={sourcePanelRef}
+            label="LaTeX Source"
+            textareaRef={sourceTextareaRef}
             value={latexSource}
             onChange={handleSourceChange}
             onKeyDown={handleSourceKeyDown}
+            onKeyDownCapture={handleSourceKeyDown}
+            onPanelKeyDownCapture={handleSourcePanelKeyDownCapture}
             onSwap={() => setSourceLeft(v => !v)}
             onClose={() => setShowPanel(false)}
-            placeholder="// WYSIWYG에서 작성한 내용은 LaTeX 소스와 동기화됩니다.&#10;// LaTeX 소스를 직접 편집하려면 이곳에 입력하세요."
+            placeholder="% Edit raw LaTeX source here.\n% Use indentation with Tab and Shift+Tab.\n"
           >
             <LatexHighlightEditor
               value={latexSource}
               onChange={handleSourceChange}
               onKeyDown={handleSourceKeyDown}
-              placeholder="// WYSIWYG에서 작성한 내용은 LaTeX 소스와 동기화됩니다.&#10;// LaTeX 소스를 직접 편집하려면 이곳에 입력하세요."
+              textareaRef={sourceTextareaRef}
+              placeholder="% Edit raw LaTeX source here.\n% Use indentation with Tab and Shift+Tab.\n"
             />
           </SourcePanel>
         }

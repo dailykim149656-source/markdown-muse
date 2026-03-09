@@ -107,6 +107,54 @@ describe("htmlToLatex", () => {
     expect(r).toContain("\\end{document}");
   });
 
+  it("omits auto metadata when includeMetadata is false", () => {
+    const r = htmlToLatex("<p>Test</p>", true, {
+      includeMetadata: false,
+    });
+
+    expect(r).not.toContain("\\title{");
+    expect(r).not.toContain("\\author{");
+    expect(r).not.toContain("\\date{");
+    expect(r).not.toContain("\\maketitle");
+    expect(r).toContain("\\begin{document}");
+    expect(r).toContain("\\end{document}");
+  });
+
+  it("omits title/author/date block when includeMetadata is false", () => {
+    const latex = `\\documentclass{article}
+\\title{Sample Title}
+\\author{Sample Author}
+\\date{2026. 3. 9.}
+\\begin{document}
+\\maketitle
+Hello world
+\\end{document}`;
+
+    const restored = latexToHtml(latex);
+
+    expect(restored).not.toContain("Sample Title");
+    expect(restored).not.toContain("Sample Author");
+    expect(restored).not.toContain("2026. 3. 9.");
+    expect(restored).toContain("Hello world");
+  });
+
+  it("includes title block when includeMetadata is true", () => {
+    const latex = `\\documentclass{article}
+\\title{Sample Title}
+\\author{Sample Author}
+\\date{2026. 3. 9.}
+\\begin{document}
+\\maketitle
+Hello world
+\\end{document}`;
+
+    const restored = latexToHtml(latex, { includeMetadata: true });
+
+    expect(restored).toContain("Sample Title");
+    expect(restored).toContain("Sample Author");
+    expect(restored).toContain("2026. 3. 9.");
+  });
+
   it("generates xelatex font preamble when font family is used", () => {
     const r = htmlToLatex('<p><span style="font-family: Inter">Styled</span></p>', true);
     expect(r).toContain("% !TeX program = xelatex");

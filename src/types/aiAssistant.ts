@@ -1,4 +1,5 @@
 import type { EditorMode } from "@/types/document";
+import type { Locale } from "@/i18n/types";
 
 export interface AiAssistantDocumentPayload {
   documentId: string;
@@ -17,6 +18,7 @@ export interface AiSourceAttribution {
 export interface SummarizeDocumentRequest {
   document: AiAssistantDocumentPayload;
   objective: string;
+  locale?: Locale;
 }
 
 export interface SummarizeDocumentResponse {
@@ -36,6 +38,7 @@ export interface GenerateSectionRequest {
   document: AiAssistantDocumentPayload;
   existingHeadings: GenerateSectionHeadingContext[];
   prompt: string;
+  locale?: Locale;
 }
 
 export interface GenerateSectionResponse {
