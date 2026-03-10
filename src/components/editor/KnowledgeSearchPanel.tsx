@@ -7,6 +7,7 @@ import { useI18n } from "@/i18n/useI18n";
 import {
   getKnowledgeRecordLabel,
   type KnowledgeDocumentRecord,
+  type KnowledgeSearchMode,
   type KnowledgeSearchResult,
 } from "@/lib/knowledge/knowledgeIndex";
 
@@ -19,7 +20,9 @@ interface KnowledgeSearchPanelProps {
   query: string;
   recentRecords: KnowledgeDocumentRecord[];
   results: KnowledgeSearchResult[];
+  searchMode: KnowledgeSearchMode;
   setQuery: (value: string) => void;
+  setSearchMode: (value: KnowledgeSearchMode) => void;
 }
 
 const KnowledgeSearchPanel = ({
@@ -31,7 +34,9 @@ const KnowledgeSearchPanel = ({
   query,
   recentRecords,
   results,
+  searchMode,
   setQuery,
+  setSearchMode,
 }: KnowledgeSearchPanelProps) => {
   const { t } = useI18n();
   const trimmedQuery = query.trim();
@@ -82,6 +87,32 @@ const KnowledgeSearchPanel = ({
           placeholder={t("knowledge.searchPlaceholder")}
           value={query}
         />
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] text-muted-foreground">{t("knowledge.searchModeLabel")}</span>
+        <div className="flex items-center gap-1">
+          <Button
+            aria-pressed={searchMode === "semantic"}
+            className="h-6 px-2 text-[10px]"
+            onClick={() => setSearchMode("semantic")}
+            size="sm"
+            type="button"
+            variant={searchMode === "semantic" ? "secondary" : "ghost"}
+          >
+            {t("knowledge.searchModeSemantic")}
+          </Button>
+          <Button
+            aria-pressed={searchMode === "keyword"}
+            className="h-6 px-2 text-[10px]"
+            onClick={() => setSearchMode("keyword")}
+            size="sm"
+            type="button"
+            variant={searchMode === "keyword" ? "secondary" : "ghost"}
+          >
+            {t("knowledge.searchModeKeyword")}
+          </Button>
+        </div>
       </div>
 
       {!isReady && (
@@ -138,6 +169,11 @@ const KnowledgeSearchPanel = ({
                             ? result.match?.chunk.metadata?.sectionTitle || result.record.fileName
                             : result.image?.metadata?.sectionTitle || result.image?.src || result.record.fileName}
                         </div>
+                        {result.rerankLabel && (
+                          <div className="mt-1 truncate text-[10px] text-foreground/70">
+                            {t("knowledge.searchRerank")}: {result.rerankLabel}
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         {result.kind === "image" && (

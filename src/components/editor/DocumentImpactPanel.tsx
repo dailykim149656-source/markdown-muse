@@ -1,4 +1,4 @@
-import { ArrowUpRight, FileSearch, GitCompareArrows, Link2, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, FileSearch, GitCompareArrows, Link2, Network, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n/useI18n";
@@ -7,6 +7,12 @@ import type { KnowledgeDocumentImpact, KnowledgeRelatedDocument } from "@/lib/kn
 interface DocumentImpactPanelProps {
   impact: KnowledgeDocumentImpact | null;
   onOpenDocument: (documentId: string) => void;
+  onOpenGraph?: (request: {
+    context: "impact";
+    nodeDocumentId: string;
+    sourceDocumentId: string;
+    targetDocumentId: string;
+  }) => void;
   onSuggestUpdates: (documentId: string) => void;
   suggestableDocumentIds: string[];
 }
@@ -44,12 +50,13 @@ const relationReasonKey = (relation: KnowledgeRelatedDocument["relationKinds"][n
 const DocumentImpactPanel = ({
   impact,
   onOpenDocument,
+  onOpenGraph,
   onSuggestUpdates,
   suggestableDocumentIds,
 }: DocumentImpactPanelProps) => {
   const { t } = useI18n();
   const describeRelations = (relationKinds: KnowledgeRelatedDocument["relationKinds"]) =>
-    relationKinds.map((relation) => t(relationReasonKey(relation))).join(" · ");
+    relationKinds.map((relation) => t(relationReasonKey(relation))).join(" / ");
 
   return (
     <div className="space-y-3 group-data-[collapsible=icon]:hidden">
@@ -95,48 +102,64 @@ const DocumentImpactPanel = ({
 
                 return (
                   <div className="rounded-md border border-border/60 px-2 py-2" key={document.documentId}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-xs font-medium text-foreground">{document.name}</div>
-                      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-                        {describeRelations(document.relationKinds)}
-                      </p>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {document.relationKinds.map((relation) => (
-                          <Badge className="h-5 rounded-full px-1.5 text-[10px]" key={`${document.documentId}-${relation}`} variant="secondary">
-                            {t(relationLabelKey(relation))}
-                          </Badge>
-                        ))}
-                        {document.issueCount > 0 && (
-                          <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant="outline">
-                            <ShieldAlert className="mr-1 h-3 w-3" />
-                            {t("knowledge.issueCount", { count: document.issueCount })}
-                          </Badge>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-xs font-medium text-foreground">{document.name}</div>
+                        <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                          {describeRelations(document.relationKinds)}
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {document.relationKinds.map((relation) => (
+                            <Badge className="h-5 rounded-full px-1.5 text-[10px]" key={`${document.documentId}-${relation}`} variant="secondary">
+                              {t(relationLabelKey(relation))}
+                            </Badge>
+                          ))}
+                          {document.issueCount > 0 && (
+                            <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant="outline">
+                              <ShieldAlert className="mr-1 h-3 w-3" />
+                              {t("knowledge.issueCount", { count: document.issueCount })}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {onOpenGraph && (
+                          <Button
+                            className="h-6 px-2 text-[10px]"
+                            onClick={() => onOpenGraph({
+                              context: "impact",
+                              nodeDocumentId: document.documentId,
+                              sourceDocumentId: impact.documentId,
+                              targetDocumentId: document.documentId,
+                            })}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <Network className="mr-1 h-3 w-3" />
+                            {t("knowledge.graphExplore")}
+                          </Button>
                         )}
+                        <Button
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => onOpenDocument(document.documentId)}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          <ArrowUpRight className="mr-1 h-3 w-3" />
+                          {t("knowledge.open")}
+                        </Button>
+                        <Button
+                          className="h-6 px-2 text-[10px]"
+                          disabled={!canSuggestUpdates}
+                          onClick={() => onSuggestUpdates(document.documentId)}
+                          size="sm"
+                          variant="outline"
+                        >
+                          <GitCompareArrows className="mr-1 h-3 w-3" />
+                          {t("knowledge.suggest")}
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        className="h-6 px-2 text-[10px]"
-                        onClick={() => onOpenDocument(document.documentId)}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <ArrowUpRight className="mr-1 h-3 w-3" />
-                        {t("knowledge.open")}
-                      </Button>
-                      <Button
-                        className="h-6 px-2 text-[10px]"
-                        disabled={!canSuggestUpdates}
-                        onClick={() => onSuggestUpdates(document.documentId)}
-                        size="sm"
-                        variant="outline"
-                      >
-                        <GitCompareArrows className="mr-1 h-3 w-3" />
-                        {t("knowledge.suggest")}
-                      </Button>
-                    </div>
-                  </div>
                   </div>
                 );
               })}
@@ -168,7 +191,7 @@ const DocumentImpactPanel = ({
                     </div>
                     <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
                       {path.viaDocumentName
-                        ? `${t("knowledge.impactVia", { name: path.viaDocumentName })} · ${describeRelations(path.relationKinds)}`
+                        ? `${t("knowledge.impactVia", { name: path.viaDocumentName })} / ${describeRelations(path.relationKinds)}`
                         : describeRelations(path.relationKinds)}
                     </p>
                   </div>

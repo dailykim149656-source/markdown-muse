@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
+import type { KnowledgeSuggestionContext } from "@/components/editor/sidebarFeatureTypes";
+import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
+import { buildDerivedDocumentIndex } from "@/lib/ast/documentIndex";
+import { buildComparisonPatchSet, compareDocuments } from "@/lib/ai/compareDocuments";
 import { useI18n } from "@/i18n/useI18n";
 import type { DocumentComparisonResult } from "@/lib/ai/compareDocuments";
 import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
@@ -25,6 +29,7 @@ export type AiBusyAction =
 export interface PatchPreviewResult {
   comparison: DocumentComparisonResult;
   patchCount: number;
+  patchSet?: DocumentPatchSet | null;
   patchSetTitle: string;
   targetDocumentName: string;
 }
@@ -67,6 +72,32 @@ const getDocumentExtension = (mode: DocumentData["mode"]) => {
       return "yaml";
     default:
       return "txt";
+  }
+};
+
+const getIssueKindLabel = (issueKind?: KnowledgeSuggestionContext["issueKind"]) => {
+  switch (issueKind) {
+    case "missing_section":
+      return "missing-section";
+    case "conflicting_procedure":
+      return "conflicting-procedure";
+    case "changed_section":
+      return "changed-section";
+    default:
+      return null;
+  }
+};
+
+const getIssuePriorityLabel = (issuePriority?: KnowledgeSuggestionContext["issuePriority"]) => {
+  switch (issuePriority) {
+    case "high":
+      return "P1";
+    case "medium":
+      return "P2";
+    case "low":
+      return "P3";
+    default:
+      return null;
   }
 };
 
@@ -128,8 +159,6 @@ export const useAiAssistant = ({
       throw new Error(t("hooks.ai.editorNotReady"));
     }
 
-    const { serializeTiptapToAst } = await import("@/lib/ast/tiptapAst");
-
     return serializeTiptapToAst(activeEditor.getJSON(), {
       documentNodeId: `doc-${activeDoc.id}`,
     });
@@ -190,11 +219,9 @@ export const useAiAssistant = ({
 
     try {
       const [
-        { buildDerivedDocumentIndex },
         { buildSectionGenerationPatchSet },
         { generateSection },
       ] = await Promise.all([
-        import("@/lib/ast/documentIndex"),
         import("@/lib/ai/sectionGeneration"),
         import("@/lib/ai/client"),
       ]);
@@ -253,11 +280,9 @@ export const useAiAssistant = ({
 
     try {
       const [
-        { buildDerivedDocumentIndex },
         { generateToc },
         { analyzeTocSuggestion, buildTocPatchSetWithAst },
       ] = await Promise.all([
-        import("@/lib/ast/documentIndex"),
         import("@/lib/ai/client"),
         import("@/lib/ai/tocGeneration"),
       ]);
@@ -371,9 +396,6 @@ export const useAiAssistant = ({
     setBusyAction("compare");
 
     try {
-      const [{ buildComparisonPatchSet, compareDocuments }] = await Promise.all([
-        import("@/lib/ai/compareDocuments"),
-      ]);
       const sourceAst = await buildSourceAst();
       const sourceNormalized = await buildActiveNormalizedDocument();
       const { normalized: targetNormalized, targetDocument } = await buildTargetNormalizedDocument(targetDocumentId);
@@ -387,6 +409,7 @@ export const useAiAssistant = ({
       const nextPreview = {
         comparison,
         patchCount: patchBuild.patchSet.patches.length,
+        patchSet: patchBuild.patchSet,
         patchSetTitle: patchBuild.patchSet.title,
         targetDocumentName: targetDocument.name,
       } satisfies PatchPreviewResult;
@@ -417,7 +440,10 @@ export const useAiAssistant = ({
     t,
   ]);
 
-  const suggestUpdatesFromDocument = useCallback(async (targetDocumentId: string) => {
+  const suggestUpdatesFromDocument = useCallback(async (
+    targetDocumentId: string,
+    context?: KnowledgeSuggestionContext,
+  ) => {
     ensureActiveRichText();
     setBusyAction("suggest-updates");
 
@@ -426,15 +452,21 @@ export const useAiAssistant = ({
       const sourceAst = await buildSourceAst();
       const sourceNormalized = await buildActiveNormalizedDocument();
       const { normalized: targetNormalized, targetDocument } = await buildTargetNormalizedDocument(targetDocumentId);
+      const issueKindLabel = getIssueKindLabel(context?.issueKind);
+      const issuePriorityLabel = getIssuePriorityLabel(context?.issuePriority);
+      const issueIdLabel = context?.issueId ? `#${context.issueId}` : null;
+      const titleSuffixParts = [issueKindLabel, issuePriorityLabel, issueIdLabel].filter(Boolean);
+      const titleSuffix = titleSuffixParts.length > 0 ? ` [${titleSuffixParts.join(" | ")}]` : "";
       const result = suggestDocumentUpdates(sourceNormalized, targetNormalized, sourceAst, {
         documentId: activeDoc.id,
         patchSetId: `suggest-updates-${activeDoc.id}-${targetDocument.id}-${Date.now()}`,
-        title: t("hooks.ai.updateTitle", { source: activeDoc.name, target: targetDocument.name }),
+        title: `${t("hooks.ai.updateTitle", { source: activeDoc.name, target: targetDocument.name })}${titleSuffix}`,
       });
 
       const nextPreview = {
         comparison: result.comparison,
         patchCount: result.patchBuild.patchSet.patches.length,
+        patchSet: result.patchBuild.patchSet,
         patchSetTitle: result.patchBuild.patchSet.title,
         targetDocumentName: targetDocument.name,
       } satisfies PatchPreviewResult;
@@ -447,6 +479,12 @@ export const useAiAssistant = ({
       }
 
       loadPatchSet(result.patchBuild.patchSet);
+      if (context?.issueId) {
+        const sourceName = context.sourceDocumentName || activeDoc.name;
+        const targetName = context.targetDocumentName || targetDocument.name;
+        const reason = context.issueReason ? ` (${context.issueReason})` : "";
+        toast.info(`Issue ${context.issueId}: ${sourceName} -> ${targetName}${reason}`);
+      }
       toast.success(t("hooks.ai.updateLoaded", { count: result.patchBuild.patchSet.patches.length }));
       return nextPreview;
     } catch (error) {

@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
+import { applyDocumentPatchSet } from "@/lib/ast/applyDocumentPatch";
+import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
+import { renderAstToHtml } from "@/lib/ast/renderAstToHtml";
+import { renderAstToLatex } from "@/lib/ast/renderAstToLatex";
+import { renderAstToMarkdown } from "@/lib/ast/renderAstToMarkdown";
+import { validateDocumentAst } from "@/lib/ast/validateDocumentAst";
 import { useI18n } from "@/i18n/useI18n";
 import { applyPatchDecision } from "@/lib/patches/reviewPatchSet";
 import type { DocumentData, DocumentVersionSnapshotMetadata } from "@/types/document";
@@ -191,7 +197,6 @@ export const usePatchReview = ({
     let documentAst;
 
     try {
-      const { serializeTiptapToAst } = await import("@/lib/ast/tiptapAst");
       documentAst = serializeTiptapToAst(activeEditor.getJSON(), {
         documentNodeId: `doc-${activeDoc.id}`,
       });
@@ -201,13 +206,6 @@ export const usePatchReview = ({
       return;
     }
 
-    const [{ validateDocumentAst }, { applyDocumentPatchSet }, { renderAstToHtml }, { renderAstToLatex }, { renderAstToMarkdown }] = await Promise.all([
-      import("@/lib/ast/validateDocumentAst"),
-      import("@/lib/ast/applyDocumentPatch"),
-      import("@/lib/ast/renderAstToHtml"),
-      import("@/lib/ast/renderAstToLatex"),
-      import("@/lib/ast/renderAstToMarkdown"),
-    ]);
     const sourceValidation = validateDocumentAst(documentAst);
 
     if (sourceValidation.errors.length > 0) {

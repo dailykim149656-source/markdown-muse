@@ -16,6 +16,7 @@ import {
   searchKnowledgeRecords,
   summarizeKnowledgeRecords,
   type KnowledgeDocumentRecord,
+  type KnowledgeSearchMode,
   type KnowledgeSearchResult,
 } from "@/lib/knowledge/knowledgeIndex";
 import {
@@ -56,6 +57,7 @@ export const useKnowledgeBase = ({
 }: UseKnowledgeBaseOptions) => {
   const { t } = useI18n();
   const [knowledgeQuery, setKnowledgeQuery] = useState("");
+  const [knowledgeSearchMode, setKnowledgeSearchMode] = useState<KnowledgeSearchMode>("semantic");
   const [knowledgeChangedSources, setKnowledgeChangedSources] = useState<SourceChangeRecord[]>([]);
   const [knowledgeLastRescannedAt, setKnowledgeLastRescannedAt] = useState<number | null>(null);
   const [knowledgeRecords, setKnowledgeRecords] = useState<KnowledgeDocumentRecord[]>([]);
@@ -197,8 +199,8 @@ export const useKnowledgeBase = ({
   }, [activeDocumentId, knowledgeActiveImpact, knowledgeConsistencyIssues, knowledgeImpactQueue]);
 
   const knowledgeResults = useMemo(
-    () => searchKnowledgeRecords(knowledgeRecords, knowledgeQuery, 12),
-    [knowledgeRecords, knowledgeQuery],
+    () => searchKnowledgeRecords(knowledgeRecords, knowledgeQuery, 12, { mode: knowledgeSearchMode }),
+    [knowledgeRecords, knowledgeQuery, knowledgeSearchMode],
   );
 
   const recentKnowledgeRecords = useMemo(
@@ -365,6 +367,7 @@ export const useKnowledgeBase = ({
     knowledgeRecords,
     knowledgeRescanning,
     knowledgeResults,
+    knowledgeSearchMode,
     knowledgeStaleCount: knowledgeSummary.staleCount,
     knowledgeSyncing,
     openKnowledgeDocumentById,
@@ -376,5 +379,6 @@ export const useKnowledgeBase = ({
     reindexKnowledgeDocument,
     resetKnowledgeBase,
     setKnowledgeQuery,
+    setKnowledgeSearchMode,
   };
 };

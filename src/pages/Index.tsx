@@ -1,10 +1,18 @@
 import type { JSONContent } from "@tiptap/core";
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
+import { useSearchParams } from "react-router-dom";
 import type { AiAssistantRuntimeState } from "@/components/editor/AiAssistantRuntime";
+import {
+  htmlHasAdvancedContent,
+  htmlHasDocumentContent,
+  markdownHasAdvancedContent,
+  markdownHasDocumentContent,
+} from "@/components/editor/editorAdvancedContent";
 import EditorWorkspace from "@/components/editor/EditorWorkspace";
 import type { DocumentTemplate } from "@/components/editor/TemplateDialog";
 import type { PlainTextFindReplaceAdapter } from "@/components/editor/findReplaceTypes";
+import type { KnowledgeSuggestionContext, KnowledgeSuggestionQueueItem } from "@/components/editor/sidebarFeatureTypes";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
 import { MAX_IMPORT_FILE_SIZE_BYTES, useDocumentIO } from "@/hooks/useDocumentIO";
 import { useEditorUiState } from "@/hooks/useEditorUiState";
@@ -22,6 +30,7 @@ import {
 } from "@/lib/editor/webEditorPreferences";
 import { DOC_SHARE_HASH_PREFIX } from "@/lib/share/shareConstants";
 import type { EditorMode } from "@/types/document";
+import type { DocumentPatchSet } from "@/types/documentPatch";
 import { toast } from "sonner";
 
 const MarkdownEditor = lazy(() => import("@/components/editor/MarkdownEditor"));
@@ -39,15 +48,205 @@ const EditorFallback = () => (
 type PendingAiIntent =
   | { type: "open" }
   | { type: "generate-toc" }
-  | { targetDocumentId: string; type: "suggest-updates" };
+  | {
+      context?: KnowledgeSuggestionContext;
+      openPatchReviewAfter?: boolean;
+      queueEntryId?: string;
+      targetDocumentId: string;
+      type: "suggest-updates";
+    };
+
+interface SuggestionQueueEntry extends KnowledgeSuggestionQueueItem {
+  patchSet?: DocumentPatchSet | null;
+}
+
+interface PendingImpactSuggestionEntry {
+  context?: KnowledgeSuggestionContext;
+  openPatchReviewAfter?: boolean;
+  queueEntryId?: string;
+  sourceDocumentId: string;
+  targetDocumentId: string;
+}
+
+const createSuggestionQueueId = () =>
+  `suggestion-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const resolveSuggestionQueueContext = (
+  context?: KnowledgeSuggestionContext,
+): KnowledgeSuggestionQueueItem["context"] =>
+  context?.queueContext || (context?.issueId ? "consistency" : "impact");
+
+const getQueueConfidenceLabel = (
+  patchSet?: DocumentPatchSet | null,
+): KnowledgeSuggestionQueueItem["confidenceLabel"] => {
+  if (!patchSet) {
+    return undefined;
+  }
+
+  const confidenceValues = patchSet.patches
+    .map((patch) => patch.confidence)
+    .filter((value): value is number => typeof value === "number");
+
+  if (confidenceValues.length === 0) {
+    return undefined;
+  }
+
+  const averageConfidence = confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length;
+
+  if (averageConfidence >= 0.85) {
+    return "high";
+  }
+
+  if (averageConfidence >= 0.6) {
+    return "medium";
+  }
+
+  return "low";
+};
+
+const getQueueSourceCount = (patchSet?: DocumentPatchSet | null) => {
+  if (!patchSet) {
+    return 0;
+  }
+
+  return new Set(
+    patchSet.patches.flatMap((patch) =>
+      (patch.sources || []).map((source) =>
+        `${source.sourceId}:${source.chunkId || "none"}:${source.sectionId || "none"}`)),
+  ).size;
+};
+
+const matchesSuggestionQueueEntry = (
+  entry: SuggestionQueueEntry,
+  context: KnowledgeSuggestionQueueItem["context"],
+  sourceDocumentId: string,
+  targetDocumentId: string,
+  issueId?: string,
+) =>
+  entry.context === context
+  && entry.sourceDocumentId === sourceDocumentId
+  && entry.targetDocumentId === targetDocumentId
+  && (entry.issueId || "") === (issueId || "");
+
+const isKnowledgeIssueKind = (
+  value: string | null,
+): value is NonNullable<KnowledgeSuggestionContext["issueKind"]> =>
+  value === "changed_section" || value === "conflicting_procedure" || value === "missing_section";
+
+const isKnowledgeIssuePriority = (
+  value: string | null,
+): value is NonNullable<KnowledgeSuggestionContext["issuePriority"]> =>
+  value === "high" || value === "medium" || value === "low";
+
+const getTemplateFallbackContent = (mode: EditorMode, locale: "en" | "ko") => {
+  const isKo = locale === "ko";
+
+  switch (mode) {
+    case "markdown":
+      return isKo
+        ? [
+          "# 새 문서",
+          "",
+          "## 요약",
+          "",
+          "간단한 요약을 작성하세요.",
+        ].join("\n")
+        : [
+          "# New Document",
+          "",
+          "## Summary",
+          "",
+          "Write a short summary.",
+        ].join("\n");
+    case "latex":
+      return isKo
+        ? [
+          "\\section{요약}",
+          "간단한 요약을 작성하세요.",
+        ].join("\n")
+        : [
+          "\\section{Summary}",
+          "Write a short summary.",
+        ].join("\n");
+    case "html":
+      return isKo
+        ? [
+          "<h1>새 문서</h1>",
+          "<h2>요약</h2>",
+          "<p>간단한 요약을 작성하세요.</p>",
+        ].join("\n")
+        : [
+          "<h1>New Document</h1>",
+          "<h2>Summary</h2>",
+          "<p>Write a short summary.</p>",
+        ].join("\n");
+    case "json":
+      return JSON.stringify({ summary: isKo ? "간단한 요약을 작성하세요." : "Write a short summary." }, null, 2);
+    case "yaml":
+      return [
+        `summary: ${isKo ? "간단한 요약을 작성하세요." : "Write a short summary."}`,
+      ].join("\n");
+    default:
+      return "";
+  }
+};
+
+const getStableTemplateFallbackContent = (mode: EditorMode, locale: "en" | "ko") => {
+  const isKo = locale === "ko";
+
+  switch (mode) {
+    case "markdown":
+      return isKo
+        ? ["# 새 문서", "", "## 요약", "", "간단한 요약을 작성하세요."].join("\n")
+        : ["# New Document", "", "## Summary", "", "Write a short summary."].join("\n");
+    case "latex":
+      return isKo
+        ? ["\\section{요약}", "간단한 요약을 작성하세요."].join("\n")
+        : ["\\section{Summary}", "Write a short summary."].join("\n");
+    case "html":
+      return isKo
+        ? ["<h1>새 문서</h1>", "<h2>요약</h2>", "<p>간단한 요약을 작성하세요.</p>"].join("\n")
+        : ["<h1>New Document</h1>", "<h2>Summary</h2>", "<p>Write a short summary.</p>"].join("\n");
+    case "json":
+      return JSON.stringify(
+        { summary: isKo ? "간단한 요약을 작성하세요." : "Write a short summary." },
+        null,
+        2,
+      );
+    case "yaml":
+      return `summary: ${isKo ? "간단한 요약을 작성하세요." : "Write a short summary."}`;
+    default:
+      return "";
+  }
+};
+
+const templateRequiresDocumentFeatures = (mode: EditorMode, content: string) => {
+  switch (mode) {
+    case "markdown":
+      return markdownHasDocumentContent(content);
+    case "html":
+      return htmlHasDocumentContent(content);
+    default:
+      return false;
+  }
+};
+
+const templateRequiresAdvancedBlocks = (mode: EditorMode, content: string) => {
+  switch (mode) {
+    case "markdown":
+      return markdownHasAdvancedContent(content);
+    case "html":
+      return htmlHasAdvancedContent(content);
+    default:
+      return false;
+  }
+};
 
 const Index = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeEditor, setActiveEditor] = useState<TiptapEditor | null>(null);
-  const [pendingImpactSuggestion, setPendingImpactSuggestion] = useState<{
-    sourceDocumentId: string;
-    targetDocumentId: string;
-  } | null>(null);
+  const [pendingImpactSuggestions, setPendingImpactSuggestions] = useState<PendingImpactSuggestionEntry[]>([]);
   const [plainTextSearchAdapter, setPlainTextSearchAdapter] = useState<PlainTextFindReplaceAdapter | null>(null);
   const [advancedBlocksPreference, setAdvancedBlocksPreference] = useState(() =>
     featureFlags.advancedBlocksOnInitialMount || readAdvancedBlocksPreference(),
@@ -58,6 +257,7 @@ const Index = () => {
   const [aiRuntimeEnabled, setAiRuntimeEnabled] = useState(() => featureFlags.aiOnInitialMount);
   const [aiRuntimeState, setAiRuntimeState] = useState<AiAssistantRuntimeState | null>(null);
   const [pendingAiIntent, setPendingAiIntent] = useState<PendingAiIntent | null>(null);
+  const [suggestionQueue, setSuggestionQueue] = useState<SuggestionQueueEntry[]>([]);
   const [historyEnabled, setHistoryEnabled] = useState(() => featureFlags.historyOnInitialMount);
   const [knowledgeEnabled, setKnowledgeEnabled] = useState(() => featureFlags.knowledgeOnInitialMount);
   const [structuredModesVisible, setStructuredModesVisible] = useState(() => featureFlags.structuredModesVisibleOnInitialMount);
@@ -208,6 +408,16 @@ const Index = () => {
     writeDocumentToolsPreference(true);
   }, []);
   const richTextAvailable = activeDoc.mode === "markdown" || activeDoc.mode === "latex" || activeDoc.mode === "html";
+  const getDocumentNameById = useCallback((documentId: string) =>
+    documents.find((document) => document.id === documentId)?.name || t("common.untitled"), [documents, t]);
+  const updateSuggestionQueueEntry = useCallback((
+    entryId: string,
+    updater: (entry: SuggestionQueueEntry) => SuggestionQueueEntry,
+  ) => {
+    setSuggestionQueue((current) => current.map((entry) => (
+      entry.id === entryId ? updater(entry) : entry
+    )));
+  }, []);
 
   const runAiIntent = useCallback(async (intent: PendingAiIntent) => {
     if (!aiRuntimeState) {
@@ -225,8 +435,51 @@ const Index = () => {
       return;
     }
 
-    await aiRuntimeState.suggestUpdatesFromDocument(intent.targetDocumentId);
-  }, [aiRuntimeState]);
+    if (intent.queueEntryId) {
+      updateSuggestionQueueEntry(intent.queueEntryId, (entry) => ({
+        ...entry,
+        errorMessage: undefined,
+        status: "running",
+        updatedAt: Date.now(),
+      }));
+    }
+
+    try {
+      const result = await aiRuntimeState.suggestUpdatesFromDocument(intent.targetDocumentId, intent.context);
+
+      if (intent.queueEntryId) {
+        updateSuggestionQueueEntry(intent.queueEntryId, (entry) => ({
+          ...entry,
+          confidenceLabel: getQueueConfidenceLabel(result?.patchSet),
+          errorMessage: result && result.patchCount === 0 ? t("hooks.ai.noDiff") : undefined,
+          hasPatchSet: Boolean(result?.patchSet && (result.patchCount || 0) > 0),
+          patchCount: result?.patchCount,
+          patchSet: result?.patchSet || null,
+          patchSetTitle: result?.patchSetTitle,
+          sourceCount: getQueueSourceCount(result?.patchSet),
+          status: "ready",
+          updatedAt: Date.now(),
+        }));
+      }
+
+      if (intent.openPatchReviewAfter) {
+        openPatchReview();
+      }
+    } catch (error) {
+      if (intent.queueEntryId) {
+        updateSuggestionQueueEntry(intent.queueEntryId, (entry) => ({
+          ...entry,
+          errorMessage: error instanceof Error ? error.message : t("hooks.ai.updateFailed"),
+          hasPatchSet: false,
+          patchSet: null,
+          status: "failed",
+          updatedAt: Date.now(),
+        }));
+      }
+
+      throw error;
+    }
+  }, [aiRuntimeState, openPatchReview, t, updateSuggestionQueueEntry]);
 
   const requestAiIntent = useCallback((intent: PendingAiIntent) => {
     if (aiRuntimeState) {
@@ -237,6 +490,195 @@ const Index = () => {
     setAiRuntimeEnabled(true);
     setPendingAiIntent(intent);
   }, [aiRuntimeState, runAiIntent]);
+  const queueKnowledgeSuggestion = useCallback(({
+    context,
+    forceQueue = false,
+    openPatchReviewAfter = false,
+    queueEntryId,
+    sourceDocumentId,
+    targetDocumentId,
+  }: {
+    context?: KnowledgeSuggestionContext;
+    forceQueue?: boolean;
+    openPatchReviewAfter?: boolean;
+    queueEntryId?: string;
+    sourceDocumentId: string;
+    targetDocumentId: string;
+  }) => {
+    const sourceDocumentName = getDocumentNameById(sourceDocumentId);
+    const targetDocumentName = getDocumentNameById(targetDocumentId);
+    const nextContext: KnowledgeSuggestionContext | undefined = context
+      ? {
+        ...context,
+        sourceDocumentId,
+        sourceDocumentName: context.sourceDocumentName || sourceDocumentName,
+        targetDocumentName: context.targetDocumentName || targetDocumentName,
+      }
+      : {
+        queueContext: "impact",
+        sourceDocumentId,
+          sourceDocumentName,
+          targetDocumentName,
+        };
+    const queueContext = resolveSuggestionQueueContext(nextContext);
+    const existingEntry = suggestionQueue.find((entry) =>
+      matchesSuggestionQueueEntry(
+        entry,
+        queueContext,
+        sourceDocumentId,
+        targetDocumentId,
+        nextContext?.issueId,
+      ));
+    const entryId = queueEntryId || existingEntry?.id || createSuggestionQueueId();
+    const reasonSummary = nextContext?.issueReason
+      || (queueContext === "consistency"
+        ? t("knowledge.healthNextMissing")
+        : queueContext === "change"
+          ? t("knowledge.changeMonitoringQueueReason", {
+            source: sourceDocumentName,
+            target: targetDocumentName,
+          })
+          : t("knowledge.impactNeedsAttention", { count: 1 }));
+
+    setSuggestionQueue((current) => [
+      {
+        attemptCount: (existingEntry?.attemptCount || 0) + 1,
+        context: queueContext,
+        errorMessage: undefined,
+        hasPatchSet: false,
+        id: entryId,
+        issueId: nextContext.issueId,
+        issueKind: nextContext.issueKind,
+        issuePriority: nextContext.issuePriority,
+        issueReason: nextContext.issueReason,
+        patchCount: undefined,
+        patchSet: null,
+        patchSetTitle: undefined,
+        reasonSummary,
+        sourceCount: undefined,
+        sourceDocumentId,
+        sourceDocumentName,
+        status: "queued",
+        targetDocumentId,
+        targetDocumentName,
+        updatedAt: Date.now(),
+      },
+      ...current.filter((entry) => entry.id !== entryId),
+    ].slice(0, 12));
+
+    if (!forceQueue && activeDoc.id === sourceDocumentId) {
+      requestAiIntent({
+        context: nextContext,
+        openPatchReviewAfter,
+        queueEntryId: entryId,
+        targetDocumentId,
+        type: "suggest-updates",
+      });
+      return;
+    }
+
+    setPendingImpactSuggestions((current) => [
+      ...current.filter((entry) => entry.queueEntryId !== entryId),
+      {
+        context: nextContext,
+        openPatchReviewAfter,
+        queueEntryId: entryId,
+        sourceDocumentId,
+        targetDocumentId,
+      },
+    ]);
+  }, [activeDoc.id, getDocumentNameById, requestAiIntent, suggestionQueue, t]);
+  const suggestionQueueItems = useMemo(
+    () => suggestionQueue.map(({ patchSet: _patchSet, ...entry }) => entry),
+    [suggestionQueue],
+  );
+  const handleOpenSuggestionQueueItem = useCallback((entryId: string) => {
+    const entry = suggestionQueue.find((queueEntry) => queueEntry.id === entryId);
+
+    if (!entry?.patchSet || !entry.hasPatchSet) {
+      return;
+    }
+
+    loadPatchSet(entry.patchSet);
+    openPatchReview();
+  }, [loadPatchSet, openPatchReview, suggestionQueue]);
+  const handleDismissSuggestionQueueItem = useCallback((entryId: string) => {
+    setSuggestionQueue((current) => current.filter((entry) => entry.id !== entryId));
+  }, []);
+  const handleRetrySuggestionQueueItem = useCallback((entryId: string) => {
+    const entry = suggestionQueue.find((queueEntry) => queueEntry.id === entryId);
+
+    if (!entry) {
+      return;
+    }
+
+    queueKnowledgeSuggestion({
+      context: {
+        issueId: entry.issueId,
+        issueKind: entry.issueKind,
+        issuePriority: entry.issuePriority,
+        issueReason: entry.issueReason,
+        queueContext: entry.context,
+        sourceDocumentId: entry.sourceDocumentId,
+        sourceDocumentName: entry.sourceDocumentName,
+        targetDocumentName: entry.targetDocumentName,
+      },
+      queueEntryId: entry.id,
+      sourceDocumentId: entry.sourceDocumentId,
+      targetDocumentId: entry.targetDocumentId,
+    });
+  }, [queueKnowledgeSuggestion, suggestionQueue]);
+  const handleRetryFailedSuggestionQueueItems = useCallback(() => {
+    suggestionQueue
+      .filter((entry) => entry.status === "failed")
+      .forEach((entry) => {
+        queueKnowledgeSuggestion({
+          context: {
+            issueId: entry.issueId,
+            issueKind: entry.issueKind,
+            issuePriority: entry.issuePriority,
+            issueReason: entry.issueReason,
+            queueContext: entry.context,
+            sourceDocumentId: entry.sourceDocumentId,
+            sourceDocumentName: entry.sourceDocumentName,
+            targetDocumentName: entry.targetDocumentName,
+          },
+          forceQueue: true,
+          queueEntryId: entry.id,
+          sourceDocumentId: entry.sourceDocumentId,
+          targetDocumentId: entry.targetDocumentId,
+        });
+      });
+  }, [queueKnowledgeSuggestion, suggestionQueue]);
+  const handleOpenNextSuggestionQueueItem = useCallback(() => {
+    const nextReadyEntry = suggestionQueue.find((entry) =>
+      entry.status === "ready" && entry.hasPatchSet && entry.patchSet);
+
+    if (!nextReadyEntry) {
+      return;
+    }
+
+    handleOpenSuggestionQueueItem(nextReadyEntry.id);
+  }, [handleOpenSuggestionQueueItem, suggestionQueue]);
+
+  const clearKnowledgeActionParams = useCallback(() => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+
+      [
+        "knowledgeAction",
+        "context",
+        "source",
+        "target",
+        "issueId",
+        "issueKind",
+        "issuePriority",
+        "issueReason",
+      ].forEach((key) => next.delete(key));
+
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   useEffect(() => {
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
@@ -255,6 +697,50 @@ const Index = () => {
     void runAiIntent(pendingAiIntent);
     setPendingAiIntent(null);
   }, [aiRuntimeState, pendingAiIntent, runAiIntent]);
+
+  useEffect(() => {
+    if (searchParams.get("knowledgeAction") !== "suggest-updates") {
+      return;
+    }
+
+    const sourceDocumentId = searchParams.get("source");
+    const targetDocumentId = searchParams.get("target");
+    const rawContext = searchParams.get("context");
+    const rawIssueKind = searchParams.get("issueKind");
+    const rawIssuePriority = searchParams.get("issuePriority");
+
+    if (!sourceDocumentId || !targetDocumentId) {
+      clearKnowledgeActionParams();
+      return;
+    }
+
+    const nextContext: KnowledgeSuggestionContext | undefined = rawContext === "consistency"
+      ? {
+        issueId: searchParams.get("issueId") || undefined,
+        issueKind: isKnowledgeIssueKind(rawIssueKind)
+          ? rawIssueKind
+          : undefined,
+        issuePriority: isKnowledgeIssuePriority(rawIssuePriority)
+          ? rawIssuePriority
+          : undefined,
+        issueReason: searchParams.get("issueReason") || undefined,
+        queueContext: "consistency",
+      }
+      : rawContext === "change"
+        ? { queueContext: "change" }
+        : rawContext === "impact"
+          ? { queueContext: "impact" }
+      : undefined;
+
+    queueKnowledgeSuggestion({
+      context: nextContext,
+      openPatchReviewAfter: true,
+      sourceDocumentId,
+      targetDocumentId,
+    });
+
+    clearKnowledgeActionParams();
+  }, [clearKnowledgeActionParams, queueKnowledgeSuggestion, searchParams]);
 
   const handleFileNameChange = useCallback((name: string) => {
     updateActiveDoc({ name });
@@ -297,13 +783,31 @@ const Index = () => {
   }, [deleteDocument, removeDocumentVersionSnapshots]);
 
   const handleTemplateSelect = useCallback((template: DocumentTemplate) => {
+    const fallbackContent = getStableTemplateFallbackContent(template.mode, locale);
+    const selectedContent = template.content.trim().length > 0 || template.id === "blank-markdown"
+      ? template.content
+      : fallbackContent;
+
+    if (templateRequiresDocumentFeatures(template.mode, selectedContent)) {
+      enableDocumentFeatures();
+    }
+
+    if (templateRequiresAdvancedBlocks(template.mode, selectedContent)) {
+      enableAdvancedBlocks();
+    }
+
     createDocument({
-      content: template.content,
+      content: selectedContent,
       mode: template.mode,
       name: template.name,
+      sourceSnapshots: {
+        [template.mode]: selectedContent,
+      },
+      storageKind: "docsy",
+      tiptapJson: null,
     });
     toast.success(t("toasts.templateApplied"));
-  }, [createDocument, t]);
+  }, [createDocument, enableAdvancedBlocks, enableDocumentFeatures, locale, t]);
 
   useEffect(() => {
     if (hasRestoredDocuments) {
@@ -356,27 +860,32 @@ const Index = () => {
   }, [activeDoc, autoSaveState.lastSavedAt, autoSaveState.status, captureAutoSaveSnapshot]);
 
   useEffect(() => {
-    if (!pendingImpactSuggestion) {
+    const nextPendingSuggestion = pendingImpactSuggestions[0];
+
+    if (!nextPendingSuggestion) {
       return;
     }
 
-    if (activeDoc.id !== pendingImpactSuggestion.sourceDocumentId) {
-      selectDocument(pendingImpactSuggestion.sourceDocumentId);
+    if (activeDoc.id !== nextPendingSuggestion.sourceDocumentId) {
+      selectDocument(nextPendingSuggestion.sourceDocumentId);
       return;
     }
 
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
       toast.error("Impact suggestions currently require a rich-text source document.");
-      setPendingImpactSuggestion(null);
+      setPendingImpactSuggestions((current) => current.slice(1));
       return;
     }
 
     requestAiIntent({
-      targetDocumentId: pendingImpactSuggestion.targetDocumentId,
+      context: nextPendingSuggestion.context,
+      openPatchReviewAfter: nextPendingSuggestion.openPatchReviewAfter,
+      queueEntryId: nextPendingSuggestion.queueEntryId,
+      targetDocumentId: nextPendingSuggestion.targetDocumentId,
       type: "suggest-updates",
     });
-    setPendingImpactSuggestion(null);
-  }, [activeDoc.id, activeDoc.mode, pendingImpactSuggestion, requestAiIntent, selectDocument]);
+    setPendingImpactSuggestions((current) => current.slice(1));
+  }, [activeDoc.id, activeDoc.mode, pendingImpactSuggestions, requestAiIntent, selectDocument]);
 
   useEffect(() => {
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
@@ -419,7 +928,7 @@ const Index = () => {
             canEnableAdvancedBlocks={canEnableAdvancedBlocks}
             canEnableDocumentFeatures={canEnableDocumentFeatures}
             documentFeaturesEnabled={documentFeaturesEnabled}
-            key={`${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
+            key={`${activeDoc.id}:${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
             initialContent={activeDoc.content || undefined}
             initialTiptapDoc={activeDoc.tiptapJson || undefined}
             onContentChange={handleContentChange}
@@ -441,7 +950,7 @@ const Index = () => {
             canEnableAdvancedBlocks={canEnableAdvancedBlocks}
             canEnableDocumentFeatures={canEnableDocumentFeatures}
             documentFeaturesEnabled={documentFeaturesEnabled}
-            key={`${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
+            key={`${activeDoc.id}:${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
             initialContent={activeDoc.content}
             initialTiptapDoc={activeDoc.tiptapJson || undefined}
             onContentChange={handleContentChange}
@@ -459,7 +968,7 @@ const Index = () => {
       return (
         <Suspense fallback={<EditorFallback />}>
           <JsonYamlEditor
-            key={editorKey}
+            key={`${activeDoc.id}:${editorKey}`}
             initialContent={activeDoc.content}
             mode={activeDoc.mode}
             onContentChange={handleContentChange}
@@ -477,7 +986,7 @@ const Index = () => {
           canEnableAdvancedBlocks={canEnableAdvancedBlocks}
           canEnableDocumentFeatures={canEnableDocumentFeatures}
           documentFeaturesEnabled={documentFeaturesEnabled}
-          key={`${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
+          key={`${activeDoc.id}:${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
           initialContent={activeDoc.content}
           initialTiptapDoc={activeDoc.tiptapJson || undefined}
           onContentChange={handleContentChange}
@@ -489,7 +998,7 @@ const Index = () => {
         />
       </Suspense>
     );
-  }, [activeDoc.content, activeDoc.mode, activeDoc.tiptapJson, advancedBlocksEnabled, canEnableAdvancedBlocks, canEnableDocumentFeatures, documentFeaturesEnabled, editorKey, enableAdvancedBlocks, enableDocumentFeatures, handleContentChange, handleModeChange, handleTiptapChange, setLiveEditorHtml]);
+  }, [activeDoc.content, activeDoc.id, activeDoc.mode, activeDoc.tiptapJson, advancedBlocksEnabled, canEnableAdvancedBlocks, canEnableDocumentFeatures, documentFeaturesEnabled, editorKey, enableAdvancedBlocks, enableDocumentFeatures, handleContentChange, handleModeChange, handleTiptapChange, setLiveEditorHtml]);
 
   const aiAssistantDialogProps = aiRuntimeState
     ? {
@@ -669,27 +1178,32 @@ const Index = () => {
             },
             knowledgeEnabled,
             knowledgeProps: {
+              acceptedPatchCount,
+              onDismissSuggestionQueueItem: handleDismissSuggestionQueueItem,
               onGenerateTocSuggestion: () => {
                 requestAiIntent({ type: "generate-toc" });
               },
-              onSuggestKnowledgeImpactUpdate: (sourceDocumentId: string, targetDocumentId: string) => {
-                if (activeDoc.id === sourceDocumentId) {
-                  requestAiIntent({
-                    targetDocumentId,
-                    type: "suggest-updates",
-                  });
-                  return;
-                }
-
-                setPendingImpactSuggestion({ sourceDocumentId, targetDocumentId });
-                selectDocument(sourceDocumentId);
+              onOpenNextSuggestionQueueItem: handleOpenNextSuggestionQueueItem,
+              onOpenPatchReview: openPatchReview,
+              onOpenSuggestionQueueItem: handleOpenSuggestionQueueItem,
+              onRetryFailedSuggestionQueueItems: handleRetryFailedSuggestionQueueItems,
+              onRetrySuggestionQueueItem: handleRetrySuggestionQueueItem,
+              onSuggestKnowledgeImpactUpdate: (
+                sourceDocumentId: string,
+                targetDocumentId: string,
+                context?: KnowledgeSuggestionContext,
+              ) => {
+                queueKnowledgeSuggestion({ context, sourceDocumentId, targetDocumentId });
               },
-              onSuggestKnowledgeUpdates: (documentId: string) => {
-                requestAiIntent({
+              onSuggestKnowledgeUpdates: (documentId: string, context?: KnowledgeSuggestionContext) => {
+                queueKnowledgeSuggestion({
+                  context,
+                  sourceDocumentId: activeDoc.id,
                   targetDocumentId: documentId,
-                  type: "suggest-updates",
                 });
               },
+              patchCount,
+              suggestionQueue: suggestionQueueItems,
             },
             onDeleteDoc: handleDeleteDoc,
             onActivateHistory: () => setHistoryEnabled(true),

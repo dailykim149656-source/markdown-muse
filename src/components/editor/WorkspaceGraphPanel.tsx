@@ -1,13 +1,15 @@
 import { Suspense, lazy, useMemo, useState } from "react";
-import { Boxes, GitBranch, ImageIcon, Maximize2, Network, SquareStack } from "lucide-react";
+import { Boxes, GitBranch, ImageIcon, Maximize2, Network, Search, SquareStack } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
 import type {
   KnowledgeGraphEdge,
   KnowledgeWorkspaceInsights,
 } from "@/lib/knowledge/workspaceInsights";
+import { useNavigate } from "react-router-dom";
 import {
   type EdgeFilter,
   type NodeFilter,
@@ -19,55 +21,146 @@ import {
   nodeKindOrder,
 } from "@/components/editor/workspaceGraphUtils";
 
-const GraphExplorerDialog = lazy(() => import("@/components/editor/GraphExplorerDialog"));
+const GraphExplorerSurface = lazy(() =>
+  import("@/components/editor/GraphExplorerDialog").then((module) => ({
+    default: module.GraphExplorerSurface,
+  })),
+);
 
 const GraphDialogFallback = () => null;
 
+const getWorkspaceScale = (insights: KnowledgeWorkspaceInsights) => {
+  const nodeCount = insights.summary.documentNodeCount
+    + insights.summary.sectionNodeCount
+    + insights.summary.imageNodeCount;
+
+  if (nodeCount <= 120 && insights.summary.edgeCount <= 180) {
+    return "small";
+  }
+
+  if (nodeCount <= 480 && insights.summary.edgeCount <= 900) {
+    return "medium";
+  }
+
+  return "large";
+};
+
 interface WorkspaceGraphPanelProps {
+  activeDocumentId?: string;
   insights: KnowledgeWorkspaceInsights;
   onOpenDocument: (documentId: string) => void;
 }
 
 const WorkspaceGraphPanel = ({
+  activeDocumentId,
   insights,
   onOpenDocument,
 }: WorkspaceGraphPanelProps) => {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [nodeFilter, setNodeFilter] = useState<NodeFilter>("all");
   const [edgeFilter, setEdgeFilter] = useState<EdgeFilter>("all");
+  const [query, setQuery] = useState("");
+  const [issuesOnly, setIssuesOnly] = useState(false);
   const [explorerOpen, setExplorerOpen] = useState(false);
+  const [explorerSelectedNodeId, setExplorerSelectedNodeId] = useState<string | null>(null);
+  const workspaceScale = useMemo(() => getWorkspaceScale(insights), [insights]);
 
   const nodeById = useMemo(
     () => new Map(insights.nodes.map((node) => [node.id, node])),
     [insights.nodes],
   );
 
-  const visibleNodes = useMemo(
+  const baseNodes = useMemo(
     () => insights.nodes
-      .filter((node) => nodeFilter === "all" || node.kind === nodeFilter)
+      .filter((node) =>
+        (nodeFilter === "all" || node.kind === nodeFilter)
+        && (!issuesOnly || (node.issueCount || 0) > 0))
       .sort((left, right) =>
         nodeKindOrder[left.kind] - nodeKindOrder[right.kind]
         || (right.issueCount || 0) - (left.issueCount || 0)
         || left.label.localeCompare(right.label)),
-    [insights.nodes, nodeFilter],
+    [insights.nodes, issuesOnly, nodeFilter],
   );
 
-  const visibleNodeIds = useMemo(
-    () => new Set(visibleNodes.map((node) => node.id)),
-    [visibleNodes],
+  const baseNodeIds = useMemo(
+    () => new Set(baseNodes.map((node) => node.id)),
+    [baseNodes],
   );
 
-  const visibleEdges = useMemo(
+  const baseEdges = useMemo(
     () => insights.edges
       .filter((edge) =>
         (edgeFilter === "all" || edge.group === edgeFilter)
-        && visibleNodeIds.has(edge.sourceId)
-        && visibleNodeIds.has(edge.targetId))
+        && baseNodeIds.has(edge.sourceId)
+        && baseNodeIds.has(edge.targetId))
       .sort((left, right) =>
         edgeGroupOrder[left.group] - edgeGroupOrder[right.group]
         || right.weight - left.weight
         || left.description.localeCompare(right.description)),
-    [edgeFilter, insights.edges, visibleNodeIds],
+    [baseNodeIds, edgeFilter, insights.edges],
+  );
+
+  const filteredGraph = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return {
+        edges: baseEdges,
+        nodes: baseNodes,
+      };
+    }
+
+    const directlyMatchedNodeIds = new Set(
+      baseNodes
+        .filter((node) => node.label.toLowerCase().includes(normalizedQuery))
+        .map((node) => node.id),
+    );
+    const matchedNodeIds = new Set(directlyMatchedNodeIds);
+    const matchedEdgeIds = new Set<string>();
+
+    for (const edge of baseEdges) {
+      const sourceLabel = nodeById.get(edge.sourceId)?.label || "";
+      const targetLabel = nodeById.get(edge.targetId)?.label || "";
+      const edgeMatches = [
+        edge.description,
+        sourceLabel,
+        targetLabel,
+      ].join(" ").toLowerCase().includes(normalizedQuery);
+
+      if (
+        edgeMatches
+        || directlyMatchedNodeIds.has(edge.sourceId)
+        || directlyMatchedNodeIds.has(edge.targetId)
+      ) {
+        matchedEdgeIds.add(edge.id);
+        matchedNodeIds.add(edge.sourceId);
+        matchedNodeIds.add(edge.targetId);
+      }
+    }
+
+    return {
+      edges: baseEdges.filter((edge) => matchedEdgeIds.has(edge.id)),
+      nodes: baseNodes.filter((node) => matchedNodeIds.has(node.id)),
+    };
+  }, [baseEdges, baseNodes, nodeById, query]);
+
+  const visibleNodes = filteredGraph.nodes;
+  const visibleEdges = filteredGraph.edges;
+  const hasQuery = query.trim().length > 0;
+  const emptyMessage = hasQuery ? t("knowledge.graphSearchEmpty") : t("knowledge.graphEmpty");
+
+  const visibleNodeCount = visibleNodes.length;
+  const visibleEdgeCount = visibleEdges.length;
+
+  const maxNodeCardCount = hasQuery ? 16 : 12;
+  const hasMoreNodeCards = visibleNodeCount > maxNodeCardCount;
+  const remainingNodeCardCount = visibleNodeCount - maxNodeCardCount;
+  const activeDocumentNode = useMemo(
+    () => activeDocumentId
+      ? insights.nodes.find((node) => node.kind === "document" && node.documentId === activeDocumentId) || null
+      : null,
+    [activeDocumentId, insights.nodes],
   );
 
   const connectionSummary = useMemo(() => {
@@ -102,8 +195,8 @@ const WorkspaceGraphPanel = ({
         || right.totalConnections - left.totalConnections
         || (right.node.issueCount || 0) - (left.node.issueCount || 0)
         || left.node.label.localeCompare(right.node.label))
-      .slice(0, 8),
-    [connectionSummary.incoming, connectionSummary.outgoing, visibleEdges, visibleNodes],
+      .slice(0, maxNodeCardCount),
+    [connectionSummary.incoming, connectionSummary.outgoing, maxNodeCardCount, visibleEdges, visibleNodes],
   );
 
   return (
@@ -114,7 +207,13 @@ const WorkspaceGraphPanel = ({
             <Network className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-xs font-medium text-foreground">{t("knowledge.graphTitle")}</span>
           </div>
-          <Button className="h-6 gap-1 px-2 text-[10px]" onClick={() => setExplorerOpen(true)} size="sm" type="button" variant="outline">
+          <Button
+            className="h-6 gap-1 px-2 text-[10px]"
+            onClick={() => navigate("/editor/graph")}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
             <Maximize2 className="h-3 w-3" />
             {t("knowledge.graphExplore")}
           </Button>
@@ -156,6 +255,39 @@ const WorkspaceGraphPanel = ({
       </div>
 
       <div className="space-y-2">
+        {workspaceScale !== "small" && (
+          <div className="rounded-md border border-border/60 bg-muted/20 px-2 py-2 text-[11px] text-muted-foreground">
+            <div className="font-medium text-foreground">
+              {t(workspaceScale === "medium" ? "knowledge.graphScaleMedium" : "knowledge.graphScaleLarge")}
+            </div>
+            <p className="mt-1 leading-4">
+              {t(workspaceScale === "medium" ? "knowledge.graphScaleHintMedium" : "knowledge.graphScaleHintLarge")}
+            </p>
+          </div>
+        )}
+        {activeDocumentNode && (
+          <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/20 px-2 py-2">
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {t("knowledge.graphSelectedNode")}
+              </div>
+              <div className="truncate text-xs font-medium text-foreground">
+                {activeDocumentNode.label}
+              </div>
+            </div>
+            <Button
+              className="h-7 px-2 text-[10px]"
+              onClick={() => {
+                navigate(`/editor/graph?node=${encodeURIComponent(activeDocumentNode.id)}`);
+              }}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              {t("knowledge.graphFocusSelection")}
+            </Button>
+          </div>
+        )}
         <div className="flex flex-wrap gap-1">
           {(["all", "document", "section", "image"] as NodeFilter[]).map((value) => (
             <Button
@@ -184,11 +316,36 @@ const WorkspaceGraphPanel = ({
             </Button>
           ))}
         </div>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-8 pl-7 text-xs"
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t("knowledge.graphSearchPlaceholder")}
+              value={query}
+            />
+          </div>
+          <Button
+            className="h-8 px-2 text-[10px]"
+            onClick={() => setIssuesOnly((current) => !current)}
+            size="sm"
+            type="button"
+            variant={issuesOnly ? "secondary" : "ghost"}
+          >
+            {t("knowledge.graphIssuesOnly")}
+          </Button>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+          <span>{t("knowledge.graphNodes")}: {visibleNodeCount}</span>
+          <span>|</span>
+          <span>{t("knowledge.graphConnections")}: {visibleEdgeCount}</span>
+        </div>
       </div>
 
       {visibleNodeCards.length === 0 ? (
         <div className="rounded-md border border-dashed border-border px-2 py-3 text-[11px] leading-4 text-muted-foreground">
-          {t("knowledge.graphEmpty")}
+          {emptyMessage}
         </div>
       ) : (
         <ScrollArea className="h-[320px] rounded-md border border-border/60">
@@ -209,15 +366,29 @@ const WorkspaceGraphPanel = ({
                       )}
                     </div>
                   </div>
-                  <Button
-                    className="h-6 px-2 text-[10px]"
-                    onClick={() => onOpenDocument(node.documentId)}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    {t("knowledge.open")}
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => {
+                        setExplorerSelectedNodeId(node.id);
+                        setExplorerOpen(true);
+                      }}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t("knowledge.consistencyInspect")}
+                    </Button>
+                    <Button
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => onOpenDocument(node.documentId)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      {t("knowledge.open")}
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
@@ -267,15 +438,21 @@ const WorkspaceGraphPanel = ({
                 )}
               </div>
             ))}
+            {hasMoreNodeCards && (
+              <div className="rounded-md border border-dashed border-border/60 px-2 py-2 text-[11px] text-muted-foreground">
+                {t("knowledge.graphMoreConnections", { count: remainingNodeCardCount })}
+              </div>
+            )}
           </div>
         </ScrollArea>
       )}
       {explorerOpen && (
         <Suspense fallback={<GraphDialogFallback />}>
-          <GraphExplorerDialog
+          <GraphExplorerSurface
             insights={insights}
             onOpenChange={setExplorerOpen}
             onOpenDocument={onOpenDocument}
+            selectedNodeId={explorerSelectedNodeId}
             open={explorerOpen}
           />
         </Suspense>

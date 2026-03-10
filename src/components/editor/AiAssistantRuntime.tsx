@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
+import type { KnowledgeSuggestionContext } from "@/components/editor/sidebarFeatureTypes";
 import { useAiAssistant } from "@/hooks/useAiAssistant";
 import type { AiBusyAction, PatchPreviewResult, TocPreviewResult } from "@/hooks/useAiAssistant";
 import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
@@ -20,7 +21,10 @@ export interface AiAssistantRuntimeState {
   procedureResult: ProcedureExtractionResult | null;
   richTextAvailable: boolean;
   setAssistantOpen: (open: boolean) => void;
-  suggestUpdatesFromDocument: (targetDocumentId: string) => Promise<unknown> | unknown;
+  suggestUpdatesFromDocument: (
+    targetDocumentId: string,
+    context?: KnowledgeSuggestionContext,
+  ) => Promise<unknown> | unknown;
   summarizeActiveDocument: (objective: string) => Promise<SummarizeDocumentResponse | unknown> | unknown;
   summaryResult: SummarizeDocumentResponse | null;
   tocPreview: TocPreviewResult | null;

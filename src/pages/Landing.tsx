@@ -23,6 +23,7 @@ import docslyLogoSmall from "@/assets/docsly-logo-small.png";
 import editorPreview from "@/assets/editor-preview.png";
 import editorPreviewSmall from "@/assets/editor-preview-small.png";
 import { Button } from "@/components/ui/button";
+import { getGuideContent } from "@/content/guideContent";
 import { useI18n } from "@/i18n/useI18n";
 import type { Locale } from "@/i18n/types";
 
@@ -89,6 +90,7 @@ const Landing = () => {
     { description: t("landing.features.exportDesc"), icon: Printer, title: t("landing.features.exportTitle") },
     { description: t("landing.features.themeDesc"), icon: Moon, title: t("landing.features.themeTitle") },
   ]), [t]);
+  const guideContent = useMemo(() => getGuideContent(locale), [locale]);
 
   const formats = ["Markdown", "LaTeX", "HTML", "Typst", "RST", "AsciiDoc", "JSON", "YAML", "PDF"];
 
@@ -121,6 +123,9 @@ const Landing = () => {
           </div>
           <Button className="h-8 w-8 p-0" onClick={() => setIsDark((value) => !value)} size="sm" variant="ghost">
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+          <Button className="rounded-lg" onClick={() => navigate("/guide")} size="sm" variant="outline">
+            {t("guide.nav")}
           </Button>
           <Button className="gap-1.5 rounded-lg" onClick={() => navigate("/editor")} size="sm">
             {t("landing.openEditor")}
@@ -288,6 +293,48 @@ const Landing = () => {
         </div>
       </section>
 
+      <section className="px-6 py-20 sm:px-10">
+        <div className="mx-auto max-w-6xl">
+          <motion.div
+            className="mb-12 text-center"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            <span className="mb-4 inline-block rounded-full bg-orange-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-orange-600 dark:text-orange-400">
+              {guideContent.landing.quickStartEyebrow}
+            </span>
+            <h2 className="mb-4 text-3xl font-bold sm:text-4xl">{guideContent.landing.quickStartTitle}</h2>
+            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">{guideContent.landing.quickStartDescription}</p>
+          </motion.div>
+
+          <motion.div
+            className="grid grid-cols-1 gap-5 md:grid-cols-3"
+            initial="hidden"
+            variants={staggerContainer}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            {guideContent.landing.quickStartSteps.map((step, index) => (
+              <motion.div
+                className="rounded-2xl border border-border bg-card p-6 shadow-sm"
+                custom={index}
+                key={step.title}
+                variants={fadeUp}
+              >
+                <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-amber-500/15 to-orange-500/15 text-base font-semibold text-amber-700 dark:text-amber-400">
+                  {index + 1}
+                </div>
+                <h3 className="mb-2 text-lg font-semibold">{step.title}</h3>
+                <p className="text-sm leading-6 text-foreground/85">{step.description}</p>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">{step.detail}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
       <section className="px-6 py-24 sm:px-10" id="features">
         <div className="mx-auto max-w-6xl">
           <motion.div
@@ -331,6 +378,88 @@ const Landing = () => {
         </div>
       </section>
 
+      <section className="border-y border-border bg-muted/30 px-6 py-20 sm:px-10">
+        <div className="mx-auto max-w-6xl">
+          <motion.div
+            className="mb-12 text-center"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            <span className="mb-4 inline-block rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
+              {guideContent.landing.workflowEyebrow}
+            </span>
+            <h2 className="mb-4 text-3xl font-bold sm:text-4xl">{guideContent.landing.workflowTitle}</h2>
+            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">{guideContent.landing.workflowDescription}</p>
+          </motion.div>
+
+          <motion.div
+            className="grid grid-cols-1 gap-5 md:grid-cols-2"
+            initial="hidden"
+            variants={staggerContainer}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            {guideContent.landing.workflowCards.map(({ description, emphasis, title }, index) => (
+              <motion.div
+                className="rounded-2xl border border-border bg-card p-6 shadow-sm"
+                custom={index}
+                key={title}
+                variants={fadeUp}
+              >
+                <div className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  {emphasis}
+                </div>
+                <h3 className="mb-2 text-xl font-semibold">{title}</h3>
+                <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      <section className="px-6 py-20 sm:px-10">
+        <div className="mx-auto max-w-6xl">
+          <motion.div
+            className="mb-12 text-center"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            <span className="mb-4 inline-block rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+              {guideContent.landing.featureEyebrow}
+            </span>
+            <h2 className="mb-4 text-3xl font-bold sm:text-4xl">{guideContent.landing.featureTitle}</h2>
+            <p className="mx-auto max-w-2xl text-lg text-muted-foreground">{guideContent.landing.featureDescription}</p>
+          </motion.div>
+
+          <motion.div
+            className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"
+            initial="hidden"
+            variants={staggerContainer}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            {guideContent.landing.featureCards.map((card, index) => (
+              <motion.div
+                className="rounded-2xl border border-border bg-card p-6 shadow-sm"
+                custom={index}
+                key={card.title}
+                variants={fadeUp}
+              >
+                <h3 className="mb-3 text-lg font-semibold">{card.title}</h3>
+                <p className="text-sm leading-6 text-foreground/85">{card.description}</p>
+                <div className="mt-4 rounded-xl border border-border/70 bg-muted/20 px-4 py-3 text-sm leading-6 text-muted-foreground">
+                  {card.useWhen}
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
       <section className="px-6 py-24 sm:px-10">
         <motion.div
           className="relative mx-auto max-w-3xl text-center"
@@ -350,14 +479,30 @@ const Landing = () => {
             />
             <h2 className="mb-3 text-2xl font-bold sm:text-3xl">{t("landing.ctaTitle")}</h2>
             <p className="mx-auto mb-8 max-w-md text-muted-foreground">{t("landing.ctaDescription")}</p>
-            <Button
-              className="gap-2 rounded-xl border-0 bg-gradient-to-r from-amber-500 to-orange-500 px-8 py-6 text-base text-white shadow-lg transition-all hover:-translate-y-0.5 hover:from-amber-600 hover:to-orange-600 hover:shadow-xl"
-              onClick={() => navigate("/editor")}
-              size="lg"
-            >
-              {t("landing.openEditor")}
-              <ArrowRight className="h-4 w-4" />
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button
+                className="gap-2 rounded-xl border-0 bg-gradient-to-r from-amber-500 to-orange-500 px-8 py-6 text-base text-white shadow-lg transition-all hover:-translate-y-0.5 hover:from-amber-600 hover:to-orange-600 hover:shadow-xl"
+                onClick={() => navigate("/editor")}
+                size="lg"
+              >
+                {t("landing.openEditor")}
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button
+                className="rounded-xl px-8 py-6 text-base"
+                onClick={() => navigate("/guide")}
+                size="lg"
+                variant="outline"
+              >
+                {t("guide.nav")}
+              </Button>
+            </div>
+            <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-border/70 bg-muted/20 px-6 py-5 text-left">
+              <div className="text-sm font-semibold text-foreground">{guideContent.landing.ctaTitle}</div>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {guideContent.landing.ctaDescription}
+              </p>
+            </div>
           </div>
         </motion.div>
       </section>

@@ -6,6 +6,40 @@ import type {
 
 export type SidebarTab = "documents" | "history" | "knowledge";
 
+export interface KnowledgeSuggestionContext {
+  issueId?: string;
+  issueKind?: "changed_section" | "conflicting_procedure" | "missing_section";
+  issuePriority?: "high" | "low" | "medium";
+  issueReason?: string;
+  queueContext?: "change" | "consistency" | "impact";
+  sourceDocumentId?: string;
+  sourceDocumentName?: string;
+  targetDocumentName?: string;
+}
+
+export interface KnowledgeSuggestionQueueItem {
+  attemptCount: number;
+  confidenceLabel?: "high" | "low" | "medium";
+  context: "change" | "consistency" | "impact";
+  errorMessage?: string;
+  hasPatchSet: boolean;
+  id: string;
+  issueId?: string;
+  issueKind?: "changed_section" | "conflicting_procedure" | "missing_section";
+  issuePriority?: "high" | "low" | "medium";
+  issueReason?: string;
+  patchCount?: number;
+  patchSetTitle?: string;
+  reasonSummary?: string;
+  sourceCount?: number;
+  sourceDocumentId: string;
+  sourceDocumentName: string;
+  status: "failed" | "queued" | "ready" | "running";
+  targetDocumentId: string;
+  targetDocumentName: string;
+  updatedAt: number;
+ }
+
 export interface HistorySidebarPanelsProps {
   activeDoc: DocumentData;
   onGenerateTocSuggestion?: () => void;
@@ -19,10 +53,23 @@ export interface HistorySidebarPanelsProps {
 export interface KnowledgeSidebarPanelsProps {
   activeDoc: DocumentData;
   activeDocId: string;
+  acceptedPatchCount: number;
   createDocument: (options?: CreateDocumentOptions) => DocumentData;
   documents: DocumentData[];
+  onDismissSuggestionQueueItem: (id: string) => void;
   onGenerateTocSuggestion?: () => void;
+  onOpenNextSuggestionQueueItem: () => void;
+  onOpenPatchReview: () => void;
+  onOpenSuggestionQueueItem: (id: string) => void;
+  onRetryFailedSuggestionQueueItems: () => void;
+  onRetrySuggestionQueueItem: (id: string) => void;
   onSelectDoc: (id: string) => void;
-  onSuggestKnowledgeImpactUpdate: (sourceDocumentId: string, targetDocumentId: string) => void;
-  onSuggestKnowledgeUpdates: (documentId: string) => void;
+  onSuggestKnowledgeImpactUpdate: (
+    sourceDocumentId: string,
+    targetDocumentId: string,
+    context?: KnowledgeSuggestionContext,
+  ) => void;
+  onSuggestKnowledgeUpdates: (documentId: string, context?: KnowledgeSuggestionContext) => void;
+  patchCount: number;
+  suggestionQueue: KnowledgeSuggestionQueueItem[];
 }

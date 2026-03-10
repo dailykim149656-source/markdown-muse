@@ -1,4 +1,4 @@
-import { ArrowRight, RefreshCcw, ScanSearch } from "lucide-react";
+import { ArrowRight, Network, RefreshCcw, ScanSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n/useI18n";
 import type { SourceChangeRecord, SourceChangeType } from "@/lib/knowledge/sourceFingerprint";
@@ -10,6 +10,12 @@ interface ChangeMonitoringPanelProps {
   isRescanning: boolean;
   lastRescannedAt: number | null;
   onOpenDocument: (documentId: string) => void;
+  onOpenGraph?: (request: {
+    context: "change";
+    nodeDocumentId: string;
+    sourceDocumentId: string;
+    targetDocumentId: string;
+  }) => void;
   onRescan: () => void;
   onSuggestUpdates: (sourceDocumentId: string, targetDocumentId: string) => void;
 }
@@ -57,18 +63,42 @@ const changeTypeLabelKey = (changeType: SourceChangeType) =>
     ? "knowledge.changeMonitoringNew"
     : "knowledge.changeMonitoringChanged";
 
+const priorityLabel = (item: KnowledgeImpactQueueItem) => {
+  if (item.relationKinds.includes("referenced_by") || item.issueCount > 0) {
+    return "P1";
+  }
+
+  if (item.relationKinds.includes("duplicate")) {
+    return "P2";
+  }
+
+  return "P3";
+};
+
+const priorityClassName = (priority: string) => {
+  switch (priority) {
+    case "P1":
+      return "border-amber-500/40 bg-amber-500/5 text-amber-600 dark:text-amber-400";
+    case "P2":
+      return "border-blue-500/30 bg-blue-500/5 text-blue-600 dark:text-blue-400";
+    default:
+      return "border-border/60 bg-background text-muted-foreground";
+  }
+};
+
 const ChangeMonitoringPanel = ({
   changedSources,
   impactQueue,
   isRescanning,
   lastRescannedAt,
   onOpenDocument,
+  onOpenGraph,
   onRescan,
   onSuggestUpdates,
 }: ChangeMonitoringPanelProps) => {
   const { t } = useI18n();
   const describeRelations = (relationKinds: KnowledgeImpactQueueItem["relationKinds"]) =>
-    relationKinds.map((relation) => t(relationReasonKey(relation))).join(" · ");
+    relationKinds.map((relation) => t(relationReasonKey(relation))).join(" / ");
 
   return (
     <section className="space-y-3 rounded-lg border border-border/60 bg-background/70 p-3 group-data-[collapsible=icon]:hidden">
@@ -81,10 +111,26 @@ const ChangeMonitoringPanel = ({
             {t("knowledge.changeMonitoringDescription")}
           </p>
         </div>
-        <Button className="h-7 gap-1 text-xs" onClick={onRescan} size="sm" variant="outline">
-          <RefreshCcw className={`h-3 w-3 ${isRescanning ? "animate-spin" : ""}`} />
-          {isRescanning ? t("knowledge.changeMonitoringScanning") : t("knowledge.changeMonitoringRescan")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            className="h-7 gap-1 text-xs"
+            disabled={impactQueue.length === 0 || isRescanning}
+            onClick={() => {
+              impactQueue.forEach((item) => {
+                onSuggestUpdates(item.changedDocumentId, item.impactedDocumentId);
+              });
+            }}
+            size="sm"
+            variant="outline"
+          >
+            <ScanSearch className="h-3 w-3" />
+            {t("knowledge.changeMonitoringQueueAll")}
+          </Button>
+          <Button className="h-7 gap-1 text-xs" onClick={onRescan} size="sm" variant="outline">
+            <RefreshCcw className={`h-3 w-3 ${isRescanning ? "animate-spin" : ""}`} />
+            {isRescanning ? t("knowledge.changeMonitoringScanning") : t("knowledge.changeMonitoringRescan")}
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
@@ -135,41 +181,77 @@ const ChangeMonitoringPanel = ({
             {t("knowledge.changeMonitoringNoImpactQueue")}
           </div>
         ) : (
-          impactQueue.map((item) => (
-            <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2" key={`${item.changedDocumentId}:${item.impactedDocumentId}`}>
-              <div className="flex items-center gap-2 text-xs font-medium text-foreground">
-                <button className="hover:underline" onClick={() => onOpenDocument(item.changedDocumentId)} type="button">
-                  {item.changedDocumentName}
-                </button>
-                <ArrowRight className="h-3 w-3 text-muted-foreground" />
-                <button className="hover:underline" onClick={() => onOpenDocument(item.impactedDocumentId)} type="button">
-                  {item.impactedDocumentName}
-                </button>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {item.relationKinds.map((relationKind) => (
-                  <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground" key={relationKind}>
-                    {t(relationLabelKey(relationKind))}
+          impactQueue.map((item) => {
+            const priority = priorityLabel(item);
+
+            return (
+              <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2" key={`${item.changedDocumentId}:${item.impactedDocumentId}`}>
+                <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <button className="hover:underline" onClick={() => onOpenDocument(item.changedDocumentId)} type="button">
+                    {item.changedDocumentName}
+                  </button>
+                  <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                  <button className="hover:underline" onClick={() => onOpenDocument(item.impactedDocumentId)} type="button">
+                    {item.impactedDocumentName}
+                  </button>
+                  <span className={`ml-auto rounded-full border px-2 py-0.5 text-[10px] ${priorityClassName(priority)}`}>
+                    {priority}
                   </span>
-                ))}
-                <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
-                  {t("knowledge.issueCount", { count: item.issueCount })}
-                </span>
-                <span className="basis-full text-[11px] leading-4 text-muted-foreground">
-                  {describeRelations(item.relationKinds)}
-                </span>
-                <Button
-                  className="ml-auto h-7 gap-1 text-xs"
-                  onClick={() => onSuggestUpdates(item.changedDocumentId, item.impactedDocumentId)}
-                  size="sm"
-                  variant="outline"
-                >
-                  <ScanSearch className="h-3 w-3" />
-                  {t("knowledge.changeMonitoringSuggestUpdate")}
-                </Button>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {item.relationKinds.map((relationKind) => (
+                    <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground" key={relationKind}>
+                      {t(relationLabelKey(relationKind))}
+                    </span>
+                  ))}
+                  <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
+                    {t("knowledge.issueCount", { count: item.issueCount })}
+                  </span>
+                  <span className="basis-full text-[11px] leading-4 text-muted-foreground">
+                    {describeRelations(item.relationKinds)}
+                  </span>
+                  <div className="basis-full rounded-md border border-border/60 bg-background px-2 py-2 text-[11px] text-muted-foreground">
+                    <div className="font-medium text-foreground">
+                      {t("knowledge.changeMonitoringQueueReason", {
+                        source: item.changedDocumentName,
+                        target: item.impactedDocumentName,
+                      })}
+                    </div>
+                    <p className="mt-1 leading-4">
+                      {item.issueCount > 0
+                        ? t("knowledge.changeMonitoringQueueIssueHint", { count: item.issueCount })
+                        : t("knowledge.changeMonitoringQueueCleanHint")}
+                    </p>
+                  </div>
+                  {onOpenGraph && (
+                    <Button
+                      className="h-7 gap-1 text-xs"
+                      onClick={() => onOpenGraph({
+                        context: "change",
+                        nodeDocumentId: item.impactedDocumentId,
+                        sourceDocumentId: item.changedDocumentId,
+                        targetDocumentId: item.impactedDocumentId,
+                      })}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      <Network className="h-3 w-3" />
+                      {t("knowledge.graphExplore")}
+                    </Button>
+                  )}
+                  <Button
+                    className="ml-auto h-7 gap-1 text-xs"
+                    onClick={() => onSuggestUpdates(item.changedDocumentId, item.impactedDocumentId)}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <ScanSearch className="h-3 w-3" />
+                    {t("knowledge.changeMonitoringSuggestUpdate")}
+                  </Button>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </section>

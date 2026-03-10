@@ -179,62 +179,45 @@ const EditorToolbar = ({
     alignmentGroup,
   ];
 
+  const renderToolbarGroups = (keyPrefix: string) => toolbarGroups.map((group, groupIndex) => (
+    <div className="flex shrink-0 snap-start items-center gap-0.5" key={`${keyPrefix}-group-${groupIndex}`}>
+      {groupIndex > 0 && <Separator className="mx-1.5 h-5" orientation="vertical" />}
+      {group.map((item) => (
+        <Toggle
+          className="h-8 w-8 rounded-sm p-0 data-[state=on]:bg-toolbar-active hover:bg-toolbar-active/50"
+          key={`${keyPrefix}-${item.title}`}
+          onPressedChange={item.action}
+          pressed={item.active}
+          size="sm"
+          title={item.title}
+        >
+          <item.icon className="h-4 w-4" />
+        </Toggle>
+      ))}
+    </div>
+  ));
+
   return (
     <div className="relative border-b border-toolbar-border bg-toolbar">
-      <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-[hsl(var(--toolbar-bg))] to-transparent sm:hidden" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-[hsl(var(--toolbar-bg))] to-transparent sm:hidden" />
-      <div className="scrollbar-thin flex w-full min-w-max items-center gap-0.5 overflow-x-auto overscroll-x-contain px-2 py-1.5 [scroll-snap-type:x_proximity] [scrollbar-width:thin] [touch-action:pan-x] [-webkit-overflow-scrolling:touch] sm:px-3">
-        {toolbarGroups.map((group, groupIndex) => (
-          <div className="flex shrink-0 snap-start items-center gap-0.5" key={`group-${groupIndex}`}>
-            {groupIndex > 0 && <Separator className="mx-1.5 h-5" orientation="vertical" />}
-            {group.map((item) => (
-              <Toggle className="h-8 w-8 rounded-sm p-0 data-[state=on]:bg-toolbar-active hover:bg-toolbar-active/50" key={item.title} onPressedChange={item.action} pressed={item.active} size="sm" title={item.title}>
-                <item.icon className="h-4 w-4" />
-              </Toggle>
-            ))}
+      <div className="flex items-center gap-2 px-2 py-1.5 sm:hidden">
+        <div className="relative min-w-0 flex-1">
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-gradient-to-r from-[hsl(var(--toolbar-bg))] to-transparent" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-[hsl(var(--toolbar-bg))] to-transparent" />
+          <div
+            className="scrollbar-thin flex w-full min-w-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain [scroll-snap-type:x_proximity] [scrollbar-width:thin] [touch-action:pan-x] [-webkit-overflow-scrolling:touch]"
+            data-testid="toolbar-mobile-scroll"
+          >
+            {renderToolbarGroups("mobile")}
+            <div className="flex shrink-0 snap-start items-center gap-0.5">
+              <Separator className="mx-1.5 h-5" orientation="vertical" />
+              <CoreInsertTools editor={editor} />
+            </div>
           </div>
-        ))}
-        <div className="flex shrink-0 snap-start items-center gap-0.5">
-          <Separator className="mx-1.5 h-5" orientation="vertical" />
-          <CoreInsertTools editor={editor} />
         </div>
-        {documentFeaturesEnabled && (
-          <div className="hidden shrink-0 snap-start items-center gap-0.5 sm:flex">
-            <Separator className="mx-1.5 h-5" orientation="vertical" />
-            <Suspense fallback={null}>
-              <EditorToolbarDocumentTools editor={editor} />
-            </Suspense>
-          </div>
-        )}
-        {!documentFeaturesEnabled && canEnableDocumentFeatures && onEnableDocumentFeatures && (
-          <div className="hidden shrink-0 snap-start items-center gap-0.5 sm:flex">
-            <Separator className="mx-1.5 h-5" orientation="vertical" />
-            <Button className="h-8 gap-1 px-2 text-xs font-normal hover:bg-toolbar-active/50" onClick={onEnableDocumentFeatures} size="sm" variant="ghost">
-              {t("toolbar.actions.enableDocumentTools")}
-            </Button>
-          </div>
-        )}
-        {advancedBlocksEnabled && (
-          <div className="hidden shrink-0 snap-start items-center gap-0.5 sm:flex">
-            <Separator className="mx-1.5 h-5" orientation="vertical" />
-            <Suspense fallback={null}>
-              <EditorToolbarAdvancedTools editor={editor} />
-            </Suspense>
-          </div>
-        )}
-        {!advancedBlocksEnabled && canEnableAdvancedBlocks && onEnableAdvancedBlocks && (
-          <div className="hidden shrink-0 snap-start items-center gap-0.5 sm:flex">
-            <Separator className="mx-1.5 h-5" orientation="vertical" />
-            <Button className="h-8 gap-1 px-2 text-xs font-normal hover:bg-toolbar-active/50" onClick={onEnableAdvancedBlocks} size="sm" variant="ghost">
-              {t("toolbar.actions.enableAdvancedBlocks")}
-            </Button>
-          </div>
-        )}
-        <div className="flex shrink-0 snap-start items-center gap-0.5 sm:hidden">
-          <Separator className="mx-1.5 h-5" orientation="vertical" />
+        <div className="shrink-0" data-testid="toolbar-mobile-more">
           <Drawer>
             <DrawerTrigger asChild>
-              <Button className="h-8 gap-1 px-2 text-xs font-normal hover:bg-toolbar-active/50" size="sm" variant="ghost">
+              <Button className="h-8 shrink-0 gap-1 whitespace-nowrap px-2 text-xs font-normal hover:bg-toolbar-active/50" size="sm" title={t("toolbar.actions.more")} variant="ghost">
                 <MoreHorizontal className="h-4 w-4" />
                 {t("toolbar.actions.more")}
               </Button>
@@ -270,6 +253,46 @@ const EditorToolbar = ({
             </DrawerContent>
           </Drawer>
         </div>
+      </div>
+
+      <div className="hidden w-full min-w-max items-center gap-0.5 overflow-x-auto overscroll-x-contain px-3 py-1.5 [scroll-snap-type:x_proximity] [scrollbar-width:thin] [touch-action:pan-x] [-webkit-overflow-scrolling:touch] sm:flex">
+        {renderToolbarGroups("desktop")}
+        <div className="flex shrink-0 snap-start items-center gap-0.5">
+          <Separator className="mx-1.5 h-5" orientation="vertical" />
+          <CoreInsertTools editor={editor} />
+        </div>
+        {documentFeaturesEnabled && (
+          <div className="flex shrink-0 snap-start items-center gap-0.5">
+            <Separator className="mx-1.5 h-5" orientation="vertical" />
+            <Suspense fallback={null}>
+              <EditorToolbarDocumentTools editor={editor} />
+            </Suspense>
+          </div>
+        )}
+        {!documentFeaturesEnabled && canEnableDocumentFeatures && onEnableDocumentFeatures && (
+          <div className="flex shrink-0 snap-start items-center gap-0.5">
+            <Separator className="mx-1.5 h-5" orientation="vertical" />
+            <Button className="h-8 gap-1 px-2 text-xs font-normal hover:bg-toolbar-active/50" onClick={onEnableDocumentFeatures} size="sm" variant="ghost">
+              {t("toolbar.actions.enableDocumentTools")}
+            </Button>
+          </div>
+        )}
+        {advancedBlocksEnabled && (
+          <div className="flex shrink-0 snap-start items-center gap-0.5">
+            <Separator className="mx-1.5 h-5" orientation="vertical" />
+            <Suspense fallback={null}>
+              <EditorToolbarAdvancedTools editor={editor} />
+            </Suspense>
+          </div>
+        )}
+        {!advancedBlocksEnabled && canEnableAdvancedBlocks && onEnableAdvancedBlocks && (
+          <div className="flex shrink-0 snap-start items-center gap-0.5">
+            <Separator className="mx-1.5 h-5" orientation="vertical" />
+            <Button className="h-8 gap-1 px-2 text-xs font-normal hover:bg-toolbar-active/50" onClick={onEnableAdvancedBlocks} size="sm" variant="ghost">
+              {t("toolbar.actions.enableAdvancedBlocks")}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

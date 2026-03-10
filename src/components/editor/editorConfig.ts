@@ -4,14 +4,57 @@ import { createCoreEditorExtensions, editorPropsDefault } from "./editorConfigBa
 export const createEditorExtensions = (placeholder: string) =>
   createCoreEditorExtensions(placeholder);
 
+let createDocumentExtensionsFactory: (() => unknown[]) | null = null;
+let createAdvancedExtensionsFactory: (() => unknown[]) | null = null;
+let documentExtensionsFactoryPromise: Promise<(() => unknown[])> | null = null;
+let advancedExtensionsFactoryPromise: Promise<(() => unknown[])> | null = null;
+
+const loadDocumentExtensionsFactory = async () => {
+  if (createDocumentExtensionsFactory) {
+    return createDocumentExtensionsFactory;
+  }
+
+  if (!documentExtensionsFactoryPromise) {
+    documentExtensionsFactoryPromise = import("./editorConfigDocument")
+      .then(({ createDocumentEditorExtensions }) => {
+        createDocumentExtensionsFactory = createDocumentEditorExtensions;
+        return createDocumentEditorExtensions;
+      });
+  }
+
+  return documentExtensionsFactoryPromise;
+};
+
+const loadAdvancedExtensionsFactory = async () => {
+  if (createAdvancedExtensionsFactory) {
+    return createAdvancedExtensionsFactory;
+  }
+
+  if (!advancedExtensionsFactoryPromise) {
+    advancedExtensionsFactoryPromise = import("./editorConfigAdvanced")
+      .then(({ createAdvancedEditorExtensions }) => {
+        createAdvancedExtensionsFactory = createAdvancedEditorExtensions;
+        return createAdvancedEditorExtensions;
+      });
+  }
+
+  return advancedExtensionsFactoryPromise;
+};
+
 export const useEditorExtensions = (
   placeholder: string,
   documentFeaturesEnabled: boolean,
   advancedBlocksEnabled: boolean,
 ) => {
   const coreExtensions = useMemo(() => createCoreEditorExtensions(placeholder), [placeholder]);
-  const [documentExtensions, setDocumentExtensions] = useState<unknown[]>([]);
-  const [advancedExtensions, setAdvancedExtensions] = useState<unknown[]>([]);
+  const [documentExtensions, setDocumentExtensions] = useState<unknown[]>(() =>
+    documentFeaturesEnabled && createDocumentExtensionsFactory
+      ? createDocumentExtensionsFactory()
+      : []);
+  const [advancedExtensions, setAdvancedExtensions] = useState<unknown[]>(() =>
+    advancedBlocksEnabled && createAdvancedExtensionsFactory
+      ? createAdvancedExtensionsFactory()
+      : []);
 
   useEffect(() => {
     let cancelled = false;
@@ -21,10 +64,15 @@ export const useEditorExtensions = (
       return;
     }
 
-    void import("./editorConfigDocument")
-      .then(({ createDocumentEditorExtensions }) => {
+    if (createDocumentExtensionsFactory) {
+      setDocumentExtensions(createDocumentExtensionsFactory());
+      return;
+    }
+
+    void loadDocumentExtensionsFactory()
+      .then((factory) => {
         if (!cancelled) {
-          setDocumentExtensions(createDocumentEditorExtensions());
+          setDocumentExtensions(factory());
         }
       });
 
@@ -41,10 +89,15 @@ export const useEditorExtensions = (
       return;
     }
 
-    void import("./editorConfigAdvanced")
-      .then(({ createAdvancedEditorExtensions }) => {
+    if (createAdvancedExtensionsFactory) {
+      setAdvancedExtensions(createAdvancedExtensionsFactory());
+      return;
+    }
+
+    void loadAdvancedExtensionsFactory()
+      .then((factory) => {
         if (!cancelled) {
-          setAdvancedExtensions(createAdvancedEditorExtensions());
+          setAdvancedExtensions(factory());
         }
       });
 

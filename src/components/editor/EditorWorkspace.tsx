@@ -1,5 +1,5 @@
-import { type CSSProperties, Suspense, lazy, useEffect, useRef, useState } from "react";
-import type { ChangeEventHandler, ComponentProps, ReactNode, RefObject } from "react";
+import { Component, type CSSProperties, Suspense, lazy, useEffect, useRef, useState } from "react";
+import type { ChangeEventHandler, ComponentProps, ErrorInfo, ReactNode, RefObject } from "react";
 import type { EditorMode } from "@/types/document";
 import EditorHeader from "@/components/editor/EditorHeader";
 import FindReplaceBar from "@/components/editor/FindReplaceBar";
@@ -36,6 +36,49 @@ const ShareLinkDialog = lazy(() => import("@/components/editor/ShareLinkDialog")
 const TemplateDialog = lazy(() => import("@/components/editor/TemplateDialog"));
 
 const PreviewFallback = () => <div className="h-full bg-background" />;
+const DialogFallback = () => (
+  <div className="rounded-md border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+    Dialog unavailable.
+  </div>
+);
+
+interface LazyDialogBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+interface LazyDialogBoundaryState {
+  hasError: boolean;
+}
+
+class LazyDialogBoundary extends Component<LazyDialogBoundaryProps, LazyDialogBoundaryState> {
+  state: LazyDialogBoundaryState = {
+    hasError: false,
+  };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
+    void _error;
+    void _errorInfo;
+  }
+
+  componentDidUpdate(previousProps: LazyDialogBoundaryProps) {
+    if (this.state.hasError && previousProps.children !== this.props.children) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback ?? null;
+    }
+
+    return this.props.children;
+  }
+}
 
 interface EditorWorkspaceProps {
   activeMode: EditorMode;
@@ -262,24 +305,32 @@ const EditorWorkspaceLayout = ({
         />
         <KeyboardShortcutsModal {...shortcutsModalProps} />
         {aiAssistantDialogProps.open && (
-          <Suspense fallback={null}>
-            <AiAssistantDialog {...aiAssistantDialogProps} />
-          </Suspense>
+          <LazyDialogBoundary fallback={<DialogFallback />}>
+            <Suspense fallback={null}>
+              <AiAssistantDialog {...aiAssistantDialogProps} />
+            </Suspense>
+          </LazyDialogBoundary>
         )}
         {shareLinkDialogProps.open && (
-          <Suspense fallback={null}>
-            <ShareLinkDialog {...shareLinkDialogProps} />
-          </Suspense>
+          <LazyDialogBoundary fallback={<DialogFallback />}>
+            <Suspense fallback={null}>
+              <ShareLinkDialog {...shareLinkDialogProps} />
+            </Suspense>
+          </LazyDialogBoundary>
         )}
         {patchReviewDialogProps.open && (
-          <Suspense fallback={null}>
-            <PatchReviewDialog {...patchReviewDialogProps} />
-          </Suspense>
+          <LazyDialogBoundary fallback={<DialogFallback />}>
+            <Suspense fallback={null}>
+              <PatchReviewDialog {...patchReviewDialogProps} />
+            </Suspense>
+          </LazyDialogBoundary>
         )}
         {templateDialogProps.open && (
-          <Suspense fallback={null}>
-            <TemplateDialog {...templateDialogProps} />
-          </Suspense>
+          <LazyDialogBoundary fallback={<DialogFallback />}>
+            <Suspense fallback={null}>
+              <TemplateDialog {...templateDialogProps} />
+            </Suspense>
+          </LazyDialogBoundary>
         )}
       </div>
     </div>

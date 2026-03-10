@@ -23,6 +23,18 @@ const matchesSource = (id: string, sourceFragments: string[]) =>
     return id.includes(posixFragment) || id.includes(windowsFragment);
   });
 
+const shouldIgnoreChunkRelocationWarning = (message: string) =>
+  message.includes("dynamic import will not move module into another chunk")
+  && [
+    "src/components/editor/GraphExplorerDialog.tsx",
+    "src/lib/ast/documentIndex.ts",
+    "src/lib/ai/compareDocuments.ts",
+    "src/lib/ast/renderAstToHtml.ts",
+    "src/lib/ast/tiptapAst.ts",
+    "src/lib/ast/renderAstToLatex.ts",
+    "src/lib/ast/renderAstToMarkdown.ts",
+  ].some((fragment) => message.includes(fragment));
+
 const bundleReportPlugin = () => ({
   generateBundle(_options: unknown, bundle: Record<string, { fileName: string; type: string; code?: string; source?: string | Uint8Array }>) {
     const assets = Object.values(bundle)
@@ -75,6 +87,13 @@ export default defineConfig(({ mode }) => {
   },
   build: {
     rollupOptions: {
+      onwarn(warning, defaultHandler) {
+        if (shouldIgnoreChunkRelocationWarning(warning.message || "")) {
+          return;
+        }
+
+        defaultHandler(warning);
+      },
       output: {
         manualChunks(id) {
           if (matchesSource(id, [

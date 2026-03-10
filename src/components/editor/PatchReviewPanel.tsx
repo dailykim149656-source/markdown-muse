@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Link2, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -106,11 +106,22 @@ const getStatusVariant = (status: PatchStatus) => {
 
 const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewPanelProps) => {
   const { t } = useI18n();
+  const [showProvenanceGapsOnly, setShowProvenanceGapsOnly] = useState(false);
   const [selectedPatchId, setSelectedPatchId] = useState<string>(patchSet.patches[0]?.patchId ?? "");
   const [editedText, setEditedText] = useState("");
+  const filteredPatches = useMemo(
+    () => showProvenanceGapsOnly
+      ? patchSet.patches.filter((patch) => (patch.sources || []).length === 0)
+      : patchSet.patches,
+    [patchSet.patches, showProvenanceGapsOnly],
+  );
+  const missingProvenanceCount = useMemo(
+    () => patchSet.patches.filter((patch) => (patch.sources || []).length === 0).length,
+    [patchSet.patches],
+  );
   const selectedPatch = useMemo(
-    () => patchSet.patches.find((patch) => patch.patchId === selectedPatchId) ?? patchSet.patches[0] ?? null,
-    [patchSet.patches, selectedPatchId],
+    () => filteredPatches.find((patch) => patch.patchId === selectedPatchId) ?? filteredPatches[0] ?? null,
+    [filteredPatches, selectedPatchId],
   );
 
   const statusCounts = useMemo(() => ({
@@ -122,13 +133,13 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
 
   useEffect(() => {
     setSelectedPatchId((currentPatchId) => {
-      if (patchSet.patches.some((patch) => patch.patchId === currentPatchId)) {
+      if (filteredPatches.some((patch) => patch.patchId === currentPatchId)) {
         return currentPatchId;
       }
 
-      return patchSet.patches[0]?.patchId ?? "";
+      return filteredPatches[0]?.patchId ?? "";
     });
-  }, [patchSet]);
+  }, [filteredPatches]);
 
   useEffect(() => {
     setEditedText(selectedPatch ? getPatchPreviewText(selectedPatch) : "");
@@ -138,21 +149,22 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
     return null;
   }
 
-  const selectedIndex = patchSet.patches.findIndex((patch) => patch.patchId === selectedPatch.patchId);
+  const selectedIndex = filteredPatches.findIndex((patch) => patch.patchId === selectedPatch.patchId);
   const isEditable = canApplyEditedSuggestedText(selectedPatch);
   const diffRows = buildLineDiff(selectedPatch.originalText || "", editedText);
+  const selectedPatchMissingProvenance = (selectedPatch.sources || []).length === 0;
 
   const moveSelection = (direction: "prev" | "next") => {
-    if (patchSet.patches.length === 0) {
+    if (filteredPatches.length === 0) {
       return;
     }
 
     const currentIndex = selectedIndex >= 0 ? selectedIndex : 0;
     const nextIndex = direction === "next"
-      ? (currentIndex + 1) % patchSet.patches.length
-      : (currentIndex - 1 + patchSet.patches.length) % patchSet.patches.length;
+      ? (currentIndex + 1) % filteredPatches.length
+      : (currentIndex - 1 + filteredPatches.length) % filteredPatches.length;
 
-    setSelectedPatchId(patchSet.patches[nextIndex]?.patchId ?? "");
+    setSelectedPatchId(filteredPatches[nextIndex]?.patchId ?? "");
   };
 
   return (
@@ -164,12 +176,25 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
             <Badge variant="default">{t("patchReview.acceptedStatus", { count: statusCounts.accepted })}</Badge>
             <Badge variant="secondary">{t("patchReview.editedStatus", { count: statusCounts.edited })}</Badge>
             <Badge variant="destructive">{t("patchReview.rejectedStatus", { count: statusCounts.rejected })}</Badge>
+            <Badge variant={missingProvenanceCount > 0 ? "outline" : "secondary"}>
+              {t("patchReview.provenanceGapCount", { count: missingProvenanceCount })}
+            </Badge>
           </div>
+          <Button
+            className="mt-3 h-7 text-xs"
+            disabled={missingProvenanceCount === 0}
+            onClick={() => setShowProvenanceGapsOnly((current) => !current)}
+            size="sm"
+            type="button"
+            variant={showProvenanceGapsOnly ? "secondary" : "outline"}
+          >
+            {t("patchReview.provenanceGapsOnly")}
+          </Button>
         </div>
 
         <div className="rounded-lg border border-border">
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="text-sm font-medium">{t("patchReview.patchCount", { count: patchSet.patches.length })}</span>
+            <span className="text-sm font-medium">{t("patchReview.patchCount", { count: filteredPatches.length })}</span>
             <div className="flex items-center gap-1">
               <Button className="h-7 w-7 p-0" onClick={() => moveSelection("prev")} size="sm" title={t("patchReview.previous")} variant="ghost">
                 <ChevronLeft className="h-4 w-4" />
@@ -181,7 +206,7 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
           </div>
           <ScrollArea className="h-[520px]">
             <div className="space-y-1 p-2">
-              {patchSet.patches.map((patch, index) => (
+              {filteredPatches.map((patch, index) => (
                 <button
                   key={patch.patchId}
                   className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
@@ -197,7 +222,12 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
                       <div className="truncate font-medium">{index + 1}. {patch.title}</div>
                       <div className="mt-1 text-xs text-muted-foreground">{patch.operation}</div>
                     </div>
-                    <Badge variant={getStatusVariant(patch.status)}>{t(`patchReview.status.${patch.status}`)}</Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant={getStatusVariant(patch.status)}>{t(`patchReview.status.${patch.status}`)}</Badge>
+                      {(patch.sources || []).length === 0 && (
+                        <Badge variant="outline">{t("patchReview.provenanceGapBadge")}</Badge>
+                      )}
+                    </div>
                   </div>
                 </button>
               ))}
@@ -212,6 +242,9 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
             <h3 className="text-base font-semibold">{selectedPatch.title}</h3>
             <Badge variant={getStatusVariant(selectedPatch.status)}>{t(`patchReview.status.${selectedPatch.status}`)}</Badge>
             <Badge variant="outline">{t(`patchReview.operations.${selectedPatch.operation}`)}</Badge>
+            {selectedPatchMissingProvenance && (
+              <Badge variant="outline">{t("patchReview.provenanceGapBadge")}</Badge>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">
             {selectedPatch.summary || selectedPatch.reason || patchSet.description || t("patchReview.descriptionFallback")}
@@ -283,6 +316,17 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
 
         <div className="space-y-2">
           <p className="text-sm font-medium">{t("patchReview.sourceDetails")}</p>
+          {selectedPatchMissingProvenance && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+              <div className="flex items-center gap-2 font-medium">
+                <TriangleAlert className="h-3.5 w-3.5" />
+                {t("patchReview.provenanceGapTitle")}
+              </div>
+              <p className="mt-1 leading-5">
+                {t("patchReview.provenanceGapDescription")}
+              </p>
+            </div>
+          )}
           {selectedPatch.sources && selectedPatch.sources.length > 0 ? (
             <div className="grid gap-2 xl:grid-cols-2">
               {selectedPatch.sources.map((source, index) => (
@@ -295,7 +339,10 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
               ))}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">{t("patchReview.noSources")}</p>
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Link2 className="h-3.5 w-3.5" />
+              {t("patchReview.noSources")}
+            </p>
           )}
         </div>
 

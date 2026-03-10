@@ -41,6 +41,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/i18n/useI18n";
 import type { DocumentData, EditorMode } from "@/types/document";
@@ -124,6 +125,7 @@ const FileSidebar = ({
   showStructuredCreateAction = false,
 }: FileSidebarProps) => {
   const { t } = useI18n();
+  const { isMobile, setOpenMobile } = useSidebar();
   const [activeTab, setActiveTab] = useState<SidebarTab>("documents");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -180,14 +182,27 @@ const FileSidebar = ({
   };
 
   return (
-    <Sidebar className="border-r border-border" collapsible="icon">
+    <Sidebar
+      className="border-r border-border"
+      collapsible="icon"
+      mobileDescription={t("sidebar.mobileDescription")}
+      mobileTitle={t("sidebar.title")}
+    >
       <SidebarHeader className="p-3">
-        <div className="flex items-center gap-2">
+        <button
+          className="flex items-center gap-2 rounded-md text-left outline-none transition-colors hover:bg-sidebar-accent/40 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+          onClick={() => {
+            if (isMobile) {
+              setOpenMobile(false);
+            }
+          }}
+          type="button"
+        >
           <FolderOpen className="h-4 w-4 text-muted-foreground" />
           <span className="text-xs font-semibold text-foreground group-data-[collapsible=icon]:hidden">
             {t("sidebar.title")}
           </span>
-        </div>
+        </button>
         <div className="mt-3 grid grid-cols-3 gap-1 group-data-[collapsible=icon]:hidden">
           <Button
             className="h-7 justify-start gap-1.5 px-2 text-[11px]"
@@ -207,7 +222,7 @@ const FileSidebar = ({
             variant={activeTab === "knowledge" ? "secondary" : "ghost"}
           >
             <BrainCircuit className="h-3.5 w-3.5" />
-            Knowledge
+            {t("sidebar.knowledge")}
           </Button>
           <Button
             className="h-7 justify-start gap-1.5 px-2 text-[11px]"
@@ -217,7 +232,7 @@ const FileSidebar = ({
             variant={activeTab === "history" ? "secondary" : "ghost"}
           >
             <History className="h-3.5 w-3.5" />
-            History
+            {t("sidebar.history")}
           </Button>
         </div>
       </SidebarHeader>
@@ -238,75 +253,91 @@ const FileSidebar = ({
                   return (
                     <SidebarMenuItem key={document.id}>
                       <SidebarMenuButton
+                        asChild
                         className={`group/item w-full ${isActive ? "bg-accent text-accent-foreground" : ""}`}
-                        onClick={() => !isEditing && onSelectDoc(document.id)}
                       >
-                        <Icon className="h-4 w-4 shrink-0" />
-                        <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                          {isEditing ? (
-                            <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
-                              <Input
-                                autoFocus
-                                className="h-5 px-1 text-xs"
-                                onChange={(event) => setEditName(event.target.value)}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    confirmRename();
-                                  }
+                        <div
+                          onClick={() => !isEditing && onSelectDoc(document.id)}
+                          onKeyDown={(event) => {
+                            if (isEditing) {
+                              return;
+                            }
 
-                                  if (event.key === "Escape") {
-                                    setEditingId(null);
-                                  }
-                                }}
-                                value={editName}
-                              />
-                              <Button className="h-5 w-5 p-0" onClick={confirmRename} size="sm" variant="ghost">
-                                <Check className="h-3 w-3" />
-                              </Button>
-                              <Button className="h-5 w-5 p-0" onClick={() => setEditingId(null)} size="sm" variant="ghost">
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-between">
-                              <div className="min-w-0">
-                                <div className="truncate text-xs font-medium">
-                                  {document.name || t("common.untitled")}
-                                  <span className="ml-0.5 text-muted-foreground/60">{modeExtension(document.mode)}</span>
-                                </div>
-                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                  <Clock className="h-2.5 w-2.5" />
-                                  {formatDate(document.updatedAt)}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
-                                <button
-                                  className="rounded p-0.5 hover:bg-secondary"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    startRename(document);
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              onSelectDoc(document.id);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                            {isEditing ? (
+                              <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                                <Input
+                                  autoFocus
+                                  className="h-5 px-1 text-xs"
+                                  onChange={(event) => setEditName(event.target.value)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      confirmRename();
+                                    }
+
+                                    if (event.key === "Escape") {
+                                      setEditingId(null);
+                                    }
                                   }}
-                                  title={t("sidebar.rename")}
-                                  type="button"
-                                >
-                                  <Pencil className="h-3 w-3 text-muted-foreground" />
-                                </button>
-                                {documents.length > 1 && (
+                                  value={editName}
+                                />
+                                <Button className="h-5 w-5 p-0" onClick={confirmRename} size="sm" variant="ghost">
+                                  <Check className="h-3 w-3" />
+                                </Button>
+                                <Button className="h-5 w-5 p-0" onClick={() => setEditingId(null)} size="sm" variant="ghost">
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between">
+                                <div className="min-w-0">
+                                  <div className="truncate text-xs font-medium">
+                                    {document.name || t("common.untitled")}
+                                    <span className="ml-0.5 text-muted-foreground/60">{modeExtension(document.mode)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                    <Clock className="h-2.5 w-2.5" />
+                                    {formatDate(document.updatedAt)}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
                                   <button
-                                    className="rounded p-0.5 hover:bg-destructive/10"
+                                    className="rounded p-0.5 hover:bg-secondary"
                                     onClick={(event) => {
                                       event.stopPropagation();
-                                      onDeleteDoc(document.id);
+                                      startRename(document);
                                     }}
-                                    title={t("sidebar.delete")}
+                                    title={t("sidebar.rename")}
                                     type="button"
                                   >
-                                    <Trash2 className="h-3 w-3 text-destructive" />
+                                    <Pencil className="h-3 w-3 text-muted-foreground" />
                                   </button>
-                                )}
+                                  {documents.length > 1 && (
+                                    <button
+                                      className="rounded p-0.5 hover:bg-destructive/10"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        onDeleteDoc(document.id);
+                                      }}
+                                      title={t("sidebar.delete")}
+                                      type="button"
+                                    >
+                                      <Trash2 className="h-3 w-3 text-destructive" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -325,12 +356,21 @@ const FileSidebar = ({
                 <FileSidebarKnowledgePanels
                   activeDoc={activeDoc}
                   activeDocId={activeDocId}
+                  acceptedPatchCount={knowledgeProps.acceptedPatchCount}
                   createDocument={createDocument}
                   documents={documents}
+                  onDismissSuggestionQueueItem={knowledgeProps.onDismissSuggestionQueueItem}
                   onGenerateTocSuggestion={knowledgeProps.onGenerateTocSuggestion}
+                  onOpenNextSuggestionQueueItem={knowledgeProps.onOpenNextSuggestionQueueItem}
+                  onOpenPatchReview={knowledgeProps.onOpenPatchReview}
+                  onOpenSuggestionQueueItem={knowledgeProps.onOpenSuggestionQueueItem}
+                  onRetryFailedSuggestionQueueItems={knowledgeProps.onRetryFailedSuggestionQueueItems}
+                  onRetrySuggestionQueueItem={knowledgeProps.onRetrySuggestionQueueItem}
                   onSelectDoc={onSelectDoc}
                   onSuggestKnowledgeImpactUpdate={knowledgeProps.onSuggestKnowledgeImpactUpdate}
                   onSuggestKnowledgeUpdates={knowledgeProps.onSuggestKnowledgeUpdates}
+                  patchCount={knowledgeProps.patchCount}
+                  suggestionQueue={knowledgeProps.suggestionQueue}
                 />
               </Suspense>
             </SidebarGroupContent>

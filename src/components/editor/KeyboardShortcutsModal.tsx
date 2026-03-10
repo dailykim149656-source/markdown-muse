@@ -1,4 +1,10 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
 
@@ -8,7 +14,7 @@ interface KeyboardShortcutsModalProps {
 }
 
 const isMac = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
-const modifierKey = isMac ? "⌘" : "Ctrl";
+const modifierKey = isMac ? "Cmd" : "Ctrl";
 
 const KeyboardShortcutsModal = ({ onOpenChange, open }: KeyboardShortcutsModalProps) => {
   const { t } = useI18n();
@@ -62,9 +68,15 @@ const KeyboardShortcutsModal = ({ onOpenChange, open }: KeyboardShortcutsModalPr
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-base">{t("keyboardShortcuts.title")}</DialogTitle>
+          <DialogDescription>{t("keyboardShortcuts.description")}</DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[60vh]">
           <div className="space-y-5 pr-3">
+            <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 px-3 py-3 text-[11px] leading-4 text-muted-foreground">
+              <p>{t("keyboardShortcuts.platformHint", { modifier: modifierKey })}</p>
+              <p>{t("keyboardShortcuts.richTextHint")}</p>
+              <p>{t("keyboardShortcuts.mobileHint")}</p>
+            </div>
             {shortcutGroups.map((group) => (
               <div key={group.title}>
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -72,7 +84,7 @@ const KeyboardShortcutsModal = ({ onOpenChange, open }: KeyboardShortcutsModalPr
                 </h3>
                 <div className="space-y-1">
                   {group.shortcuts.map((shortcut) => (
-                    <div key={shortcut.keys} className="flex items-center justify-between py-1">
+                    <div className="flex items-center justify-between py-1" key={shortcut.keys}>
                       <span className="text-sm text-foreground">{shortcut.description}</span>
                       <kbd className="rounded border border-border bg-secondary px-2 py-0.5 font-mono text-xs text-muted-foreground">
                         {shortcut.keys}

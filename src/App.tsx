@@ -7,7 +7,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 const Landing = lazy(() => import("./pages/Landing"));
+const Guide = lazy(() => import("./pages/Guide"));
 const Index = lazy(() => import("./pages/Index"));
+const WorkspaceGraph = lazy(() => import("./pages/WorkspaceGraph"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -28,7 +30,9 @@ const App = () => (
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<Landing />} />
+              <Route path="/guide" element={<Guide />} />
               <Route path="/editor" element={<Index />} />
+              <Route path="/editor/graph" element={<WorkspaceGraph />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

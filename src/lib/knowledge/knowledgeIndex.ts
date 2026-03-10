@@ -11,6 +11,7 @@ export const KNOWLEDGE_RECORD_SCHEMA_VERSION = 2;
 export type KnowledgeRecordStatus = "fresh" | "stale";
 export type KnowledgeStaleReason = "schema_version" | "source_changed";
 export type KnowledgeSearchResultKind = "chunk" | "image";
+export type KnowledgeSearchMode = "keyword" | "semantic";
 
 export interface KnowledgeDocumentRecord {
   contentHash: string;
@@ -34,6 +35,7 @@ export interface KnowledgeSearchResult {
   match?: KeywordRetrievalMatch;
   matchedTerms: string[];
   record: KnowledgeDocumentRecord;
+  rerankLabel?: string;
   score: number;
   snippet: string;
 }
@@ -141,6 +143,52 @@ const tokenize = (value: string) =>
       .map((term) => term.trim())
       .filter((term) => term.length >= 2),
   ));
+
+const intersectTerms = (left: string[], right: string[]) =>
+  left.filter((term) => right.includes(term));
+
+const jaccardSimilarity = (left: string[], right: string[]) => {
+  if (left.length === 0 || right.length === 0) {
+    return 0;
+  }
+
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  const intersection = left.filter((term) => rightSet.has(term)).length;
+  const union = new Set([...leftSet, ...rightSet]).size;
+
+  return union === 0 ? 0 : intersection / union;
+};
+
+const QUERY_TERM_EXPANSIONS: Record<string, string[]> = {
+  auth: ["authentication"],
+  authentication: ["auth"],
+  cfg: ["config", "configuration"],
+  config: ["configuration", "cfg"],
+  configuration: ["config", "cfg"],
+  credential: ["token", "secret"],
+  credentials: ["token", "secret"],
+  doc: ["document", "docs"],
+  docs: ["document", "doc"],
+  incident: ["outage", "runbook"],
+  outage: ["incident", "runbook"],
+  playbook: ["runbook"],
+  runbook: ["playbook", "incident"],
+  secret: ["credential", "token"],
+  token: ["credential", "secret"],
+};
+
+const expandQueryTerms = (terms: string[]) => {
+  const expanded = new Set(terms);
+
+  for (const term of terms) {
+    for (const synonym of QUERY_TERM_EXPANSIONS[term] || []) {
+      expanded.add(synonym);
+    }
+  }
+
+  return Array.from(expanded);
+};
 
 const countOccurrences = (haystack: string, needle: string) => haystack.split(needle).length - 1;
 
@@ -387,10 +435,78 @@ const getRecencyBoost = (record: KnowledgeDocumentRecord) => {
 const getRecordScoreAdjustment = (record: KnowledgeDocumentRecord) =>
   getRecencyBoost(record) - (record.indexStatus === "stale" ? 18 : 0);
 
+type SemanticRerankCandidateKind = "body" | "image" | "section" | "title";
+
+const getSemanticRerank = (
+  normalizedQuery: string,
+  originalQueryTerms: string[],
+  expandedQueryTerms: string[],
+  candidates: Array<{ kind: SemanticRerankCandidateKind; text: string }>,
+) => {
+  let boost = 0;
+  const signals: string[] = [];
+
+  for (const candidate of candidates) {
+    if (!candidate.text) {
+      continue;
+    }
+
+      const normalizedCandidate = normalizeTerm(candidate.text);
+      const candidateTerms = tokenize(normalizedCandidate);
+      const overlappingOriginalTerms = intersectTerms(originalQueryTerms, candidateTerms);
+      const overlappingExpandedTerms = intersectTerms(expandedQueryTerms, candidateTerms);
+      const primaryWeight = candidate.kind === "section"
+        ? 1.4
+        : candidate.kind === "title"
+          ? 1.25
+          : candidate.kind === "image"
+          ? 1.1
+          : 0.75;
+
+      if (normalizedCandidate.includes(normalizedQuery)) {
+        boost += Math.round(16 * primaryWeight);
+        signals.push(candidate.kind === "body" ? "body phrase" : "exact phrase");
+      }
+
+      if (originalQueryTerms.length > 1 && overlappingOriginalTerms.length === originalQueryTerms.length) {
+        boost += Math.round(12 * primaryWeight);
+        signals.push(candidate.kind === "section" || candidate.kind === "title"
+          ? "all query terms"
+          : "term coverage");
+      }
+
+      if (
+        expandedQueryTerms.length > originalQueryTerms.length
+        && overlappingExpandedTerms.length > overlappingOriginalTerms.length
+        && overlappingExpandedTerms.length >= Math.min(2, expandedQueryTerms.length)
+      ) {
+        boost += Math.round(8 * primaryWeight);
+        signals.push("synonym match");
+      }
+
+      const similarity = jaccardSimilarity(expandedQueryTerms, candidateTerms);
+
+    if (similarity >= 0.6) {
+      boost += Math.round(10 * primaryWeight);
+      signals.push(candidate.kind === "body" ? "related terms" : "strong title match");
+    } else if (similarity >= 0.35) {
+      boost += Math.round(6 * primaryWeight);
+      signals.push("related terms");
+    }
+  }
+
+  return {
+    boost,
+    label: signals.length > 0 ? Array.from(new Set(signals)).slice(0, 2).join(", ") : undefined,
+  };
+};
+
 const buildImageSearchResults = (
   record: KnowledgeDocumentRecord,
   normalizedQuery: string,
-  terms: string[],
+  originalTerms: string[],
+  expandedTerms: string[],
+  searchMode: KnowledgeSearchMode,
 ): KnowledgeSearchResult[] =>
   record.normalizedDocument.images.flatMap((image) => {
     const haystack = [
@@ -406,7 +522,8 @@ const buildImageSearchResults = (
       .filter(Boolean)
       .join("\n")
       .toLowerCase();
-    const matchedTerms = terms.filter((term) => haystack.includes(term));
+    const activeTerms = searchMode === "semantic" ? expandedTerms : originalTerms;
+    const matchedTerms = activeTerms.filter((term) => haystack.includes(term));
 
     if (matchedTerms.length === 0) {
       return [];
@@ -430,6 +547,16 @@ const buildImageSearchResults = (
       score += 8;
     }
 
+    const semanticRerank = searchMode === "semantic"
+      ? getSemanticRerank(normalizedQuery, originalTerms, expandedTerms, [
+        { kind: "image", text: image.alt || "" },
+        { kind: "image", text: image.caption || "" },
+        { kind: "image", text: image.title || "" },
+        { kind: "section", text: image.metadata?.sectionTitle || "" },
+        { kind: "title", text: record.normalizedDocument.metadata.title || "" },
+      ])
+      : { boost: 0, label: undefined };
+    score += semanticRerank.boost;
     score += getRecordScoreAdjustment(record);
 
     return [{
@@ -437,6 +564,7 @@ const buildImageSearchResults = (
       kind: "image",
       matchedTerms,
       record,
+      rerankLabel: semanticRerank.label,
       score,
       snippet: buildSnippet(
         [
@@ -457,6 +585,7 @@ export const searchKnowledgeRecords = (
   records: KnowledgeDocumentRecord[],
   query: string,
   limit = 8,
+  options?: { mode?: KnowledgeSearchMode },
 ): KnowledgeSearchResult[] => {
   const trimmedQuery = query.trim();
 
@@ -466,6 +595,9 @@ export const searchKnowledgeRecords = (
 
   const normalizedQuery = normalizeTerm(trimmedQuery);
   const terms = tokenize(normalizedQuery);
+  const expandedTerms = expandQueryTerms(terms);
+  const searchMode = options?.mode ?? "semantic";
+  const retrievalTerms = searchMode === "semantic" ? expandedTerms : terms;
 
   if (terms.length === 0) {
     return [];
@@ -474,7 +606,9 @@ export const searchKnowledgeRecords = (
   const recordById = new Map(records.map((record) => [record.documentId, record]));
   const retrieval = keywordRetrieve(records.map((record) => record.normalizedDocument), {
     limit: limit * 3,
-    query: trimmedQuery,
+    query: searchMode === "semantic"
+      ? [trimmedQuery, ...expandedTerms.filter((term) => !terms.includes(term))].join(" ")
+      : trimmedQuery,
   });
   const chunkResults = retrieval.matches.flatMap((match) => {
     const record = recordById.get(match.documentId);
@@ -483,7 +617,14 @@ export const searchKnowledgeRecords = (
       return [];
     }
 
-    const score = match.score + getRecordScoreAdjustment(record);
+    const semanticRerank = searchMode === "semantic"
+      ? getSemanticRerank(normalizedQuery, terms, expandedTerms, [
+        { kind: "section", text: match.chunk.metadata?.sectionTitle || "" },
+        { kind: "title", text: record.normalizedDocument.metadata.title || "" },
+        { kind: "body", text: match.chunk.text.slice(0, 220) },
+      ])
+      : { boost: 0, label: undefined };
+    const score = match.score + semanticRerank.boost + getRecordScoreAdjustment(record);
 
     return [{
       kind: "chunk",
@@ -493,11 +634,13 @@ export const searchKnowledgeRecords = (
       },
       matchedTerms: match.matchedTerms,
       record,
+      rerankLabel: semanticRerank.label,
       score,
       snippet: buildSnippet(match.chunk.text, match.matchedTerms),
     } satisfies KnowledgeSearchResult];
   });
-  const imageResults = records.flatMap((record) => buildImageSearchResults(record, normalizedQuery, terms));
+  const imageResults = records.flatMap((record) =>
+    buildImageSearchResults(record, normalizedQuery, terms, retrievalTerms, searchMode));
 
   return [...chunkResults, ...imageResults]
     .sort((left, right) =>

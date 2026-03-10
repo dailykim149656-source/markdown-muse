@@ -49,7 +49,7 @@ const LatexEditor = ({
 
   const syncingFromSource = useRef(false);
   const syncingFromWysiwyg = useRef(false);
-  const sourceDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const sourceSyncFrame = useRef<number | null>(null);
   const initialHtml = useMemo(() => initialContent ? latexToHtml(initialContent, { includeMetadata: false }) : "", [initialContent]);
   const requiresDocumentFeatures = tiptapDocumentHasDocumentContent(initialTiptapDoc) || htmlHasDocumentContent(initialHtml);
   const requiresAdvancedBlocks = tiptapDocumentHasAdvancedContent(initialTiptapDoc) || htmlHasAdvancedContent(initialHtml);
@@ -60,9 +60,11 @@ const LatexEditor = ({
     documentFeaturesEnabled,
     advancedBlocksEnabled,
   );
+  const requiresEnabledExtensions = (requiresDocumentFeatures && documentFeaturesEnabled)
+    || (requiresAdvancedBlocks && advancedBlocksEnabled);
   const shouldHoldEditor = (requiresDocumentFeatures && !documentFeaturesEnabled)
     || (requiresAdvancedBlocks && !advancedBlocksEnabled)
-    || !extensionsReady;
+    || (requiresEnabledExtensions && !extensionsReady);
 
   useEffect(() => {
     if (requiresDocumentFeatures && !documentFeaturesEnabled) {
@@ -116,6 +118,25 @@ const LatexEditor = ({
   });
 
   useEffect(() => {
+    if (!editor || shouldHoldEditor) {
+      return;
+    }
+
+    const nextContent = initialTiptapDoc || initialHtml;
+    const hasSeedContent = typeof nextContent === "string"
+      ? nextContent.trim().length > 0
+      : Boolean(nextContent);
+
+    if (!hasSeedContent) {
+      return;
+    }
+
+    editor.commands.setContent(nextContent, { emitUpdate: false });
+    onHtmlChange?.(editor.getHTML());
+    onTiptapChange?.(editor.getJSON());
+  }, [editor, initialHtml, initialTiptapDoc, onHtmlChange, onTiptapChange, shouldHoldEditor]);
+
+  useEffect(() => {
     onEditorReady?.(editor);
 
     if (editor) {
@@ -143,17 +164,30 @@ const LatexEditor = ({
         onEnableAdvancedBlocks?.();
         return;
       }
-      if (sourceDebounce.current) clearTimeout(sourceDebounce.current);
-      sourceDebounce.current = setTimeout(() => {
+
+      if (sourceSyncFrame.current !== null) {
+        cancelAnimationFrame(sourceSyncFrame.current);
+      }
+
+      sourceSyncFrame.current = requestAnimationFrame(() => {
+        sourceSyncFrame.current = null;
         if (!editor || syncingFromWysiwyg.current) return;
+        if (editor.getHTML() === html) return;
         syncingFromSource.current = true;
         editor.commands.setContent(html, { emitUpdate: false });
         onTiptapChange?.(editor.getJSON());
         queueMicrotask(() => { syncingFromSource.current = false; });
-      }, 600);
+      });
     },
     [advancedBlocksEnabled, documentFeaturesEnabled, editor, onContentChange, onEnableAdvancedBlocks, onEnableDocumentFeatures, onHtmlChange, onTiptapChange]
   );
+
+  useEffect(() => () => {
+    if (sourceSyncFrame.current !== null) {
+      cancelAnimationFrame(sourceSyncFrame.current);
+      sourceSyncFrame.current = null;
+    }
+  }, []);
 
   const handleSourceKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
