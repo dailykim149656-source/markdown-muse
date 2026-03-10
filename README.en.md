@@ -17,11 +17,16 @@ sets instead of modifying documents directly.
 - Rich-text editing for Markdown, LaTeX, and HTML
 - Structured editing for JSON and YAML
 - Local autosave and session restore
+- Autosave state feedback in the editor header
 - `.docsy` save and restore with richer editor state preservation
 - `Document AST` serialization, rendering, validation, and patch application
 - Review-first AI workflows for summaries, section generation, comparisons,
-  update suggestions, and procedure extraction
+  update suggestions, procedure extraction, and AI TOC suggestions
 - Local knowledge indexing with search over normalized document chunks
+- Local version history with snapshot preview and restore
+- Share-link and QR-based lightweight document sharing for small documents
+- Direct clipboard export for Markdown, HTML, JSON, and YAML
+- Responsive editor shell for desktop, tablet, and mobile
 - Import and export for `Markdown`, `LaTeX`, `HTML`, `Typst`, `AsciiDoc`,
   `reStructuredText`, `JSON`, `YAML`, and `PDF`
 - Mermaid diagrams, math, tables, admonitions, footnotes, captions, and cross
@@ -53,6 +58,7 @@ The current implementation follows this model:
 
 - AI summary generation with attribution details
 - Section generation into Patch Review
+- AI TOC suggestion into Patch Review
 - Document comparison preview
 - Update suggestion generation into Patch Review
 - Procedure extraction from the active document
@@ -64,12 +70,21 @@ The current implementation follows this model:
 - IndexedDB-backed storage with localStorage fallback
 - Sidebar search over normalized sections and chunks
 - Source provenance preserved for imported files
+- Workspace graph, impact, consistency, and change-monitoring panels
 
 ### Structured Data
 
 - JSON and YAML schema-aware editing surface
 - Structured patch application via `structured_path`
 - Safe review flow for structured patches without unsafe free-form rewrites
+
+### Productization and Sharing
+
+- Version history snapshots with restore flow
+- Share-link and QR share for small documents
+- Deterministic format-consistency checks in the sidebar
+- Export preview with code-oriented copy, line-number, and wrap controls
+- Mobile and tablet responsive editor behavior
 
 ## Architecture Overview
 
@@ -314,6 +329,8 @@ Representative test files:
 
 ### docs
 
+- [2026-03-10 v0.7 Implementation Update](docs/session-summary-2026-03-10-v0.7-implementation-update.md)
+- [2026-03-10 v0.7 Implementation Plan](docs/prd-v0.7-implementation-plan-2026-03-10.md)
 - [2026-03-09 Session Summary](docs/session-summary-2026-03-09.md)
 - [2026-03-09 Docsy Storage Update](docs/session-summary-2026-03-09-docsy.md)
 - [2026-03-09 Engineering Update](docs/session-summary-2026-03-09-engineering-update.md)

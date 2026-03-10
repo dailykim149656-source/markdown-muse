@@ -1,5 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import type { AutoSaveData, CreateDocumentOptions, DocumentData } from "@/types/document";
+import type {
+  AutoSaveData,
+  AutoSaveIndicatorState,
+  CreateDocumentOptions,
+  DocumentData,
+} from "@/types/document";
 import {
   createNewDocument,
   loadSavedData,
@@ -40,6 +45,11 @@ export const useDocumentManager = () => {
   const [documents, setDocuments] = useState<DocumentData[]>(() => initialDocuments);
   const [activeDocId, setActiveDocId] = useState<string>(() => initialActiveDocId);
   const [editorKey, setEditorKey] = useState(0);
+  const [autoSaveState, setAutoSaveState] = useState<AutoSaveIndicatorState>(() => ({
+    error: null,
+    lastSavedAt: initialSavedData?.lastSaved ?? null,
+    status: initialSavedData ? "saved" : "saving",
+  }));
 
   const activeDoc = useMemo(
     () => documents.find((doc) => doc.id === activeDocId) || documents[0],
@@ -50,29 +60,81 @@ export const useDocumentManager = () => {
     version: 2,
     documents,
     activeDocId,
-    lastSaved: Date.now(),
-  }), [documents, activeDocId]);
+    lastSaved: autoSaveState.lastSavedAt ?? initialSavedData?.lastSaved ?? 0,
+  }), [activeDocId, autoSaveState.lastSavedAt, documents, initialSavedData?.lastSaved]);
 
-  useAutoSave(autoSaveData);
+  const markAutosavePending = useCallback(() => {
+    setAutoSaveState((previousState) => ({
+      error: null,
+      lastSavedAt: previousState.lastSavedAt,
+      status: "saving",
+    }));
+  }, []);
+
+  useAutoSave(autoSaveData, 3000, {
+    onError: (error) => {
+      setAutoSaveState((previousState) => ({
+        error,
+        lastSavedAt: previousState.lastSavedAt,
+        status: "error",
+      }));
+    },
+    onSaved: (savedAt) => {
+      setAutoSaveState({
+        error: null,
+        lastSavedAt: savedAt,
+        status: "saved",
+      });
+    },
+    onSaving: () => {
+      setAutoSaveState((previousState) => previousState.status === "saving"
+        ? previousState
+        : {
+          error: null,
+          lastSavedAt: previousState.lastSavedAt,
+          status: "saving",
+        });
+    },
+  });
 
   const saveImmediate = useCallback(() => {
-    saveData({ version: 2, documents, activeDocId, lastSaved: Date.now() });
-  }, [documents, activeDocId]);
+    const result = saveData({
+      version: 2,
+      documents,
+      activeDocId,
+      lastSaved: autoSaveState.lastSavedAt ?? Date.now(),
+    });
+
+    if (result.ok) {
+      setAutoSaveState({
+        error: null,
+        lastSavedAt: result.savedAt,
+        status: "saved",
+      });
+      return;
+    }
+
+    setAutoSaveState((previousState) => ({
+      error: result.error,
+      lastSavedAt: previousState.lastSavedAt,
+      status: "error",
+    }));
+  }, [activeDocId, autoSaveState.lastSavedAt, documents]);
 
   const bumpEditorKey = useCallback(() => {
     setEditorKey((key) => key + 1);
   }, []);
 
   const updateActiveDoc = useCallback((patch: Partial<DocumentData>) => {
+    const hasChanges = Object.entries(patch).some(([key, value]) => !areValuesEqual(activeDoc[key as keyof DocumentData], value));
+
+    if (!hasChanges) {
+      return;
+    }
+
     setDocuments((previousDocuments) =>
       previousDocuments.map((doc) => {
         if (doc.id !== activeDocId) {
-          return doc;
-        }
-
-        const hasChanges = Object.entries(patch).some(([key, value]) => !areValuesEqual(doc[key as keyof DocumentData], value));
-
-        if (!hasChanges) {
           return doc;
         }
 
@@ -83,21 +145,22 @@ export const useDocumentManager = () => {
         };
       })
     );
-  }, [activeDocId]);
+    markAutosavePending();
+  }, [activeDoc, activeDocId, markAutosavePending]);
 
   const handleContentChange = useCallback((content: string) => {
+    const sourceSnapshots = {
+      ...(activeDoc.sourceSnapshots || {}),
+      [activeDoc.mode]: content,
+    };
+
+    if (activeDoc.content === content && areValuesEqual(activeDoc.sourceSnapshots, sourceSnapshots)) {
+      return;
+    }
+
     setDocuments((previousDocuments) =>
       previousDocuments.map((doc) => {
         if (doc.id !== activeDocId) {
-          return doc;
-        }
-
-        const sourceSnapshots = {
-          ...(doc.sourceSnapshots || {}),
-          [doc.mode]: content,
-        };
-
-        if (doc.content === content && areValuesEqual(doc.sourceSnapshots, sourceSnapshots)) {
           return doc;
         }
 
@@ -110,7 +173,8 @@ export const useDocumentManager = () => {
         };
       })
     );
-  }, [activeDocId]);
+    markAutosavePending();
+  }, [activeDoc, activeDocId, markAutosavePending]);
 
   const createDocument = useCallback((options: CreateDocumentOptions = {}) => {
     const {
@@ -150,6 +214,11 @@ export const useDocumentManager = () => {
     setDocuments((previousDocuments) => [...previousDocuments, newDoc]);
     setActiveDocId(newDoc.id);
     setEditorKey((key) => key + 1);
+    setAutoSaveState((previousState) => ({
+      error: null,
+      lastSavedAt: previousState.lastSavedAt,
+      status: "saving",
+    }));
 
     return newDoc;
   }, []);
@@ -163,10 +232,10 @@ export const useDocumentManager = () => {
   const closeDocument = useCallback((id: string) => {
     setDocuments((previousDocuments) => {
       if (previousDocuments.length <= 1) {
-        return previousDocuments;
-      }
+      return previousDocuments;
+    }
 
-      const nextDocuments = previousDocuments.filter((doc) => doc.id !== id);
+    const nextDocuments = previousDocuments.filter((doc) => doc.id !== id);
 
       if (id === activeDocId) {
         const closingIndex = previousDocuments.findIndex((doc) => doc.id === id);
@@ -180,7 +249,8 @@ export const useDocumentManager = () => {
 
       return nextDocuments;
     });
-  }, [activeDocId]);
+    markAutosavePending();
+  }, [activeDocId, markAutosavePending]);
 
   const deleteDocument = useCallback((id: string) => {
     closeDocument(id);
@@ -190,11 +260,13 @@ export const useDocumentManager = () => {
     setDocuments((previousDocuments) =>
       previousDocuments.map((doc) => doc.id === id ? { ...doc, name, updatedAt: Date.now() } : doc)
     );
-  }, []);
+    markAutosavePending();
+  }, [markAutosavePending]);
 
   return {
     activeDoc,
     activeDocId,
+    autoSaveState,
     bumpEditorKey,
     closeDocument,
     createDocument,

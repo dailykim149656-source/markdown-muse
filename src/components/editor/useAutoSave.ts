@@ -122,29 +122,92 @@ export const loadSavedData = (): AutoSaveData | null => {
   }
 };
 
-export const saveData = (data: AutoSaveData) => {
+export interface AutoSaveWriteSuccess {
+  ok: true;
+  savedAt: number;
+}
+
+export interface AutoSaveWriteFailure {
+  ok: false;
+  error: string;
+}
+
+export type AutoSaveWriteResult = AutoSaveWriteSuccess | AutoSaveWriteFailure;
+
+export const getAutoSaveSnapshotKey = (data: AutoSaveData) => JSON.stringify({
+  activeDocId: data.activeDocId,
+  documents: data.documents,
+  version: data.version,
+});
+
+export const saveData = (data: AutoSaveData): AutoSaveWriteResult => {
+  const savedAt = Date.now();
+
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       ...data,
       version: 2,
-      lastSaved: Date.now(),
+      lastSaved: savedAt,
     }));
+    return { ok: true, savedAt };
   } catch {
-    // storage full or unavailable
+    return {
+      error: "Autosave failed because local storage is unavailable or full.",
+      ok: false,
+    };
   }
 };
 
-export const useAutoSave = (data: AutoSaveData | null, intervalMs = 3000) => {
+interface UseAutoSaveOptions {
+  onError?: (error: string) => void;
+  onSaved?: (savedAt: number) => void;
+  onSaving?: () => void;
+}
+
+export const useAutoSave = (
+  data: AutoSaveData | null,
+  intervalMs = 3000,
+  options: UseAutoSaveOptions = {},
+) => {
   const dataRef = useRef(data);
+  const optionsRef = useRef(options);
+  const lastSavedSnapshotRef = useRef<string | null>(
+    data && data.lastSaved > 0 ? getAutoSaveSnapshotKey(data) : null,
+  );
+
   dataRef.current = data;
+  optionsRef.current = options;
+
+  useEffect(() => {
+    lastSavedSnapshotRef.current = data && data.lastSaved > 0 ? getAutoSaveSnapshotKey(data) : null;
+  }, [data?.lastSaved]);
 
   useEffect(() => {
     if (!data) return;
     const timer = setInterval(() => {
-      if (dataRef.current) saveData(dataRef.current);
+      if (!dataRef.current) {
+        return;
+      }
+
+      const snapshotKey = getAutoSaveSnapshotKey(dataRef.current);
+
+      if (snapshotKey === lastSavedSnapshotRef.current) {
+        return;
+      }
+
+      optionsRef.current.onSaving?.();
+      const result = saveData(dataRef.current);
+
+      if (result.ok) {
+        lastSavedSnapshotRef.current = snapshotKey;
+        optionsRef.current.onSaved?.(result.savedAt);
+        return;
+      }
+
+      optionsRef.current.onError?.(result.error);
     }, intervalMs);
     return () => clearInterval(timer);
-  }, [intervalMs, !!data]);
+  }, [data, intervalMs]);
 };
 
 export type { AutoSaveData, DocumentData };

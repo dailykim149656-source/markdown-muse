@@ -27,6 +27,33 @@ export interface AutoSaveData {
   lastSaved: number;
 }
 
+export type AutoSaveIndicatorStatus = "saving" | "saved" | "error";
+
+export interface AutoSaveIndicatorState {
+  status: AutoSaveIndicatorStatus;
+  lastSavedAt: number | null;
+  error: string | null;
+}
+
+export type VersionSnapshotTrigger = "autosave" | "export" | "patch_apply";
+
+export interface DocumentVersionSnapshotMetadata {
+  exportFormat?: string;
+  patchCount?: number;
+  patchSetTitle?: string;
+}
+
+export interface DocumentVersionSnapshot {
+  snapshotId: string;
+  documentId: string;
+  createdAt: number;
+  mode: EditorMode;
+  trigger: VersionSnapshotTrigger;
+  contentHash: string;
+  document: DocumentData;
+  metadata?: DocumentVersionSnapshotMetadata;
+}
+
 export interface CreateDocumentOptions {
   ast?: DocumentAst | null;
   content?: string;

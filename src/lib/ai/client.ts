@@ -1,4 +1,6 @@
 import type {
+  GenerateTocRequest,
+  GenerateTocResponse,
   GenerateSectionRequest,
   GenerateSectionResponse,
   SummarizeDocumentRequest,
@@ -24,14 +26,26 @@ const readErrorMessage = async (response: Response) => {
   return `AI request failed with status ${response.status}.`;
 };
 
+const readNetworkErrorMessage = (baseUrl: string, error: unknown) => {
+  const detail = error instanceof Error && error.message ? ` (${error.message})` : "";
+  return `Unable to reach the AI server at ${baseUrl}. Start \`npm run ai:server\` and verify the current app origin can access it.${detail}`;
+};
+
 const postJson = async <TResponse, TRequest>(path: string, body: TRequest): Promise<TResponse> => {
-  const response = await fetch(`${getAiApiBaseUrl()}${path}`, {
-    body: JSON.stringify(body),
-    headers: {
-      "Content-Type": "application/json",
-    },
-    method: "POST",
-  });
+  const baseUrl = getAiApiBaseUrl();
+  let response: Response;
+
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      body: JSON.stringify(body),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+  } catch (error) {
+    throw new Error(readNetworkErrorMessage(baseUrl, error));
+  }
 
   if (!response.ok) {
     throw new Error(await readErrorMessage(response));
@@ -45,3 +59,6 @@ export const summarizeDocument = (request: SummarizeDocumentRequest) =>
 
 export const generateSection = (request: GenerateSectionRequest) =>
   postJson<GenerateSectionResponse, GenerateSectionRequest>("/api/ai/generate-section", request);
+
+export const generateToc = (request: GenerateTocRequest) =>
+  postJson<GenerateTocResponse, GenerateTocRequest>("/api/ai/generate-toc", request);

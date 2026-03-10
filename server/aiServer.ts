@@ -10,6 +10,8 @@ import {
 } from "../src/lib/ai/summaryContracts";
 import { generateStructuredJson, getGeminiModel, schemaType } from "./geminiClient";
 import type {
+  GenerateTocRequest,
+  GenerateTocResponse,
   GenerateSectionRequest,
   GenerateSectionResponse,
   SummarizeDocumentRequest,
@@ -62,13 +64,13 @@ const parseRequestBody = async <TRequest>(request: import("node:http").IncomingM
   return JSON.parse(rawBody) as TRequest;
 };
 
-const assertMarkdownDocument = (request: SummarizeDocumentRequest | GenerateSectionRequest) => {
+const assertMarkdownDocument = (request: SummarizeDocumentRequest | GenerateSectionRequest | GenerateTocRequest) => {
   if (!request.document?.markdown?.trim()) {
     throw new HttpError(400, "Document markdown is required.");
   }
 };
 
-const normalizeMarkdownDocument = (request: SummarizeDocumentRequest | GenerateSectionRequest) =>
+const normalizeMarkdownDocument = (request: SummarizeDocumentRequest | GenerateSectionRequest | GenerateTocRequest) =>
   normalizeIngestionRequest({
     fileName: `${request.document.fileName}.md`,
     importedAt: Date.now(),
@@ -168,6 +170,39 @@ const generateSectionResponseSchema = {
     title: { type: schemaType.STRING },
   },
   required: ["title", "body", "rationale", "attributions"],
+  type: schemaType.OBJECT,
+};
+
+const generateTocResponseSchema = {
+  properties: {
+    attributions: {
+      items: {
+        properties: {
+          chunkId: { type: schemaType.STRING },
+          ingestionId: { type: schemaType.STRING },
+          rationale: { type: schemaType.STRING },
+          sectionId: { type: schemaType.STRING },
+        },
+        required: ["chunkId", "ingestionId", "rationale"],
+        type: schemaType.OBJECT,
+      },
+      type: schemaType.ARRAY,
+    },
+    entries: {
+      items: {
+        properties: {
+          level: { type: schemaType.INTEGER },
+          title: { type: schemaType.STRING },
+        },
+        required: ["level", "title"],
+        type: schemaType.OBJECT,
+      },
+      type: schemaType.ARRAY,
+    },
+    maxDepth: { type: schemaType.INTEGER },
+    rationale: { type: schemaType.STRING },
+  },
+  required: ["entries", "maxDepth", "rationale", "attributions"],
   type: schemaType.OBJECT,
 };
 
@@ -300,6 +335,68 @@ const handleGenerateSection = async (request: GenerateSectionRequest): Promise<G
   return result;
 };
 
+const buildTocGrounding = (request: GenerateTocRequest) => {
+  const normalizedDocument = normalizeMarkdownDocument(request);
+  const chunks = normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk) => ({
+    chunkId: chunk.chunkId,
+    ingestionId: normalizedDocument.ingestionId,
+    sectionId: chunk.sectionId,
+    text: chunk.text,
+  }));
+
+  return {
+    chunks,
+    normalizedDocument,
+  };
+};
+
+const buildTocPrompt = (
+  request: GenerateTocRequest,
+  chunks: { chunkId: string; ingestionId: string; sectionId?: string; text: string }[],
+  locale: Locale,
+) => `
+You are proposing a table of contents suggestion for a technical document editor.
+Use only the supplied grounding chunks and existing headings.
+Return strict JSON matching the provided schema.
+${localePromptSuffix(locale)}
+
+Rules:
+- Suggest a concise table of contents that reflects the current document structure.
+- Prefer headings that already exist in the document.
+- Keep levels within 1 to 3.
+- Choose maxDepth between 1 and 3.
+- Every attribution must reference only the supplied chunk ids.
+- Do not invent facts or sections that are unsupported by the supplied chunks.
+
+Existing headings:
+${JSON.stringify(request.existingHeadings, null, 2)}
+
+Grounding chunks:
+${JSON.stringify(chunks, null, 2)}
+`.trim();
+
+const handleGenerateToc = async (request: GenerateTocRequest): Promise<GenerateTocResponse> => {
+  assertMarkdownDocument(request);
+  const { chunks } = buildTocGrounding(request);
+  const result = await generateStructuredJson<GenerateTocResponse>({
+    prompt: buildTocPrompt(request, chunks, resolveAiLocale(request.locale)),
+    responseSchema: generateTocResponseSchema,
+  });
+
+  validateAttributions(chunks, result.attributions);
+
+  return {
+    ...result,
+    entries: result.entries
+      .map((entry) => ({
+        level: entry.level <= 1 ? 1 : entry.level >= 3 ? 3 : 2,
+        title: entry.title.trim(),
+      }))
+      .filter((entry) => entry.title.length > 0),
+    maxDepth: result.maxDepth <= 1 ? 1 : result.maxDepth >= 3 ? 3 : 2,
+  };
+};
+
 const server = createServer(async (request, response) => {
   try {
     if (!request.url) {
@@ -336,6 +433,15 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/ai/generate-section") {
       const payload = await parseRequestBody<GenerateSectionRequest>(request);
       const result = await handleGenerateSection(payload);
+      const output = json(result);
+      response.writeHead(output.statusCode, output.headers);
+      response.end(output.body);
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/ai/generate-toc") {
+      const payload = await parseRequestBody<GenerateTocRequest>(request);
+      const result = await handleGenerateToc(payload);
       const output = json(result);
       response.writeHead(output.statusCode, output.headers);
       response.end(output.body);

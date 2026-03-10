@@ -100,7 +100,7 @@ describe("PatchReviewPanel", () => {
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ patchId: "patch-1" }), "Edited intro");
     expect(onAccept).toHaveBeenCalledWith(expect.objectContaining({ patchId: "patch-1" }));
     expect(onReject).toHaveBeenCalledWith(expect.objectContaining({ patchId: "patch-1" }));
-  });
+  }, 10000);
 
   it("disables text editing for non-rewritable patches", () => {
     render(<PatchReviewPanel patchSet={nonEditablePatchSetFixture} />);

@@ -355,15 +355,15 @@ const FindReplaceBar = ({ editor, plainTextAdapter, open, onClose }: FindReplace
   const isSearchAvailable = Boolean(editor || plainTextAdapter);
 
   return (
-    <div className="flex items-start gap-2 px-3 py-2 bg-secondary/50 border-b border-border">
-      <div className="flex flex-col gap-1.5 flex-1">
-        <div className="flex items-center gap-1.5">
+    <div className="flex flex-col gap-2 border-b border-border bg-secondary/50 px-3 py-2 sm:flex-row sm:items-start">
+      <div className="flex flex-1 flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Input
             ref={findInputRef}
             value={findText}
             onChange={(event) => setFindText(event.target.value)}
             placeholder={isSearchAvailable ? t("findReplace.findPlaceholder") : t("findReplace.searchUnavailable")}
-            className="h-7 text-xs flex-1 max-w-xs"
+            className="h-8 w-full flex-1 text-xs sm:h-7 sm:max-w-xs"
             disabled={!isSearchAvailable}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
@@ -374,28 +374,28 @@ const FindReplaceBar = ({ editor, plainTextAdapter, open, onClose }: FindReplace
               }
             }}
           />
-          <span className="text-[10px] text-muted-foreground min-w-[70px]">
+          <span className="min-w-[70px] text-[10px] text-muted-foreground">
             {isSearchAvailable
               ? (matchCount > 0 ? `${currentMatch}/${matchCount}` : t("findReplace.noMatches"))
               : t("findReplace.searchUnavailable")}
           </span>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => navigateMatch("prev")} disabled={!isSearchAvailable || matchCount === 0}>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 sm:h-6 sm:w-6" onClick={() => navigateMatch("prev")} disabled={!isSearchAvailable || matchCount === 0}>
             <ChevronUp className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => navigateMatch("next")} disabled={!isSearchAvailable || matchCount === 0}>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 sm:h-6 sm:w-6" onClick={() => navigateMatch("next")} disabled={!isSearchAvailable || matchCount === 0}>
             <ChevronDown className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px]" onClick={() => setShowReplace((value) => !value)} disabled={!isSearchAvailable}>
+          <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px] sm:h-6 sm:px-1.5" onClick={() => setShowReplace((value) => !value)} disabled={!isSearchAvailable}>
             {t("findReplace.replace")}
           </Button>
         </div>
         {showReplace && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Input
               value={replaceText}
               onChange={(event) => setReplaceText(event.target.value)}
               placeholder={t("findReplace.replacePlaceholder")}
-              className="h-7 text-xs flex-1 max-w-xs"
+              className="h-8 w-full flex-1 text-xs sm:h-7 sm:max-w-xs"
               disabled={!isSearchAvailable}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -406,16 +406,16 @@ const FindReplaceBar = ({ editor, plainTextAdapter, open, onClose }: FindReplace
                 }
               }}
             />
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleReplace} disabled={!isSearchAvailable || matchCount === 0} title={t("findReplace.replace")}>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 sm:h-6 sm:w-6" onClick={handleReplace} disabled={!isSearchAvailable || matchCount === 0} title={t("findReplace.replace")}>
               <Replace className="h-3.5 w-3.5" />
             </Button>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleReplaceAll} disabled={!isSearchAvailable || matchCount === 0} title={t("findReplace.replaceAll")}>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 sm:h-6 sm:w-6" onClick={handleReplaceAll} disabled={!isSearchAvailable || matchCount === 0} title={t("findReplace.replaceAll")}>
               <ReplaceAll className="h-3.5 w-3.5" />
             </Button>
           </div>
         )}
       </div>
-      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 mt-0.5" onClick={onClose}>
+      <Button variant="ghost" size="sm" className="mt-0.5 h-7 w-7 self-end p-0 sm:h-6 sm:w-6" onClick={onClose}>
         <X className="h-3.5 w-3.5" />
       </Button>
     </div>

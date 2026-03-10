@@ -2,25 +2,34 @@ import type { KnowledgeDocumentRecord } from "@/lib/knowledge/knowledgeIndex";
 
 export type KnowledgeGraphNodeKind = "document" | "section" | "image";
 export type KnowledgeGraphEdgeKind = "contains_section" | "contains_image" | "references" | "similar_to" | "duplicate";
+export type KnowledgeGraphEdgeGroup = "containment" | "reference" | "similarity";
 export type KnowledgeHealthIssueKind =
   | "stale_index"
   | "unresolved_reference"
   | "duplicate_document"
-  | "image_missing_description";
+  | "image_missing_description"
+  | "missing_section"
+  | "conflicting_procedure"
+  | "outdated_source";
 export type KnowledgeHealthSeverity = "info" | "warning";
 
 export interface KnowledgeGraphNode {
   documentId: string;
   id: string;
+  issueCount?: number;
   kind: KnowledgeGraphNodeKind;
   label: string;
 }
 
 export interface KnowledgeGraphEdge {
+  description: string;
+  group: KnowledgeGraphEdgeGroup;
   id: string;
   kind: KnowledgeGraphEdgeKind;
   sourceId: string;
+  sourceDocumentId: string;
   targetId: string;
+  targetDocumentId: string;
   weight: number;
 }
 
@@ -66,8 +75,44 @@ export interface KnowledgeDocumentImpact {
   inboundReferenceCount: number;
   issues: KnowledgeHealthIssue[];
   outboundReferenceCount: number;
+  paths: KnowledgeImpactPath[];
   relatedDocuments: KnowledgeRelatedDocument[];
 }
+
+export interface KnowledgeImpactPath {
+  depth: 1 | 2;
+  relationKinds: KnowledgeDocumentRelationKind[];
+  targetDocumentId: string;
+  targetDocumentName: string;
+  viaDocumentId?: string;
+  viaDocumentName?: string;
+}
+
+export interface KnowledgeImpactQueueItem {
+  changedDocumentId: string;
+  changedDocumentName: string;
+  impactedDocumentId: string;
+  impactedDocumentName: string;
+  issueCount: number;
+  relationKinds: KnowledgeDocumentRelationKind[];
+}
+
+const relationKindWeight = (relationKind: KnowledgeDocumentRelationKind) => {
+  switch (relationKind) {
+    case "references":
+    case "referenced_by":
+      return 4;
+    case "duplicate":
+      return 3;
+    case "similar":
+      return 1;
+    default:
+      return 0;
+  }
+};
+
+const scoreRelationKinds = (relationKinds: KnowledgeDocumentRelationKind[]) =>
+  relationKinds.reduce((score, relationKind) => score + relationKindWeight(relationKind), 0);
 
 const REFERENCE_TARGET_PATTERN = /\b([a-z0-9._/-]+\.(?:md|markdown|html?|tex|adoc|asciidoc|rst|json|ya?ml))(#[a-z0-9._:-]+)?\b/gi;
 
@@ -106,6 +151,7 @@ const extractReferenceTargets = (rawContent: string) =>
   }));
 
 const normalizeRecordName = (record: KnowledgeDocumentRecord) => record.fileName.split(/[\\/]/).pop()?.toLowerCase() || record.fileName.toLowerCase();
+const getRecordName = (record: KnowledgeDocumentRecord) => record.normalizedDocument.metadata.title || record.fileName;
 
 export const buildKnowledgeWorkspaceInsights = (
   records: KnowledgeDocumentRecord[],
@@ -128,11 +174,11 @@ export const buildKnowledgeWorkspaceInsights = (
   const duplicateBuckets = new Map<string, KnowledgeDocumentRecord[]>();
 
   for (const record of records) {
-    nodes.push({
-      documentId: record.documentId,
-      id: `doc:${record.documentId}`,
-      kind: "document",
-      label: record.normalizedDocument.metadata.title || record.fileName,
+      nodes.push({
+        documentId: record.documentId,
+        id: `doc:${record.documentId}`,
+        kind: "document",
+        label: record.normalizedDocument.metadata.title || record.fileName,
     });
 
     for (const section of record.normalizedDocument.sections) {
@@ -143,10 +189,14 @@ export const buildKnowledgeWorkspaceInsights = (
         label: section.title,
       });
       edges.push({
+        description: `${record.normalizedDocument.metadata.title || record.fileName} includes section ${section.title}.`,
+        group: "containment",
         id: `edge:contains_section:${record.documentId}:${section.sectionId}`,
         kind: "contains_section",
         sourceId: `doc:${record.documentId}`,
+        sourceDocumentId: record.documentId,
         targetId: `section:${record.documentId}:${section.sectionId}`,
+        targetDocumentId: record.documentId,
         weight: 1,
       });
     }
@@ -159,12 +209,16 @@ export const buildKnowledgeWorkspaceInsights = (
         label: image.alt || image.caption || image.src,
       });
       edges.push({
+        description: `${record.normalizedDocument.metadata.title || record.fileName} includes image ${image.alt || image.caption || image.src}.`,
+        group: "containment",
         id: `edge:contains_image:${record.documentId}:${image.imageId}`,
         kind: "contains_image",
         sourceId: image.sectionId
           ? `section:${record.documentId}:${image.sectionId}`
           : `doc:${record.documentId}`,
+        sourceDocumentId: record.documentId,
         targetId: `image:${record.documentId}:${image.imageId}`,
+        targetDocumentId: record.documentId,
         weight: 1,
       });
 
@@ -217,10 +271,14 @@ export const buildKnowledgeWorkspaceInsights = (
       }
 
       edges.push({
+        description: `${record.normalizedDocument.metadata.title || record.fileName} references ${target.normalizedDocument.metadata.title || target.fileName}.`,
+        group: "reference",
         id: `edge:references:${record.documentId}:${target.documentId}:${reference.anchor || "root"}`,
         kind: "references",
         sourceId: `doc:${record.documentId}`,
+        sourceDocumentId: record.documentId,
         targetId: `doc:${target.documentId}`,
+        targetDocumentId: target.documentId,
         weight: 2,
       });
 
@@ -257,10 +315,14 @@ export const buildKnowledgeWorkspaceInsights = (
       for (let targetIndex = index + 1; targetIndex < duplicateRecords.length; targetIndex += 1) {
         const target = duplicateRecords[targetIndex];
         edges.push({
+          description: `${source.normalizedDocument.metadata.title || source.fileName} overlaps with ${target.normalizedDocument.metadata.title || target.fileName}.`,
+          group: "similarity",
           id: `edge:duplicate:${source.documentId}:${target.documentId}`,
           kind: "duplicate",
           sourceId: `doc:${source.documentId}`,
+          sourceDocumentId: source.documentId,
           targetId: `doc:${target.documentId}`,
+          targetDocumentId: target.documentId,
           weight: 5,
         });
       }
@@ -281,10 +343,14 @@ export const buildKnowledgeWorkspaceInsights = (
       }
 
       edges.push({
+        description: `${left.normalizedDocument.metadata.title || left.fileName} is similar to ${right.normalizedDocument.metadata.title || right.fileName}.`,
+        group: "similarity",
         id: `edge:similar_to:${left.documentId}:${right.documentId}`,
         kind: "similar_to",
         sourceId: `doc:${left.documentId}`,
+        sourceDocumentId: left.documentId,
         targetId: `doc:${right.documentId}`,
+        targetDocumentId: right.documentId,
         weight: Number((similarity * 10).toFixed(2)),
       });
     }
@@ -292,13 +358,27 @@ export const buildKnowledgeWorkspaceInsights = (
 
   const dedupedEdges = Array.from(new Map(edges.map((edge) => [edge.id, edge])).values());
   const dedupedIssues = Array.from(new Map(issues.map((issue) => [issue.id, issue])).values());
+  const issueCountByDocumentId = dedupedIssues.reduce((counts, issue) => {
+    counts.set(issue.documentId, (counts.get(issue.documentId) || 0) + 1);
+
+    for (const relatedDocumentId of issue.relatedDocumentIds) {
+      counts.set(relatedDocumentId, Math.max(counts.get(relatedDocumentId) || 0, issue.documentId === relatedDocumentId
+        ? counts.get(relatedDocumentId) || 0
+        : (counts.get(relatedDocumentId) || 0) + 1));
+    }
+
+    return counts;
+  }, new Map<string, number>());
 
   return {
     edges: dedupedEdges,
     issues: dedupedIssues.sort((left, right) =>
       Number(right.severity === "warning") - Number(left.severity === "warning")
       || left.message.localeCompare(right.message)),
-    nodes,
+    nodes: nodes.map((node) => ({
+      ...node,
+      issueCount: issueCountByDocumentId.get(node.documentId) || 0,
+    })),
     summary: {
       documentNodeCount: nodes.filter((node) => node.kind === "document").length,
       edgeCount: dedupedEdges.length,
@@ -325,6 +405,18 @@ export const buildKnowledgeDocumentImpact = (
 
   const activeNodeId = `doc:${documentId}`;
   const related = new Map<string, Set<KnowledgeDocumentRelationKind>>();
+  const adjacency = new Map<string, Map<string, Set<KnowledgeDocumentRelationKind>>>();
+  const connectRelation = (
+    sourceDocumentId: string,
+    targetDocumentId: string,
+    relationKind: KnowledgeDocumentRelationKind,
+  ) => {
+    const relatedDocuments = adjacency.get(sourceDocumentId) || new Map<string, Set<KnowledgeDocumentRelationKind>>();
+    const relationKinds = relatedDocuments.get(targetDocumentId) || new Set<KnowledgeDocumentRelationKind>();
+    relationKinds.add(relationKind);
+    relatedDocuments.set(targetDocumentId, relationKinds);
+    adjacency.set(sourceDocumentId, relatedDocuments);
+  };
   let inboundReferenceCount = 0;
   let outboundReferenceCount = 0;
 
@@ -335,6 +427,20 @@ export const buildKnowledgeDocumentImpact = (
       && edge.kind !== "duplicate"
     ) {
       continue;
+    }
+
+    if (edge.kind === "references" && edge.sourceId.startsWith("doc:") && edge.targetId.startsWith("doc:")) {
+      const sourceDocumentId = edge.sourceId.replace(/^doc:/, "");
+      const targetDocumentId = edge.targetId.replace(/^doc:/, "");
+      connectRelation(sourceDocumentId, targetDocumentId, "references");
+      connectRelation(targetDocumentId, sourceDocumentId, "referenced_by");
+    }
+
+    if ((edge.kind === "similar_to" || edge.kind === "duplicate") && edge.sourceId.startsWith("doc:") && edge.targetId.startsWith("doc:")) {
+      const sourceDocumentId = edge.sourceId.replace(/^doc:/, "");
+      const targetDocumentId = edge.targetId.replace(/^doc:/, "");
+      connectRelation(sourceDocumentId, targetDocumentId, edge.kind === "similar_to" ? "similar" : "duplicate");
+      connectRelation(targetDocumentId, sourceDocumentId, edge.kind === "similar_to" ? "similar" : "duplicate");
     }
 
     if (edge.kind === "references" && edge.sourceId === activeNodeId && edge.targetId.startsWith("doc:")) {
@@ -386,15 +492,58 @@ export const buildKnowledgeDocumentImpact = (
       return {
         documentId: relatedDocumentId,
         issueCount,
-        name: relatedRecord.normalizedDocument.metadata.title || relatedRecord.fileName,
+        name: getRecordName(relatedRecord),
         relationKinds: Array.from(relationKinds).sort(),
       } satisfies KnowledgeRelatedDocument;
     })
     .filter((entry): entry is KnowledgeRelatedDocument => Boolean(entry))
     .sort((left, right) =>
-      right.relationKinds.length - left.relationKinds.length
+      scoreRelationKinds(right.relationKinds) - scoreRelationKinds(left.relationKinds)
+      || right.relationKinds.length - left.relationKinds.length
       || right.issueCount - left.issueCount
       || left.name.localeCompare(right.name));
+
+  const directDocumentIds = new Set(relatedDocuments.map((document) => document.documentId));
+  const impactPaths = [
+    ...relatedDocuments.map((document) => ({
+      depth: 1 as const,
+      relationKinds: document.relationKinds,
+      targetDocumentId: document.documentId,
+      targetDocumentName: document.name,
+    })),
+    ...Array.from(directDocumentIds).flatMap((viaDocumentId) => {
+      const viaRecord = records.find((record) => record.documentId === viaDocumentId);
+      const viaRelations = adjacency.get(viaDocumentId);
+
+      if (!viaRelations || !viaRecord) {
+        return [];
+      }
+
+      return Array.from(viaRelations.entries())
+        .filter(([targetDocumentId]) => targetDocumentId !== documentId && !directDocumentIds.has(targetDocumentId))
+        .map(([targetDocumentId, relationKinds]) => {
+          const targetRecord = records.find((record) => record.documentId === targetDocumentId);
+
+          if (!targetRecord) {
+            return null;
+          }
+
+          return {
+            depth: 2 as const,
+            relationKinds: Array.from(relationKinds).sort(),
+            targetDocumentId,
+            targetDocumentName: getRecordName(targetRecord),
+            viaDocumentId,
+            viaDocumentName: getRecordName(viaRecord),
+          } satisfies KnowledgeImpactPath;
+        })
+        .filter((path): path is KnowledgeImpactPath => Boolean(path));
+    }),
+  ].sort((left, right) =>
+    left.depth - right.depth
+    || scoreRelationKinds(right.relationKinds) - scoreRelationKinds(left.relationKinds)
+    || left.targetDocumentName.localeCompare(right.targetDocumentName)
+    || (left.viaDocumentName || "").localeCompare(right.viaDocumentName || ""));
 
   return {
     documentId: activeRecord.documentId,
@@ -402,6 +551,80 @@ export const buildKnowledgeDocumentImpact = (
     inboundReferenceCount,
     issues,
     outboundReferenceCount,
+    paths: impactPaths,
     relatedDocuments,
   };
+};
+
+export const buildKnowledgeImpactQueue = (
+  records: KnowledgeDocumentRecord[],
+  insights: KnowledgeWorkspaceInsights,
+  changedDocumentIds: string[],
+): KnowledgeImpactQueueItem[] => {
+  const changedDocumentIdSet = new Set(changedDocumentIds);
+  const relationKindsByPair = new Map<string, Set<KnowledgeDocumentRelationKind>>();
+  const issueCountByDocumentId = insights.issues.reduce((counts, issue) => {
+    for (const relatedDocumentId of issue.relatedDocumentIds) {
+      counts.set(relatedDocumentId, (counts.get(relatedDocumentId) || 0) + 1);
+    }
+
+    return counts;
+  }, new Map<string, number>());
+
+  for (const edge of insights.edges) {
+    if (edge.sourceDocumentId === edge.targetDocumentId) {
+      continue;
+    }
+
+    if (edge.kind === "references" && changedDocumentIdSet.has(edge.targetDocumentId)) {
+      const pairId = `${edge.targetDocumentId}:${edge.sourceDocumentId}`;
+      const relationKinds = relationKindsByPair.get(pairId) || new Set<KnowledgeDocumentRelationKind>();
+      relationKinds.add("referenced_by");
+      relationKindsByPair.set(pairId, relationKinds);
+      continue;
+    }
+
+    if ((edge.kind === "similar_to" || edge.kind === "duplicate") && (
+      changedDocumentIdSet.has(edge.sourceDocumentId)
+      || changedDocumentIdSet.has(edge.targetDocumentId)
+    )) {
+      const changedDocumentId = changedDocumentIdSet.has(edge.sourceDocumentId)
+        ? edge.sourceDocumentId
+        : edge.targetDocumentId;
+      const impactedDocumentId = changedDocumentId === edge.sourceDocumentId
+        ? edge.targetDocumentId
+        : edge.sourceDocumentId;
+      const pairId = `${changedDocumentId}:${impactedDocumentId}`;
+      const relationKinds = relationKindsByPair.get(pairId) || new Set<KnowledgeDocumentRelationKind>();
+      relationKinds.add(edge.kind === "duplicate" ? "duplicate" : "similar");
+      relationKindsByPair.set(pairId, relationKinds);
+    }
+  }
+
+  return Array.from(relationKindsByPair.entries())
+    .map(([pairId, relationKinds]) => {
+      const [changedDocumentId, impactedDocumentId] = pairId.split(":");
+      const changedRecord = records.find((record) => record.documentId === changedDocumentId);
+      const impactedRecord = records.find((record) => record.documentId === impactedDocumentId);
+
+      if (!changedRecord || !impactedRecord) {
+        return null;
+      }
+
+      return {
+        changedDocumentId,
+        changedDocumentName: changedRecord.normalizedDocument.metadata.title || changedRecord.fileName,
+        impactedDocumentId,
+        impactedDocumentName: impactedRecord.normalizedDocument.metadata.title || impactedRecord.fileName,
+        issueCount: issueCountByDocumentId.get(impactedDocumentId) || 0,
+        relationKinds: Array.from(relationKinds).sort(),
+      } satisfies KnowledgeImpactQueueItem;
+    })
+    .filter((item): item is KnowledgeImpactQueueItem => Boolean(item))
+    .sort((left, right) =>
+      scoreRelationKinds(right.relationKinds) - scoreRelationKinds(left.relationKinds)
+      || right.relationKinds.length - left.relationKinds.length
+      || right.issueCount - left.issueCount
+      || left.impactedDocumentName.localeCompare(right.impactedDocumentName)
+      || left.changedDocumentName.localeCompare(right.changedDocumentName));
 };

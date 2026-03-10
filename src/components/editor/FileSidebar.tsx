@@ -14,10 +14,16 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import ChangeMonitoringPanel from "@/components/editor/ChangeMonitoringPanel";
+import ConsistencyIssuesPanel from "@/components/editor/ConsistencyIssuesPanel";
+import DocumentHealthPanel from "@/components/editor/DocumentHealthPanel";
 import DocumentImpactPanel from "@/components/editor/DocumentImpactPanel";
+import FormatConsistencyPanel from "@/components/editor/FormatConsistencyPanel";
 import KnowledgeIndexPanel from "@/components/editor/KnowledgeIndexPanel";
 import KnowledgeInsightsPanel from "@/components/editor/KnowledgeInsightsPanel";
 import KnowledgeSearchPanel from "@/components/editor/KnowledgeSearchPanel";
+import VersionHistoryPanel from "@/components/editor/VersionHistoryPanel";
+import WorkspaceGraphPanel from "@/components/editor/WorkspaceGraphPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -34,9 +40,18 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/i18n/useI18n";
+import type { KnowledgeConsistencyIssue } from "@/lib/knowledge/consistencyAnalysis";
 import type { KnowledgeDocumentRecord, KnowledgeSearchResult } from "@/lib/knowledge/knowledgeIndex";
-import type { KnowledgeDocumentImpact, KnowledgeWorkspaceInsights } from "@/lib/knowledge/workspaceInsights";
+import type { SourceChangeRecord } from "@/lib/knowledge/sourceFingerprint";
+import type {
+  KnowledgeDocumentImpact,
+  KnowledgeHealthIssue,
+  KnowledgeImpactQueueItem,
+  KnowledgeWorkspaceInsights,
+} from "@/lib/knowledge/workspaceInsights";
 import type { DocumentData, EditorMode } from "@/types/document";
+import type { DocumentVersionSnapshot } from "@/types/document";
+import type { FormatConsistencyIssue } from "@/lib/analysis/formatConsistency";
 
 interface FileSidebarProps {
   activeDocId: string;
@@ -45,10 +60,17 @@ interface FileSidebarProps {
   knowledgeDocumentCount: number;
   knowledgeFreshCount: number;
   knowledgeImageCount: number;
+  knowledgeChangedSources: SourceChangeRecord[];
+  knowledgeConsistencyIssues: KnowledgeConsistencyIssue[];
+  knowledgeHealthIssues: KnowledgeHealthIssue[];
+  formatConsistencyIssues: FormatConsistencyIssue[];
+  knowledgeImpactQueue: KnowledgeImpactQueueItem[];
   knowledgeInsights: KnowledgeWorkspaceInsights;
   knowledgeLastIndexedAt: number | null;
+  knowledgeLastRescannedAt: number | null;
   knowledgeQuery: string;
   knowledgeReady: boolean;
+  knowledgeRescanning: boolean;
   knowledgeResults: KnowledgeSearchResult[];
   knowledgeStaleCount: number;
   knowledgeSyncing: boolean;
@@ -61,12 +83,20 @@ interface FileSidebarProps {
   onRebuildKnowledgeBase: () => void;
   onReindexKnowledgeDocument: (documentId: string) => void;
   onRenameDoc: (id: string, name: string) => void;
+  onRescanKnowledgeSources: () => void;
   onResetKnowledgeBase: () => void;
   onSelectDoc: (id: string) => void;
+  onSuggestKnowledgeImpactUpdate: (sourceDocumentId: string, targetDocumentId: string) => void;
   onSuggestKnowledgeUpdates: (documentId: string) => void;
+  onGenerateTocSuggestion?: () => void;
   recentKnowledgeRecords: KnowledgeDocumentRecord[];
   setKnowledgeQuery: (value: string) => void;
   suggestableKnowledgeDocumentIds: string[];
+  versionHistoryReady: boolean;
+  versionHistoryRestoring: boolean;
+  versionHistorySnapshots: DocumentVersionSnapshot[];
+  versionHistorySyncing: boolean;
+  onRestoreVersionSnapshot: (snapshotId: string) => void;
 }
 
 const modeIcon = (mode: string) => {
@@ -106,10 +136,17 @@ const FileSidebar = ({
   knowledgeDocumentCount,
   knowledgeFreshCount,
   knowledgeImageCount,
+  knowledgeChangedSources,
+  knowledgeConsistencyIssues,
+  knowledgeHealthIssues,
+  formatConsistencyIssues,
+  knowledgeImpactQueue,
   knowledgeInsights,
   knowledgeLastIndexedAt,
+  knowledgeLastRescannedAt,
   knowledgeQuery,
   knowledgeReady,
+  knowledgeRescanning,
   knowledgeResults,
   knowledgeStaleCount,
   knowledgeSyncing,
@@ -122,12 +159,20 @@ const FileSidebar = ({
   onRebuildKnowledgeBase,
   onReindexKnowledgeDocument,
   onRenameDoc,
+  onRescanKnowledgeSources,
   onResetKnowledgeBase,
   onSelectDoc,
+  onSuggestKnowledgeImpactUpdate,
   onSuggestKnowledgeUpdates,
+  onGenerateTocSuggestion,
   recentKnowledgeRecords,
   setKnowledgeQuery,
   suggestableKnowledgeDocumentIds,
+  versionHistoryReady,
+  versionHistoryRestoring,
+  versionHistorySnapshots,
+  versionHistorySyncing,
+  onRestoreVersionSnapshot,
 }: FileSidebarProps) => {
   const { t } = useI18n();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -278,6 +323,27 @@ const FileSidebar = ({
         <SidebarGroup>
           <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
           <SidebarGroupContent>
+            <FormatConsistencyPanel
+              issues={formatConsistencyIssues}
+              onGenerateToc={onGenerateTocSuggestion}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroupContent>
+            <VersionHistoryPanel
+              isReady={versionHistoryReady}
+              isRestoring={versionHistoryRestoring}
+              isSyncing={versionHistorySyncing}
+              onRestore={onRestoreVersionSnapshot}
+              snapshots={versionHistorySnapshots}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroupContent>
             <KnowledgeIndexPanel
               freshCount={knowledgeFreshCount}
               imageCount={knowledgeImageCount}
@@ -298,6 +364,46 @@ const FileSidebar = ({
               onOpenDocument={onOpenRelatedKnowledgeDocument}
               onSuggestUpdates={onSuggestKnowledgeUpdates}
               suggestableDocumentIds={suggestableKnowledgeDocumentIds}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroupContent>
+            <WorkspaceGraphPanel
+              insights={knowledgeInsights}
+              onOpenDocument={onOpenRelatedKnowledgeDocument}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroupContent>
+            <DocumentHealthPanel issues={knowledgeHealthIssues} />
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroupContent>
+            <ConsistencyIssuesPanel
+              issues={knowledgeConsistencyIssues}
+              onOpenDocument={onOpenRelatedKnowledgeDocument}
+              onSuggestUpdates={onSuggestKnowledgeUpdates}
+              suggestableDocumentIds={suggestableKnowledgeDocumentIds}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+          <SidebarGroupContent>
+            <ChangeMonitoringPanel
+              changedSources={knowledgeChangedSources}
+              impactQueue={knowledgeImpactQueue}
+              isRescanning={knowledgeRescanning}
+              lastRescannedAt={knowledgeLastRescannedAt}
+              onOpenDocument={onOpenRelatedKnowledgeDocument}
+              onRescan={onRescanKnowledgeSources}
+              onSuggestUpdates={onSuggestKnowledgeImpactUpdate}
             />
           </SidebarGroupContent>
         </SidebarGroup>

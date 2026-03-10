@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,7 +8,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/useI18n";
 import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
-import type { AiBusyAction, PatchPreviewResult } from "@/hooks/useAiAssistant";
+import type { AiBusyAction, PatchPreviewResult, TocPreviewResult } from "@/hooks/useAiAssistant";
 import type { SummarizeDocumentResponse } from "@/types/aiAssistant";
 import type { DocumentData } from "@/types/document";
 
@@ -27,6 +26,8 @@ interface AiAssistantDialogProps {
   onCompare: (targetDocumentId: string) => Promise<unknown> | unknown;
   onExtractProcedure: () => Promise<ProcedureExtractionResult | unknown> | unknown;
   onGenerateSection: (prompt: string) => Promise<unknown> | unknown;
+  onGenerateToc: () => Promise<unknown> | unknown;
+  onLoadTocPatch: (maxDepthOverride?: 1 | 2 | 3) => Promise<unknown> | unknown;
   onOpenChange: (open: boolean) => void;
   onSuggestUpdates: (targetDocumentId: string) => Promise<unknown> | unknown;
   onSummarize: (objective: string) => Promise<SummarizeDocumentResponse | unknown> | unknown;
@@ -34,6 +35,7 @@ interface AiAssistantDialogProps {
   procedureResult: ProcedureExtractionResult | null;
   richTextAvailable: boolean;
   summaryResult: SummarizeDocumentResponse | null;
+  tocPreview: TocPreviewResult | null;
   updateSuggestionPreview: PatchPreviewResult | null;
 }
 
@@ -71,6 +73,8 @@ const AiAssistantDialog = ({
   onCompare,
   onExtractProcedure,
   onGenerateSection,
+  onGenerateToc,
+  onLoadTocPatch,
   onOpenChange,
   onSuggestUpdates,
   onSummarize,
@@ -78,6 +82,7 @@ const AiAssistantDialog = ({
   procedureResult,
   richTextAvailable,
   summaryResult,
+  tocPreview,
   updateSuggestionPreview,
 }: AiAssistantDialogProps) => {
   const { t } = useI18n();
@@ -85,12 +90,19 @@ const AiAssistantDialog = ({
   const [sectionPrompt, setSectionPrompt] = useState("");
   const [compareTargetId, setCompareTargetId] = useState("");
   const [updateTargetId, setUpdateTargetId] = useState("");
+  const [tocMaxDepth, setTocMaxDepth] = useState<"1" | "2" | "3">("2");
 
   const isBusy = busyAction !== null;
   const compareOptions = useMemo(
     () => compareCandidates.map((candidate) => ({ id: candidate.id, name: candidate.name })),
     [compareCandidates],
   );
+
+  useEffect(() => {
+    if (tocPreview) {
+      setTocMaxDepth(String(tocPreview.maxDepth) as "1" | "2" | "3");
+    }
+  }, [tocPreview]);
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -110,9 +122,10 @@ const AiAssistantDialog = ({
           </div>
         ) : (
           <Tabs className="space-y-4" defaultValue="summary">
-            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 lg:grid-cols-5">
+            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 lg:grid-cols-6">
               <TabsTrigger value="summary">{t("aiDialog.tabs.summary")}</TabsTrigger>
               <TabsTrigger value="generate">{t("aiDialog.tabs.generate")}</TabsTrigger>
+              <TabsTrigger value="toc">{t("aiDialog.tabs.toc")}</TabsTrigger>
               <TabsTrigger value="compare">{t("aiDialog.tabs.compare")}</TabsTrigger>
               <TabsTrigger value="update">{t("aiDialog.tabs.update")}</TabsTrigger>
               <TabsTrigger value="procedure">{t("aiDialog.tabs.procedure")}</TabsTrigger>
@@ -215,6 +228,121 @@ const AiAssistantDialog = ({
                 <section className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
                   <h3 className="text-sm font-semibold text-foreground">{t("aiDialog.generate.reviewTitle")}</h3>
                   <p className="mt-3">{t("aiDialog.generate.reviewDescription")}</p>
+                </section>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="toc">
+              <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+                <section className="space-y-3 rounded-lg border border-border p-4">
+                  <div>
+                    <h3 className="text-sm font-semibold">{t("aiDialog.toc.title")}</h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {t("aiDialog.toc.help")}
+                    </p>
+                  </div>
+                  <Button
+                    className="w-full"
+                    disabled={isBusy}
+                    onClick={() => void onGenerateToc()}
+                    type="button"
+                    variant="secondary"
+                  >
+                    {busyAction === "generate-toc" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    {busyAction === "generate-toc" ? t("aiDialog.toc.loading") : t("aiDialog.toc.action")}
+                  </Button>
+
+                  <div className="space-y-2 rounded-md border border-border/60 bg-muted/20 p-3">
+                    <Label htmlFor="toc-depth">{t("aiDialog.toc.depth")}</Label>
+                    <Select onValueChange={(value) => setTocMaxDepth(value as "1" | "2" | "3")} value={tocMaxDepth}>
+                      <SelectTrigger id="toc-depth">
+                        <SelectValue placeholder={t("aiDialog.toc.depth")} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">{t("aiDialog.toc.depthValue", { value: 1 })}</SelectItem>
+                        <SelectItem value="2">{t("aiDialog.toc.depthValue", { value: 2 })}</SelectItem>
+                        <SelectItem value="3">{t("aiDialog.toc.depthValue", { value: 3 })}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">{t("aiDialog.toc.depthHelp")}</p>
+                    <Button
+                      className="w-full"
+                      disabled={!tocPreview}
+                      onClick={() => void onLoadTocPatch(Number(tocMaxDepth) as 1 | 2 | 3)}
+                      type="button"
+                      variant="outline"
+                    >
+                      {t("aiDialog.toc.loadPatch")}
+                    </Button>
+                  </div>
+                </section>
+
+                <section className="rounded-lg border border-border p-4">
+                  <h3 className="text-sm font-semibold">{t("aiDialog.toc.result")}</h3>
+                  <ScrollArea className="mt-3 h-72 pr-3">
+                    {tocPreview ? (
+                      <div className="space-y-4 text-sm">
+                        <div className="space-y-1">
+                          <p className="font-medium">
+                            {t("aiDialog.toc.suggestedDepth", { value: tocPreview.maxDepth })}
+                          </p>
+                          <p className="text-muted-foreground">{tocPreview.rationale}</p>
+                        </div>
+
+                        {tocPreview.entries.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">{t("aiDialog.toc.entries")}</p>
+                            <div className="space-y-2">
+                              {tocPreview.entries.map((entry, index) => (
+                                <div key={`${entry.level}-${entry.title}-${index}`} className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                                  <div className="text-[11px] text-muted-foreground">
+                                    {t("aiDialog.toc.entryLevel", { level: entry.level })}
+                                  </div>
+                                  <div className="mt-1 text-sm text-foreground">{entry.title}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {tocPreview.conflicts.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">{t("aiDialog.toc.conflicts")}</p>
+                            <ul className="space-y-2 text-xs text-muted-foreground">
+                              {tocPreview.conflicts.map((conflict) => (
+                                <li key={conflict} className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                                  {t(`aiDialog.toc.conflict.${conflict}`)}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {tocPreview.attributions.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">{t("aiDialog.toc.attributions")}</p>
+                            <ul className="space-y-2 text-xs text-muted-foreground">
+                              {tocPreview.attributions.map((attribution, index) => (
+                                <li key={`toc-src-${index}`} className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                                  <div>{t("aiDialog.summary.sourceLine", { sourceId: attribution.ingestionId, chunkId: attribution.chunkId })}</div>
+                                  {attribution.sectionId ? <div>{t("aiDialog.summary.sectionLine", { sectionId: attribution.sectionId })}</div> : null}
+                                  {attribution.rationale ? <div>{attribution.rationale}</div> : null}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        <div className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                          {tocPreview.hasLoadablePatch
+                            ? t("aiDialog.toc.patchReady", { count: tocPreview.patchCount })
+                            : t("aiDialog.toc.patchNotNeeded")}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">{t("aiDialog.toc.empty")}</p>
+                    )}
+                  </ScrollArea>
                 </section>
               </div>
             </TabsContent>

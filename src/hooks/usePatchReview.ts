@@ -14,13 +14,14 @@ import {
   serializeStructuredContent,
 } from "@/lib/patches/applyStructuredPatchSet";
 import { applyPatchDecision } from "@/lib/patches/reviewPatchSet";
-import type { DocumentData } from "@/types/document";
+import type { DocumentData, DocumentVersionSnapshotMetadata } from "@/types/document";
 import type { DocumentPatch, DocumentPatchSet } from "@/types/documentPatch";
 
 interface UsePatchReviewOptions {
   activeDoc: DocumentData;
   activeEditor: TiptapEditor | null;
   bumpEditorKey: () => void;
+  onVersionSnapshot?: (document: DocumentData, metadata?: DocumentVersionSnapshotMetadata) => Promise<unknown> | unknown;
   setLiveEditorHtml: (html: string) => void;
   updateActiveDoc: (patch: Partial<DocumentData>) => void;
 }
@@ -45,6 +46,7 @@ export const usePatchReview = ({
   activeDoc,
   activeEditor,
   bumpEditorKey,
+  onVersionSnapshot,
   setLiveEditorHtml,
   updateActiveDoc,
 }: UsePatchReviewOptions) => {
@@ -151,10 +153,25 @@ export const usePatchReview = ({
       }
 
       if (result.appliedPatchIds.length > 0) {
+        const nextContent = serializeStructuredContent(result.value, activeDoc.mode);
+
         updateActiveDoc({
-          content: serializeStructuredContent(result.value, activeDoc.mode),
+          content: nextContent,
         });
         bumpEditorKey();
+        void onVersionSnapshot?.({
+          ...activeDoc,
+          content: nextContent,
+          sourceSnapshots: {
+            ...(activeDoc.sourceSnapshots || {}),
+            [activeDoc.mode]: nextContent,
+          },
+          tiptapJson: null,
+          updatedAt: Date.now(),
+        }, {
+          patchCount: result.appliedPatchIds.length,
+          patchSetTitle: patchSet.title,
+        });
       }
 
       if (result.warnings.length > 0) {
@@ -211,10 +228,28 @@ export const usePatchReview = ({
       const nextLatex = renderAstToLatex(result.document, { includeWrapper: false });
       const nextMarkdown = renderAstToMarkdown(result.document);
       const nextContent = getContentForMode(activeDoc.mode, nextHtml, nextMarkdown, nextLatex);
+      const nextUpdatedAt = Date.now();
 
       updateActiveDoc({ content: nextContent });
       setLiveEditorHtml(nextHtml);
       bumpEditorKey();
+      void onVersionSnapshot?.({
+        ...activeDoc,
+        ast: result.document,
+        content: nextContent,
+        sourceSnapshots: {
+          ...(activeDoc.sourceSnapshots || {}),
+          html: nextHtml,
+          latex: nextLatex,
+          markdown: nextMarkdown,
+          [activeDoc.mode]: nextContent,
+        },
+        tiptapJson: null,
+        updatedAt: nextUpdatedAt,
+      }, {
+        patchCount: result.appliedPatchIds.length,
+        patchSetTitle: patchSet.title,
+      });
     }
 
     if (result.warnings.length > 0) {
@@ -232,7 +267,7 @@ export const usePatchReview = ({
     setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
     setPatchReviewOpen(false);
     toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
-  }, [activeDoc.content, activeDoc.id, activeDoc.mode, activeEditor, bumpEditorKey, patchSet, setLiveEditorHtml, t, updateActiveDoc]);
+  }, [activeDoc, activeDoc.content, activeDoc.id, activeDoc.mode, activeEditor, bumpEditorKey, onVersionSnapshot, patchSet, setLiveEditorHtml, t, updateActiveDoc]);
 
   return {
     acceptedPatchCount,

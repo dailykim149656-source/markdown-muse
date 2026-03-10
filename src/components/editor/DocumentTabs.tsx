@@ -35,7 +35,7 @@ const DocumentTabs = ({ activeDocId, documents, onCloseDoc, onNewDoc, onSelectDo
   }
 
   return (
-    <div className="flex h-8 items-center border-b border-border bg-secondary/30 px-1">
+    <div className="flex h-9 items-center border-b border-border bg-secondary/30 px-1 sm:h-8">
       <ScrollArea className="flex-1">
         <div className="flex items-center gap-0.5">
           {documents.map((document) => {
@@ -44,7 +44,7 @@ const DocumentTabs = ({ activeDocId, documents, onCloseDoc, onNewDoc, onSelectDo
             return (
               <button
                 key={document.id}
-                className={`group flex max-w-[160px] shrink-0 items-center gap-1 rounded-t-md px-2.5 py-1 text-xs transition-colors ${
+                className={`group flex max-w-[130px] shrink-0 items-center gap-1 rounded-t-md px-2 py-1.5 text-xs transition-colors sm:max-w-[160px] sm:px-2.5 sm:py-1 ${
                   isActive
                     ? "border-b-2 border-primary bg-background text-foreground"
                     : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
@@ -56,7 +56,7 @@ const DocumentTabs = ({ activeDocId, documents, onCloseDoc, onNewDoc, onSelectDo
                 <span className="text-[9px] text-muted-foreground/60">{modeLabel(document.mode)}</span>
                 {documents.length > 1 && (
                   <span
-                    className="ml-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-destructive"
+                    className="ml-0.5 opacity-100 transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
                     onClick={(event) => {
                       event.stopPropagation();
                       onCloseDoc(document.id);
@@ -72,7 +72,7 @@ const DocumentTabs = ({ activeDocId, documents, onCloseDoc, onNewDoc, onSelectDo
         <ScrollBar className="h-1" orientation="horizontal" />
       </ScrollArea>
       <Button
-        className="ml-1 h-6 w-6 shrink-0 p-0"
+        className="ml-1 h-7 w-7 shrink-0 p-0 sm:h-6 sm:w-6"
         onClick={onNewDoc}
         size="sm"
         title={t("tabs.newDocument")}

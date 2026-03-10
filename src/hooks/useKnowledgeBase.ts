@@ -1,6 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n/useI18n";
+import {
+  buildConsistencyHealthIssues,
+  buildKnowledgeConsistencyIssues,
+  type KnowledgeConsistencyIssue,
+} from "@/lib/knowledge/consistencyAnalysis";
 import {
   buildDocumentOptionsFromKnowledgeRecord,
   buildKnowledgeRecordFromDocument,
@@ -19,7 +24,21 @@ import {
   removeKnowledgeRecord,
   upsertKnowledgeRecords,
 } from "@/lib/knowledge/knowledgeStore";
-import { buildKnowledgeDocumentImpact, buildKnowledgeWorkspaceInsights } from "@/lib/knowledge/workspaceInsights";
+import {
+  buildSourceSnapshotRecordFromKnowledgeRecord,
+  compareSourceSnapshots,
+  type SourceChangeRecord,
+} from "@/lib/knowledge/sourceFingerprint";
+import {
+  clearSourceSnapshots,
+  listSourceSnapshots,
+  replaceSourceSnapshots,
+} from "@/lib/knowledge/sourceSnapshotStore";
+import {
+  buildKnowledgeDocumentImpact,
+  buildKnowledgeImpactQueue,
+  buildKnowledgeWorkspaceInsights,
+} from "@/lib/knowledge/workspaceInsights";
 import type { CreateDocumentOptions, DocumentData } from "@/types/document";
 
 interface UseKnowledgeBaseOptions {
@@ -37,9 +56,13 @@ export const useKnowledgeBase = ({
 }: UseKnowledgeBaseOptions) => {
   const { t } = useI18n();
   const [knowledgeQuery, setKnowledgeQuery] = useState("");
+  const [knowledgeChangedSources, setKnowledgeChangedSources] = useState<SourceChangeRecord[]>([]);
+  const [knowledgeLastRescannedAt, setKnowledgeLastRescannedAt] = useState<number | null>(null);
   const [knowledgeRecords, setKnowledgeRecords] = useState<KnowledgeDocumentRecord[]>([]);
   const [knowledgeReady, setKnowledgeReady] = useState(false);
+  const [knowledgeRescanning, setKnowledgeRescanning] = useState(false);
   const [knowledgeSyncing, setKnowledgeSyncing] = useState(false);
+  const [sourceSnapshotRecords, setSourceSnapshotRecords] = useState(() => [] as ReturnType<typeof buildSourceSnapshotRecordFromKnowledgeRecord>[]);
 
   const liveKnowledgeRecords = useMemo(
     () => documents
@@ -47,16 +70,27 @@ export const useKnowledgeBase = ({
       .filter((record): record is KnowledgeDocumentRecord => Boolean(record)),
     [documents],
   );
+  const initialLiveKnowledgeRecords = useRef(liveKnowledgeRecords);
 
   useEffect(() => {
     let cancelled = false;
 
     const hydrateKnowledgeBase = async () => {
       try {
-        const storedRecords = await listKnowledgeRecords();
+        const [storedRecords, storedSnapshots] = await Promise.all([
+          listKnowledgeRecords(),
+          listSourceSnapshots(),
+        ]);
 
         if (!cancelled) {
-          setKnowledgeRecords(reconcileKnowledgeRecords(storedRecords, liveKnowledgeRecords));
+          setKnowledgeRecords(reconcileKnowledgeRecords(storedRecords, initialLiveKnowledgeRecords.current));
+          setSourceSnapshotRecords(storedSnapshots);
+          setKnowledgeLastRescannedAt(
+            storedSnapshots.reduce<number | null>(
+              (latest, snapshot) => (latest === null || snapshot.scannedAt > latest ? snapshot.scannedAt : latest),
+              null,
+            ),
+          );
         }
       } finally {
         if (!cancelled) {
@@ -74,6 +108,12 @@ export const useKnowledgeBase = ({
 
   useEffect(() => {
     setKnowledgeRecords((previousRecords) => reconcileKnowledgeRecords(previousRecords, liveKnowledgeRecords));
+  }, [liveKnowledgeRecords]);
+
+  useEffect(() => {
+    const liveDocumentIds = new Set(liveKnowledgeRecords.map((record) => record.documentId));
+    setKnowledgeChangedSources((previousSources) =>
+      previousSources.filter((source) => liveDocumentIds.has(source.documentId)));
   }, [liveKnowledgeRecords]);
 
   useEffect(() => {
@@ -114,6 +154,47 @@ export const useKnowledgeBase = ({
     () => buildKnowledgeDocumentImpact(knowledgeRecords, knowledgeInsights, activeDocumentId),
     [activeDocumentId, knowledgeInsights, knowledgeRecords],
   );
+  const activeKnowledgeRecord = useMemo(
+    () => knowledgeRecords.find((record) => record.documentId === activeDocumentId) || null,
+    [activeDocumentId, knowledgeRecords],
+  );
+  const knowledgeImpactQueue = useMemo(
+    () => buildKnowledgeImpactQueue(
+      knowledgeRecords,
+      knowledgeInsights,
+      knowledgeChangedSources.map((source) => source.documentId),
+    ),
+    [knowledgeChangedSources, knowledgeInsights, knowledgeRecords],
+  );
+  const knowledgeConsistencyIssues = useMemo<KnowledgeConsistencyIssue[]>(() => {
+    if (!activeKnowledgeRecord || !knowledgeActiveImpact) {
+      return [];
+    }
+
+    const relatedDocumentIds = new Set(knowledgeActiveImpact.relatedDocuments.map((document) => document.documentId));
+    const candidateRecords = knowledgeRecords.filter((record) => relatedDocumentIds.has(record.documentId));
+    return buildKnowledgeConsistencyIssues(activeKnowledgeRecord, candidateRecords);
+  }, [activeKnowledgeRecord, knowledgeActiveImpact, knowledgeRecords]);
+  const knowledgeHealthIssues = useMemo(() => {
+    const impactIssues = knowledgeActiveImpact?.issues || [];
+    const consistencyHealthIssues = buildConsistencyHealthIssues(knowledgeConsistencyIssues);
+    const outdatedIssues = knowledgeImpactQueue
+      .filter((item) => item.impactedDocumentId === activeDocumentId)
+      .map((item) => ({
+        documentId: activeDocumentId,
+        id: `issue:outdated_source:${item.changedDocumentId}:${item.impactedDocumentId}`,
+        kind: "outdated_source" as const,
+        message: `${item.impactedDocumentName} may need updates because ${item.changedDocumentName} changed during the last rescan.`,
+        relatedDocumentIds: [item.changedDocumentId, item.impactedDocumentId],
+        severity: "warning" as const,
+      }));
+
+    return Array.from(new Map(
+      [...impactIssues, ...consistencyHealthIssues, ...outdatedIssues].map((issue) => [issue.id, issue]),
+    ).values()).sort((left, right) =>
+      Number(right.severity === "warning") - Number(left.severity === "warning")
+      || left.message.localeCompare(right.message));
+  }, [activeDocumentId, knowledgeActiveImpact, knowledgeConsistencyIssues, knowledgeImpactQueue]);
 
   const knowledgeResults = useMemo(
     () => searchKnowledgeRecords(knowledgeRecords, knowledgeQuery, 12),
@@ -171,13 +252,42 @@ export const useKnowledgeBase = ({
     void removeKnowledgeRecord(documentId);
   }, []);
 
+  const rescanKnowledgeSources = useCallback(async () => {
+    setKnowledgeRescanning(true);
+
+    try {
+      const scannedAt = Date.now();
+      const nextSnapshots = liveKnowledgeRecords.map((record) =>
+        buildSourceSnapshotRecordFromKnowledgeRecord(record, scannedAt));
+      const changes = compareSourceSnapshots(sourceSnapshotRecords, nextSnapshots);
+
+      await replaceSourceSnapshots(nextSnapshots);
+
+      setSourceSnapshotRecords(nextSnapshots);
+      setKnowledgeChangedSources(changes);
+      setKnowledgeLastRescannedAt(scannedAt);
+
+      if (changes.length === 0) {
+        toast.info("Knowledge rescan finished with no detected source changes.");
+        return;
+      }
+
+      toast.success(`Knowledge rescan detected ${changes.length} changed source${changes.length === 1 ? "" : "s"}.`);
+    } finally {
+      setKnowledgeRescanning(false);
+    }
+  }, [liveKnowledgeRecords, sourceSnapshotRecords]);
+
   const resetKnowledgeBase = useCallback(async () => {
     setKnowledgeSyncing(true);
 
     try {
-      await clearKnowledgeRecords();
+      await Promise.all([clearKnowledgeRecords(), clearSourceSnapshots()]);
       setKnowledgeQuery("");
+      setKnowledgeChangedSources([]);
+      setKnowledgeLastRescannedAt(null);
       setKnowledgeRecords([]);
+      setSourceSnapshotRecords([]);
       toast.success(t("knowledge.resetDone"));
     } finally {
       setKnowledgeSyncing(false);
@@ -243,11 +353,17 @@ export const useKnowledgeBase = ({
     knowledgeFreshCount: knowledgeSummary.freshCount,
     knowledgeImageCount: knowledgeSummary.imageCount,
     knowledgeActiveImpact,
+    knowledgeChangedSources,
+    knowledgeConsistencyIssues,
+    knowledgeHealthIssues,
+    knowledgeImpactQueue,
     knowledgeInsights,
     knowledgeLastIndexedAt: knowledgeSummary.lastIndexedAt,
+    knowledgeLastRescannedAt,
     knowledgeQuery,
     knowledgeReady,
     knowledgeRecords,
+    knowledgeRescanning,
     knowledgeResults,
     knowledgeStaleCount: knowledgeSummary.staleCount,
     knowledgeSyncing,
@@ -256,6 +372,7 @@ export const useKnowledgeBase = ({
     openKnowledgeResult,
     recentKnowledgeRecords,
     rebuildKnowledgeBase,
+    rescanKnowledgeSources,
     reindexKnowledgeDocument,
     resetKnowledgeBase,
     setKnowledgeQuery,

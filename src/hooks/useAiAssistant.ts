@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useI18n } from "@/i18n/useI18n";
 import { buildDerivedDocumentIndex } from "@/lib/ast/documentIndex";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
-import { generateSection, summarizeDocument } from "@/lib/ai/client";
+import { generateSection, generateToc, summarizeDocument } from "@/lib/ai/client";
 import {
   buildComparisonPatchSet,
   compareDocuments,
@@ -16,15 +16,25 @@ import {
 } from "@/lib/ai/procedureExtraction";
 import { buildSectionGenerationPatchSet } from "@/lib/ai/sectionGeneration";
 import { suggestDocumentUpdates } from "@/lib/ai/suggestDocumentUpdates";
+import {
+  analyzeTocSuggestion,
+  buildTocPatchSetWithAst,
+  type TocSuggestionConflictCode,
+} from "@/lib/ai/tocGeneration";
 import { normalizeIngestionRequest } from "@/lib/ingestion/normalizeIngestionRequest";
 import type { DocumentData } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
-import type { SummarizeDocumentResponse } from "@/types/aiAssistant";
+import type {
+  GenerateTocEntry,
+  GenerateTocResponse,
+  SummarizeDocumentResponse,
+} from "@/types/aiAssistant";
 
 export type AiBusyAction =
   | "compare"
   | "extract-procedure"
   | "generate-section"
+  | "generate-toc"
   | "suggest-updates"
   | "summarize"
   | null;
@@ -34,6 +44,17 @@ export interface PatchPreviewResult {
   patchCount: number;
   patchSetTitle: string;
   targetDocumentName: string;
+}
+
+export interface TocPreviewResult {
+  attributions: GenerateTocResponse["attributions"];
+  conflicts: TocSuggestionConflictCode[];
+  entries: GenerateTocEntry[];
+  hasLoadablePatch: boolean;
+  maxDepth: 1 | 2 | 3;
+  patchCount: number;
+  patchSetTitle: string;
+  rationale: string;
 }
 
 interface UseAiAssistantOptions {
@@ -80,6 +101,7 @@ export const useAiAssistant = ({
   const [comparePreview, setComparePreview] = useState<PatchPreviewResult | null>(null);
   const [updateSuggestionPreview, setUpdateSuggestionPreview] = useState<PatchPreviewResult | null>(null);
   const [procedureResult, setProcedureResult] = useState<ProcedureExtractionResult | null>(null);
+  const [tocPreview, setTocPreview] = useState<TocPreviewResult | null>(null);
 
   const richTextAvailable = isRichTextDocument(activeDoc);
   const compareCandidates = useMemo(
@@ -92,6 +114,7 @@ export const useAiAssistant = ({
     setComparePreview(null);
     setUpdateSuggestionPreview(null);
     setProcedureResult(null);
+    setTocPreview(null);
   }, [activeDoc.id]);
 
   const ensureActiveRichText = useCallback(() => {
@@ -226,6 +249,115 @@ export const useAiAssistant = ({
     }
   }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, currentRenderableMarkdown, ensureActiveRichText, locale, loadPatchSet, t]);
 
+  const generateTocSuggestion = useCallback(async () => {
+    ensureActiveRichText();
+    setBusyAction("generate-toc");
+
+    try {
+      const sourceAst = buildSourceAst();
+      const headings = buildDerivedDocumentIndex(sourceAst).headings;
+      const result = await generateToc({
+        document: {
+          documentId: activeDoc.id,
+          fileName: activeDoc.name,
+          markdown: currentRenderableMarkdown,
+          mode: activeDoc.mode,
+        },
+        existingHeadings: headings.map((heading) => ({
+          level: heading.level,
+          nodeId: heading.nodeId,
+          text: heading.text,
+        })),
+        locale,
+      });
+      const analysis = analyzeTocSuggestion(sourceAst, result.entries, result.maxDepth);
+      const patchSet = buildTocPatchSetWithAst(sourceAst, {
+        analysis,
+        documentId: activeDoc.id,
+        maxDepth: result.maxDepth,
+        patchSetId: `gemini-toc-${Date.now()}`,
+        rationale: result.rationale,
+        sources: result.attributions.map((attribution) => ({
+          chunkId: attribution.chunkId,
+          sectionId: attribution.sectionId,
+          sourceId: attribution.ingestionId,
+        })),
+      });
+
+      const preview = {
+        attributions: result.attributions,
+        conflicts: analysis.conflicts,
+        entries: result.entries,
+        hasLoadablePatch: patchSet.patches.length > 0,
+        maxDepth: result.maxDepth,
+        patchCount: patchSet.patches.length,
+        patchSetTitle: patchSet.title,
+        rationale: result.rationale,
+      } satisfies TocPreviewResult;
+
+      setTocPreview(preview);
+      return preview;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : t("hooks.ai.tocFailed");
+      toast.error(message);
+      throw error;
+    } finally {
+      setBusyAction((current) => (current === "generate-toc" ? null : current));
+    }
+  }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, currentRenderableMarkdown, ensureActiveRichText, locale, t]);
+
+  const loadTocPatch = useCallback((maxDepthOverride?: 1 | 2 | 3) => {
+    ensureActiveRichText();
+
+    if (!tocPreview) {
+      toast.info(t("hooks.ai.tocGenerateFirst"));
+      return null;
+    }
+
+    const sourceAst = buildSourceAst();
+    const maxDepth = maxDepthOverride ?? tocPreview.maxDepth;
+    const analysis = analyzeTocSuggestion(sourceAst, tocPreview.entries, maxDepth);
+    const patchSet = buildTocPatchSetWithAst(sourceAst, {
+      analysis,
+      documentId: activeDoc.id,
+      maxDepth,
+      patchSetId: `gemini-toc-${Date.now()}`,
+      rationale: tocPreview.rationale,
+      sources: tocPreview.attributions.map((attribution) => ({
+        chunkId: attribution.chunkId,
+        sectionId: attribution.sectionId,
+        sourceId: attribution.ingestionId,
+      })),
+    });
+
+    if (patchSet.patches.length === 0) {
+      toast.info(t("hooks.ai.tocNoPatchNeeded"));
+      setTocPreview((current) => current
+        ? {
+          ...current,
+          conflicts: analysis.conflicts,
+          hasLoadablePatch: false,
+          maxDepth,
+          patchCount: 0,
+        }
+        : current);
+      return null;
+    }
+
+    loadPatchSet(patchSet);
+    setTocPreview((current) => current
+      ? {
+        ...current,
+        conflicts: analysis.conflicts,
+        hasLoadablePatch: true,
+        maxDepth,
+        patchCount: patchSet.patches.length,
+      }
+      : current);
+    toast.success(t("hooks.ai.tocPatchLoaded"));
+    return patchSet;
+  }, [activeDoc.id, buildSourceAst, ensureActiveRichText, loadPatchSet, t, tocPreview]);
+
   const compareWithDocument = useCallback((targetDocumentId: string) => {
     ensureActiveRichText();
     setBusyAction("compare");
@@ -356,12 +488,15 @@ export const useAiAssistant = ({
     compareWithDocument,
     extractProcedureFromActiveDocument,
     generateSectionPatch,
+    generateTocSuggestion,
+    loadTocPatch,
     procedureResult,
     richTextAvailable,
     setAssistantOpen,
     suggestUpdatesFromDocument,
     summarizeActiveDocument,
     summaryResult,
+    tocPreview,
     updateSuggestionPreview,
   };
 };

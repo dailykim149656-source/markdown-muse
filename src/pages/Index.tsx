@@ -1,18 +1,21 @@
 import type { JSONContent } from "@tiptap/core";
-import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import EditorWorkspace from "@/components/editor/EditorWorkspace";
 import type { DocumentTemplate } from "@/components/editor/TemplateDialog";
 import type { PlainTextFindReplaceAdapter } from "@/components/editor/findReplaceTypes";
 import { useAiAssistant } from "@/hooks/useAiAssistant";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
-import { useDocumentIO } from "@/hooks/useDocumentIO";
+import { MAX_IMPORT_FILE_SIZE_BYTES, useDocumentIO } from "@/hooks/useDocumentIO";
 import { useEditorUiState } from "@/hooks/useEditorUiState";
 import { useFormatConversion } from "@/hooks/useFormatConversion";
 import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
 import { usePatchReview } from "@/hooks/usePatchReview";
 import { useI18n } from "@/i18n/useI18n";
+import { useVersionHistory } from "@/hooks/useVersionHistory";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
+import { analyzeFormatConsistency } from "@/lib/analysis/formatConsistency";
+import { DOC_SHARE_HASH_PREFIX, parseSharedDocumentFromHash } from "@/lib/share/docShare";
 import type { EditorMode } from "@/types/document";
 import { toast } from "sonner";
 
@@ -30,10 +33,16 @@ const EditorFallback = () => (
 const Index = () => {
   const { t } = useI18n();
   const [activeEditor, setActiveEditor] = useState<TiptapEditor | null>(null);
+  const [pendingImpactSuggestion, setPendingImpactSuggestion] = useState<{
+    sourceDocumentId: string;
+    targetDocumentId: string;
+  } | null>(null);
   const [plainTextSearchAdapter, setPlainTextSearchAdapter] = useState<PlainTextFindReplaceAdapter | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const {
     activeDoc,
     activeDocId,
+    autoSaveState,
     bumpEditorKey,
     closeDocument,
     createDocument,
@@ -46,6 +55,7 @@ const Index = () => {
     selectDocument,
     updateActiveDoc,
   } = useDocumentManager();
+  const lastCapturedAutoSaveAtRef = useRef<number | null>(null);
   const {
     closeFindReplace,
     closePreview,
@@ -83,6 +93,20 @@ const Index = () => {
     updateActiveDoc,
   });
   const {
+    captureAutoSaveSnapshot,
+    createVersionSnapshot,
+    removeDocumentVersionSnapshots,
+    restoreVersionSnapshot,
+    versionHistoryReady,
+    versionHistoryRestoring,
+    versionHistorySnapshots,
+    versionHistorySyncing,
+  } = useVersionHistory({
+    activeDoc,
+    bumpEditorKey,
+    updateActiveDoc,
+  });
+  const {
     acceptedPatchCount,
     applyReviewedPatches,
     clearPatchSet,
@@ -99,6 +123,7 @@ const Index = () => {
     activeDoc,
     activeEditor,
     bumpEditorKey,
+    onVersionSnapshot: (document, metadata) => createVersionSnapshot(document, "patch_apply", metadata),
     setLiveEditorHtml,
     updateActiveDoc,
   });
@@ -110,12 +135,15 @@ const Index = () => {
     compareWithDocument,
     extractProcedureFromActiveDocument,
     generateSectionPatch,
+    generateTocSuggestion,
+    loadTocPatch,
     procedureResult,
     richTextAvailable,
     setAssistantOpen,
     suggestUpdatesFromDocument,
     summarizeActiveDocument,
     summaryResult,
+    tocPreview,
     updateSuggestionPreview,
   } = useAiAssistant({
     activeDoc,
@@ -126,6 +154,13 @@ const Index = () => {
   });
   const {
     fileInputRef,
+    importState,
+    shareLinkInfo,
+    handleCopyHtml,
+    handleCopyJson,
+    handleCopyMd,
+    handleCopyShareLink,
+    handleCopyYaml,
     handleFileChange,
     handleLoad,
     handlePrint,
@@ -143,6 +178,7 @@ const Index = () => {
     activeDoc,
     createDocument,
     onPatchSetLoad: loadPatchSet,
+    onVersionSnapshot: (metadata) => createVersionSnapshot(activeDoc, "export", metadata),
     renderableEditorHtml: currentRenderableHtml,
     renderableLatexDocument: currentRenderableLatexDocument,
     renderableMarkdown: currentRenderableMarkdown,
@@ -150,13 +186,19 @@ const Index = () => {
   const {
     deleteKnowledgeDocument,
     knowledgeActiveImpact,
+    knowledgeChangedSources,
+    knowledgeConsistencyIssues,
     knowledgeDocumentCount,
     knowledgeFreshCount,
+    knowledgeHealthIssues,
     knowledgeImageCount,
+    knowledgeImpactQueue,
     knowledgeInsights,
     knowledgeLastIndexedAt,
+    knowledgeLastRescannedAt,
     knowledgeQuery,
     knowledgeReady,
+    knowledgeRescanning,
     knowledgeResults,
     knowledgeStaleCount,
     knowledgeSyncing,
@@ -165,6 +207,7 @@ const Index = () => {
     openKnowledgeResult,
     recentKnowledgeRecords,
     rebuildKnowledgeBase,
+    rescanKnowledgeSources,
     reindexKnowledgeDocument,
     resetKnowledgeBase,
     setKnowledgeQuery,
@@ -174,6 +217,7 @@ const Index = () => {
     documents,
     selectDocument,
   });
+  const formatConsistencyIssues = analyzeFormatConsistency(activeDoc);
 
   useEffect(() => {
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
@@ -218,7 +262,8 @@ const Index = () => {
   const handleDeleteDoc = useCallback((id: string) => {
     deleteDocument(id);
     deleteKnowledgeDocument(id);
-  }, [deleteDocument, deleteKnowledgeDocument]);
+    void removeDocumentVersionSnapshots(id);
+  }, [deleteDocument, deleteKnowledgeDocument, removeDocumentVersionSnapshots]);
 
   const handleTemplateSelect = useCallback((template: DocumentTemplate) => {
     createDocument({
@@ -234,6 +279,66 @@ const Index = () => {
       toast.info(t("toasts.restoredSession"), { duration: 2000 });
     }
   }, [hasRestoredDocuments, t]);
+
+  useEffect(() => {
+    const openSharedDocumentFromHash = () => {
+      if (typeof window === "undefined" || !window.location.hash.startsWith(DOC_SHARE_HASH_PREFIX)) {
+        return;
+      }
+
+      try {
+        const sharedDocument = parseSharedDocumentFromHash(window.location.hash);
+
+        if (!sharedDocument) {
+          return;
+        }
+
+        createDocument(sharedDocument);
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+        toast.success(t("hooks.io.sharedDocumentLoaded"));
+      } catch (error) {
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+        toast.error(error instanceof Error ? error.message : t("hooks.io.sharedDocumentFailed"));
+      }
+    };
+
+    openSharedDocumentFromHash();
+    window.addEventListener("hashchange", openSharedDocumentFromHash);
+    return () => window.removeEventListener("hashchange", openSharedDocumentFromHash);
+  }, [createDocument, t]);
+
+  useEffect(() => {
+    if (autoSaveState.status !== "saved" || !autoSaveState.lastSavedAt) {
+      return;
+    }
+
+    if (lastCapturedAutoSaveAtRef.current === autoSaveState.lastSavedAt) {
+      return;
+    }
+
+    lastCapturedAutoSaveAtRef.current = autoSaveState.lastSavedAt;
+    void captureAutoSaveSnapshot(activeDoc);
+  }, [activeDoc, autoSaveState.lastSavedAt, autoSaveState.status, captureAutoSaveSnapshot]);
+
+  useEffect(() => {
+    if (!pendingImpactSuggestion) {
+      return;
+    }
+
+    if (activeDoc.id !== pendingImpactSuggestion.sourceDocumentId) {
+      selectDocument(pendingImpactSuggestion.sourceDocumentId);
+      return;
+    }
+
+    if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
+      toast.error("Impact suggestions currently require a rich-text source document.");
+      setPendingImpactSuggestion(null);
+      return;
+    }
+
+    void suggestUpdatesFromDocument(pendingImpactSuggestion.targetDocumentId);
+    setPendingImpactSuggestion(null);
+  }, [activeDoc.id, activeDoc.mode, pendingImpactSuggestion, selectDocument, suggestUpdatesFromDocument]);
 
   useEffect(() => {
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
@@ -340,6 +445,8 @@ const Index = () => {
         onCompare: compareWithDocument,
         onExtractProcedure: extractProcedureFromActiveDocument,
         onGenerateSection: generateSectionPatch,
+        onGenerateToc: generateTocSuggestion,
+        onLoadTocPatch: loadTocPatch,
         onOpenChange: setAssistantOpen,
         onSuggestUpdates: suggestUpdatesFromDocument,
         onSummarize: summarizeActiveDocument,
@@ -347,6 +454,7 @@ const Index = () => {
         procedureResult,
         richTextAvailable,
         summaryResult,
+        tocPreview,
         updateSuggestionPreview,
       }}
       fileInputRef={fileInputRef}
@@ -358,11 +466,22 @@ const Index = () => {
       }}
       headerProps={{
         countWithSpaces,
+        autoSaveState,
         fileName: activeDoc.name,
+        importState,
         isDark,
         isFullscreen,
+        loadFileTitle: t("header.loadFileHint", {
+          size: `${Math.round(MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024))}MB`,
+        }),
         mode: activeDoc.mode,
         onOpenAiAssistant: () => setAssistantOpen(true),
+        onOpenShare: () => setShareDialogOpen(true),
+        onCopyHtml: handleCopyHtml,
+        onCopyJson: handleCopyJson,
+        onCopyMd: handleCopyMd,
+        onCopyShareLink: handleCopyShareLink,
+        onCopyYaml: handleCopyYaml,
         onFileNameChange: handleFileNameChange,
         onLoad: handleLoad,
         onModeChange: handleModeChange,
@@ -407,6 +526,14 @@ const Index = () => {
         open: patchReviewOpen,
         patchSet,
       }}
+      shareLinkDialogProps={{
+        link: shareLinkInfo.link,
+        onCopy: () => {
+          void handleCopyShareLink();
+        },
+        onOpenChange: setShareDialogOpen,
+        open: shareDialogOpen,
+      }}
       previewOpen={previewOpen}
       previewProps={{
         editorHtml: currentRenderableHtml,
@@ -423,13 +550,19 @@ const Index = () => {
           activeDocId,
           documents,
           knowledgeActiveImpact,
+          knowledgeChangedSources,
+          knowledgeConsistencyIssues,
           knowledgeDocumentCount,
           knowledgeFreshCount,
+          knowledgeHealthIssues,
           knowledgeImageCount,
+          knowledgeImpactQueue,
           knowledgeInsights,
           knowledgeLastIndexedAt,
+          knowledgeLastRescannedAt,
           knowledgeQuery,
           knowledgeReady,
+          knowledgeRescanning,
           knowledgeResults,
           knowledgeStaleCount,
           knowledgeSyncing,
@@ -442,16 +575,40 @@ const Index = () => {
           onRebuildKnowledgeBase: rebuildKnowledgeBase,
           onReindexKnowledgeDocument: reindexKnowledgeDocument,
           onRenameDoc: renameDocument,
+          onRescanKnowledgeSources: () => {
+            void rescanKnowledgeSources();
+          },
           onResetKnowledgeBase: resetKnowledgeBase,
           onSelectDoc: selectDocument,
+          onSuggestKnowledgeImpactUpdate: (sourceDocumentId: string, targetDocumentId: string) => {
+            if (activeDoc.id === sourceDocumentId) {
+              void suggestUpdatesFromDocument(targetDocumentId);
+              return;
+            }
+
+            setPendingImpactSuggestion({ sourceDocumentId, targetDocumentId });
+            selectDocument(sourceDocumentId);
+          },
           onSuggestKnowledgeUpdates: (documentId: string) => {
             void suggestUpdatesFromDocument(documentId);
           },
+          onGenerateTocSuggestion: () => {
+            void generateTocSuggestion();
+            setAssistantOpen(true);
+          },
+          formatConsistencyIssues,
           recentKnowledgeRecords,
           setKnowledgeQuery,
           suggestableKnowledgeDocumentIds: richTextAvailable
             ? compareCandidates.map((document) => document.id)
             : [],
+          versionHistoryReady,
+          versionHistoryRestoring,
+          versionHistorySnapshots,
+          versionHistorySyncing,
+          onRestoreVersionSnapshot: (snapshotId: string) => {
+            void restoreVersionSnapshot(snapshotId);
+          },
         }}
       tabsProps={{
         activeDocId,

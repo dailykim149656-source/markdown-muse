@@ -1,7 +1,13 @@
-import { useCallback, useRef, type ChangeEvent } from "react";
+import { useCallback, useRef, useState, type ChangeEvent } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n/useI18n";
-import type { CreateDocumentOptions, DocumentData, EditorMode, SourceSnapshots } from "@/types/document";
+import type {
+  CreateDocumentOptions,
+  DocumentData,
+  DocumentVersionSnapshotMetadata,
+  EditorMode,
+  SourceSnapshots,
+} from "@/types/document";
 import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
 import { htmlToRst } from "@/components/editor/utils/htmlToRst";
@@ -15,18 +21,97 @@ import {
   parseDocsyFile,
   serializeDocsyFile,
 } from "@/lib/docsy/fileFormat";
+import { buildDocShareLink, DOC_SHARE_MAX_PAYLOAD_LENGTH } from "@/lib/share/docShare";
 import { isDocumentPatchSet } from "@/lib/patches/isDocumentPatchSet";
 import type { DocumentPatchSet } from "@/types/documentPatch";
 import type { SourceFileReference } from "@/types/documentAst";
+import {
+  parseStructuredPatchDocument,
+  serializeStructuredContent,
+} from "@/lib/patches/applyStructuredPatchSet";
 
 interface UseDocumentIOOptions {
   activeDoc: DocumentData;
   createDocument: (options?: CreateDocumentOptions) => void;
   onPatchSetLoad?: (patchSet: DocumentPatchSet) => void;
+  onVersionSnapshot?: (metadata?: DocumentVersionSnapshotMetadata) => Promise<unknown> | unknown;
   renderableEditorHtml: string;
   renderableLatexDocument: string;
   renderableMarkdown: string;
 }
+
+export const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+
+export interface DocumentImportState {
+  error: string | null;
+  fileName: string | null;
+  progress: number | null;
+  status: "idle" | "reading" | "error";
+}
+
+export type ImportValidationCode = "file_too_large" | "unsupported_extension";
+
+interface ImportValidationSuccess {
+  ok: true;
+}
+
+interface ImportValidationFailure {
+  code: ImportValidationCode;
+  ok: false;
+}
+
+export type ImportValidationResult = ImportValidationSuccess | ImportValidationFailure;
+
+export type ClipboardExportFormat = "html" | "json" | "markdown" | "yaml";
+
+export interface ShareLinkInfo {
+  available: boolean;
+  link: string | null;
+}
+
+const SUPPORTED_IMPORT_EXTENSIONS = [
+  ".docsy",
+  ".md",
+  ".markdown",
+  ".txt",
+  ".tex",
+  ".html",
+  ".htm",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".adoc",
+  ".asciidoc",
+  ".rst",
+] as const;
+
+const createIdleImportState = (): DocumentImportState => ({
+  error: null,
+  fileName: null,
+  progress: null,
+  status: "idle",
+});
+
+const hasSupportedImportExtension = (fileName: string) =>
+  SUPPORTED_IMPORT_EXTENSIONS.some((extension) => fileName.toLowerCase().endsWith(extension));
+
+export const validateImportFileCandidate = (file: Pick<File, "name" | "size">): ImportValidationResult => {
+  if (!hasSupportedImportExtension(file.name)) {
+    return {
+      code: "unsupported_extension",
+      ok: false,
+    };
+  }
+
+  if (file.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+    return {
+      code: "file_too_large",
+      ok: false,
+    };
+  }
+
+  return { ok: true };
+};
 
 const buildFontStylesheetLinks = () => `
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -143,16 +228,70 @@ const waitForPrintWindowReady = async (windowRef: Window) => {
   await new Promise<void>((resolve) => window.setTimeout(resolve, 150));
 };
 
+export const buildClipboardExportContent = ({
+  activeDoc,
+  format,
+  renderableEditorHtml,
+  renderableMarkdown,
+}: {
+  activeDoc: Pick<DocumentData, "content" | "mode">;
+  format: ClipboardExportFormat;
+  renderableEditorHtml: string;
+  renderableMarkdown: string;
+}) => {
+  if (format === "markdown") {
+    return activeDoc.mode === "markdown" ? activeDoc.content : renderableMarkdown;
+  }
+
+  if (format === "html") {
+    return renderableEditorHtml;
+  }
+
+  if (format === "json") {
+    if (activeDoc.mode === "json") {
+      return activeDoc.content;
+    }
+
+    const parsed = parseStructuredPatchDocument(activeDoc.content, "yaml");
+    return serializeStructuredContent(parsed, "json");
+  }
+
+  if (activeDoc.mode === "yaml") {
+    return activeDoc.content;
+  }
+
+  const parsed = parseStructuredPatchDocument(activeDoc.content, "json");
+  return serializeStructuredContent(parsed, "yaml");
+};
+
+export const buildShareLinkInfo = (
+  document: DocumentData,
+  locationHref: string,
+): ShareLinkInfo => {
+  const link = buildDocShareLink(document, locationHref);
+
+  return {
+    available: Boolean(link),
+    link,
+  };
+};
+
 export const useDocumentIO = ({
   activeDoc,
   createDocument,
   onPatchSetLoad,
+  onVersionSnapshot,
   renderableEditorHtml,
   renderableLatexDocument,
   renderableMarkdown,
 }: UseDocumentIOOptions) => {
   const { locale, t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importState, setImportState] = useState<DocumentImportState>(createIdleImportState);
+  const shareLinkInfo = buildShareLinkInfo(
+    activeDoc,
+    typeof window !== "undefined" ? window.location.href : "http://localhost/editor",
+  );
 
   const buildSourceFileReference = useCallback((
     fileName: string,
@@ -175,28 +314,78 @@ export const useDocumentIO = ({
     URL.revokeObjectURL(url);
   }, [activeDoc.name]);
 
+  const copyToClipboard = useCallback(async (content: string, formatLabel: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      toast.success(t("hooks.io.copiedToClipboard", { format: formatLabel }));
+    } catch {
+      toast.error(t("hooks.io.copyFailed", { format: formatLabel }));
+    }
+  }, [t]);
+
+  const copyExportFormat = useCallback((format: ClipboardExportFormat, formatLabel: string) => {
+    try {
+      void copyToClipboard(buildClipboardExportContent({
+        activeDoc,
+        format,
+        renderableEditorHtml,
+        renderableMarkdown,
+      }), formatLabel);
+      void onVersionSnapshot?.({ exportFormat: formatLabel });
+    } catch {
+      toast.error(t("hooks.io.copyFailed", { format: formatLabel }));
+    }
+  }, [activeDoc, copyToClipboard, onVersionSnapshot, renderableEditorHtml, renderableMarkdown, t]);
+
+  const handleCopyShareLink = useCallback(async () => {
+    const locationHref = typeof window !== "undefined" ? window.location.href : "http://localhost/editor";
+    const shareLink = buildDocShareLink(activeDoc, locationHref);
+
+    if (!shareLink) {
+      toast.error(t("hooks.io.shareTooLarge", { size: DOC_SHARE_MAX_PAYLOAD_LENGTH }));
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      void onVersionSnapshot?.({ exportFormat: "Share link" });
+      toast.success(t("hooks.io.shareCopied"));
+    } catch {
+      toast.error(t("hooks.io.shareCopyFailed"));
+    }
+  }, [activeDoc, onVersionSnapshot, t]);
+
   const handleSaveMd = useCallback(() => {
     const markdownContent = activeDoc.mode === "markdown" ? activeDoc.content : renderableMarkdown;
     downloadFile(markdownContent, ".md", "text/markdown");
-  }, [activeDoc.content, activeDoc.mode, downloadFile, renderableMarkdown]);
+    void onVersionSnapshot?.({ exportFormat: "Markdown" });
+  }, [activeDoc.content, activeDoc.mode, downloadFile, onVersionSnapshot, renderableMarkdown]);
+
+  const handleCopyMd = useCallback(() => {
+    copyExportFormat("markdown", "Markdown");
+  }, [copyExportFormat]);
 
   const handleSaveDocsy = useCallback(() => {
     downloadFile(serializeDocsyFile(buildDocsyFileFromDocumentData(activeDoc)), ".docsy", "application/json");
+    void onVersionSnapshot?.({ exportFormat: "Docsy" });
     toast.success(t("toasts.savedDocsy"));
-  }, [activeDoc, downloadFile, t]);
+  }, [activeDoc, downloadFile, onVersionSnapshot, t]);
 
   const handleSaveTex = useCallback(() => {
     downloadFile(renderableLatexDocument, ".tex", "application/x-tex");
+    void onVersionSnapshot?.({ exportFormat: "LaTeX" });
     toast.success(t("hooks.io.latexSaved"));
-  }, [downloadFile, renderableLatexDocument, t]);
+  }, [downloadFile, onVersionSnapshot, renderableLatexDocument, t]);
 
   const handleSaveJson = useCallback(() => {
     downloadFile(activeDoc.content, ".json", "application/json");
-  }, [activeDoc.content, downloadFile]);
+    void onVersionSnapshot?.({ exportFormat: "JSON" });
+  }, [activeDoc.content, downloadFile, onVersionSnapshot]);
 
   const handleSaveYaml = useCallback(() => {
     downloadFile(activeDoc.content, ".yaml", "text/yaml");
-  }, [activeDoc.content, downloadFile]);
+    void onVersionSnapshot?.({ exportFormat: "YAML" });
+  }, [activeDoc.content, downloadFile, onVersionSnapshot]);
 
   const handleSaveTypst = useCallback(() => {
     const typstContent = activeDoc.mode === "latex"
@@ -204,23 +393,39 @@ export const useDocumentIO = ({
       : htmlToTypst(renderableEditorHtml);
 
     downloadFile(typstContent, ".typ", "text/plain");
+    void onVersionSnapshot?.({ exportFormat: "Typst" });
     toast.success(t("hooks.io.typstSaved"));
-  }, [activeDoc.content, activeDoc.mode, downloadFile, renderableEditorHtml, t]);
+  }, [activeDoc.content, activeDoc.mode, downloadFile, onVersionSnapshot, renderableEditorHtml, t]);
 
   const handleSaveAdoc = useCallback(() => {
     downloadFile(htmlToAsciidoc(renderableEditorHtml), ".adoc", "text/plain");
+    void onVersionSnapshot?.({ exportFormat: "AsciiDoc" });
     toast.success(t("hooks.io.adocSaved"));
-  }, [downloadFile, renderableEditorHtml, t]);
+  }, [downloadFile, onVersionSnapshot, renderableEditorHtml, t]);
 
   const handleSaveRst = useCallback(() => {
     downloadFile(htmlToRst(renderableEditorHtml), ".rst", "text/x-rst");
+    void onVersionSnapshot?.({ exportFormat: "RST" });
     toast.success(t("hooks.io.rstSaved"));
-  }, [downloadFile, renderableEditorHtml, t]);
+  }, [downloadFile, onVersionSnapshot, renderableEditorHtml, t]);
 
   const handleSaveHtml = useCallback(() => {
     downloadFile(buildExportHtml(activeDoc.name || "Untitled", renderableEditorHtml, locale), ".html", "text/html");
+    void onVersionSnapshot?.({ exportFormat: "HTML" });
     toast.success(t("hooks.io.htmlSaved"));
-  }, [activeDoc.name, downloadFile, locale, renderableEditorHtml, t]);
+  }, [activeDoc.name, downloadFile, locale, onVersionSnapshot, renderableEditorHtml, t]);
+
+  const handleCopyHtml = useCallback(() => {
+    copyExportFormat("html", "HTML");
+  }, [copyExportFormat]);
+
+  const handleCopyJson = useCallback(() => {
+    copyExportFormat("json", "JSON");
+  }, [copyExportFormat]);
+
+  const handleCopyYaml = useCallback(() => {
+    copyExportFormat("yaml", "YAML");
+  }, [copyExportFormat]);
 
   const getEditorHtmlForPrint = useCallback(() => {
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
@@ -247,16 +452,21 @@ export const useDocumentIO = ({
       windowRef.document.write(buildPrintHtml(activeDoc.name || "Untitled", content, locale));
       windowRef.document.close();
       await waitForPrintWindowReady(windowRef);
+      void onVersionSnapshot?.({ exportFormat: "PDF" });
       windowRef.focus();
       windowRef.print();
     };
 
     void printDocument();
-  }, [activeDoc.name, getEditorHtmlForPrint, locale]);
+  }, [activeDoc.name, getEditorHtmlForPrint, locale, onVersionSnapshot]);
 
   const handleLoad = useCallback(() => {
+    if (importState.status === "reading") {
+      return;
+    }
+
     fileInputRef.current?.click();
-  }, []);
+  }, [importState.status]);
 
   const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -265,97 +475,167 @@ export const useDocumentIO = ({
       return;
     }
 
+    const validation = validateImportFileCandidate(file);
+
+    if (!validation.ok) {
+      const message = validation.code === "unsupported_extension"
+        ? t("hooks.io.importUnsupportedType")
+        : t("hooks.io.importFileTooLarge", {
+          size: `${Math.round(MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024))}MB`,
+        });
+
+      setImportState({
+        error: message,
+        fileName: file.name,
+        progress: null,
+        status: "error",
+      });
+      toast.error(message);
+      event.target.value = "";
+      return;
+    }
+
     const reader = new FileReader();
 
-    reader.onload = (loadEvent) => {
-      const content = loadEvent.target?.result as string;
-      const lowerName = file.name.toLowerCase();
-      const name = file.name.replace(/\.(docsy|md|markdown|txt|tex|html|htm|json|yaml|yml|adoc|asciidoc|rst)$/i, "");
-      const importedAt = Date.now();
-      let mode: EditorMode = "markdown";
-      let finalContent = content;
-      let sourceFormat = "markdown";
-      let sourceSnapshots: SourceSnapshots | undefined;
+    setImportState({
+      error: null,
+      fileName: file.name,
+      progress: 0,
+      status: "reading",
+    });
 
-      if (lowerName.endsWith(".docsy")) {
-        try {
-          const parsed = parseDocsyFile(content);
-          createDocument(buildDocumentDataFromDocsyFile(parsed));
-          toast.success(t("hooks.io.loadedDocument", { name: parsed.document.name }));
-        } catch (error) {
-          const message = error instanceof Error ? error.message : t("toasts.docsyReadFailed");
-          toast.error(message);
-        }
-
-        event.target.value = "";
+    reader.onprogress = (progressEvent) => {
+      if (!progressEvent.lengthComputable) {
         return;
       }
 
-      if (lowerName.endsWith(".tex")) {
-        mode = "latex";
-        sourceFormat = "latex";
-      } else if (lowerName.endsWith(".html") || lowerName.endsWith(".htm")) {
-        mode = "html";
-        sourceFormat = "html";
-      } else if (lowerName.endsWith(".json")) {
-        try {
-          const parsed = JSON.parse(content) as unknown;
+      setImportState((previousState) => previousState.status !== "reading"
+        ? previousState
+        : {
+          ...previousState,
+          progress: Math.max(1, Math.min(99, Math.round((progressEvent.loaded / progressEvent.total) * 100))),
+        });
+    };
 
-          if (onPatchSetLoad && isDocumentPatchSet(parsed)) {
-            onPatchSetLoad(parsed);
-            event.target.value = "";
-            return;
-          }
-        } catch (error) {
-          void error;
+    reader.onerror = () => {
+      const message = t("hooks.io.importReadFailed", { name: file.name });
+
+      setImportState({
+        error: message,
+        fileName: file.name,
+        progress: null,
+        status: "error",
+      });
+      toast.error(message);
+      event.target.value = "";
+    };
+
+    reader.onload = (loadEvent) => {
+      try {
+        const content = loadEvent.target?.result as string;
+        const lowerName = file.name.toLowerCase();
+        const name = file.name.replace(/\.(docsy|md|markdown|txt|tex|html|htm|json|yaml|yml|adoc|asciidoc|rst)$/i, "");
+        const importedAt = Date.now();
+        let mode: EditorMode = "markdown";
+        let finalContent = content;
+        let sourceFormat = "markdown";
+        let sourceSnapshots: SourceSnapshots | undefined;
+
+        if (lowerName.endsWith(".docsy")) {
+          const parsed = parseDocsyFile(content);
+          createDocument(buildDocumentDataFromDocsyFile(parsed));
+          setImportState(createIdleImportState());
+          toast.success(t("hooks.io.loadedDocument", { name: parsed.document.name }));
+          event.target.value = "";
+          return;
         }
 
-        mode = "json";
-        sourceFormat = "json";
-      } else if (lowerName.endsWith(".yaml") || lowerName.endsWith(".yml")) {
-        mode = "yaml";
-        sourceFormat = "yaml";
-      } else if (lowerName.endsWith(".adoc") || lowerName.endsWith(".asciidoc")) {
-        mode = "html";
-        finalContent = asciidocToHtml(content);
-        sourceFormat = "asciidoc";
-        sourceSnapshots = {
-          asciidoc: content,
-          html: finalContent,
-        };
-        toast.info(t("hooks.io.adocConverted"));
-      } else if (lowerName.endsWith(".rst")) {
-        mode = "html";
-        finalContent = rstToHtml(content);
-        sourceFormat = "rst";
-        sourceSnapshots = {
-          html: finalContent,
-          rst: content,
-        };
-        toast.info(t("hooks.io.rstConverted"));
-      } else {
-        sourceFormat = "markdown";
-      }
+        if (lowerName.endsWith(".tex")) {
+          mode = "latex";
+          sourceFormat = "latex";
+        } else if (lowerName.endsWith(".html") || lowerName.endsWith(".htm")) {
+          mode = "html";
+          sourceFormat = "html";
+        } else if (lowerName.endsWith(".json")) {
+          try {
+            const parsed = JSON.parse(content) as unknown;
 
-      createDocument({
-        content: finalContent,
-        metadata: {
-          sourceFiles: [buildSourceFileReference(file.name, sourceFormat, importedAt)],
-          title: name,
-        },
-        mode,
-        name,
-        sourceSnapshots,
-      });
-      toast.success(t("hooks.io.loadedDocument", { name }));
+            if (onPatchSetLoad && isDocumentPatchSet(parsed)) {
+              onPatchSetLoad(parsed);
+              setImportState(createIdleImportState());
+              event.target.value = "";
+              return;
+            }
+          } catch (error) {
+            void error;
+          }
+
+          mode = "json";
+          sourceFormat = "json";
+        } else if (lowerName.endsWith(".yaml") || lowerName.endsWith(".yml")) {
+          mode = "yaml";
+          sourceFormat = "yaml";
+        } else if (lowerName.endsWith(".adoc") || lowerName.endsWith(".asciidoc")) {
+          mode = "html";
+          finalContent = asciidocToHtml(content);
+          sourceFormat = "asciidoc";
+          sourceSnapshots = {
+            asciidoc: content,
+            html: finalContent,
+          };
+          toast.info(t("hooks.io.adocConverted"));
+        } else if (lowerName.endsWith(".rst")) {
+          mode = "html";
+          finalContent = rstToHtml(content);
+          sourceFormat = "rst";
+          sourceSnapshots = {
+            html: finalContent,
+            rst: content,
+          };
+          toast.info(t("hooks.io.rstConverted"));
+        } else {
+          sourceFormat = "markdown";
+        }
+
+        createDocument({
+          content: finalContent,
+          metadata: {
+            sourceFiles: [buildSourceFileReference(file.name, sourceFormat, importedAt)],
+            title: name,
+          },
+          mode,
+          name,
+          sourceSnapshots,
+        });
+        setImportState(createIdleImportState());
+        toast.success(t("hooks.io.loadedDocument", { name }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : t("hooks.io.importParseFailed", { name: file.name });
+
+        setImportState({
+          error: message,
+          fileName: file.name,
+          progress: null,
+          status: "error",
+        });
+        toast.error(message);
+      } finally {
+        event.target.value = "";
+      }
     };
 
     reader.readAsText(file);
-    event.target.value = "";
   }, [buildSourceFileReference, createDocument, onPatchSetLoad, t]);
 
   return {
     fileInputRef,
+    importState,
+    shareLinkInfo,
+    handleCopyHtml,
+    handleCopyJson,
+    handleCopyMd,
+    handleCopyShareLink,
+    handleCopyYaml,
     handleFileChange,
     handleLoad,
     handlePrint: handleSavePdf,

@@ -47,3 +47,21 @@ export interface GenerateSectionResponse {
   rationale: string;
   title: string;
 }
+
+export interface GenerateTocEntry {
+  level: 1 | 2 | 3;
+  title: string;
+}
+
+export interface GenerateTocRequest {
+  document: AiAssistantDocumentPayload;
+  existingHeadings: GenerateSectionHeadingContext[];
+  locale?: Locale;
+}
+
+export interface GenerateTocResponse {
+  attributions: AiSourceAttribution[];
+  entries: GenerateTocEntry[];
+  maxDepth: 1 | 2 | 3;
+  rationale: string;
+}

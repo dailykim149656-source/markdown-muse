@@ -26,6 +26,21 @@ const relationLabelKey = (relation: KnowledgeRelatedDocument["relationKinds"][nu
   }
 };
 
+const relationReasonKey = (relation: KnowledgeRelatedDocument["relationKinds"][number]) => {
+  switch (relation) {
+    case "references":
+      return "knowledge.impactReasonReferences";
+    case "referenced_by":
+      return "knowledge.impactReasonReferencedBy";
+    case "similar":
+      return "knowledge.impactReasonSimilar";
+    case "duplicate":
+      return "knowledge.impactReasonDuplicate";
+    default:
+      return "knowledge.impactReasonSimilar";
+  }
+};
+
 const DocumentImpactPanel = ({
   impact,
   onOpenDocument,
@@ -33,6 +48,8 @@ const DocumentImpactPanel = ({
   suggestableDocumentIds,
 }: DocumentImpactPanelProps) => {
   const { t } = useI18n();
+  const describeRelations = (relationKinds: KnowledgeRelatedDocument["relationKinds"]) =>
+    relationKinds.map((relation) => t(relationReasonKey(relation))).join(" · ");
 
   return (
     <div className="space-y-3 group-data-[collapsible=icon]:hidden">
@@ -81,6 +98,9 @@ const DocumentImpactPanel = ({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="truncate text-xs font-medium text-foreground">{document.name}</div>
+                      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                        {describeRelations(document.relationKinds)}
+                      </p>
                       <div className="mt-1 flex flex-wrap gap-1">
                         {document.relationKinds.map((relation) => (
                           <Badge className="h-5 rounded-full px-1.5 text-[10px]" key={`${document.documentId}-${relation}`} variant="secondary">
@@ -120,6 +140,40 @@ const DocumentImpactPanel = ({
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {impact.paths.length > 0 && (
+            <div className="space-y-2 rounded-md border border-border/60 px-2 py-2">
+              <div className="text-[11px] font-medium text-foreground">
+                {t("knowledge.impactChainTitle")}
+              </div>
+              <div className="space-y-1.5">
+                {impact.paths.slice(0, 6).map((path) => (
+                  <div className="rounded-md border border-border/40 bg-background px-2 py-2" key={`${path.depth}:${path.viaDocumentId || "direct"}:${path.targetDocumentId}`}>
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant="outline">
+                        {path.depth === 1 ? t("knowledge.impactDirect") : t("knowledge.impactTwoHop")}
+                      </Badge>
+                      {path.relationKinds.map((relation) => (
+                        <Badge className="h-5 rounded-full px-1.5 text-[10px]" key={`${path.targetDocumentId}-${path.depth}-${relation}`} variant="secondary">
+                          {t(relationLabelKey(relation))}
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-xs text-foreground">
+                      {path.viaDocumentName
+                        ? `${path.viaDocumentName} -> ${path.targetDocumentName}`
+                        : path.targetDocumentName}
+                    </div>
+                    <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                      {path.viaDocumentName
+                        ? `${t("knowledge.impactVia", { name: path.viaDocumentName })} · ${describeRelations(path.relationKinds)}`
+                        : describeRelations(path.relationKinds)}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
