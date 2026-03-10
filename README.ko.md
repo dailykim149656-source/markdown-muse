@@ -1,88 +1,88 @@
 # Markdown Muse
 
-언어: [한국어](README.ko.md) | [English](README.en.md)
-
-Markdown Muse는 rich-text 편집, `.docsy` 저장 포맷, `Document AST`,
-reviewable patch를 중심으로 구성된 local-first 기술 문서 편집기입니다.
+Markdown Muse는 rich-text 편집, `.docsy` 저장 형식, `Document AST`,
+reviewable AI patch workflow를 중심으로 설계된 local-first 기술 문서 편집기입니다.
 
 `Markdown`, `LaTeX`, `HTML`, `JSON`, `YAML`, `AsciiDoc`,
-`reStructuredText`를 지원하며, AI 결과를 문서에 직접 삽입하지 않고
-검토 가능한 patch set으로 다루는 워크플로를 사용합니다.
+`reStructuredText`를 지원하며, AI 결과를 문서에 바로 반영하지 않고
+검토 가능한 patch set으로 생성합니다.
 
 ![Markdown Muse preview](src/assets/editor-preview.png)
 
 ## 주요 기능
 
 - 탭과 파일 사이드바 기반 다중 문서 편집
-- `Markdown`, `LaTeX`, `HTML` rich-text 편집
-- `JSON`, `YAML` structured editing
+- Markdown, LaTeX, HTML rich-text 편집
+- JSON, YAML structured editing
 - local autosave와 세션 복원
-- 에디터 헤더의 autosave 상태 표시
-- richer editor state를 보존하는 `.docsy` 저장/복원
+- `.docsy` 저장/복원과 richer editor state 보존
 - `Document AST` 직렬화, 렌더링, 검증, patch 적용
-- 요약, 섹션 생성, 비교, 업데이트 제안, 절차 추출, AI TOC를 포함한 review-first AI 워크플로
-- 정규화된 문서 chunk 검색이 가능한 local knowledge index
-- 로컬 버전 기록과 snapshot 복원
-- 작은 문서를 위한 share link 및 QR 공유
-- Markdown, HTML, JSON, YAML 직접 클립보드 export
-- 데스크톱, 태블릿, 모바일 대응 responsive editor shell
-- `Markdown`, `LaTeX`, `HTML`, `Typst`, `AsciiDoc`,
-  `reStructuredText`, `JSON`, `YAML`, `PDF` 입출력
-- Mermaid, 수식, 표, admonition, 각주, caption, cross reference 지원
-- `ko/en` UI i18n
+- 요약, 섹션 생성, 비교, 업데이트 제안, 절차 추출, TOC 제안까지 포함한 review-first AI 흐름
+- normalized document chunk 기반 local knowledge index와 검색
+- snapshot preview와 restore가 가능한 local version history
+- share link와 QR 기반 경량 문서 공유
+- Markdown, HTML, JSON, YAML clipboard export
+- 데스크톱, 태블릿, 모바일 대응 editor shell
+
+## 데스크톱 / 웹 프로필
+
+현재 Markdown Muse는 두 가지 실행 프로필을 갖습니다.
+
+- `desktop`
+  전체 기능이 기본 노출됩니다. 문서 도구, structured editing, AI,
+  history, knowledge panel, 고급 블록이 모두 바로 사용 가능합니다.
+- `web`
+  기본 편집기는 더 가볍게 시작합니다. 텍스트, 제목, 리스트, blockquote,
+  inline formatting, link 중심으로 열리고, 무거운 기능은 필요할 때만
+  로드됩니다.
+
+빌드 명령:
+
+- `npm run build`
+  데스크톱 중심 프로덕션 빌드
+- `npm run build:web`
+  웹 중심 프로덕션 빌드
+
+예시:
+
+```bash
+# 데스크톱 프로필
+npm run build
+
+# 웹 프로필
+npm run build:web
+```
+
+## 최근 최적화 요약
+
+최근 작업은 웹 기본 진입 성능을 낮추면서 데스크톱 기능 범위를 유지하는 데
+집중했습니다.
+
+- core rich-text 편집기와 문서 도구, 고급 블록을 분리했습니다.
+- 웹에서는 문서 도구가 기본 비활성입니다.
+  표, 이미지, 캡션, cross-reference, 각주, admonition, TOC placeholder,
+  code-block UI, font controls가 여기에 포함됩니다.
+- 웹에서는 고급 블록도 기본 비활성입니다.
+  수식과 Mermaid 편집이 여기에 포함됩니다.
+- JSON/YAML 편집은 유지하지만, 웹 기본 모드 스위치에는 노출하지 않고
+  명시적 structured flow로 진입합니다.
+- AI, knowledge, history, share, structured editing 경로는 lazy runtime
+  경계로 분리했습니다.
+- 데스크톱은 전체 기능 노출을 유지하면서 내부 로딩만 점진적으로 줄였습니다.
+
+대표적인 웹 빌드 기준 수치:
+
+- `/editor` 메인 청크: 약 `270KB raw / 79KB gzip`
+- `EditorToolbarDocumentTools` 청크: 약 `21KB raw`
+- `EditorToolbarAdvancedTools` 청크: 약 `3KB raw`
 
 ## 제품 모델
 
-Markdown Muse는 단순한 텍스트 편집기가 아닙니다.
-
-현재 구현은 다음 모델을 따릅니다.
-
-- source format은 import/export 표면이다
-- `.docsy`는 richer state를 보존하는 persistence format이다
-- `Document AST`는 canonical structured representation이다
-- AI 결과는 reviewable patch set으로 변환된다
-- 사용자가 변경 사항을 검토한 뒤 accept, reject, edit를 결정한다
-
-## 핵심 구성
-
-### 편집
-
-- `Markdown`, `LaTeX`, `HTML` rich-text editing
-- `JSON`, `YAML` structured editing
-- 모드 전환과 format conversion
-- rich text와 plain text editor용 find/replace
-
-### AI와 Patch Review
-
-- 출처 정보가 포함된 AI 요약
-- Patch Review로 연결되는 섹션 생성
-- Patch Review로 연결되는 AI TOC 제안
-- 문서 비교 preview
-- Patch Review로 연결되는 업데이트 제안
-- 현재 문서 기준 procedure extraction
-- rich-text와 structured document 모두를 다루는 Patch Review
-
-### Knowledge Layer
-
-- 열어본 문서와 import 문서를 대상으로 하는 local knowledge index
-- IndexedDB 우선, localStorage fallback 저장소
-- section/chunk 단위 knowledge search
-- import 파일 provenance 보존
-- workspace graph, impact, consistency, change-monitoring 패널
-
-### Structured Data
-
-- JSON/YAML schema-aware editing surface
-- `structured_path` 기반 structured patch 적용
-- structured patch에 대한 안전한 review flow
-
-### 제품화와 공유
-
-- version history snapshot과 restore flow
-- 작은 문서를 위한 share link 및 QR 공유
-- 사이드바의 deterministic format consistency 점검
-- code-oriented export preview: 복사, 줄 번호, wrap 토글
-- 모바일/태블릿 반응형 에디터 동작
+- source format은 import/export surface입니다.
+- `.docsy`는 richer editor state를 보존하는 persistence format입니다.
+- `Document AST`는 canonical structured representation입니다.
+- AI 결과는 reviewable patch set으로 변환됩니다.
+- 사용자는 변경 전 patch를 검토하고 accept, reject, edit를 결정합니다.
 
 ## 아키텍처 개요
 
@@ -92,21 +92,19 @@ Markdown Muse는 단순한 텍스트 편집기가 아닙니다.
 - `src/pages`
 - `src/i18n`
 
-이 레이어에는 편집기 UI, dialog, toolbar, preview, sidebar, 번역 문자열이
-들어 있습니다.
+에디터 UI, dialog, toolbar, preview, sidebar, 번역 문자열이 여기에 있습니다.
 
-### State and Workflow Layer
+### State / Workflow Layer
 
 - `src/hooks/useDocumentManager.ts`
 - `src/hooks/useEditorUiState.ts`
 - `src/hooks/useFormatConversion.ts`
 - `src/hooks/useDocumentIO.ts`
-- `src/hooks/useAiAssistant.ts`
 - `src/hooks/usePatchReview.ts`
 - `src/hooks/useKnowledgeBase.ts`
 
-이 훅들은 문서 상태, UI 상태, format conversion, file IO, AI action,
-patch review, local knowledge indexing을 조율합니다.
+문서 상태, UI 상태, conversion, file IO, patch review, knowledge workflow를
+조합합니다.
 
 ### Domain Layer
 
@@ -118,116 +116,14 @@ patch review, local knowledge indexing을 조율합니다.
 - `src/lib/retrieval`
 - `src/lib/knowledge`
 
-이 레이어는 AST 변환, `.docsy` persistence, patch 검증과 적용, AI
-orchestration, ingestion normalization, retrieval, knowledge indexing을
-담당합니다.
+AST 변환, `.docsy` persistence, patch 검증/적용, AI orchestration,
+ingestion normalization, retrieval, knowledge indexing을 담당합니다.
 
 ### Server Layer
 
 - `server/aiServer.ts`
 
-Gemini 요청은 브라우저에서 직접 보내지 않고 local Node proxy를 통해
-처리합니다.
-
-## 프로젝트 구조
-
-```text
-.
-|- docs/                      # 세션 요약과 로드맵 문서
-|- PRD/                       # 제품 및 아키텍처 문서
-|- public/
-|- server/                    # Gemini proxy server
-|- src/
-|  |- assets/
-|  |- components/
-|  |  |- editor/             # editor UI, dialog, extension, preview
-|  |  |- ui/                 # shared shadcn/ui components
-|  |- hooks/                 # state, workflow, AI, IO, knowledge hooks
-|  |- i18n/                  # translations and provider
-|  |- lib/
-|  |  |- ai/
-|  |  |- ast/
-|  |  |- docsy/
-|  |  |- ingestion/
-|  |  |- knowledge/
-|  |  |- patches/
-|  |  |- rendering/
-|  |  |- retrieval/
-|  |- pages/
-|  |- test/
-|  |- types/
-|- .env.example
-|- package.json
-`- README.md
-```
-
-## 지원 포맷
-
-### Import / Open
-
-- `.docsy`
-- `.md`
-- `.markdown`
-- `.txt`
-- `.tex`
-- `.html`
-- `.htm`
-- `.json`
-- `.yaml`
-- `.yml`
-- `.adoc`
-- `.asciidoc`
-- `.rst`
-
-### Export
-
-- Markdown
-- LaTeX
-- HTML
-- JSON
-- YAML
-- Typst
-- AsciiDoc
-- reStructuredText
-- 브라우저 print 기반 PDF
-
-## `.docsy` 포맷
-
-`.docsy`는 애플리케이션 전용 persistence format입니다.
-
-일반 source format보다 더 많은 상태를 보존하도록 설계되어 있습니다.
-
-- document metadata
-- TipTap JSON
-- `Document AST`
-- mode별 source snapshot
-- autosave recovery state
-
-Markdown나 LaTeX 같은 source format도 여전히 중요하지만, `.docsy`는
-save/restore 과정에서 상태 손실을 최소화하기 위한 포맷입니다.
-
-## Local Knowledge와 AI
-
-AI와 retrieval 흐름은 review-first, local-first를 최대한 유지합니다.
-
-- 클라이언트가 editor content와 normalized retrieval context를 준비함
-- local AI server가 Gemini 요청을 proxy함
-- 생성 결과는 summary 또는 patch set으로 반환됨
-- patch set은 적용 전에 반드시 review를 거침
-- 열어본 문서와 import 문서가 local knowledge store에 색인됨
-
-관련 경로:
-
-- `src/components/editor/AiAssistantDialog.tsx`
-- `src/components/editor/PatchReviewDialog.tsx`
-- `src/components/editor/PatchReviewPanel.tsx`
-- `src/components/editor/KnowledgeSearchPanel.tsx`
-- `src/hooks/useAiAssistant.ts`
-- `src/hooks/usePatchReview.ts`
-- `src/hooks/useKnowledgeBase.ts`
-- `src/lib/ai`
-- `src/lib/knowledge`
-- `server/aiServer.ts`
+Gemini 요청은 브라우저에서 직접 호출하지 않고 local Node proxy를 통해 처리합니다.
 
 ## 시작하기
 
@@ -242,7 +138,7 @@ AI와 retrieval 흐름은 review-first, local-first를 최대한 유지합니다
 npm install
 ```
 
-### 앱 실행
+### 프런트엔드 실행
 
 ```bash
 npm run dev
@@ -267,10 +163,10 @@ Copy-Item .env.example .env.local
 2. `.env.local`을 설정합니다.
 
 - `GEMINI_API_KEY`
-- `GEMINI_MODEL` 기본값: `gemini-2.5-flash`
-- `AI_SERVER_PORT` 기본값: `8787`
-- `AI_ALLOWED_ORIGIN` 기본값: `http://localhost:8080`
-- `VITE_AI_API_BASE_URL` 기본값: `http://localhost:8787`
+- `GEMINI_MODEL`
+- `AI_SERVER_PORT`
+- `AI_ALLOWED_ORIGIN`
+- `VITE_AI_API_BASE_URL`
 
 3. AI 서버를 시작합니다.
 
@@ -278,7 +174,7 @@ Copy-Item .env.example .env.local
 npm run ai:server
 ```
 
-4. 다른 터미널에서 프론트엔드를 실행합니다.
+4. 다른 터미널에서 프런트엔드를 실행합니다.
 
 ```bash
 npm run dev
@@ -286,8 +182,9 @@ npm run dev
 
 ## 스크립트
 
-- `npm run dev` - Vite 개발 서버 실행
-- `npm run build` - 프로덕션 빌드
+- `npm run dev` - Vite 개발 서버
+- `npm run build` - 데스크톱 중심 프로덕션 빌드
+- `npm run build:web` - 웹 중심 프로덕션 빌드
 - `npm run build:dev` - 개발 모드 빌드
 - `npm run preview` - 프로덕션 빌드 미리보기
 - `npm run lint` - ESLint 실행
@@ -296,53 +193,19 @@ npm run dev
 - `npm run ai:server` - Gemini proxy server 실행
 - `npm run typecheck:server` - 서버 타입 체크
 
-## 테스트 범위
-
-테스트는 `src/test/`에 있으며 현재 다음 영역을 다룹니다.
-
-- format conversion과 round-trip 동작
-- AST rendering과 validation
-- `.docsy` file format과 autosave migration
-- patch parsing, review, apply
-- structured patch apply
-- ingestion normalization
-- retrieval contract와 vector store
-- 일부 editor UI 동작
-
-대표 테스트 파일:
-
-- `src/test/docsyFileFormat.test.ts`
-- `src/test/docsyAutosaveMigration.test.ts`
-- `src/test/docsyRichTextRoundtrip.test.ts`
-- `src/test/applyDocumentPatch.test.ts`
-- `src/test/applyStructuredPatchSet.test.ts`
-- `src/test/reviewPatchSet.test.ts`
-- `src/test/compareDocuments.test.ts`
-- `src/test/knowledgeIndex.test.ts`
-- `src/test/normalizeIngestionRequest.test.ts`
-- `src/test/patchReviewPanel.test.tsx`
-
 ## 문서
 
-### docs
-
-- [2026-03-10 v0.7 구현 업데이트](docs/session-summary-2026-03-10-v0.7-implementation-update.md)
-- [2026-03-10 v0.7 구현 계획](docs/prd-v0.7-implementation-plan-2026-03-10.md)
-- [2026-03-09 Session Summary](docs/session-summary-2026-03-09.md)
-- [2026-03-09 Docsy Storage Update](docs/session-summary-2026-03-09-docsy.md)
-- [2026-03-09 Engineering Update](docs/session-summary-2026-03-09-engineering-update.md)
-- [2026-03-09 Feasible Roadmap](docs/prd-feasible-implementation-roadmap-2026-03-09.md)
-- [2026-03-09 Roadmap Execution Summary](docs/session-summary-2026-03-09-roadmap-execution.md)
-
-### PRD
-
-- [Execution Plan v0.1](PRD/docsy_execution_plan_v0.1.md)
-- [Issue Backlog v0.1](PRD/docsy_issue_backlog_v0.1.md)
-- [Document AST Design Spec v0.1](PRD/docsy_document_ast_design_spec_v0.1.md)
+- [문서 인덱스](docs/README.md)
+- [PRD 인덱스](PRD/README.md)
+- [아키텍처 개요](docs/architecture-overview-2026-03-10.md)
+- [웹 성능 최적화 요약](docs/session-summary-2026-03-10-web-performance-optimization.md)
+- [GCP 배포 가이드](docs/gcp-deployment.md)
+- [v0.7 구현 업데이트](docs/session-summary-2026-03-10-v0.7-implementation-update.md)
+- [v0.7 구현 계획](docs/prd-v0.7-implementation-plan-2026-03-10.md)
+- [실행 가능한 로드맵](docs/prd-feasible-implementation-roadmap-2026-03-09.md)
 
 ## 보안 메모
 
-- `GEMINI_API_KEY`는 브라우저 번들에 포함되지 않습니다
-- Gemini 호출은 `server/aiServer.ts`를 통해 처리됩니다
-- 프론트엔드는 document payload만 proxy로 보내고, 비밀 값은 서버 환경 변수로
-  관리됩니다
+- `GEMINI_API_KEY`는 브라우저 번들에 포함되지 않습니다.
+- Gemini 호출은 `server/aiServer.ts`를 통해 처리됩니다.
+- 프런트엔드는 document payload만 proxy로 보내고, secret은 서버 환경 변수로 관리합니다.

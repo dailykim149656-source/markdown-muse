@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 import {
+  BrainCircuit,
   Braces,
   Check,
   Clock,
@@ -9,22 +10,24 @@ import {
   FileText,
   FileType,
   FolderOpen,
+  History,
   LayoutTemplate,
   Pencil,
   Trash2,
   X,
 } from "lucide-react";
-import ChangeMonitoringPanel from "@/components/editor/ChangeMonitoringPanel";
-import ConsistencyIssuesPanel from "@/components/editor/ConsistencyIssuesPanel";
-import DocumentHealthPanel from "@/components/editor/DocumentHealthPanel";
-import DocumentImpactPanel from "@/components/editor/DocumentImpactPanel";
-import FormatConsistencyPanel from "@/components/editor/FormatConsistencyPanel";
-import KnowledgeIndexPanel from "@/components/editor/KnowledgeIndexPanel";
-import KnowledgeInsightsPanel from "@/components/editor/KnowledgeInsightsPanel";
-import KnowledgeSearchPanel from "@/components/editor/KnowledgeSearchPanel";
-import VersionHistoryPanel from "@/components/editor/VersionHistoryPanel";
-import WorkspaceGraphPanel from "@/components/editor/WorkspaceGraphPanel";
+import type {
+  HistorySidebarPanelsProps,
+  KnowledgeSidebarPanelsProps,
+  SidebarTab,
+} from "@/components/editor/sidebarFeatureTypes";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -40,63 +43,35 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/i18n/useI18n";
-import type { KnowledgeConsistencyIssue } from "@/lib/knowledge/consistencyAnalysis";
-import type { KnowledgeDocumentRecord, KnowledgeSearchResult } from "@/lib/knowledge/knowledgeIndex";
-import type { SourceChangeRecord } from "@/lib/knowledge/sourceFingerprint";
-import type {
-  KnowledgeDocumentImpact,
-  KnowledgeHealthIssue,
-  KnowledgeImpactQueueItem,
-  KnowledgeWorkspaceInsights,
-} from "@/lib/knowledge/workspaceInsights";
 import type { DocumentData, EditorMode } from "@/types/document";
-import type { DocumentVersionSnapshot } from "@/types/document";
-import type { FormatConsistencyIssue } from "@/lib/analysis/formatConsistency";
+
+const FileSidebarHistoryPanels = lazy(() => import("@/components/editor/FileSidebarHistoryPanels"));
+const FileSidebarKnowledgePanels = lazy(() => import("@/components/editor/FileSidebarKnowledgePanels"));
+
+const SidebarPanelFallback = () => (
+  <div className="rounded-md border border-dashed border-border/60 px-3 py-3 text-xs text-muted-foreground">
+    Loading...
+  </div>
+);
 
 interface FileSidebarProps {
+  activeDoc: DocumentData;
   activeDocId: string;
+  createDocument: KnowledgeSidebarPanelsProps["createDocument"];
   documents: DocumentData[];
-  knowledgeActiveImpact: KnowledgeDocumentImpact | null;
-  knowledgeDocumentCount: number;
-  knowledgeFreshCount: number;
-  knowledgeImageCount: number;
-  knowledgeChangedSources: SourceChangeRecord[];
-  knowledgeConsistencyIssues: KnowledgeConsistencyIssue[];
-  knowledgeHealthIssues: KnowledgeHealthIssue[];
-  formatConsistencyIssues: FormatConsistencyIssue[];
-  knowledgeImpactQueue: KnowledgeImpactQueueItem[];
-  knowledgeInsights: KnowledgeWorkspaceInsights;
-  knowledgeLastIndexedAt: number | null;
-  knowledgeLastRescannedAt: number | null;
-  knowledgeQuery: string;
-  knowledgeReady: boolean;
-  knowledgeRescanning: boolean;
-  knowledgeResults: KnowledgeSearchResult[];
-  knowledgeStaleCount: number;
-  knowledgeSyncing: boolean;
+  historyEnabled: boolean;
+  historyProps: HistorySidebarPanelsProps;
+  knowledgeEnabled: boolean;
+  knowledgeProps: Omit<KnowledgeSidebarPanelsProps, "activeDoc" | "activeDocId" | "createDocument" | "documents" | "onSelectDoc">;
   onDeleteDoc: (id: string) => void;
-  onOpenKnowledgeRecord: (record: KnowledgeDocumentRecord) => void;
-  onOpenKnowledgeResult: (result: KnowledgeSearchResult) => void;
-  onOpenRelatedKnowledgeDocument: (documentId: string) => void;
+  onActivateHistory: () => void;
+  onActivateKnowledge: () => void;
   onNewDoc: (mode?: EditorMode) => void;
   onOpenTemplates?: () => void;
-  onRebuildKnowledgeBase: () => void;
-  onReindexKnowledgeDocument: (documentId: string) => void;
+  onOpenStructuredModes?: () => void;
   onRenameDoc: (id: string, name: string) => void;
-  onRescanKnowledgeSources: () => void;
-  onResetKnowledgeBase: () => void;
   onSelectDoc: (id: string) => void;
-  onSuggestKnowledgeImpactUpdate: (sourceDocumentId: string, targetDocumentId: string) => void;
-  onSuggestKnowledgeUpdates: (documentId: string) => void;
-  onGenerateTocSuggestion?: () => void;
-  recentKnowledgeRecords: KnowledgeDocumentRecord[];
-  setKnowledgeQuery: (value: string) => void;
-  suggestableKnowledgeDocumentIds: string[];
-  versionHistoryReady: boolean;
-  versionHistoryRestoring: boolean;
-  versionHistorySnapshots: DocumentVersionSnapshot[];
-  versionHistorySyncing: boolean;
-  onRestoreVersionSnapshot: (snapshotId: string) => void;
+  showStructuredCreateAction?: boolean;
 }
 
 const modeIcon = (mode: string) => {
@@ -130,51 +105,26 @@ const modeExtension = (mode: string) => {
 };
 
 const FileSidebar = ({
+  activeDoc,
   activeDocId,
+  createDocument,
   documents,
-  knowledgeActiveImpact,
-  knowledgeDocumentCount,
-  knowledgeFreshCount,
-  knowledgeImageCount,
-  knowledgeChangedSources,
-  knowledgeConsistencyIssues,
-  knowledgeHealthIssues,
-  formatConsistencyIssues,
-  knowledgeImpactQueue,
-  knowledgeInsights,
-  knowledgeLastIndexedAt,
-  knowledgeLastRescannedAt,
-  knowledgeQuery,
-  knowledgeReady,
-  knowledgeRescanning,
-  knowledgeResults,
-  knowledgeStaleCount,
-  knowledgeSyncing,
+  historyEnabled,
+  historyProps,
+  knowledgeEnabled,
+  knowledgeProps,
   onDeleteDoc,
-  onOpenKnowledgeRecord,
-  onOpenKnowledgeResult,
-  onOpenRelatedKnowledgeDocument,
+  onActivateHistory,
+  onActivateKnowledge,
   onNewDoc,
   onOpenTemplates,
-  onRebuildKnowledgeBase,
-  onReindexKnowledgeDocument,
+  onOpenStructuredModes,
   onRenameDoc,
-  onRescanKnowledgeSources,
-  onResetKnowledgeBase,
   onSelectDoc,
-  onSuggestKnowledgeImpactUpdate,
-  onSuggestKnowledgeUpdates,
-  onGenerateTocSuggestion,
-  recentKnowledgeRecords,
-  setKnowledgeQuery,
-  suggestableKnowledgeDocumentIds,
-  versionHistoryReady,
-  versionHistoryRestoring,
-  versionHistorySnapshots,
-  versionHistorySyncing,
-  onRestoreVersionSnapshot,
+  showStructuredCreateAction = false,
 }: FileSidebarProps) => {
   const { t } = useI18n();
+  const [activeTab, setActiveTab] = useState<SidebarTab>("documents");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
 
@@ -217,6 +167,18 @@ const FileSidebar = ({
 
   const sortedDocuments = [...documents].sort((leftDocument, rightDocument) => rightDocument.updatedAt - leftDocument.updatedAt);
 
+  const activateTab = (tab: SidebarTab) => {
+    setActiveTab(tab);
+
+    if (tab === "knowledge" && !knowledgeEnabled) {
+      onActivateKnowledge();
+    }
+
+    if (tab === "history" && !historyEnabled) {
+      onActivateHistory();
+    }
+  };
+
   return (
     <Sidebar className="border-r border-border" collapsible="icon">
       <SidebarHeader className="p-3">
@@ -226,212 +188,173 @@ const FileSidebar = ({
             {t("sidebar.title")}
           </span>
         </div>
+        <div className="mt-3 grid grid-cols-3 gap-1 group-data-[collapsible=icon]:hidden">
+          <Button
+            className="h-7 justify-start gap-1.5 px-2 text-[11px]"
+            onClick={() => activateTab("documents")}
+            size="sm"
+            type="button"
+            variant={activeTab === "documents" ? "secondary" : "ghost"}
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+            {t("sidebar.documents")}
+          </Button>
+          <Button
+            className="h-7 justify-start gap-1.5 px-2 text-[11px]"
+            onClick={() => activateTab("knowledge")}
+            size="sm"
+            type="button"
+            variant={activeTab === "knowledge" ? "secondary" : "ghost"}
+          >
+            <BrainCircuit className="h-3.5 w-3.5" />
+            Knowledge
+          </Button>
+          <Button
+            className="h-7 justify-start gap-1.5 px-2 text-[11px]"
+            onClick={() => activateTab("history")}
+            size="sm"
+            type="button"
+            variant={activeTab === "history" ? "secondary" : "ghost"}
+          >
+            <History className="h-3.5 w-3.5" />
+            History
+          </Button>
+        </div>
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] group-data-[collapsible=icon]:hidden">
-            {t("sidebar.documents")} ({documents.length})
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {sortedDocuments.map((document) => {
-                const Icon = modeIcon(document.mode);
-                const isActive = document.id === activeDocId;
-                const isEditing = editingId === document.id;
+        {activeTab === "documents" && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[10px] group-data-[collapsible=icon]:hidden">
+              {t("sidebar.documents")} ({documents.length})
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {sortedDocuments.map((document) => {
+                  const Icon = modeIcon(document.mode);
+                  const isActive = document.id === activeDocId;
+                  const isEditing = editingId === document.id;
 
-                return (
-                  <SidebarMenuItem key={document.id}>
-                    <SidebarMenuButton
-                      className={`group/item w-full ${isActive ? "bg-accent text-accent-foreground" : ""}`}
-                      onClick={() => !isEditing && onSelectDoc(document.id)}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                        {isEditing ? (
-                          <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
-                            <Input
-                              autoFocus
-                              className="h-5 px-1 text-xs"
-                              onChange={(event) => setEditName(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  confirmRename();
-                                }
+                  return (
+                    <SidebarMenuItem key={document.id}>
+                      <SidebarMenuButton
+                        className={`group/item w-full ${isActive ? "bg-accent text-accent-foreground" : ""}`}
+                        onClick={() => !isEditing && onSelectDoc(document.id)}
+                      >
+                        <Icon className="h-4 w-4 shrink-0" />
+                        <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                          {isEditing ? (
+                            <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                              <Input
+                                autoFocus
+                                className="h-5 px-1 text-xs"
+                                onChange={(event) => setEditName(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    confirmRename();
+                                  }
 
-                                if (event.key === "Escape") {
-                                  setEditingId(null);
-                                }
-                              }}
-                              value={editName}
-                            />
-                            <Button className="h-5 w-5 p-0" onClick={confirmRename} size="sm" variant="ghost">
-                              <Check className="h-3 w-3" />
-                            </Button>
-                            <Button className="h-5 w-5 p-0" onClick={() => setEditingId(null)} size="sm" variant="ghost">
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between">
-                            <div className="min-w-0">
-                              <div className="truncate text-xs font-medium">
-                                {document.name || t("common.untitled")}
-                                <span className="ml-0.5 text-muted-foreground/60">{modeExtension(document.mode)}</span>
-                              </div>
-                              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                <Clock className="h-2.5 w-2.5" />
-                                {formatDate(document.updatedAt)}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
-                              <button
-                                className="rounded p-0.5 hover:bg-secondary"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  startRename(document);
+                                  if (event.key === "Escape") {
+                                    setEditingId(null);
+                                  }
                                 }}
-                                title={t("sidebar.rename")}
-                                type="button"
-                              >
-                                <Pencil className="h-3 w-3 text-muted-foreground" />
-                              </button>
-                              {documents.length > 1 && (
+                                value={editName}
+                              />
+                              <Button className="h-5 w-5 p-0" onClick={confirmRename} size="sm" variant="ghost">
+                                <Check className="h-3 w-3" />
+                              </Button>
+                              <Button className="h-5 w-5 p-0" onClick={() => setEditingId(null)} size="sm" variant="ghost">
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between">
+                              <div className="min-w-0">
+                                <div className="truncate text-xs font-medium">
+                                  {document.name || t("common.untitled")}
+                                  <span className="ml-0.5 text-muted-foreground/60">{modeExtension(document.mode)}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                                  <Clock className="h-2.5 w-2.5" />
+                                  {formatDate(document.updatedAt)}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
                                 <button
-                                  className="rounded p-0.5 hover:bg-destructive/10"
+                                  className="rounded p-0.5 hover:bg-secondary"
                                   onClick={(event) => {
                                     event.stopPropagation();
-                                    onDeleteDoc(document.id);
+                                    startRename(document);
                                   }}
-                                  title={t("sidebar.delete")}
+                                  title={t("sidebar.rename")}
                                   type="button"
                                 >
-                                  <Trash2 className="h-3 w-3 text-destructive" />
+                                  <Pencil className="h-3 w-3 text-muted-foreground" />
                                 </button>
-                              )}
+                                {documents.length > 1 && (
+                                  <button
+                                    className="rounded p-0.5 hover:bg-destructive/10"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      onDeleteDoc(document.id);
+                                    }}
+                                    title={t("sidebar.delete")}
+                                    type="button"
+                                  >
+                                    <Trash2 className="h-3 w-3 text-destructive" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
-          <SidebarGroupContent>
-            <FormatConsistencyPanel
-              issues={formatConsistencyIssues}
-              onGenerateToc={onGenerateTocSuggestion}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
-          <SidebarGroupContent>
-            <VersionHistoryPanel
-              isReady={versionHistoryReady}
-              isRestoring={versionHistoryRestoring}
-              isSyncing={versionHistorySyncing}
-              onRestore={onRestoreVersionSnapshot}
-              snapshots={versionHistorySnapshots}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
-          <SidebarGroupContent>
-            <KnowledgeIndexPanel
-              freshCount={knowledgeFreshCount}
-              imageCount={knowledgeImageCount}
-              isSyncing={knowledgeSyncing}
-              lastIndexedAt={knowledgeLastIndexedAt}
-              onRebuild={onRebuildKnowledgeBase}
-              onReindexActive={() => onReindexKnowledgeDocument(activeDocId)}
-              onReset={onResetKnowledgeBase}
-              staleCount={knowledgeStaleCount}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
-          <SidebarGroupContent>
-            <DocumentImpactPanel
-              impact={knowledgeActiveImpact}
-              onOpenDocument={onOpenRelatedKnowledgeDocument}
-              onSuggestUpdates={onSuggestKnowledgeUpdates}
-              suggestableDocumentIds={suggestableKnowledgeDocumentIds}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
-          <SidebarGroupContent>
-            <WorkspaceGraphPanel
-              insights={knowledgeInsights}
-              onOpenDocument={onOpenRelatedKnowledgeDocument}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
-          <SidebarGroupContent>
-            <DocumentHealthPanel issues={knowledgeHealthIssues} />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
-          <SidebarGroupContent>
-            <ConsistencyIssuesPanel
-              issues={knowledgeConsistencyIssues}
-              onOpenDocument={onOpenRelatedKnowledgeDocument}
-              onSuggestUpdates={onSuggestKnowledgeUpdates}
-              suggestableDocumentIds={suggestableKnowledgeDocumentIds}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
-          <SidebarGroupContent>
-            <ChangeMonitoringPanel
-              changedSources={knowledgeChangedSources}
-              impactQueue={knowledgeImpactQueue}
-              isRescanning={knowledgeRescanning}
-              lastRescannedAt={knowledgeLastRescannedAt}
-              onOpenDocument={onOpenRelatedKnowledgeDocument}
-              onRescan={onRescanKnowledgeSources}
-              onSuggestUpdates={onSuggestKnowledgeImpactUpdate}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
-          <SidebarGroupContent>
-            <KnowledgeInsightsPanel
-              issues={knowledgeInsights.issues}
-              summary={knowledgeInsights.summary}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
-          <SidebarGroupContent>
-            <KnowledgeSearchPanel
-              indexedDocumentCount={knowledgeDocumentCount}
-              isReady={knowledgeReady}
-              isSyncing={knowledgeSyncing}
-              onOpenRecord={onOpenKnowledgeRecord}
-              onOpenResult={onOpenKnowledgeResult}
-              query={knowledgeQuery}
-              recentRecords={recentKnowledgeRecords}
-              results={knowledgeResults}
-              setQuery={setKnowledgeQuery}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
+                          )}
+                        </div>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {knowledgeEnabled && (
+          <SidebarGroup className={activeTab === "knowledge" ? "" : "hidden"}>
+            <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+            <SidebarGroupContent>
+              <Suspense fallback={<SidebarPanelFallback />}>
+                <FileSidebarKnowledgePanels
+                  activeDoc={activeDoc}
+                  activeDocId={activeDocId}
+                  createDocument={createDocument}
+                  documents={documents}
+                  onGenerateTocSuggestion={knowledgeProps.onGenerateTocSuggestion}
+                  onSelectDoc={onSelectDoc}
+                  onSuggestKnowledgeImpactUpdate={knowledgeProps.onSuggestKnowledgeImpactUpdate}
+                  onSuggestKnowledgeUpdates={knowledgeProps.onSuggestKnowledgeUpdates}
+                />
+              </Suspense>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {historyEnabled && (
+          <SidebarGroup className={activeTab === "history" ? "" : "hidden"}>
+            <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
+            <SidebarGroupContent>
+              <Suspense fallback={<SidebarPanelFallback />}>
+                <FileSidebarHistoryPanels
+                  activeDoc={historyProps.activeDoc}
+                  onGenerateTocSuggestion={historyProps.onGenerateTocSuggestion}
+                  onRestoreVersionSnapshot={historyProps.onRestoreVersionSnapshot}
+                  versionHistoryReady={historyProps.versionHistoryReady}
+                  versionHistoryRestoring={historyProps.versionHistoryRestoring}
+                  versionHistorySnapshots={historyProps.versionHistorySnapshots}
+                  versionHistorySyncing={historyProps.versionHistorySyncing}
+                />
+              </Suspense>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="p-2 group-data-[collapsible=icon]:p-1">
@@ -461,14 +384,37 @@ const FileSidebar = ({
             <FileType className="h-3.5 w-3.5" />
             <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newHtml")}</span>
           </Button>
-          <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("json")} size="sm" title={t("sidebar.newJson")} variant="ghost">
-            <FileJson className="h-3.5 w-3.5" />
-            <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newJson")}</span>
-          </Button>
-          <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("yaml")} size="sm" title={t("sidebar.newYaml")} variant="ghost">
-            <Braces className="h-3.5 w-3.5" />
-            <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newYaml")}</span>
-          </Button>
+          {showStructuredCreateAction ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" size="sm" title={t("sidebar.structuredCreate")} variant="ghost">
+                  <Braces className="h-3.5 w-3.5" />
+                  <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.structuredCreate")}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-36">
+                <DropdownMenuItem onClick={() => { onOpenStructuredModes?.(); onNewDoc("json"); }} className="text-xs">
+                  <FileJson className="mr-2 h-3.5 w-3.5" />
+                  {t("sidebar.newJson")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { onOpenStructuredModes?.(); onNewDoc("yaml"); }} className="text-xs">
+                  <Braces className="mr-2 h-3.5 w-3.5" />
+                  {t("sidebar.newYaml")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <>
+              <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("json")} size="sm" title={t("sidebar.newJson")} variant="ghost">
+                <FileJson className="h-3.5 w-3.5" />
+                <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newJson")}</span>
+              </Button>
+              <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("yaml")} size="sm" title={t("sidebar.newYaml")} variant="ghost">
+                <Braces className="h-3.5 w-3.5" />
+                <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newYaml")}</span>
+              </Button>
+            </>
+          )}
         </div>
       </SidebarFooter>
     </Sidebar>

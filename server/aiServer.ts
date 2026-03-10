@@ -20,7 +20,7 @@ import type {
 import type { Locale } from "../src/i18n/types";
 
 const PORT = Number(process.env.AI_SERVER_PORT || 8787);
-const ALLOWED_ORIGIN = process.env.AI_ALLOWED_ORIGIN || "*";
+const ALLOWED_ORIGIN = process.env.AI_ALLOWED_ORIGIN || "http://localhost:8080";
 const MAX_CHUNKS = 8;
 
 const resolveAiLocale = (value: string | undefined): Locale => (value === "ko" ? "ko" : "en");

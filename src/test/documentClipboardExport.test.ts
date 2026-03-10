@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildClipboardExportContent } from "@/hooks/useDocumentIO";
 
 describe("document clipboard export", () => {
-  it("returns renderable markdown for rich-text documents", () => {
-    const content = buildClipboardExportContent({
+  it("returns renderable markdown for rich-text documents", async () => {
+    const content = await buildClipboardExportContent({
       activeDoc: {
         content: "<p>ignored</p>",
         mode: "html",
@@ -16,8 +16,8 @@ describe("document clipboard export", () => {
     expect(content).toBe("# Hello");
   });
 
-  it("converts yaml content to json when copying json", () => {
-    const content = buildClipboardExportContent({
+  it("converts yaml content to json when copying json", async () => {
+    const content = await buildClipboardExportContent({
       activeDoc: {
         content: "name: Docsy\ncount: 2\n",
         mode: "yaml",
@@ -31,8 +31,8 @@ describe("document clipboard export", () => {
     expect(content).toContain('"count": 2');
   });
 
-  it("converts json content to yaml when copying yaml", () => {
-    const content = buildClipboardExportContent({
+  it("converts json content to yaml when copying yaml", async () => {
+    const content = await buildClipboardExportContent({
       activeDoc: {
         content: '{\n  "name": "Docsy",\n  "count": 2\n}',
         mode: "json",

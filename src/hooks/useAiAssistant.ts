@@ -2,26 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n/useI18n";
-import { buildDerivedDocumentIndex } from "@/lib/ast/documentIndex";
-import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
-import { generateSection, generateToc, summarizeDocument } from "@/lib/ai/client";
-import {
-  buildComparisonPatchSet,
-  compareDocuments,
-  type DocumentComparisonResult,
-} from "@/lib/ai/compareDocuments";
-import {
-  extractProcedure,
-  type ProcedureExtractionResult,
-} from "@/lib/ai/procedureExtraction";
-import { buildSectionGenerationPatchSet } from "@/lib/ai/sectionGeneration";
-import { suggestDocumentUpdates } from "@/lib/ai/suggestDocumentUpdates";
-import {
-  analyzeTocSuggestion,
-  buildTocPatchSetWithAst,
-  type TocSuggestionConflictCode,
-} from "@/lib/ai/tocGeneration";
-import { normalizeIngestionRequest } from "@/lib/ingestion/normalizeIngestionRequest";
+import type { DocumentComparisonResult } from "@/lib/ai/compareDocuments";
+import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
+import type { TocSuggestionConflictCode } from "@/lib/ai/tocGeneration";
 import type { DocumentData } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
 import type {
@@ -127,8 +110,9 @@ export const useAiAssistant = ({
     }
   }, [currentRenderableMarkdown, richTextAvailable, t]);
 
-  const buildActiveNormalizedDocument = useCallback(() => {
+  const buildActiveNormalizedDocument = useCallback(async () => {
     ensureActiveRichText();
+    const { normalizeIngestionRequest } = await import("@/lib/ingestion/normalizeIngestionRequest");
 
     return normalizeIngestionRequest({
       fileName: `${activeDoc.name}.${getDocumentExtension(activeDoc.mode)}`,
@@ -139,22 +123,26 @@ export const useAiAssistant = ({
     });
   }, [activeDoc.id, activeDoc.mode, activeDoc.name, activeDoc.updatedAt, currentRenderableMarkdown, ensureActiveRichText]);
 
-  const buildSourceAst = useCallback(() => {
+  const buildSourceAst = useCallback(async () => {
     if (!activeEditor) {
       throw new Error(t("hooks.ai.editorNotReady"));
     }
+
+    const { serializeTiptapToAst } = await import("@/lib/ast/tiptapAst");
 
     return serializeTiptapToAst(activeEditor.getJSON(), {
       documentNodeId: `doc-${activeDoc.id}`,
     });
   }, [activeDoc.id, activeEditor, t]);
 
-  const buildTargetNormalizedDocument = useCallback((targetDocumentId: string) => {
+  const buildTargetNormalizedDocument = useCallback(async (targetDocumentId: string) => {
     const targetDocument = compareCandidates.find((candidate) => candidate.id === targetDocumentId);
 
     if (!targetDocument) {
       throw new Error(t("hooks.ai.compareTargetMissing"));
     }
+
+    const { normalizeIngestionRequest } = await import("@/lib/ingestion/normalizeIngestionRequest");
 
     return {
       normalized: normalizeIngestionRequest({
@@ -173,6 +161,7 @@ export const useAiAssistant = ({
     setBusyAction("summarize");
 
     try {
+      const { summarizeDocument } = await import("@/lib/ai/client");
       const result = await summarizeDocument({
         document: {
           documentId: activeDoc.id,
@@ -200,7 +189,16 @@ export const useAiAssistant = ({
     setBusyAction("generate-section");
 
     try {
-      const sourceAst = buildSourceAst();
+      const [
+        { buildDerivedDocumentIndex },
+        { buildSectionGenerationPatchSet },
+        { generateSection },
+      ] = await Promise.all([
+        import("@/lib/ast/documentIndex"),
+        import("@/lib/ai/sectionGeneration"),
+        import("@/lib/ai/client"),
+      ]);
+      const sourceAst = await buildSourceAst();
       const headings = buildDerivedDocumentIndex(sourceAst).headings;
       const lastBlock = sourceAst.blocks.at(-1);
 
@@ -254,7 +252,16 @@ export const useAiAssistant = ({
     setBusyAction("generate-toc");
 
     try {
-      const sourceAst = buildSourceAst();
+      const [
+        { buildDerivedDocumentIndex },
+        { generateToc },
+        { analyzeTocSuggestion, buildTocPatchSetWithAst },
+      ] = await Promise.all([
+        import("@/lib/ast/documentIndex"),
+        import("@/lib/ai/client"),
+        import("@/lib/ai/tocGeneration"),
+      ]);
+      const sourceAst = await buildSourceAst();
       const headings = buildDerivedDocumentIndex(sourceAst).headings;
       const result = await generateToc({
         document: {
@@ -306,7 +313,7 @@ export const useAiAssistant = ({
     }
   }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, currentRenderableMarkdown, ensureActiveRichText, locale, t]);
 
-  const loadTocPatch = useCallback((maxDepthOverride?: 1 | 2 | 3) => {
+  const loadTocPatch = useCallback(async (maxDepthOverride?: 1 | 2 | 3) => {
     ensureActiveRichText();
 
     if (!tocPreview) {
@@ -314,7 +321,8 @@ export const useAiAssistant = ({
       return null;
     }
 
-    const sourceAst = buildSourceAst();
+    const { analyzeTocSuggestion, buildTocPatchSetWithAst } = await import("@/lib/ai/tocGeneration");
+    const sourceAst = await buildSourceAst();
     const maxDepth = maxDepthOverride ?? tocPreview.maxDepth;
     const analysis = analyzeTocSuggestion(sourceAst, tocPreview.entries, maxDepth);
     const patchSet = buildTocPatchSetWithAst(sourceAst, {
@@ -358,14 +366,17 @@ export const useAiAssistant = ({
     return patchSet;
   }, [activeDoc.id, buildSourceAst, ensureActiveRichText, loadPatchSet, t, tocPreview]);
 
-  const compareWithDocument = useCallback((targetDocumentId: string) => {
+  const compareWithDocument = useCallback(async (targetDocumentId: string) => {
     ensureActiveRichText();
     setBusyAction("compare");
 
     try {
-      const sourceAst = buildSourceAst();
-      const sourceNormalized = buildActiveNormalizedDocument();
-      const { normalized: targetNormalized, targetDocument } = buildTargetNormalizedDocument(targetDocumentId);
+      const [{ buildComparisonPatchSet, compareDocuments }] = await Promise.all([
+        import("@/lib/ai/compareDocuments"),
+      ]);
+      const sourceAst = await buildSourceAst();
+      const sourceNormalized = await buildActiveNormalizedDocument();
+      const { normalized: targetNormalized, targetDocument } = await buildTargetNormalizedDocument(targetDocumentId);
       const comparison = compareDocuments(sourceNormalized, targetNormalized);
       const patchBuild = buildComparisonPatchSet(comparison, sourceAst, targetNormalized, {
         documentId: activeDoc.id,
@@ -406,14 +417,15 @@ export const useAiAssistant = ({
     t,
   ]);
 
-  const suggestUpdatesFromDocument = useCallback((targetDocumentId: string) => {
+  const suggestUpdatesFromDocument = useCallback(async (targetDocumentId: string) => {
     ensureActiveRichText();
     setBusyAction("suggest-updates");
 
     try {
-      const sourceAst = buildSourceAst();
-      const sourceNormalized = buildActiveNormalizedDocument();
-      const { normalized: targetNormalized, targetDocument } = buildTargetNormalizedDocument(targetDocumentId);
+      const { suggestDocumentUpdates } = await import("@/lib/ai/suggestDocumentUpdates");
+      const sourceAst = await buildSourceAst();
+      const sourceNormalized = await buildActiveNormalizedDocument();
+      const { normalized: targetNormalized, targetDocument } = await buildTargetNormalizedDocument(targetDocumentId);
       const result = suggestDocumentUpdates(sourceNormalized, targetNormalized, sourceAst, {
         documentId: activeDoc.id,
         patchSetId: `suggest-updates-${activeDoc.id}-${targetDocument.id}-${Date.now()}`,
@@ -455,12 +467,13 @@ export const useAiAssistant = ({
     t,
   ]);
 
-  const extractProcedureFromActiveDocument = useCallback(() => {
+  const extractProcedureFromActiveDocument = useCallback(async () => {
     ensureActiveRichText();
     setBusyAction("extract-procedure");
 
     try {
-      const normalizedDocument = buildActiveNormalizedDocument();
+      const { extractProcedure } = await import("@/lib/ai/procedureExtraction");
+      const normalizedDocument = await buildActiveNormalizedDocument();
       const result = extractProcedure([normalizedDocument]);
       setProcedureResult(result);
 

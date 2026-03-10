@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { gzipSync } from "node:zlib";
 import { componentTagger } from "lovable-tagger";
 
 const matchesPackage = (id: string, packageNames: string[]) =>
@@ -14,8 +15,51 @@ const matchesPackage = (id: string, packageNames: string[]) =>
     );
   });
 
+const matchesSource = (id: string, sourceFragments: string[]) =>
+  sourceFragments.some((fragment) => {
+    const posixFragment = fragment.replaceAll("/", path.posix.sep);
+    const windowsFragment = fragment.replaceAll("/", path.win32.sep);
+
+    return id.includes(posixFragment) || id.includes(windowsFragment);
+  });
+
+const bundleReportPlugin = () => ({
+  generateBundle(_options: unknown, bundle: Record<string, { fileName: string; type: string; code?: string; source?: string | Uint8Array }>) {
+    const assets = Object.values(bundle)
+      .filter((entry) => entry.type === "asset" || entry.type === "chunk")
+      .map((entry) => {
+        const content = entry.type === "chunk"
+          ? Buffer.from(entry.code || "")
+          : typeof entry.source === "string"
+            ? Buffer.from(entry.source)
+            : entry.source
+              ? Buffer.from(entry.source)
+              : Buffer.alloc(0);
+        const size = content.byteLength;
+        const gzipSize = gzipSync(content).byteLength;
+
+        return {
+          fileName: entry.fileName,
+          gzipSize,
+          size,
+          type: entry.type,
+        };
+      })
+      .sort((left, right) => right.size - left.size);
+
+    this.emitFile({
+      fileName: "bundle-report.json",
+      source: JSON.stringify({ assets }, null, 2),
+      type: "asset",
+    });
+  },
+});
+
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const profile = mode === "web" ? "web" : "desktop";
+
+  return ({
   server: {
     host: "::",
     port: 8080,
@@ -23,7 +67,7 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [react(), bundleReportPlugin(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -33,12 +77,58 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks(id) {
+          if (matchesSource(id, [
+            "src/components/editor/FileSidebarKnowledgePanels.tsx",
+            "src/components/editor/WorkspaceGraphPanel.tsx",
+            "src/components/editor/GraphExplorerDialog.tsx",
+            "src/hooks/useKnowledgeBase.ts",
+            "src/lib/knowledge/",
+          ])) {
+            return "knowledge";
+          }
+
+          if (matchesSource(id, [
+            "src/components/editor/FileSidebarHistoryPanels.tsx",
+            "src/lib/history/",
+            "src/lib/analysis/formatConsistency.ts",
+          ])) {
+            return "history";
+          }
+
+          if (matchesSource(id, [
+            "src/hooks/useAiAssistant.ts",
+            "src/lib/ai/",
+          ])) {
+            return "ai";
+          }
+
+          if (matchesSource(id, [
+            "src/components/editor/ShareLinkDialog.tsx",
+          ])) {
+            return "share";
+          }
+
+          if (profile === "web" && matchesSource(id, [
+            "src/components/editor/TemplateDialog.tsx",
+            "src/components/editor/PatchReviewDialog.tsx",
+          ])) {
+            return "editor-aux";
+          }
+
           if (!id.includes("node_modules")) {
             return;
           }
 
           if (matchesPackage(id, ["katex"])) {
             return "math-vendor";
+          }
+
+          if (matchesPackage(id, ["js-yaml"])) {
+            return "structured-io";
+          }
+
+          if (matchesPackage(id, ["qrcode"])) {
+            return "share";
           }
 
           if (matchesPackage(id, ["@tiptap"])) {
@@ -49,8 +139,12 @@ export default defineConfig(({ mode }) => ({
             return "prosemirror-vendor";
           }
 
-          if (matchesPackage(id, ["lowlight"])) {
+          if (matchesPackage(id, ["lowlight", "highlight.js"])) {
             return "syntax-vendor";
+          }
+
+          if (matchesPackage(id, ["recharts"])) {
+            return "graph-vendor";
           }
 
           if (matchesPackage(id, ["@radix-ui", "vaul", "cmdk", "lucide-react"])) {
@@ -68,4 +162,5 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-}));
+  });
+});

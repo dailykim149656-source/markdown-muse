@@ -1,21 +1,26 @@
 import type { JSONContent } from "@tiptap/core";
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
+import type { AiAssistantRuntimeState } from "@/components/editor/AiAssistantRuntime";
 import EditorWorkspace from "@/components/editor/EditorWorkspace";
 import type { DocumentTemplate } from "@/components/editor/TemplateDialog";
 import type { PlainTextFindReplaceAdapter } from "@/components/editor/findReplaceTypes";
-import { useAiAssistant } from "@/hooks/useAiAssistant";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
 import { MAX_IMPORT_FILE_SIZE_BYTES, useDocumentIO } from "@/hooks/useDocumentIO";
 import { useEditorUiState } from "@/hooks/useEditorUiState";
 import { useFormatConversion } from "@/hooks/useFormatConversion";
-import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
 import { usePatchReview } from "@/hooks/usePatchReview";
 import { useI18n } from "@/i18n/useI18n";
 import { useVersionHistory } from "@/hooks/useVersionHistory";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
-import { analyzeFormatConsistency } from "@/lib/analysis/formatConsistency";
-import { DOC_SHARE_HASH_PREFIX, parseSharedDocumentFromHash } from "@/lib/share/docShare";
+import { featureFlags, isWebProfile } from "@/lib/appProfile";
+import {
+  readAdvancedBlocksPreference,
+  readDocumentToolsPreference,
+  writeAdvancedBlocksPreference,
+  writeDocumentToolsPreference,
+} from "@/lib/editor/webEditorPreferences";
+import { DOC_SHARE_HASH_PREFIX } from "@/lib/share/shareConstants";
 import type { EditorMode } from "@/types/document";
 import { toast } from "sonner";
 
@@ -23,12 +28,18 @@ const MarkdownEditor = lazy(() => import("@/components/editor/MarkdownEditor"));
 const LatexEditor = lazy(() => import("@/components/editor/LatexEditor"));
 const HtmlEditor = lazy(() => import("@/components/editor/HtmlEditor"));
 const JsonYamlEditor = lazy(() => import("@/components/editor/JsonYamlEditor"));
+const AiAssistantRuntime = lazy(() => import("@/components/editor/AiAssistantRuntime"));
 
 const EditorFallback = () => (
   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
     Loading editor...
   </div>
 );
+
+type PendingAiIntent =
+  | { type: "open" }
+  | { type: "generate-toc" }
+  | { targetDocumentId: string; type: "suggest-updates" };
 
 const Index = () => {
   const { t } = useI18n();
@@ -38,6 +49,18 @@ const Index = () => {
     targetDocumentId: string;
   } | null>(null);
   const [plainTextSearchAdapter, setPlainTextSearchAdapter] = useState<PlainTextFindReplaceAdapter | null>(null);
+  const [advancedBlocksPreference, setAdvancedBlocksPreference] = useState(() =>
+    featureFlags.advancedBlocksOnInitialMount || readAdvancedBlocksPreference(),
+  );
+  const [documentToolsPreference, setDocumentToolsPreference] = useState(() =>
+    featureFlags.documentToolsOnInitialMount || readDocumentToolsPreference(),
+  );
+  const [aiRuntimeEnabled, setAiRuntimeEnabled] = useState(() => featureFlags.aiOnInitialMount);
+  const [aiRuntimeState, setAiRuntimeState] = useState<AiAssistantRuntimeState | null>(null);
+  const [pendingAiIntent, setPendingAiIntent] = useState<PendingAiIntent | null>(null);
+  const [historyEnabled, setHistoryEnabled] = useState(() => featureFlags.historyOnInitialMount);
+  const [knowledgeEnabled, setKnowledgeEnabled] = useState(() => featureFlags.knowledgeOnInitialMount);
+  const [structuredModesVisible, setStructuredModesVisible] = useState(() => featureFlags.structuredModesVisibleOnInitialMount);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const {
     activeDoc,
@@ -104,6 +127,7 @@ const Index = () => {
   } = useVersionHistory({
     activeDoc,
     bumpEditorKey,
+    enabled: historyEnabled,
     updateActiveDoc,
   });
   const {
@@ -128,33 +152,9 @@ const Index = () => {
     updateActiveDoc,
   });
   const {
-    assistantOpen,
-    busyAction: aiBusyAction,
-    compareCandidates,
-    comparePreview,
-    compareWithDocument,
-    extractProcedureFromActiveDocument,
-    generateSectionPatch,
-    generateTocSuggestion,
-    loadTocPatch,
-    procedureResult,
-    richTextAvailable,
-    setAssistantOpen,
-    suggestUpdatesFromDocument,
-    summarizeActiveDocument,
-    summaryResult,
-    tocPreview,
-    updateSuggestionPreview,
-  } = useAiAssistant({
-    activeDoc,
-    activeEditor,
-    currentRenderableMarkdown,
-    documents,
-    loadPatchSet,
-  });
-  const {
     fileInputRef,
     importState,
+    prepareShareLink,
     shareLinkInfo,
     handleCopyHtml,
     handleCopyJson,
@@ -183,41 +183,60 @@ const Index = () => {
     renderableLatexDocument: currentRenderableLatexDocument,
     renderableMarkdown: currentRenderableMarkdown,
   });
-  const {
-    deleteKnowledgeDocument,
-    knowledgeActiveImpact,
-    knowledgeChangedSources,
-    knowledgeConsistencyIssues,
-    knowledgeDocumentCount,
-    knowledgeFreshCount,
-    knowledgeHealthIssues,
-    knowledgeImageCount,
-    knowledgeImpactQueue,
-    knowledgeInsights,
-    knowledgeLastIndexedAt,
-    knowledgeLastRescannedAt,
-    knowledgeQuery,
-    knowledgeReady,
-    knowledgeRescanning,
-    knowledgeResults,
-    knowledgeStaleCount,
-    knowledgeSyncing,
-    openKnowledgeDocumentById,
-    openKnowledgeRecord,
-    openKnowledgeResult,
-    recentKnowledgeRecords,
-    rebuildKnowledgeBase,
-    rescanKnowledgeSources,
-    reindexKnowledgeDocument,
-    resetKnowledgeBase,
-    setKnowledgeQuery,
-  } = useKnowledgeBase({
-    activeDocumentId: activeDocId,
-    createDocument,
-    documents,
-    selectDocument,
-  });
-  const formatConsistencyIssues = analyzeFormatConsistency(activeDoc);
+  const showStructuredModes = !isWebProfile
+    || structuredModesVisible
+    || activeDoc.mode === "json"
+    || activeDoc.mode === "yaml";
+  const availableModes = showStructuredModes
+    ? ["markdown", "latex", "html", "json", "yaml"] as EditorMode[]
+    : ["markdown", "latex", "html"] as EditorMode[];
+  const documentFeaturesEnabled = !isWebProfile || documentToolsPreference;
+  const advancedBlocksEnabled = !isWebProfile || advancedBlocksPreference;
+  const canEnableDocumentFeatures = isWebProfile && activeDoc.mode !== "json" && activeDoc.mode !== "yaml";
+  const canEnableAdvancedBlocks = isWebProfile && activeDoc.mode !== "json" && activeDoc.mode !== "yaml";
+
+  const enableStructuredModes = useCallback(() => {
+    setStructuredModesVisible(true);
+  }, []);
+
+  const enableAdvancedBlocks = useCallback(() => {
+    setAdvancedBlocksPreference(true);
+    writeAdvancedBlocksPreference(true);
+  }, []);
+  const enableDocumentFeatures = useCallback(() => {
+    setDocumentToolsPreference(true);
+    writeDocumentToolsPreference(true);
+  }, []);
+  const richTextAvailable = activeDoc.mode === "markdown" || activeDoc.mode === "latex" || activeDoc.mode === "html";
+
+  const runAiIntent = useCallback(async (intent: PendingAiIntent) => {
+    if (!aiRuntimeState) {
+      return;
+    }
+
+    if (intent.type === "open") {
+      aiRuntimeState.setAssistantOpen(true);
+      return;
+    }
+
+    if (intent.type === "generate-toc") {
+      await aiRuntimeState.generateTocSuggestion();
+      aiRuntimeState.setAssistantOpen(true);
+      return;
+    }
+
+    await aiRuntimeState.suggestUpdatesFromDocument(intent.targetDocumentId);
+  }, [aiRuntimeState]);
+
+  const requestAiIntent = useCallback((intent: PendingAiIntent) => {
+    if (aiRuntimeState) {
+      void runAiIntent(intent);
+      return;
+    }
+
+    setAiRuntimeEnabled(true);
+    setPendingAiIntent(intent);
+  }, [aiRuntimeState, runAiIntent]);
 
   useEffect(() => {
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
@@ -227,6 +246,15 @@ const Index = () => {
 
     setPlainTextSearchAdapter(null);
   }, [activeDoc.mode]);
+
+  useEffect(() => {
+    if (!aiRuntimeState || !pendingAiIntent) {
+      return;
+    }
+
+    void runAiIntent(pendingAiIntent);
+    setPendingAiIntent(null);
+  }, [aiRuntimeState, pendingAiIntent, runAiIntent]);
 
   const handleFileNameChange = useCallback((name: string) => {
     updateActiveDoc({ name });
@@ -256,14 +284,17 @@ const Index = () => {
   }, [activeDoc.ast, activeDoc.id, updateActiveDoc]);
 
   const handleNewDoc = useCallback((mode: EditorMode = "markdown") => {
+    if (mode === "json" || mode === "yaml") {
+      enableStructuredModes();
+    }
+
     createDocument({ mode });
-  }, [createDocument]);
+  }, [createDocument, enableStructuredModes]);
 
   const handleDeleteDoc = useCallback((id: string) => {
     deleteDocument(id);
-    deleteKnowledgeDocument(id);
     void removeDocumentVersionSnapshots(id);
-  }, [deleteDocument, deleteKnowledgeDocument, removeDocumentVersionSnapshots]);
+  }, [deleteDocument, removeDocumentVersionSnapshots]);
 
   const handleTemplateSelect = useCallback((template: DocumentTemplate) => {
     createDocument({
@@ -281,12 +312,13 @@ const Index = () => {
   }, [hasRestoredDocuments, t]);
 
   useEffect(() => {
-    const openSharedDocumentFromHash = () => {
+    const openSharedDocumentFromHash = async () => {
       if (typeof window === "undefined" || !window.location.hash.startsWith(DOC_SHARE_HASH_PREFIX)) {
         return;
       }
 
       try {
+        const { parseSharedDocumentFromHash } = await import("@/lib/share/docShare");
         const sharedDocument = parseSharedDocumentFromHash(window.location.hash);
 
         if (!sharedDocument) {
@@ -302,9 +334,12 @@ const Index = () => {
       }
     };
 
-    openSharedDocumentFromHash();
-    window.addEventListener("hashchange", openSharedDocumentFromHash);
-    return () => window.removeEventListener("hashchange", openSharedDocumentFromHash);
+    void openSharedDocumentFromHash();
+    const handleHashChange = () => {
+      void openSharedDocumentFromHash();
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
   }, [createDocument, t]);
 
   useEffect(() => {
@@ -336,9 +371,12 @@ const Index = () => {
       return;
     }
 
-    void suggestUpdatesFromDocument(pendingImpactSuggestion.targetDocumentId);
+    requestAiIntent({
+      targetDocumentId: pendingImpactSuggestion.targetDocumentId,
+      type: "suggest-updates",
+    });
     setPendingImpactSuggestion(null);
-  }, [activeDoc.id, activeDoc.mode, pendingImpactSuggestion, selectDocument, suggestUpdatesFromDocument]);
+  }, [activeDoc.id, activeDoc.mode, pendingImpactSuggestion, requestAiIntent, selectDocument]);
 
   useEffect(() => {
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
@@ -377,10 +415,16 @@ const Index = () => {
       return (
         <Suspense fallback={<EditorFallback />}>
           <MarkdownEditor
-            key={editorKey}
+            advancedBlocksEnabled={advancedBlocksEnabled}
+            canEnableAdvancedBlocks={canEnableAdvancedBlocks}
+            canEnableDocumentFeatures={canEnableDocumentFeatures}
+            documentFeaturesEnabled={documentFeaturesEnabled}
+            key={`${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
             initialContent={activeDoc.content || undefined}
             initialTiptapDoc={activeDoc.tiptapJson || undefined}
             onContentChange={handleContentChange}
+            onEnableAdvancedBlocks={enableAdvancedBlocks}
+            onEnableDocumentFeatures={enableDocumentFeatures}
             onEditorReady={setActiveEditor}
             onHtmlChange={setLiveEditorHtml}
             onTiptapChange={handleTiptapChange}
@@ -393,10 +437,16 @@ const Index = () => {
       return (
         <Suspense fallback={<EditorFallback />}>
           <LatexEditor
-            key={editorKey}
+            advancedBlocksEnabled={advancedBlocksEnabled}
+            canEnableAdvancedBlocks={canEnableAdvancedBlocks}
+            canEnableDocumentFeatures={canEnableDocumentFeatures}
+            documentFeaturesEnabled={documentFeaturesEnabled}
+            key={`${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
             initialContent={activeDoc.content}
             initialTiptapDoc={activeDoc.tiptapJson || undefined}
             onContentChange={handleContentChange}
+            onEnableAdvancedBlocks={enableAdvancedBlocks}
+            onEnableDocumentFeatures={enableDocumentFeatures}
             onEditorReady={setActiveEditor}
             onHtmlChange={setLiveEditorHtml}
             onTiptapChange={handleTiptapChange}
@@ -423,206 +473,248 @@ const Index = () => {
     return (
       <Suspense fallback={<EditorFallback />}>
         <HtmlEditor
-          key={editorKey}
+          advancedBlocksEnabled={advancedBlocksEnabled}
+          canEnableAdvancedBlocks={canEnableAdvancedBlocks}
+          canEnableDocumentFeatures={canEnableDocumentFeatures}
+          documentFeaturesEnabled={documentFeaturesEnabled}
+          key={`${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
           initialContent={activeDoc.content}
           initialTiptapDoc={activeDoc.tiptapJson || undefined}
           onContentChange={handleContentChange}
+          onEnableAdvancedBlocks={enableAdvancedBlocks}
+          onEnableDocumentFeatures={enableDocumentFeatures}
           onEditorReady={setActiveEditor}
           onHtmlChange={setLiveEditorHtml}
           onTiptapChange={handleTiptapChange}
         />
       </Suspense>
     );
-  }, [activeDoc.content, activeDoc.mode, activeDoc.tiptapJson, editorKey, handleContentChange, handleModeChange, handleTiptapChange, setLiveEditorHtml]);
+  }, [activeDoc.content, activeDoc.mode, activeDoc.tiptapJson, advancedBlocksEnabled, canEnableAdvancedBlocks, canEnableDocumentFeatures, documentFeaturesEnabled, editorKey, enableAdvancedBlocks, enableDocumentFeatures, handleContentChange, handleModeChange, handleTiptapChange, setLiveEditorHtml]);
+
+  const aiAssistantDialogProps = aiRuntimeState
+    ? {
+      busyAction: aiRuntimeState.busyAction,
+      compareCandidates: aiRuntimeState.compareCandidates,
+      comparePreview: aiRuntimeState.comparePreview,
+      onCompare: aiRuntimeState.compareWithDocument,
+      onExtractProcedure: aiRuntimeState.extractProcedureFromActiveDocument,
+      onGenerateSection: aiRuntimeState.generateSectionPatch,
+      onGenerateToc: aiRuntimeState.generateTocSuggestion,
+      onLoadTocPatch: aiRuntimeState.loadTocPatch,
+      onOpenChange: aiRuntimeState.setAssistantOpen,
+      onSuggestUpdates: aiRuntimeState.suggestUpdatesFromDocument,
+      onSummarize: aiRuntimeState.summarizeActiveDocument,
+      open: aiRuntimeState.assistantOpen,
+      procedureResult: aiRuntimeState.procedureResult,
+      richTextAvailable: aiRuntimeState.richTextAvailable,
+      summaryResult: aiRuntimeState.summaryResult,
+      tocPreview: aiRuntimeState.tocPreview,
+      updateSuggestionPreview: aiRuntimeState.updateSuggestionPreview,
+    }
+    : {
+      busyAction: null,
+      compareCandidates: [],
+      comparePreview: null,
+      onCompare: async () => undefined,
+      onExtractProcedure: async () => undefined,
+      onGenerateSection: async () => undefined,
+      onGenerateToc: async () => undefined,
+      onLoadTocPatch: async () => undefined,
+      onOpenChange: (open: boolean) => {
+        if (open) {
+          requestAiIntent({ type: "open" });
+        }
+      },
+      onSuggestUpdates: async (targetDocumentId: string) => {
+        requestAiIntent({ targetDocumentId, type: "suggest-updates" });
+      },
+      onSummarize: async () => undefined,
+      open: false,
+      procedureResult: null,
+      richTextAvailable,
+      summaryResult: null,
+      tocPreview: null,
+      updateSuggestionPreview: null,
+    };
 
   return (
-    <EditorWorkspace
-      activeMode={activeDoc.mode}
-      aiAssistantDialogProps={{
-        busyAction: aiBusyAction,
-        compareCandidates,
-        comparePreview,
-        onCompare: compareWithDocument,
-        onExtractProcedure: extractProcedureFromActiveDocument,
-        onGenerateSection: generateSectionPatch,
-        onGenerateToc: generateTocSuggestion,
-        onLoadTocPatch: loadTocPatch,
-        onOpenChange: setAssistantOpen,
-        onSuggestUpdates: suggestUpdatesFromDocument,
-        onSummarize: summarizeActiveDocument,
-        open: assistantOpen,
-        procedureResult,
-        richTextAvailable,
-        summaryResult,
-        tocPreview,
-        updateSuggestionPreview,
-      }}
-      fileInputRef={fileInputRef}
-      findReplaceProps={{
-        editor: activeEditor,
-        onClose: closeFindReplace,
-        open: findReplaceOpen,
-        plainTextAdapter: plainTextSearchAdapter,
-      }}
-      headerProps={{
-        countWithSpaces,
-        autoSaveState,
-        fileName: activeDoc.name,
-        importState,
-        isDark,
-        isFullscreen,
-        loadFileTitle: t("header.loadFileHint", {
-          size: `${Math.round(MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024))}MB`,
-        }),
-        mode: activeDoc.mode,
-        onOpenAiAssistant: () => setAssistantOpen(true),
-        onOpenShare: () => setShareDialogOpen(true),
-        onCopyHtml: handleCopyHtml,
-        onCopyJson: handleCopyJson,
-        onCopyMd: handleCopyMd,
-        onCopyShareLink: handleCopyShareLink,
-        onCopyYaml: handleCopyYaml,
-        onFileNameChange: handleFileNameChange,
-        onLoad: handleLoad,
-        onModeChange: handleModeChange,
-        onOpenPatchReview: openPatchReview,
-        onOpenShortcuts: openShortcuts,
-        onPrint: handlePrint,
-        patchCount,
-        onSaveAdoc: handleSaveAdoc,
-        onSaveDocsy: handleSaveDocsy,
-        onSaveHtml: handleSaveHtml,
-        onSaveJson: handleSaveJson,
-        onSaveMd: handleSaveMd,
-        onSavePdf: handleSavePdf,
-        onSaveRst: handleSaveRst,
-        onSaveTex: handleSaveTex,
-        onSaveTypst: handleSaveTypst,
-        onSaveYaml: handleSaveYaml,
-        onToggleCountMode: toggleCountMode,
-        onToggleFullscreen: toggleFullscreen,
-        onTogglePreview: togglePreview,
-        onToggleTheme: toggleTheme,
-        previewOpen,
-        textStats,
-      }}
-      onFileChange={handleFileChange}
-      patchReviewDialogProps={{
-        acceptedPatchCount,
-        onAccept: handleAcceptPatch,
-        onApply: applyReviewedPatches,
-        onClear: clearPatchSet,
-        onEdit: handleEditPatch,
-        onLoadPatchSet: handleLoad,
-        onOpenChange: (open) => {
-          if (!open) {
-            closePatchReview();
-            return;
-          }
-
-          openPatchReview();
-        },
-        onReject: handleRejectPatch,
-        open: patchReviewOpen,
-        patchSet,
-      }}
-      shareLinkDialogProps={{
-        link: shareLinkInfo.link,
-        onCopy: () => {
-          void handleCopyShareLink();
-        },
-        onOpenChange: setShareDialogOpen,
-        open: shareDialogOpen,
-      }}
-      previewOpen={previewOpen}
-      previewProps={{
-        editorHtml: currentRenderableHtml,
-        editorLatex: currentRenderableLatexDocument,
-        editorMarkdown: currentRenderableMarkdown,
-        editorMode: activeDoc.mode,
-        fileName: activeDoc.name,
-        onClose: closePreview,
-        rawContent: activeDoc.content,
-      }}
-      renderEditor={renderEditor}
-      shortcutsModalProps={{ onOpenChange: setShortcutsOpen, open: shortcutsOpen }}
-        sidebarProps={{
-          activeDocId,
-          documents,
-          knowledgeActiveImpact,
-          knowledgeChangedSources,
-          knowledgeConsistencyIssues,
-          knowledgeDocumentCount,
-          knowledgeFreshCount,
-          knowledgeHealthIssues,
-          knowledgeImageCount,
-          knowledgeImpactQueue,
-          knowledgeInsights,
-          knowledgeLastIndexedAt,
-          knowledgeLastRescannedAt,
-          knowledgeQuery,
-          knowledgeReady,
-          knowledgeRescanning,
-          knowledgeResults,
-          knowledgeStaleCount,
-          knowledgeSyncing,
-          onDeleteDoc: handleDeleteDoc,
-          onOpenKnowledgeRecord: openKnowledgeRecord,
-          onOpenKnowledgeResult: openKnowledgeResult,
-          onOpenRelatedKnowledgeDocument: openKnowledgeDocumentById,
-          onNewDoc: handleNewDoc,
-          onOpenTemplates: openTemplateDialog,
-          onRebuildKnowledgeBase: rebuildKnowledgeBase,
-          onReindexKnowledgeDocument: reindexKnowledgeDocument,
-          onRenameDoc: renameDocument,
-          onRescanKnowledgeSources: () => {
-            void rescanKnowledgeSources();
+    <>
+      {aiRuntimeEnabled && (
+        <Suspense fallback={null}>
+          <AiAssistantRuntime
+            activeDoc={activeDoc}
+            activeEditor={activeEditor}
+            currentRenderableMarkdown={currentRenderableMarkdown}
+            documents={documents}
+            loadPatchSet={loadPatchSet}
+            onStateChange={setAiRuntimeState}
+          />
+        </Suspense>
+      )}
+      <EditorWorkspace
+        activeMode={activeDoc.mode}
+        aiAssistantDialogProps={aiAssistantDialogProps}
+        fileInputRef={fileInputRef}
+        findReplaceProps={{
+          editor: activeEditor,
+          onClose: closeFindReplace,
+          open: findReplaceOpen,
+          plainTextAdapter: plainTextSearchAdapter,
+        }}
+        headerProps={{
+          countWithSpaces,
+          autoSaveState,
+          fileName: activeDoc.name,
+          importState,
+          isDark,
+          isFullscreen,
+          loadFileTitle: t("header.loadFileHint", {
+            size: `${Math.round(MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024))}MB`,
+          }),
+          availableModes,
+          mode: activeDoc.mode,
+          onOpenAiAssistant: () => requestAiIntent({ type: "open" }),
+          onOpenStructuredModes: enableStructuredModes,
+          onOpenShare: () => {
+            void prepareShareLink().finally(() => setShareDialogOpen(true));
           },
-          onResetKnowledgeBase: resetKnowledgeBase,
-          onSelectDoc: selectDocument,
-          onSuggestKnowledgeImpactUpdate: (sourceDocumentId: string, targetDocumentId: string) => {
-            if (activeDoc.id === sourceDocumentId) {
-              void suggestUpdatesFromDocument(targetDocumentId);
+          onCopyHtml: handleCopyHtml,
+          onCopyJson: handleCopyJson,
+          onCopyMd: handleCopyMd,
+          onCopyShareLink: handleCopyShareLink,
+          onCopyYaml: handleCopyYaml,
+          onFileNameChange: handleFileNameChange,
+          onLoad: handleLoad,
+          onModeChange: handleModeChange,
+          onOpenPatchReview: openPatchReview,
+          onOpenShortcuts: openShortcuts,
+          onPrint: handlePrint,
+          patchCount,
+          onSaveAdoc: handleSaveAdoc,
+          onSaveDocsy: handleSaveDocsy,
+          onSaveHtml: handleSaveHtml,
+          onSaveJson: handleSaveJson,
+          onSaveMd: handleSaveMd,
+          onSavePdf: handleSavePdf,
+          onSaveRst: handleSaveRst,
+          onSaveTex: handleSaveTex,
+          onSaveTypst: handleSaveTypst,
+          onSaveYaml: handleSaveYaml,
+          onToggleCountMode: toggleCountMode,
+          onToggleFullscreen: toggleFullscreen,
+          onTogglePreview: togglePreview,
+          onToggleTheme: toggleTheme,
+          previewOpen,
+          showStructuredModeAction: isWebProfile && !showStructuredModes,
+          textStats,
+        }}
+        onFileChange={handleFileChange}
+        patchReviewDialogProps={{
+          acceptedPatchCount,
+          onAccept: handleAcceptPatch,
+          onApply: applyReviewedPatches,
+          onClear: clearPatchSet,
+          onEdit: handleEditPatch,
+          onLoadPatchSet: handleLoad,
+          onOpenChange: (open) => {
+            if (!open) {
+              closePatchReview();
               return;
             }
 
-            setPendingImpactSuggestion({ sourceDocumentId, targetDocumentId });
-            selectDocument(sourceDocumentId);
+            openPatchReview();
           },
-          onSuggestKnowledgeUpdates: (documentId: string) => {
-            void suggestUpdatesFromDocument(documentId);
-          },
-          onGenerateTocSuggestion: () => {
-            void generateTocSuggestion();
-            setAssistantOpen(true);
-          },
-          formatConsistencyIssues,
-          recentKnowledgeRecords,
-          setKnowledgeQuery,
-          suggestableKnowledgeDocumentIds: richTextAvailable
-            ? compareCandidates.map((document) => document.id)
-            : [],
-          versionHistoryReady,
-          versionHistoryRestoring,
-          versionHistorySnapshots,
-          versionHistorySyncing,
-          onRestoreVersionSnapshot: (snapshotId: string) => {
-            void restoreVersionSnapshot(snapshotId);
-          },
+          onReject: handleRejectPatch,
+          open: patchReviewOpen,
+          patchSet,
         }}
-      tabsProps={{
-        activeDocId,
-        documents,
-        onCloseDoc: closeDocument,
-        onNewDoc: () => handleNewDoc(),
-        onSelectDoc: selectDocument,
-      }}
-      templateDialogProps={{
-        onOpenChange: setTemplateOpen,
-        onSelect: handleTemplateSelect,
-        open: templateOpen,
-      }}
-    />
+        shareLinkDialogProps={{
+          link: shareLinkInfo.link,
+          onCopy: () => {
+            void handleCopyShareLink();
+          },
+          onOpenChange: setShareDialogOpen,
+          open: shareDialogOpen,
+        }}
+        previewOpen={previewOpen}
+        previewProps={{
+          editorHtml: currentRenderableHtml,
+          editorLatex: currentRenderableLatexDocument,
+          editorMarkdown: currentRenderableMarkdown,
+          editorMode: activeDoc.mode,
+          fileName: activeDoc.name,
+          onClose: closePreview,
+          rawContent: activeDoc.content,
+        }}
+        renderEditor={renderEditor}
+        shortcutsModalProps={{ onOpenChange: setShortcutsOpen, open: shortcutsOpen }}
+          sidebarProps={{
+            activeDoc,
+            activeDocId,
+            createDocument,
+            documents,
+            historyEnabled,
+            historyProps: {
+              activeDoc,
+              onGenerateTocSuggestion: () => {
+                requestAiIntent({ type: "generate-toc" });
+              },
+              onRestoreVersionSnapshot: (snapshotId: string) => {
+                void restoreVersionSnapshot(snapshotId);
+              },
+              versionHistoryReady,
+              versionHistoryRestoring,
+              versionHistorySnapshots,
+              versionHistorySyncing,
+            },
+            knowledgeEnabled,
+            knowledgeProps: {
+              onGenerateTocSuggestion: () => {
+                requestAiIntent({ type: "generate-toc" });
+              },
+              onSuggestKnowledgeImpactUpdate: (sourceDocumentId: string, targetDocumentId: string) => {
+                if (activeDoc.id === sourceDocumentId) {
+                  requestAiIntent({
+                    targetDocumentId,
+                    type: "suggest-updates",
+                  });
+                  return;
+                }
+
+                setPendingImpactSuggestion({ sourceDocumentId, targetDocumentId });
+                selectDocument(sourceDocumentId);
+              },
+              onSuggestKnowledgeUpdates: (documentId: string) => {
+                requestAiIntent({
+                  targetDocumentId: documentId,
+                  type: "suggest-updates",
+                });
+              },
+            },
+            onDeleteDoc: handleDeleteDoc,
+            onActivateHistory: () => setHistoryEnabled(true),
+            onActivateKnowledge: () => setKnowledgeEnabled(true),
+            onNewDoc: handleNewDoc,
+            onOpenStructuredModes: enableStructuredModes,
+            onOpenTemplates: openTemplateDialog,
+            onRenameDoc: renameDocument,
+            onSelectDoc: selectDocument,
+            showStructuredCreateAction: isWebProfile && !showStructuredModes,
+          }}
+        tabsProps={{
+          activeDocId,
+          documents,
+          onCloseDoc: closeDocument,
+          onNewDoc: () => handleNewDoc(),
+          onSelectDoc: selectDocument,
+        }}
+        templateDialogProps={{
+          onOpenChange: setTemplateOpen,
+          onSelect: handleTemplateSelect,
+          open: templateOpen,
+        }}
+      />
+    </>
   );
 };
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { AutoSaveData, DocumentData, EditorMode } from "@/types/document";
-import { migrateLegacyDocumentData } from "@/lib/docsy/fileFormat";
+import { migrateStoredDocumentData } from "@/lib/documents/storedDocument";
 
 const STORAGE_KEY = "docsy-autosave-v2";
 const LEGACY_STORAGE_KEY = "docsy-autosave";
@@ -22,7 +22,7 @@ const normalizeLegacyDocument = (value: unknown): DocumentData | null => {
     return null;
   }
 
-  return migrateLegacyDocumentData({
+  return migrateStoredDocumentData({
     id: value.id,
     name: value.name,
     mode,
@@ -62,7 +62,7 @@ export const migrateLegacyAutoSaveData = (raw: unknown): AutoSaveData | null => 
   if (isAutoSaveData(raw)) {
     return {
       ...raw,
-      documents: raw.documents.map(migrateLegacyDocumentData),
+      documents: raw.documents.map(migrateStoredDocumentData),
     };
   }
 

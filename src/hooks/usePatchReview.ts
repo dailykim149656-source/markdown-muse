@@ -2,17 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n/useI18n";
-import { applyDocumentPatchSet } from "@/lib/ast/applyDocumentPatch";
-import { renderAstToHtml } from "@/lib/ast/renderAstToHtml";
-import { renderAstToLatex } from "@/lib/ast/renderAstToLatex";
-import { renderAstToMarkdown } from "@/lib/ast/renderAstToMarkdown";
-import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
-import { validateDocumentAst } from "@/lib/ast/validateDocumentAst";
-import {
-  applyStructuredPatchSet,
-  parseStructuredPatchDocument,
-  serializeStructuredContent,
-} from "@/lib/patches/applyStructuredPatchSet";
 import { applyPatchDecision } from "@/lib/patches/reviewPatchSet";
 import type { DocumentData, DocumentVersionSnapshotMetadata } from "@/types/document";
 import type { DocumentPatch, DocumentPatchSet } from "@/types/documentPatch";
@@ -123,7 +112,7 @@ export const usePatchReview = ({
     });
   }, [t]);
 
-  const applyReviewedPatches = useCallback(() => {
+  const applyReviewedPatches = useCallback(async () => {
     if (!patchSet) {
       toast.info(t("hooks.patchReview.loadFirst"));
       return;
@@ -138,6 +127,7 @@ export const usePatchReview = ({
       let structuredDocument: unknown;
 
       try {
+        const { parseStructuredPatchDocument } = await import("@/lib/patches/applyStructuredPatchSet");
         structuredDocument = parseStructuredPatchDocument(activeDoc.content, activeDoc.mode);
       } catch (error) {
         const message = error instanceof Error ? error.message : t("hooks.patchReview.structuredParseFailed");
@@ -145,6 +135,7 @@ export const usePatchReview = ({
         return;
       }
 
+      const { applyStructuredPatchSet, serializeStructuredContent } = await import("@/lib/patches/applyStructuredPatchSet");
       const result = applyStructuredPatchSet(structuredDocument, patchSet);
 
       if (result.appliedPatchIds.length === 0 && result.failures.length === 0) {
@@ -200,6 +191,7 @@ export const usePatchReview = ({
     let documentAst;
 
     try {
+      const { serializeTiptapToAst } = await import("@/lib/ast/tiptapAst");
       documentAst = serializeTiptapToAst(activeEditor.getJSON(), {
         documentNodeId: `doc-${activeDoc.id}`,
       });
@@ -209,6 +201,13 @@ export const usePatchReview = ({
       return;
     }
 
+    const [{ validateDocumentAst }, { applyDocumentPatchSet }, { renderAstToHtml }, { renderAstToLatex }, { renderAstToMarkdown }] = await Promise.all([
+      import("@/lib/ast/validateDocumentAst"),
+      import("@/lib/ast/applyDocumentPatch"),
+      import("@/lib/ast/renderAstToHtml"),
+      import("@/lib/ast/renderAstToLatex"),
+      import("@/lib/ast/renderAstToMarkdown"),
+    ]);
     const sourceValidation = validateDocumentAst(documentAst);
 
     if (sourceValidation.errors.length > 0) {

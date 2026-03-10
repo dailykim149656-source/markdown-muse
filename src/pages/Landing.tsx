@@ -19,7 +19,9 @@ import {
   Zap,
 } from "lucide-react";
 import docslyLogo from "@/assets/docsly-logo.png";
+import docslyLogoSmall from "@/assets/docsly-logo-small.png";
 import editorPreview from "@/assets/editor-preview.png";
+import editorPreviewSmall from "@/assets/editor-preview-small.png";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n/useI18n";
 import type { Locale } from "@/i18n/types";
@@ -99,7 +101,7 @@ const Landing = () => {
         transition={{ duration: 0.4 }}
       >
         <div className="flex items-center gap-2.5">
-          <img alt={t("common.appName")} className="h-8 w-8" src={docslyLogo} />
+          <img alt={t("common.appName")} className="h-8 w-8" src={docslyLogoSmall} />
           <span className="text-lg font-bold tracking-tight">{t("common.appName")}</span>
         </div>
         <div className="flex items-center gap-2">
@@ -242,7 +244,14 @@ const Landing = () => {
               </div>
               <span className="ml-2 text-xs text-muted-foreground">docsy.app/editor</span>
             </div>
-            <img alt={t("landing.previewAlt")} className="w-full" loading="lazy" src={editorPreview} />
+            <img
+              alt={t("landing.previewAlt")}
+              className="w-full"
+              loading="lazy"
+              sizes="(max-width: 1024px) 960px, 1280px"
+              src={editorPreviewSmall}
+              srcSet={`${editorPreviewSmall} 960w, ${editorPreview} 1280w`}
+            />
           </motion.div>
         </div>
       </motion.section>
@@ -355,7 +364,7 @@ const Landing = () => {
 
       <footer className="border-t border-border px-6 py-8 text-center">
         <div className="mb-3 flex items-center justify-center gap-2">
-          <img alt={t("common.appName")} className="h-5 w-5" src={docslyLogo} />
+          <img alt={t("common.appName")} className="h-5 w-5" src={docslyLogoSmall} />
           <span className="text-sm font-semibold">{t("common.appName")}</span>
         </div>
         <p className="text-xs text-muted-foreground">{t("landing.footer")}</p>

@@ -1,0 +1,54 @@
+const ADVANCED_BLOCKS_STORAGE_KEY = "docsy:web:advanced-blocks-enabled";
+const DOCUMENT_TOOLS_STORAGE_KEY = "docsy:web:document-tools-enabled";
+
+const canUseStorage = () => typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+
+export const readAdvancedBlocksPreference = () => {
+  if (!canUseStorage()) {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem(ADVANCED_BLOCKS_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
+export const readDocumentToolsPreference = () => {
+  if (!canUseStorage()) {
+    return false;
+  }
+
+  try {
+    return window.localStorage.getItem(DOCUMENT_TOOLS_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
+export const writeAdvancedBlocksPreference = (enabled: boolean) => {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(ADVANCED_BLOCKS_STORAGE_KEY, enabled ? "true" : "false");
+  } catch {
+    // noop
+  }
+};
+
+export const writeDocumentToolsPreference = (enabled: boolean) => {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(DOCUMENT_TOOLS_STORAGE_KEY, enabled ? "true" : "false");
+  } catch {
+    // noop
+  }
+};
+
+export { ADVANCED_BLOCKS_STORAGE_KEY, DOCUMENT_TOOLS_STORAGE_KEY };

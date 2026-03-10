@@ -4,10 +4,10 @@ import {
   parseDocsyFile,
   serializeDocsyFile,
 } from "@/lib/docsy/fileFormat";
+import { DOC_SHARE_HASH_PREFIX, DOC_SHARE_MAX_PAYLOAD_LENGTH } from "@/lib/share/shareConstants";
 import type { CreateDocumentOptions, DocumentData } from "@/types/document";
 
-export const DOC_SHARE_HASH_PREFIX = "#share=";
-export const DOC_SHARE_MAX_PAYLOAD_LENGTH = 3500;
+export { DOC_SHARE_HASH_PREFIX, DOC_SHARE_MAX_PAYLOAD_LENGTH } from "@/lib/share/shareConstants";
 
 const encodeBase64Url = (input: string) => {
   const bytes = new TextEncoder().encode(input);

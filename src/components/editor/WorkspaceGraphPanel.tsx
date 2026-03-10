@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
+import { Suspense, lazy, useMemo, useState } from "react";
 import { Boxes, GitBranch, ImageIcon, Maximize2, Network, SquareStack } from "lucide-react";
-import GraphExplorerDialog from "@/components/editor/GraphExplorerDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -19,6 +18,10 @@ import {
   nodeFilterKey,
   nodeKindOrder,
 } from "@/components/editor/workspaceGraphUtils";
+
+const GraphExplorerDialog = lazy(() => import("@/components/editor/GraphExplorerDialog"));
+
+const GraphDialogFallback = () => null;
 
 interface WorkspaceGraphPanelProps {
   insights: KnowledgeWorkspaceInsights;
@@ -267,12 +270,16 @@ const WorkspaceGraphPanel = ({
           </div>
         </ScrollArea>
       )}
-      <GraphExplorerDialog
-        insights={insights}
-        onOpenChange={setExplorerOpen}
-        onOpenDocument={onOpenDocument}
-        open={explorerOpen}
-      />
+      {explorerOpen && (
+        <Suspense fallback={<GraphDialogFallback />}>
+          <GraphExplorerDialog
+            insights={insights}
+            onOpenChange={setExplorerOpen}
+            onOpenDocument={onOpenDocument}
+            open={explorerOpen}
+          />
+        </Suspense>
+      )}
     </div>
   );
 };

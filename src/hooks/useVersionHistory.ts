@@ -1,10 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  appendDocumentVersionSnapshot,
-  clearDocumentVersionSnapshots,
-  listDocumentVersionSnapshots,
-} from "@/lib/history/versionHistoryStore";
 import { useI18n } from "@/i18n/useI18n";
 import type {
   DocumentData,
@@ -16,10 +11,13 @@ import type {
 interface UseVersionHistoryOptions {
   activeDoc: DocumentData;
   bumpEditorKey: () => void;
+  enabled?: boolean;
   updateActiveDoc: (patch: Partial<DocumentData>) => void;
 }
 
 const MAX_VERSION_SNAPSHOTS = 5;
+
+const loadVersionHistoryStore = () => import("@/lib/history/versionHistoryStore");
 
 const hashString = (value: string) => {
   let hash = 2166136261;
@@ -46,6 +44,7 @@ const createSnapshotContentHash = (document: DocumentData) =>
 export const useVersionHistory = ({
   activeDoc,
   bumpEditorKey,
+  enabled = true,
   updateActiveDoc,
 }: UseVersionHistoryOptions) => {
   const { t } = useI18n();
@@ -56,6 +55,13 @@ export const useVersionHistory = ({
   const initializedDocumentIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    if (!enabled) {
+      setVersionHistoryReady(false);
+      setVersionHistorySyncing(false);
+      setVersionSnapshots([]);
+      return;
+    }
+
     let cancelled = false;
 
     const hydrateSnapshots = async () => {
@@ -64,6 +70,7 @@ export const useVersionHistory = ({
       setVersionSnapshots([]);
 
       try {
+        const { listDocumentVersionSnapshots } = await loadVersionHistoryStore();
         const snapshots = await listDocumentVersionSnapshots(activeDoc.id);
 
         if (!cancelled) {
@@ -83,7 +90,7 @@ export const useVersionHistory = ({
     return () => {
       cancelled = true;
     };
-  }, [activeDoc.id]);
+  }, [activeDoc.id, enabled]);
 
   const createVersionSnapshot = useCallback(async (
     document: DocumentData,
@@ -101,6 +108,7 @@ export const useVersionHistory = ({
       trigger,
     } satisfies DocumentVersionSnapshot;
 
+    const { appendDocumentVersionSnapshot } = await loadVersionHistoryStore();
     const nextSnapshots = await appendDocumentVersionSnapshot(snapshot, MAX_VERSION_SNAPSHOTS);
 
     if (document.id === activeDoc.id) {
@@ -111,13 +119,17 @@ export const useVersionHistory = ({
   }, [activeDoc.id]);
 
   const captureAutoSaveSnapshot = useCallback(async (document: DocumentData) => {
+    if (!enabled) {
+      return;
+    }
+
     if (!initializedDocumentIdsRef.current.has(document.id)) {
       initializedDocumentIdsRef.current.add(document.id);
       return;
     }
 
     await createVersionSnapshot(document, "autosave");
-  }, [createVersionSnapshot]);
+  }, [createVersionSnapshot, enabled]);
 
   const restoreVersionSnapshot = useCallback(async (snapshotId: string) => {
     const snapshot = versionSnapshots.find((entry) => entry.snapshotId === snapshotId);
@@ -148,6 +160,7 @@ export const useVersionHistory = ({
   );
 
   const removeDocumentVersionSnapshots = useCallback(async (documentId: string) => {
+    const { clearDocumentVersionSnapshots } = await loadVersionHistoryStore();
     await clearDocumentVersionSnapshots(documentId);
 
     if (documentId === activeDoc.id) {

@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import * as yaml from "js-yaml";
+import { migrateStoredDocumentData } from "@/lib/documents/storedDocument";
 import { renderAstToHtml } from "@/lib/ast/renderAstToHtml";
 import { renderAstToLatex } from "@/lib/ast/renderAstToLatex";
 import { renderAstToMarkdown } from "@/lib/ast/renderAstToMarkdown";
@@ -202,14 +203,8 @@ export const parseDocsyFile = (raw: string): DocsyFileEnvelope => {
 
 export const serializeDocsyFile = (input: DocsyFileEnvelope) => JSON.stringify(input, null, 2);
 
-export const migrateLegacyDocumentData = (document: DocumentData): DocumentData => ({
-  ...document,
-  ast: document.ast ?? null,
-  metadata: normalizeMetadata(document.metadata),
-  sourceSnapshots: normalizeSourceSnapshots(document.sourceSnapshots, document.mode, document.content),
-  storageKind: document.storageKind ?? "legacy",
-  tiptapJson: document.tiptapJson ?? null,
-});
+export const migrateLegacyDocumentData = (document: DocumentData): DocumentData =>
+  migrateStoredDocumentData(document);
 
 export const buildDocsyFileFromDocumentData = (document: DocumentData): DocsyFileEnvelope => {
   const normalizedDocument = migrateLegacyDocumentData(document);

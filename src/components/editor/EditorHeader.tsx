@@ -1,4 +1,5 @@
 import {
+  Braces,
   ChevronDown,
   Copy,
   Download,
@@ -20,7 +21,7 @@ import {
   Upload,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import docslyLogo from "@/assets/docsly-logo.png";
+import docslyLogoSmall from "@/assets/docsly-logo-small.png";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -61,6 +62,9 @@ interface EditorHeaderProps {
   onLoad: () => void;
   fileName: string;
   onFileNameChange: (name: string) => void;
+  availableModes?: EditorMode[];
+  onOpenStructuredModes?: () => void;
+  showStructuredModeAction?: boolean;
   textStats: { charCount: number; wordCount: number; lines: number; paragraphs: number; readingTimeMin: number };
   countWithSpaces?: boolean;
   onToggleCountMode?: () => void;
@@ -104,6 +108,9 @@ const EditorHeader = ({
   onLoad,
   fileName,
   onFileNameChange,
+  availableModes = ["markdown", "latex", "html", "json", "yaml"],
+  onOpenStructuredModes,
+  showStructuredModeAction = false,
   textStats,
   countWithSpaces = true,
   onToggleCountMode,
@@ -122,6 +129,21 @@ const EditorHeader = ({
   const { locale, setLocale, t } = useI18n();
   const { toggleSidebar } = useSidebar();
   const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : mode === "json" ? ".json" : mode === "yaml" ? ".yaml" : ".md";
+  const renderModeLabel = (editorMode: EditorMode) => (
+    editorMode === "markdown"
+      ? "Markdown"
+      : editorMode === "latex"
+        ? "LaTeX"
+        : editorMode === "html"
+          ? "HTML"
+          : editorMode === "json"
+            ? "JSON"
+            : "YAML"
+  );
+  const openStructuredMode = (editorMode: "json" | "yaml") => {
+    onOpenStructuredModes?.();
+    onModeChange(editorMode);
+  };
   const lastSavedLabel = autoSaveState.lastSavedAt
     ? new Intl.DateTimeFormat(locale, {
       hour: "numeric",
@@ -160,10 +182,10 @@ const EditorHeader = ({
             <PanelLeft className="h-4 w-4" />
           </Button>
           <Link to="/" className="hidden shrink-0 items-center gap-2 transition-opacity hover:opacity-80 sm:flex">
-            <img src={docslyLogo} alt={t("common.appName")} className="h-6 w-6" />
+            <img src={docslyLogoSmall} alt={t("common.appName")} className="h-6 w-6" />
             <span className="mr-1 text-sm font-bold text-foreground">{t("common.appName")}</span>
           </Link>
-          <img src={docslyLogo} alt={t("common.appName")} className="h-5 w-5 shrink-0 sm:hidden" />
+          <img src={docslyLogoSmall} alt={t("common.appName")} className="h-5 w-5 shrink-0 sm:hidden" />
           <span className="hidden text-muted-foreground sm:inline">|</span>
           <input
             value={fileName}
@@ -197,25 +219,35 @@ const EditorHeader = ({
           </div>
 
           <div className="ml-3 hidden items-center rounded-md bg-secondary p-0.5 lg:flex">
-            {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((editorMode) => (
+            {availableModes.map((editorMode) => (
               <button
                 key={editorMode}
                 className={`rounded-sm px-3 py-1 text-xs transition-colors ${mode === editorMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                 onClick={() => onModeChange(editorMode)}
                 type="button"
               >
-                {editorMode === "markdown"
-                  ? "Markdown"
-                  : editorMode === "latex"
-                    ? "LaTeX"
-                    : editorMode === "html"
-                      ? "HTML"
-                      : editorMode === "json"
-                        ? "JSON"
-                        : "YAML"}
+                {renderModeLabel(editorMode)}
               </button>
             ))}
           </div>
+          {showStructuredModeAction && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="hidden h-7 gap-1 px-2 text-xs lg:inline-flex">
+                  <Braces className="h-3.5 w-3.5" />
+                  {t("header.structuredEditor")}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-36">
+                <DropdownMenuItem onClick={() => openStructuredMode("json")} className="text-xs">
+                  JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openStructuredMode("yaml")} className="text-xs">
+                  YAML
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -225,23 +257,26 @@ const EditorHeader = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-36">
-              {(["markdown", "latex", "html", "json", "yaml"] as EditorMode[]).map((editorMode) => (
+              {availableModes.map((editorMode) => (
                 <DropdownMenuItem
                   key={editorMode}
                   onClick={() => onModeChange(editorMode)}
                   className={`text-xs ${mode === editorMode ? "bg-accent" : ""}`}
                 >
-                  {editorMode === "markdown"
-                    ? "Markdown"
-                    : editorMode === "latex"
-                      ? "LaTeX"
-                      : editorMode === "html"
-                        ? "HTML"
-                        : editorMode === "json"
-                          ? "JSON"
-                          : "YAML"}
+                  {renderModeLabel(editorMode)}
                 </DropdownMenuItem>
               ))}
+              {showStructuredModeAction && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => openStructuredMode("json")} className="text-xs">
+                    JSON
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => openStructuredMode("yaml")} className="text-xs">
+                    YAML
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

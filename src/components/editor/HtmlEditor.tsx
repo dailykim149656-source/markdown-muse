@@ -2,28 +2,48 @@ import type { JSONContent } from "@tiptap/core";
 import { EditorContent, type Editor, useEditor } from "@tiptap/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import EditorToolbar from "./EditorToolbar";
-import { createEditorExtensions, editorPropsDefault } from "./editorConfig";
+import {
+  htmlHasAdvancedContent,
+  htmlHasDocumentContent,
+  tiptapDocumentHasAdvancedContent,
+  tiptapDocumentHasDocumentContent,
+} from "./editorAdvancedContent";
+import { useEditorExtensions } from "./editorConfig";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
 
 interface HtmlEditorProps {
+  advancedBlocksEnabled?: boolean;
+  canEnableAdvancedBlocks?: boolean;
+  canEnableDocumentFeatures?: boolean;
+  documentFeaturesEnabled?: boolean;
   initialContent?: string;
   initialTiptapDoc?: JSONContent;
   onContentChange?: (content: string) => void;
+  onEnableAdvancedBlocks?: () => void;
+  onEnableDocumentFeatures?: () => void;
   onHtmlChange?: (html: string) => void;
   onEditorReady?: (editor: Editor | null) => void;
   onTiptapChange?: (document: JSONContent | null) => void;
 }
 
 const HtmlEditor = ({
+  advancedBlocksEnabled = false,
+  canEnableAdvancedBlocks = false,
+  canEnableDocumentFeatures = false,
+  documentFeaturesEnabled = false,
   initialContent,
   initialTiptapDoc,
   onContentChange,
+  onEnableAdvancedBlocks,
+  onEnableDocumentFeatures,
   onHtmlChange,
   onEditorReady,
   onTiptapChange,
 }: HtmlEditorProps) => {
   const initialHtml = initialContent || "";
+  const requiresDocumentFeatures = tiptapDocumentHasDocumentContent(initialTiptapDoc) || htmlHasDocumentContent(initialHtml);
+  const requiresAdvancedBlocks = tiptapDocumentHasAdvancedContent(initialTiptapDoc) || htmlHasAdvancedContent(initialHtml);
   const [htmlSource, setHtmlSource] = useState(initialHtml);
   const [showPanel, setShowPanel] = useState(true);
   const [sourceLeft, setSourceLeft] = useState(false);
@@ -33,6 +53,26 @@ const HtmlEditor = ({
   const sourceDebounce = useRef<ReturnType<typeof setTimeout>>();
   const sourcePanelRef = useRef<HTMLDivElement | null>(null);
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const { editorPropsDefault, coreExtensions, extensions, extensionsReady } = useEditorExtensions(
+    "HTML WYSIWYG editor with synced source.",
+    documentFeaturesEnabled,
+    advancedBlocksEnabled,
+  );
+  const shouldHoldEditor = (requiresDocumentFeatures && !documentFeaturesEnabled)
+    || (requiresAdvancedBlocks && !advancedBlocksEnabled)
+    || !extensionsReady;
+
+  useEffect(() => {
+    if (requiresDocumentFeatures && !documentFeaturesEnabled) {
+      onEnableDocumentFeatures?.();
+    }
+  }, [documentFeaturesEnabled, onEnableDocumentFeatures, requiresDocumentFeatures]);
+
+  useEffect(() => {
+    if (requiresAdvancedBlocks && !advancedBlocksEnabled) {
+      onEnableAdvancedBlocks?.();
+    }
+  }, [advancedBlocksEnabled, onEnableAdvancedBlocks, requiresAdvancedBlocks]);
 
   const handleWysiwygUpdate = useCallback(
     (html: string, document: JSONContent) => {
@@ -48,8 +88,8 @@ const HtmlEditor = ({
   );
 
   const editor = useEditor({
-    extensions: createEditorExtensions("HTML WYSIWYG editor with synced source."),
-    content: initialTiptapDoc || initialHtml,
+    extensions: shouldHoldEditor ? coreExtensions : extensions,
+    content: shouldHoldEditor ? "" : (initialTiptapDoc || initialHtml),
     onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML(), editor.getJSON()),
     editorProps: editorPropsDefault,
   });
@@ -91,6 +131,14 @@ const HtmlEditor = ({
       setHtmlSource(newHtml);
       onContentChange?.(newHtml);
       onHtmlChange?.(newHtml);
+      if (!documentFeaturesEnabled && htmlHasDocumentContent(newHtml)) {
+        onEnableDocumentFeatures?.();
+        return;
+      }
+      if (!advancedBlocksEnabled && htmlHasAdvancedContent(newHtml)) {
+        onEnableAdvancedBlocks?.();
+        return;
+      }
       if (sourceDebounce.current) clearTimeout(sourceDebounce.current);
       sourceDebounce.current = setTimeout(() => {
         if (!editor || syncingFromWysiwyg.current) return;
@@ -100,7 +148,7 @@ const HtmlEditor = ({
         queueMicrotask(() => { syncingFromSource.current = false; });
       }, 600);
     },
-    [editor, onContentChange, onHtmlChange, onTiptapChange]
+    [advancedBlocksEnabled, documentFeaturesEnabled, editor, onContentChange, onEnableAdvancedBlocks, onEnableDocumentFeatures, onHtmlChange, onTiptapChange]
   );
 
   const handleSourceKeyDown = useCallback(
@@ -143,9 +191,25 @@ const HtmlEditor = ({
     [applySourceTabIndent]
   );
 
+  if (shouldHoldEditor) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Loading editor...
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full">
-      <EditorToolbar editor={editor} />
+      <EditorToolbar
+        advancedBlocksEnabled={advancedBlocksEnabled}
+        canEnableAdvancedBlocks={canEnableAdvancedBlocks}
+        canEnableDocumentFeatures={canEnableDocumentFeatures}
+        documentFeaturesEnabled={documentFeaturesEnabled}
+        editor={editor}
+        onEnableAdvancedBlocks={onEnableAdvancedBlocks}
+        onEnableDocumentFeatures={onEnableDocumentFeatures}
+      />
       <SplitEditorLayout
         showPanel={showPanel}
         sourceLeft={sourceLeft}
