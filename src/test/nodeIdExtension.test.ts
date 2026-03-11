@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { Editor } from "@tiptap/core";
-import { createEditorExtensions } from "@/components/editor/editorConfig";
+import { createCoreEditorExtensions } from "@/components/editor/editorConfigBase";
+import { createDocumentEditorExtensions } from "@/components/editor/editorConfigDocument";
 
 const waitForNodeIdSync = () => new Promise((resolve) => setTimeout(resolve, 0));
+const createExtensions = () => [
+  ...createCoreEditorExtensions(""),
+  ...createDocumentEditorExtensions(),
+];
 
 describe("NodeIdExtension", () => {
   it("assigns deterministic node ids to eligible nodes on initial load", async () => {
     const editor = new Editor({
-      extensions: createEditorExtensions(""),
+      extensions: createExtensions(),
       content: {
         type: "doc",
         content: [
@@ -36,7 +41,7 @@ describe("NodeIdExtension", () => {
 
   it("preserves existing node ids and fills missing ids after content updates", async () => {
     const editor = new Editor({
-      extensions: createEditorExtensions(""),
+      extensions: createExtensions(),
       content: {
         type: "doc",
         content: [

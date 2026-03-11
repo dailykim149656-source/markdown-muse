@@ -7,5 +7,28 @@ steps:
       - -t
       - ${_IMAGE_URI}
       - .
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_IMAGE_URI}
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE_NAME}
+      - --image=${_IMAGE_URI}
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --set-env-vars=GEMINI_MODEL=${_GEMINI_MODEL},AI_ALLOWED_ORIGIN=${_AI_ALLOWED_ORIGIN}
+      - --update-secrets=GEMINI_API_KEY=${_GEMINI_API_KEY_SECRET}:latest
+substitutions:
+  _REGION: asia-northeast3
+  _SERVICE_NAME: markdown-muse-ai
+  _GEMINI_MODEL: gemini-2.5-flash
+  _AI_ALLOWED_ORIGIN: "*"
+  _GEMINI_API_KEY_SECRET: gemini-api-key
 images:
   - ${_IMAGE_URI}

@@ -39,6 +39,32 @@ interface AiAssistantDialogProps {
   updateSuggestionPreview: PatchPreviewResult | null;
 }
 
+const getTocConflictTone = (conflict: TocPreviewResult["conflicts"][number]) => {
+  switch (conflict) {
+    case "duplicate_headings":
+    case "non_matching_titles":
+      return "border-destructive/30 bg-destructive/10 text-destructive";
+    case "existing_toc":
+    case "unchanged_toc":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    case "no_headings":
+    default:
+      return "border-border/60 bg-background text-muted-foreground";
+  }
+};
+
+const getTocEntryAccent = (level: 1 | 2 | 3) => {
+  switch (level) {
+    case 1:
+      return "border-l-primary";
+    case 2:
+      return "border-l-blue-500";
+    case 3:
+    default:
+      return "border-l-emerald-500";
+  }
+};
+
 const PreviewSummary = ({
   comparison,
   patchCount,
@@ -270,7 +296,7 @@ const AiAssistantDialog = ({
                       disabled={!tocPreview}
                       onClick={() => void onLoadTocPatch(Number(tocMaxDepth) as 1 | 2 | 3)}
                       type="button"
-                      variant="outline"
+                      variant={tocPreview?.hasLoadablePatch ? "default" : "outline"}
                     >
                       {t("aiDialog.toc.loadPatch")}
                     </Button>
@@ -282,6 +308,31 @@ const AiAssistantDialog = ({
                   <ScrollArea className="mt-3 h-72 pr-3">
                     {tocPreview ? (
                       <div className="space-y-4 text-sm">
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                              {t("aiDialog.toc.depth")}
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-foreground">
+                              {t("aiDialog.toc.depthValue", { value: tocPreview.maxDepth })}
+                            </div>
+                          </div>
+                          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                              {t("aiDialog.toc.entries")}
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-foreground">{tocPreview.entries.length}</div>
+                          </div>
+                          <div className={`rounded-md border px-3 py-2 ${tocPreview.hasLoadablePatch ? "border-emerald-500/30 bg-emerald-500/10" : "border-amber-500/30 bg-amber-500/10"}`}>
+                            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                              Patch
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-foreground">
+                              {tocPreview.hasLoadablePatch ? `${tocPreview.patchCount}` : "0"}
+                            </div>
+                          </div>
+                        </div>
+
                         <div className="space-y-1">
                           <p className="font-medium">
                             {t("aiDialog.toc.suggestedDepth", { value: tocPreview.maxDepth })}
@@ -294,7 +345,12 @@ const AiAssistantDialog = ({
                             <p className="text-xs font-medium text-muted-foreground">{t("aiDialog.toc.entries")}</p>
                             <div className="space-y-2">
                               {tocPreview.entries.map((entry, index) => (
-                                <div key={`${entry.level}-${entry.title}-${index}`} className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                                <div
+                                  key={`${entry.level}-${entry.title}-${index}`}
+                                  className={`rounded-md border border-border bg-muted/20 px-3 py-2 border-l-4 ${getTocEntryAccent(entry.level)} ${
+                                    entry.level === 2 ? "ml-3" : entry.level === 3 ? "ml-6" : ""
+                                  }`}
+                                >
                                   <div className="text-[11px] text-muted-foreground">
                                     {t("aiDialog.toc.entryLevel", { level: entry.level })}
                                   </div>
@@ -310,7 +366,7 @@ const AiAssistantDialog = ({
                             <p className="text-xs font-medium text-muted-foreground">{t("aiDialog.toc.conflicts")}</p>
                             <ul className="space-y-2 text-xs text-muted-foreground">
                               {tocPreview.conflicts.map((conflict) => (
-                                <li key={conflict} className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                                <li key={conflict} className={`rounded-md border px-3 py-2 ${getTocConflictTone(conflict)}`}>
                                   {t(`aiDialog.toc.conflict.${conflict}`)}
                                 </li>
                               ))}
@@ -338,6 +394,16 @@ const AiAssistantDialog = ({
                             ? t("aiDialog.toc.patchReady", { count: tocPreview.patchCount })
                             : t("aiDialog.toc.patchNotNeeded")}
                         </div>
+
+                        {tocPreview.hasLoadablePatch && (
+                          <Button
+                            className="w-full"
+                            onClick={() => void onLoadTocPatch(Number(tocMaxDepth) as 1 | 2 | 3)}
+                            type="button"
+                          >
+                            {t("aiDialog.toc.loadPatch")}
+                          </Button>
+                        )}
                       </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">{t("aiDialog.toc.empty")}</p>

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { AutoSaveData, DocumentData, EditorMode } from "@/types/document";
+import type { WorkspaceBinding } from "@/types/workspace";
 import { migrateStoredDocumentData } from "@/lib/documents/storedDocument";
 
 const STORAGE_KEY = "docsy-autosave-v2";
@@ -10,6 +11,36 @@ const isEditorMode = (value: unknown): value is EditorMode =>
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const normalizeWorkspaceBinding = (value: unknown): WorkspaceBinding | undefined => {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (
+    value.provider !== "google_drive"
+    || value.documentKind !== "google_docs"
+    || typeof value.fileId !== "string"
+    || typeof value.mimeType !== "string"
+    || typeof value.importedAt !== "number"
+    || typeof value.syncStatus !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    documentKind: "google_docs",
+    driveModifiedTime: typeof value.driveModifiedTime === "string" ? value.driveModifiedTime : undefined,
+    fileId: value.fileId,
+    importedAt: value.importedAt,
+    lastSyncedAt: typeof value.lastSyncedAt === "number" ? value.lastSyncedAt : undefined,
+    mimeType: value.mimeType,
+    provider: "google_drive",
+    revisionId: typeof value.revisionId === "string" ? value.revisionId : undefined,
+    syncError: typeof value.syncError === "string" ? value.syncError : undefined,
+    syncStatus: value.syncStatus as WorkspaceBinding["syncStatus"],
+  };
+};
 
 const hasMeaningfulMetadata = (metadata: DocumentData["metadata"]) => {
   if (!metadata) {
@@ -129,6 +160,7 @@ const normalizeLegacyDocument = (value: unknown): DocumentData | null => {
     sourceSnapshots: isRecord(value.sourceSnapshots) ? value.sourceSnapshots as DocumentData["sourceSnapshots"] : undefined,
     storageKind: value.storageKind === "docsy" || value.storageKind === "legacy" ? value.storageKind : undefined,
     tiptapJson: isRecord(value.tiptapJson) ? value.tiptapJson : null,
+    workspaceBinding: normalizeWorkspaceBinding(value.workspaceBinding),
   });
 };
 

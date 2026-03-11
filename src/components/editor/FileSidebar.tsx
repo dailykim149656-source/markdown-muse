@@ -44,6 +44,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/i18n/useI18n";
+import { getWorkspaceProviderLabel, getWorkspaceSyncLabel } from "@/lib/workspace/workspaceLabels";
 import type { DocumentData, EditorMode } from "@/types/document";
 
 const FileSidebarHistoryPanels = lazy(() => import("@/components/editor/FileSidebarHistoryPanels"));
@@ -249,6 +250,8 @@ const FileSidebar = ({
                   const Icon = modeIcon(document.mode);
                   const isActive = document.id === activeDocId;
                   const isEditing = editingId === document.id;
+                  const workspaceProviderLabel = getWorkspaceProviderLabel(document.workspaceBinding);
+                  const workspaceSyncLabel = getWorkspaceSyncLabel(document.workspaceBinding);
 
                   return (
                     <SidebarMenuItem key={document.id}>
@@ -308,6 +311,11 @@ const FileSidebar = ({
                                     <Clock className="h-2.5 w-2.5" />
                                     {formatDate(document.updatedAt)}
                                   </div>
+                                  {workspaceProviderLabel && workspaceSyncLabel && (
+                                    <div className="mt-1 text-[10px] text-muted-foreground">
+                                      {workspaceProviderLabel} • {workspaceSyncLabel}
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
                                   <button

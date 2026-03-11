@@ -1,69 +1,64 @@
-# Markdown Muse
+# Docsy
 
-Markdown Muse는 `.docsy`, `Document AST`, review-first AI patch workflow를 중심으로 만든 local-first 기술 문서 편집기입니다.
+Docsy는 Markdown Muse 에디터를 기반으로 만든 해커톤용 AI 문서 워크플로 에이전트입니다.
 
-핵심 특징:
+제품의 핵심 흐름은 하나입니다.
 
-- Markdown, LaTeX, HTML, JSON, YAML, AsciiDoc, RST 지원
-- 리치 텍스트 편집과 구조 편집을 함께 지원
-- AI 결과를 문서에 바로 반영하지 않고 `Patch Review`를 통해 검토
-- 로컬 knowledge index, graph, suggestion queue 기반 다문서 유지보수 지원
-- 랜딩 페이지와 `/guide` 설명서 제공
+1. 사용자가 기술 문서를 수정합니다.
+2. Gemini가 문서 문맥을 분석합니다.
+3. 시스템이 구조화된 액션 또는 패치 제안을 반환합니다.
+4. 사용자는 변경을 적용하기 전에 먼저 리뷰합니다.
 
-![Markdown Muse preview](src/assets/editor-preview.png)
+![Docsy editor preview](src/assets/editor-preview.png)
 
 ## 언어
 
 - [기본 README](README.md)
 - [English README](README.en.md)
 
-## 빠른 요약
+## 해커톤 목표
 
-- 다중 문서 편집과 파일 사이드바
-- Markdown, LaTeX, HTML 리치 텍스트 편집
-- JSON, YAML 구조 편집
-- `.docsy` 저장 및 복원
-- `Document AST` 기반 렌더링, 검증, 패치 적용
-- review-first AI 기능
-  - 요약
-  - 섹션 생성
-  - 비교
-  - 업데이트 제안
-  - 절차 추출
-  - TOC 제안
-- local knowledge index와 검색
-- version history와 snapshot 복원
-- share link / QR 공유
-- clipboard export
-- desktop / tablet / mobile 대응 editor shell
+이 저장소는 Gemini 해커톤 제출을 목표로 정리되고 있습니다.
 
-## 빌드 프로필
+현재 제출 관점의 핵심 포인트는 다음과 같습니다.
 
-Markdown Muse는 두 가지 빌드/실행 프로필을 가집니다.
+- Google GenAI SDK 기반 Gemini 연동
+- review-first patch workflow
+- 모델의 structured JSON 출력
+- 에디터 스크린샷을 포함한 멀티모달 입력 경로
+- AI 응답을 실제 UI 액션으로 연결하는 데모
+- 기술 문서 유지보수라는 분명한 사용 사례
 
-- `desktop`
-  전체 편집 표면을 기본으로 노출합니다. 문서 도구, structured editing, AI, history, knowledge panel, advanced blocks를 바로 사용할 수 있습니다.
-- `web`
-  기본 에디터는 더 가볍게 시작합니다. 무거운 기능은 필요할 때만 열리도록 분리되어 있습니다.
+## 데모 시나리오
 
-주요 명령:
+1. 여러 기술 문서를 에디터에서 엽니다.
+2. 한 문서의 절차를 수정합니다.
+3. 문서 문맥과 에디터 상태를 AI 서비스로 보냅니다.
+4. Gemini가 액션 또는 패치 제안을 반환합니다.
+5. 앱이 patch review 흐름을 엽니다.
+6. 사용자가 제안을 수락하거나 거절합니다.
 
-- `npm run build`
-  데스크톱 중심 프로덕션 빌드
-- `npm run build:web`
-  웹 중심 프로덕션 빌드
+## 저장소 구조
 
-예시:
-
-```bash
-# desktop profile
-npm run build
-
-# web profile
-npm run build:web
+```text
+src/       프론트엔드 에디터와 UI 워크플로
+server/    Gemini 기반 AI 서비스
+docs/      엔지니어링 문서
+PRD/       제품 요구사항 문서
+public/    정적 자산
 ```
 
-## 시작하기
+## 현재 구현된 기반 기능
+
+- 탭과 사이드바를 포함한 멀티 문서 편집
+- Markdown, LaTeX, HTML, JSON, YAML 편집
+- Document AST 생성과 구조화된 패치 처리
+- AI 요약, 섹션 생성, TOC 제안, 업데이트 제안
+- 문서를 바로 바꾸지 않고 Patch Review를 거치는 흐름
+- 로컬 knowledge index와 관련 문서 워크플로
+- 버전 히스토리, 공유, 내보내기 기능
+
+## 로컬 실행
 
 ### 요구 사항
 
@@ -76,27 +71,27 @@ npm run build:web
 npm install
 ```
 
-### 프런트엔드 실행
+### 프론트엔드 실행
 
 ```bash
 npm run dev
 ```
 
-### AI 서버 실행
+### AI 서비스 실행
 
-1. 환경 파일 생성
+먼저 `.env.local` 파일을 만듭니다.
 
 ```bash
 cp .env.example .env.local
 ```
 
-Windows PowerShell:
+PowerShell:
 
 ```powershell
 Copy-Item .env.example .env.local
 ```
 
-2. `.env.local` 설정
+다음 값을 설정합니다.
 
 - `GEMINI_API_KEY`
 - `GEMINI_MODEL`
@@ -104,62 +99,59 @@ Copy-Item .env.example .env.local
 - `AI_ALLOWED_ORIGIN`
 - `VITE_AI_API_BASE_URL`
 
-3. AI 서버 실행
+그 다음 실행합니다.
 
 ```bash
 npm run ai:server
 ```
 
-4. 다른 터미널에서 프런트엔드 실행
+## Cloud Run 배포
 
-```bash
-npm run dev
-```
+AI 서비스는 Cloud Run 배포를 기준으로 정리되어 있습니다.
+
+배포 계약은 다음과 같습니다.
+
+- `PORT`는 Cloud Run이 주입합니다.
+- `GEMINI_API_KEY`는 Secret Manager에서 주입하는 것을 기준으로 합니다.
+- `GEMINI_MODEL`로 Gemini 모델을 선택합니다.
+- `AI_ALLOWED_ORIGIN`으로 허용할 프론트엔드 origin 목록을 제어합니다.
+
+배포 관련 파일:
+
+- [Dockerfile.ai](Dockerfile.ai)
+- [cloudbuild.ai.yaml](cloudbuild.ai.yaml)
+
+프론트엔드 설정:
+
+- `VITE_AI_API_BASE_URL`을 배포된 AI 서비스 URL로 설정합니다.
+- 이 값이 없고 localhost가 아니면 프론트엔드는 same-origin을 기본값으로 사용합니다.
+
+헬스 체크:
+
+- `GET /api/ai/health`
 
 ## 주요 스크립트
 
-- `npm run dev` - Vite 개발 서버
-- `npm run build` - desktop 프로덕션 빌드
-- `npm run build:web` - web 프로덕션 빌드
-- `npm run build:dev` - development 모드 빌드
-- `npm run preview` - 프로덕션 빌드 미리보기
-- `npm run lint` - ESLint 실행
-- `npm run test` - Vitest 실행
-- `npm run test:watch` - Vitest watch 모드
-- `npm run ai:server` - Gemini proxy server 실행
-- `npm run typecheck:server` - 서버 타입체크
-
-## 현재 구현된 기능 문서
-
-- [구현 기능 요약 (Korean)](docs/implemented-features-summary-ko-2026-03-11.md)
-- [Implemented Features Summary](docs/implemented-features-summary-2026-03-11.md)
-- [Developer Feature Map](docs/developer-feature-map-2026-03-11.md)
-- [PRD 상태 점검](docs/prd-status-check-2026-03-11.md)
-
-## 문서 역할 안내
-
-문서 종류마다 목적이 다릅니다.
-
-- `/guide`
-  제품 안에 있는 사용자 설명서입니다. 실제 사용 방법을 익힐 때 봅니다.
-- `docs/`
-  저장소 기준의 제품 상태, 구현 계획, 릴리즈 관련 문서입니다. 현재 제품 상태나 개발 계획을 파악할 때 봅니다.
-- `PRD/`
-  원본 요구사항 초안과 과거 PRD 보관소입니다. 초기 요구사항이나 이전 버전 문맥을 추적할 때 봅니다.
+- `npm run dev`
+- `npm run ai:server`
+- `npm run build`
+- `npm run build:web`
+- `npm run preview`
+- `npm run lint`
+- `npm run test`
+- `npm run typecheck:server`
 
 ## 주요 문서
 
-- [Docs Index](docs/README.md)
-- [PRD Index](PRD/README.md)
-- [Architecture Overview](docs/architecture-overview-2026-03-10.md)
-- [Landing Guide Implementation Plan](docs/landing-guide-implementation-plan-2026-03-11.md)
-- [Release Gate and DoD for v1.0](docs/release-gate-and-dod-v1-2026-03-10.md)
-- [v0.8-v1.0 Execution Plan](docs/prd-v0.8-to-v1.0-execution-plan-2026-03-10.md)
-- [Web Performance Optimization Summary](docs/session-summary-2026-03-10-web-performance-optimization.md)
-- [GCP Deployment Guide](docs/gcp-deployment.md)
+- [해커톤 PRD](PRD/docsy_prd.md)
+- [최종 제출 패키지](docs/final-submission-package-2026-03-11.md)
+- [해커톤 구현 세션 요약](docs/session-summary-2026-03-11-hackathon-implementation.md)
+- [Docs index](docs/README.md)
+- [PRD index](PRD/README.md)
+- [GCP 배포 가이드](docs/gcp-deployment.md)
 
 ## 보안 메모
 
 - `GEMINI_API_KEY`는 브라우저 번들에 포함되지 않습니다.
-- Gemini 호출은 `server/aiServer.ts`를 통해 처리됩니다.
-- 프런트엔드는 문서 payload만 proxy로 보내고, 비밀 값은 서버 환경 변수로 관리합니다.
+- Gemini 호출은 서버 레이어를 통해 처리됩니다.
+- 문서 내용은 AI 서비스로 전달될 수 있지만, 인증 정보는 서버 환경 변수에만 남습니다.

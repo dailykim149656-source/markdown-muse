@@ -9,6 +9,7 @@ import {
   tiptapDocumentHasDocumentContent,
 } from "./editorAdvancedContent";
 import { useEditorExtensions } from "./editorConfig";
+import { applyEditorSeed } from "./editorSeedSync";
 import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
 import { htmlToLatex, latexToHtml } from "./utils/htmlToLatex";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
@@ -50,6 +51,7 @@ const LatexEditor = ({
   const syncingFromSource = useRef(false);
   const syncingFromWysiwyg = useRef(false);
   const sourceSyncFrame = useRef<number | null>(null);
+  const seedSignatureRef = useRef<string | null>(null);
   const initialHtml = useMemo(() => initialContent ? latexToHtml(initialContent, { includeMetadata: false }) : "", [initialContent]);
   const requiresDocumentFeatures = tiptapDocumentHasDocumentContent(initialTiptapDoc) || htmlHasDocumentContent(initialHtml);
   const requiresAdvancedBlocks = tiptapDocumentHasAdvancedContent(initialTiptapDoc) || htmlHasAdvancedContent(initialHtml);
@@ -118,22 +120,23 @@ const LatexEditor = ({
   });
 
   useEffect(() => {
+    const nextLatex = initialContent || "";
+
+    setLatexSource((current) => current === nextLatex ? current : nextLatex);
+  }, [initialContent]);
+
+  useEffect(() => {
     if (!editor || shouldHoldEditor) {
       return;
     }
 
-    const nextContent = initialTiptapDoc || initialHtml;
-    const hasSeedContent = typeof nextContent === "string"
-      ? nextContent.trim().length > 0
-      : Boolean(nextContent);
-
-    if (!hasSeedContent) {
-      return;
-    }
-
-    editor.commands.setContent(nextContent, { emitUpdate: false });
-    onHtmlChange?.(editor.getHTML());
-    onTiptapChange?.(editor.getJSON());
+    applyEditorSeed({
+      editor,
+      nextContent: initialTiptapDoc || initialHtml,
+      onHtmlChange,
+      onTiptapChange,
+      seedSignatureRef,
+    });
   }, [editor, initialHtml, initialTiptapDoc, onHtmlChange, onTiptapChange, shouldHoldEditor]);
 
   useEffect(() => {

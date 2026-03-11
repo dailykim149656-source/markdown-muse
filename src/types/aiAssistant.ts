@@ -8,6 +8,14 @@ export interface AiAssistantDocumentPayload {
   mode: Exclude<EditorMode, "json" | "yaml">;
 }
 
+export interface AiAssistantScreenshotPayload {
+  capturedAt: number;
+  dataBase64: string;
+  height: number;
+  mimeType: "image/png";
+  width: number;
+}
+
 export interface AiSourceAttribution {
   chunkId: string;
   ingestionId: string;
@@ -19,6 +27,7 @@ export interface SummarizeDocumentRequest {
   document: AiAssistantDocumentPayload;
   objective: string;
   locale?: Locale;
+  screenshot?: AiAssistantScreenshotPayload;
 }
 
 export interface SummarizeDocumentResponse {
@@ -39,6 +48,7 @@ export interface GenerateSectionRequest {
   existingHeadings: GenerateSectionHeadingContext[];
   prompt: string;
   locale?: Locale;
+  screenshot?: AiAssistantScreenshotPayload;
 }
 
 export interface GenerateSectionResponse {
@@ -57,6 +67,7 @@ export interface GenerateTocRequest {
   document: AiAssistantDocumentPayload;
   existingHeadings: GenerateSectionHeadingContext[];
   locale?: Locale;
+  screenshot?: AiAssistantScreenshotPayload;
 }
 
 export interface GenerateTocResponse {
@@ -64,4 +75,28 @@ export interface GenerateTocResponse {
   entries: GenerateTocEntry[];
   maxDepth: 1 | 2 | 3;
   rationale: string;
+}
+
+export type AiAssistantActionType = "none" | "open_patch_review";
+
+export interface ProposeEditorActionRequest {
+  candidatePatchCount?: number;
+  document: AiAssistantDocumentPayload;
+  existingHeadings: GenerateSectionHeadingContext[];
+  intent: "review_patch_suggestion";
+  issueSummary?: string;
+  locale?: Locale;
+  screenshot?: AiAssistantScreenshotPayload;
+  targetDocumentId?: string;
+  targetDocumentName?: string;
+}
+
+export interface ProposeEditorActionResponse {
+  action: AiAssistantActionType;
+  confidence: number;
+  payload: {
+    targetDocumentId?: string;
+    title: string;
+  };
+  reason: string;
 }

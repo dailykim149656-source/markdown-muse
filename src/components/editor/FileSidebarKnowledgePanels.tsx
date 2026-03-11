@@ -16,6 +16,8 @@ import SuggestionQueuePanel from "@/components/editor/SuggestionQueuePanel";
 import WorkspaceGraphPanel from "@/components/editor/WorkspaceGraphPanel";
 import type { KnowledgeSidebarPanelsProps } from "@/components/editor/sidebarFeatureTypes";
 import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
+import { setPendingEditorFocusTarget } from "@/lib/editor/editorFocusTarget";
+import type { KnowledgeGraphNavigationTarget } from "@/lib/knowledge/workspaceInsights";
 import { useNavigate } from "react-router-dom";
 
 const isRichTextDocument = (mode: KnowledgeSidebarPanelsProps["activeDoc"]["mode"]) =>
@@ -67,6 +69,8 @@ const FileSidebarKnowledgePanels = ({
   onGenerateTocSuggestion,
   onOpenNextSuggestionQueueItem,
   onOpenPatchReview,
+  onRefreshWorkspaceDocument,
+  onRescanWorkspaceSources,
   onOpenSuggestionQueueItem,
   onRetryFailedSuggestionQueueItems,
   onRetrySuggestionQueueItem,
@@ -75,6 +79,9 @@ const FileSidebarKnowledgePanels = ({
   onSuggestKnowledgeUpdates,
   patchCount,
   suggestionQueue,
+  workspaceChangedSources = [],
+  workspaceLastRescannedAt = null,
+  workspaceRescanning = false,
 }: KnowledgeSidebarPanelsProps) => {
   const navigate = useNavigate();
   const [releaseChecklistCheckedIds, setReleaseChecklistCheckedIds] = useState<ChecklistItemId[]>(() => readStoredChecklist());
@@ -111,6 +118,7 @@ const FileSidebarKnowledgePanels = ({
     activeDocumentId: activeDocId,
     createDocument,
     documents,
+    externalChangedSources: workspaceChangedSources,
     selectDocument: onSelectDoc,
   });
 
@@ -121,6 +129,10 @@ const FileSidebarKnowledgePanels = ({
         && (document.mode === "markdown" || document.mode === "latex" || document.mode === "html"))
       .map((document) => document.id)
     : [];
+  const openKnowledgeGraphTarget = (target: KnowledgeGraphNavigationTarget) => {
+    setPendingEditorFocusTarget(target);
+    openKnowledgeDocumentById(target.documentId);
+  };
   const openKnowledgeGraph = ({
     context,
     issueId,
@@ -191,7 +203,7 @@ const FileSidebarKnowledgePanels = ({
       <WorkspaceGraphPanel
         activeDocumentId={activeDocId}
         insights={knowledgeInsights}
-        onOpenDocument={openKnowledgeDocumentById}
+        onOpenDocument={openKnowledgeGraphTarget}
       />
       <DocumentHealthPanel issues={knowledgeHealthIssues} />
       <ConsistencyIssuesPanel
@@ -224,12 +236,14 @@ const FileSidebarKnowledgePanels = ({
       <ChangeMonitoringPanel
         changedSources={knowledgeChangedSources}
         impactQueue={knowledgeImpactQueue}
-        isRescanning={knowledgeRescanning}
-        lastRescannedAt={knowledgeLastRescannedAt}
+        isRescanning={knowledgeRescanning || workspaceRescanning}
+        lastRescannedAt={workspaceLastRescannedAt || knowledgeLastRescannedAt}
         onOpenDocument={openKnowledgeDocumentById}
+        onRefreshDocument={onRefreshWorkspaceDocument}
         onOpenGraph={openKnowledgeGraph}
         onRescan={() => {
           void rescanKnowledgeSources();
+          void onRescanWorkspaceSources?.();
         }}
         onSuggestUpdates={(sourceDocumentId, targetDocumentId) => {
           onSuggestKnowledgeImpactUpdate(sourceDocumentId, targetDocumentId, {

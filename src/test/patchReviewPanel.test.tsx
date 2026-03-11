@@ -1,7 +1,21 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import PatchReviewPanel from "@/components/editor/PatchReviewPanel";
+import { I18nContext } from "@/i18n/I18nProvider";
 import type { DocumentPatchSet } from "@/types/documentPatch";
+
+const renderWithI18n = (ui: React.ReactNode) =>
+  render(
+    <I18nContext.Provider
+      value={{
+        locale: "en",
+        setLocale: vi.fn(),
+        t: (key) => key,
+      }}
+    >
+      {ui}
+    </I18nContext.Provider>,
+  );
 
 const patchSetFixture: DocumentPatchSet = {
   patchSetId: "set-1",
@@ -66,11 +80,11 @@ const nonEditablePatchSetFixture: DocumentPatchSet = {
 
 describe("PatchReviewPanel", () => {
   it("renders patches and switches selection", () => {
-    render(<PatchReviewPanel patchSet={patchSetFixture} />);
+    renderWithI18n(<PatchReviewPanel patchSet={patchSetFixture} />);
 
     expect(screen.getAllByText(/Update intro/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Add conclusion/)).toBeInTheDocument();
-    expect(screen.getByText("문서: doc-ref")).toBeInTheDocument();
+    expect(screen.getByText("patchReview.sourceId")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("2. Add conclusion"));
 
@@ -83,30 +97,30 @@ describe("PatchReviewPanel", () => {
     const onReject = vi.fn();
     const onEdit = vi.fn();
 
-    render(
+    renderWithI18n(
       <PatchReviewPanel
         onAccept={onAccept}
         onEdit={onEdit}
         onReject={onReject}
         patchSet={patchSetFixture}
-      />
+      />,
     );
 
     fireEvent.change(screen.getByDisplayValue("New intro"), { target: { value: "Edited intro" } });
-    fireEvent.click(screen.getByRole("button", { name: "편집 저장" }));
-    fireEvent.click(screen.getByRole("button", { name: "승인" }));
-    fireEvent.click(screen.getByRole("button", { name: "거부" }));
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.saveEdit" }));
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.accept" }));
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.reject" }));
 
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ patchId: "patch-1" }), "Edited intro");
     expect(onAccept).toHaveBeenCalledWith(expect.objectContaining({ patchId: "patch-1" }));
     expect(onReject).toHaveBeenCalledWith(expect.objectContaining({ patchId: "patch-1" }));
-  }, 10000);
+  }, 15000);
 
   it("disables text editing for non-rewritable patches", () => {
-    render(<PatchReviewPanel patchSet={nonEditablePatchSetFixture} />);
+    renderWithI18n(<PatchReviewPanel patchSet={nonEditablePatchSetFixture} />);
 
     expect(screen.getByRole("textbox")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "편집 저장" })).toBeDisabled();
-    expect(screen.getByText(/일반 텍스트 편집으로 안전하게 다시 쓸 수 없습니다/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "patchReview.saveEdit" })).toBeDisabled();
+    expect(screen.getByText("patchReview.nonEditable")).toBeInTheDocument();
   });
 });

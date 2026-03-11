@@ -44,3 +44,12 @@ Thumbs.db
 *.local
 *.tmp
 *.temp
+*.err.log
+*.out.log
+*.har
+temp-*.js
+temp-*.ts
+temp-*.tsx
+test-results
+playwright-report
+.playwright-*.png

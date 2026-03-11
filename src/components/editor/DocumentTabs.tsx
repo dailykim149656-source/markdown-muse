@@ -2,6 +2,7 @@ import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
+import { getWorkspaceSyncLabel } from "@/lib/workspace/workspaceLabels";
 import type { DocumentData } from "@/types/document";
 
 interface DocumentTabsProps {
@@ -40,6 +41,7 @@ const DocumentTabs = ({ activeDocId, documents, onCloseDoc, onNewDoc, onSelectDo
         <div className="flex items-center gap-0.5">
           {documents.map((document) => {
             const isActive = document.id === activeDocId;
+            const workspaceSyncLabel = getWorkspaceSyncLabel(document.workspaceBinding);
 
             return (
               <button
@@ -54,6 +56,11 @@ const DocumentTabs = ({ activeDocId, documents, onCloseDoc, onNewDoc, onSelectDo
               >
                 <span className="truncate">{document.name || t("common.untitled")}</span>
                 <span className="text-[9px] text-muted-foreground/60">{modeLabel(document.mode)}</span>
+                {workspaceSyncLabel && (
+                  <span className="rounded-full border border-border/60 px-1 py-0.5 text-[8px] text-muted-foreground">
+                    {workspaceSyncLabel}
+                  </span>
+                )}
                 {documents.length > 1 && (
                   <span
                     className="ml-0.5 opacity-100 transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"

@@ -2,6 +2,7 @@ import { Suspense, lazy, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
 import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
+import { setPendingEditorFocusTarget } from "@/lib/editor/editorFocusTarget";
 
 const GraphExplorerSurface = lazy(() =>
   import("@/components/editor/GraphExplorerDialog").then((module) => ({
@@ -58,6 +59,7 @@ const WorkspaceGraph = () => {
   return (
     <Suspense fallback={null}>
       <GraphExplorerSurface
+        activeDocumentId={activeDocId}
         contextChain={contextChain}
         insights={knowledgeInsights}
         onOpenChange={(open) => {
@@ -65,8 +67,9 @@ const WorkspaceGraph = () => {
             navigate("/editor");
           }
         }}
-        onOpenDocument={(documentId) => {
-          selectDocument(documentId);
+        onOpenDocument={(target) => {
+          setPendingEditorFocusTarget(target);
+          selectDocument(target.documentId);
           navigate("/editor");
         }}
         onSelectedNodeChange={(nodeId) => {

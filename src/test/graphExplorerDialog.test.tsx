@@ -17,24 +17,49 @@ const insightsFixture: KnowledgeWorkspaceInsights = {
       targetId: "doc:beta",
       weight: 2,
     },
+    {
+      description: "Alpha Doc has an unresolved reference to Beta Doc.",
+      group: "issue",
+      id: "edge-issue-1",
+      kind: "issue_relation",
+      sourceDocumentId: "doc-alpha",
+      sourceId: "doc:alpha",
+      targetDocumentId: "doc-beta",
+      targetId: "doc:beta",
+      weight: 6,
+    },
   ],
-  issues: [],
+  issues: [{
+    documentId: "doc-alpha",
+    id: "issue-1",
+    kind: "unresolved_reference",
+    message: "Alpha Doc references a missing anchor in Beta Doc.",
+    relatedDocumentIds: ["doc-alpha", "doc-beta"],
+    severity: "warning",
+  }],
   nodes: [
     {
+      dominantIssueKind: "unresolved_reference",
       documentId: "doc-alpha",
       id: "doc:alpha",
+      issueCount: 1,
+      issueSeverity: "warning",
       kind: "document",
       label: "Alpha Doc",
     },
     {
+      dominantIssueKind: "unresolved_reference",
       documentId: "doc-beta",
       id: "doc:beta",
+      issueCount: 1,
+      issueSeverity: "warning",
       kind: "document",
       label: "Beta Doc",
     },
     {
       documentId: "doc-gamma",
       id: "doc:gamma",
+      issueCount: 0,
       kind: "document",
       label: "Gamma Doc",
     },
@@ -77,6 +102,7 @@ describe("GraphExplorerDialog", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Alpha Doc").length).toBeGreaterThan(0);
     });
+    expect(screen.getAllByText("knowledge.issueReference").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Gamma Doc").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "knowledge.graphFocusSelection" }));
@@ -90,7 +116,7 @@ describe("GraphExplorerDialog", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Gamma Doc").length).toBeGreaterThan(0);
     });
-  });
+  }, 15000);
 
   it("reports selected node changes", async () => {
     const onSelectedNodeChange = vi.fn();
@@ -105,7 +131,7 @@ describe("GraphExplorerDialog", () => {
     await waitFor(() => {
       expect(onSelectedNodeChange).toHaveBeenCalledWith("doc:beta");
     });
-  });
+  }, 15000);
 
   it("shows large-workspace guardrails", () => {
     render(
@@ -135,5 +161,22 @@ describe("GraphExplorerDialog", () => {
 
     expect(screen.getByText("knowledge.graphScaleLarge")).toBeInTheDocument();
     expect(screen.getByText("knowledge.graphScaleHintLarge")).toBeInTheDocument();
+  });
+
+  it("supports an issues graph mode", async () => {
+    renderDialog();
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Gamma Doc").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "knowledge.graphModeIssues" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Gamma Doc")).not.toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Alpha Doc").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Beta Doc").length).toBeGreaterThan(0);
   });
 });

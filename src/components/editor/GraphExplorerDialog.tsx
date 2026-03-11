@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import GraphCanvas from "@/components/editor/GraphCanvas";
 import {
   Dialog,
   DialogContent,
@@ -27,19 +28,28 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
 import type {
   KnowledgeGraphEdge,
+  KnowledgeGraphNavigationTarget,
   KnowledgeGraphNode,
   KnowledgeHealthIssue,
   KnowledgeWorkspaceInsights,
 } from "@/lib/knowledge/workspaceInsights";
 import {
   type EdgeFilter,
+  type GraphMode,
+  type IssueFilter,
   type NodeFilter,
+  applyGraphMode,
+  applyIssueFilter,
   edgeBadgeVariant,
   edgeFilterKey,
   edgeGroupOrder,
   edgeKindLabelKey,
+  graphModeKey,
+  issueFilterKey,
+  issueKindLabelKey,
   nodeFilterKey,
   nodeKindOrder,
+  toGraphNavigationTarget,
 } from "@/components/editor/workspaceGraphUtils";
 import { deriveSemanticOverlay } from "@/components/editor/workspaceSemanticOverlay";
 
@@ -68,10 +78,11 @@ interface GraphChainSuggestionRequest {
 }
 
 interface GraphExplorerDialogProps {
+  activeDocumentId?: string;
   contextChain?: GraphExplorerContextChain | null;
   insights: KnowledgeWorkspaceInsights;
   onOpenChange: (open: boolean) => void;
-  onOpenDocument: (documentId: string) => void;
+  onOpenDocument: (target: KnowledgeGraphNavigationTarget) => void;
   onSuggestChainUpdate?: (request: GraphChainSuggestionRequest) => void;
   onSelectedNodeChange?: (nodeId: string | null) => void;
   open: boolean;
@@ -81,6 +92,7 @@ interface GraphExplorerDialogProps {
 
 const sortNodes = (left: KnowledgeGraphNode, right: KnowledgeGraphNode) =>
   nodeKindOrder[left.kind] - nodeKindOrder[right.kind]
+  || Number(right.issueSeverity === "warning") - Number(left.issueSeverity === "warning")
   || (right.issueCount || 0) - (left.issueCount || 0)
   || left.label.localeCompare(right.label);
 
@@ -88,27 +100,6 @@ const sortEdges = (left: KnowledgeGraphEdge, right: KnowledgeGraphEdge) =>
   edgeGroupOrder[left.group] - edgeGroupOrder[right.group]
   || right.weight - left.weight
   || left.description.localeCompare(right.description);
-
-const issueLabelKey = (kind: KnowledgeHealthIssue["kind"]) => {
-  switch (kind) {
-    case "stale_index":
-      return "knowledge.issueStale";
-    case "unresolved_reference":
-      return "knowledge.issueReference";
-    case "duplicate_document":
-      return "knowledge.issueDuplicate";
-    case "image_missing_description":
-      return "knowledge.issueImage";
-    case "missing_section":
-      return "knowledge.issueMissingSection";
-    case "conflicting_procedure":
-      return "knowledge.issueConflictingProcedure";
-    case "outdated_source":
-      return "knowledge.issueOutdatedSource";
-    default:
-      return "knowledge.healthTitle";
-  }
-};
 
 const semanticKindLabelKey = (kind: "depends_on" | "conflicts_with") => {
   switch (kind) {
@@ -183,6 +174,7 @@ const getWorkspaceScale = (insights: KnowledgeWorkspaceInsights) => {
 };
 
 const GraphExplorerDialog = ({
+  activeDocumentId,
   contextChain = null,
   insights,
   onOpenChange,
@@ -194,6 +186,8 @@ const GraphExplorerDialog = ({
   variant = "dialog",
 }: GraphExplorerDialogProps) => {
   const { t } = useI18n();
+  const [graphMode, setGraphMode] = useState<GraphMode>("full");
+  const [issueFilter, setIssueFilter] = useState<IssueFilter>("all");
   const [nodeFilter, setNodeFilter] = useState<NodeFilter>("all");
   const [edgeFilter, setEdgeFilter] = useState<EdgeFilter>("all");
   const [query, setQuery] = useState("");
@@ -266,28 +260,46 @@ const GraphExplorerDialog = ({
     };
   }, [baseNodes, edgeFilter, insights.edges, nodeById, query]);
 
+  const issueFilteredGraph = useMemo(
+    () => applyIssueFilter({
+      graph: filteredGraph,
+      issues: insights.issues,
+      value: issueFilter,
+    }),
+    [filteredGraph, insights.issues, issueFilter],
+  );
+
+  const modeGraph = useMemo(
+    () => applyGraphMode({
+      activeDocumentId,
+      graph: issueFilteredGraph,
+      mode: graphMode,
+    }),
+    [activeDocumentId, graphMode, issueFilteredGraph],
+  );
+
   useEffect(() => {
-    if (filteredGraph.nodes.length === 0) {
+    if (modeGraph.nodes.length === 0) {
       if (selectedNodeId !== null) {
         setSelectedNodeId(null);
       }
       return;
     }
 
-    if (!selectedNodeId || !filteredGraph.nodes.some((node) => node.id === selectedNodeId)) {
-      setSelectedNodeId(filteredGraph.nodes[0].id);
+    if (!selectedNodeId || !modeGraph.nodes.some((node) => node.id === selectedNodeId)) {
+      setSelectedNodeId(modeGraph.nodes[0].id);
     }
-  }, [filteredGraph.nodes, selectedNodeId]);
+  }, [modeGraph.nodes, selectedNodeId]);
 
   useEffect(() => {
     if (!open || !externallySelectedNodeId) {
       return;
     }
 
-    if (filteredGraph.nodes.some((node) => node.id === externallySelectedNodeId)) {
+    if (modeGraph.nodes.some((node) => node.id === externallySelectedNodeId)) {
       setSelectedNodeId(externallySelectedNodeId);
     }
-  }, [externallySelectedNodeId, filteredGraph.nodes, open]);
+  }, [externallySelectedNodeId, modeGraph.nodes, open]);
 
   useEffect(() => {
     if (open) {
@@ -297,10 +309,10 @@ const GraphExplorerDialog = ({
 
   const displayedGraph = useMemo(() => {
     if (!focusMode || !selectedNodeId) {
-      return filteredGraph;
+      return modeGraph;
     }
 
-    const focusedEdges = filteredGraph.edges.filter((edge) =>
+    const focusedEdges = modeGraph.edges.filter((edge) =>
       edge.sourceId === selectedNodeId || edge.targetId === selectedNodeId);
     const visibleNodeIds = new Set<string>([selectedNodeId]);
 
@@ -311,12 +323,12 @@ const GraphExplorerDialog = ({
 
     return {
       edges: focusedEdges,
-      nodes: filteredGraph.nodes.filter((node) => visibleNodeIds.has(node.id)),
+      nodes: modeGraph.nodes.filter((node) => visibleNodeIds.has(node.id)),
     };
-  }, [filteredGraph, focusMode, selectedNodeId]);
+  }, [focusMode, modeGraph, selectedNodeId]);
 
   const selectedNode = displayedGraph.nodes.find((node) => node.id === selectedNodeId)
-    || filteredGraph.nodes.find((node) => node.id === selectedNodeId)
+    || modeGraph.nodes.find((node) => node.id === selectedNodeId)
     || null;
 
   const connectionSummary = useMemo(() => {
@@ -342,9 +354,10 @@ const GraphExplorerDialog = ({
   const selectedNodeIssues = useMemo(
     () => selectedNode
       ? insights.issues.filter((issue) =>
-        issue.documentId === selectedNode.documentId || issue.relatedDocumentIds.includes(selectedNode.documentId))
+        (issue.documentId === selectedNode.documentId || issue.relatedDocumentIds.includes(selectedNode.documentId))
+        && (issueFilter === "all" || issue.kind === issueFilter))
       : [],
-    [insights.issues, selectedNode],
+    [insights.issues, issueFilter, selectedNode],
   );
 
   const semanticOverlay = useMemo(
@@ -375,8 +388,8 @@ const GraphExplorerDialog = ({
   const isSourceChainNode = selectedNode && contextChain?.sourceNodeId === selectedNode.id;
   const isTargetChainNode = selectedNode && contextChain?.targetNodeId === selectedNode.id;
 
-  const handleOpenDocument = (documentId: string) => {
-    onOpenDocument(documentId);
+  const handleOpenDocument = (target: KnowledgeGraphNavigationTarget) => {
+    onOpenDocument(target);
     onOpenChange(false);
   };
 
@@ -387,6 +400,8 @@ const GraphExplorerDialog = ({
     setIssuesOnly(false);
     setSemanticOverlayEnabled(false);
     setFocusMode(false);
+    setGraphMode("full");
+    setIssueFilter("all");
   };
 
   const body = (
@@ -437,7 +452,7 @@ const GraphExplorerDialog = ({
                 <div className="mt-3 flex flex-wrap gap-2">
                   {sourceChainNode && (
                     <Button
-                      onClick={() => handleOpenDocument(sourceChainNode.documentId)}
+                      onClick={() => handleOpenDocument(toGraphNavigationTarget(sourceChainNode))}
                       size="sm"
                       type="button"
                       variant="outline"
@@ -447,7 +462,7 @@ const GraphExplorerDialog = ({
                   )}
                   {targetChainNode && (
                     <Button
-                      onClick={() => handleOpenDocument(targetChainNode.documentId)}
+                      onClick={() => handleOpenDocument(toGraphNavigationTarget(targetChainNode))}
                       size="sm"
                       type="button"
                       variant="outline"
@@ -489,12 +504,12 @@ const GraphExplorerDialog = ({
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     className="h-7 text-[11px]"
-                    onClick={() => setIssuesOnly(true)}
+                    onClick={() => setGraphMode("issues")}
                     size="sm"
                     type="button"
                     variant="outline"
                   >
-                    {t("knowledge.graphIssuesOnly")}
+                    {t("knowledge.graphModeIssues")}
                   </Button>
                   <Button
                     className="h-7 text-[11px]"
@@ -507,12 +522,12 @@ const GraphExplorerDialog = ({
                   </Button>
                   <Button
                     className="h-7 text-[11px]"
-                    onClick={() => selectedNode && setFocusMode(true)}
+                    onClick={() => setGraphMode("document")}
                     size="sm"
                     type="button"
                     variant="outline"
                   >
-                    {t("knowledge.graphFocusSelection")}
+                    {t("knowledge.graphModeDocument")}
                   </Button>
                 </div>
               </div>
@@ -560,8 +575,8 @@ const GraphExplorerDialog = ({
       </div>
 
       <div className="border-b px-6 py-4">
-        <div className="flex flex-col gap-3">
-          <div className="relative">
+          <div className="flex flex-col gap-3">
+            <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
@@ -569,9 +584,37 @@ const GraphExplorerDialog = ({
               placeholder={t("knowledge.graphSearchPlaceholder")}
               value={query}
             />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(["all", "document", "section", "image"] as NodeFilter[]).map((value) => (
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["full", "document", "issues"] as GraphMode[]).map((value) => (
+                <Button
+                  className="h-7 px-2 text-[11px]"
+                  key={`dialog-graph-mode-${value}`}
+                  onClick={() => setGraphMode(value)}
+                  size="sm"
+                  type="button"
+                  variant={graphMode === value ? "secondary" : "ghost"}
+                >
+                  {t(graphModeKey(value))}
+                </Button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["all", "unresolved_reference", "duplicate_document", "missing_section", "conflicting_procedure", "outdated_source", "stale_index", "image_missing_description"] as IssueFilter[]).map((value) => (
+                <Button
+                  className="h-7 px-2 text-[11px]"
+                  key={`dialog-issue-filter-${value}`}
+                  onClick={() => setIssueFilter(value)}
+                  size="sm"
+                  type="button"
+                  variant={issueFilter === value ? "secondary" : "ghost"}
+                >
+                  {t(issueFilterKey(value))}
+                </Button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(["all", "document", "section", "image"] as NodeFilter[]).map((value) => (
               <Button
                 className="h-7 px-2 text-[11px]"
                 key={`dialog-node-filter-${value}`}
@@ -624,7 +667,7 @@ const GraphExplorerDialog = ({
             </Button>
           </div>
           <div className="flex flex-wrap gap-2">
-            {(["all", "containment", "reference", "similarity"] as EdgeFilter[]).map((value) => (
+            {(["all", "containment", "reference", "similarity", "issue"] as EdgeFilter[]).map((value) => (
               <Button
                 className="h-7 px-2 text-[11px]"
                 key={`dialog-edge-filter-${value}`}
@@ -650,15 +693,23 @@ const GraphExplorerDialog = ({
             <div className="space-y-1 p-2">
               {displayedGraph.nodes.length === 0 ? (
                 <div className="rounded-md border border-dashed border-border px-3 py-4 text-xs text-muted-foreground">
-                  {focusMode ? t("knowledge.graphNoMatchingConnections") : t("knowledge.graphSearchEmpty")}
+                  {focusMode
+                    ? t("knowledge.graphNoMatchingConnections")
+                    : graphMode === "issues"
+                      ? t("knowledge.graphIssuesEmpty")
+                      : t("knowledge.graphSearchEmpty")}
                 </div>
               ) : (
                 displayedGraph.nodes.map((node) => (
                   <button
                     className={`w-full rounded-md border px-3 py-2 text-left transition-colors ${
                       selectedNodeId === node.id
-                        ? "border-border bg-accent/60 text-accent-foreground"
-                        : "border-transparent hover:border-border/60 hover:bg-accent/30"
+                        ? node.issueSeverity === "warning"
+                          ? "border-amber-500/50 bg-amber-500/10 text-foreground"
+                          : "border-border bg-accent/60 text-accent-foreground"
+                        : node.issueSeverity === "warning"
+                          ? "border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50 hover:bg-amber-500/10"
+                          : "border-transparent hover:border-border/60 hover:bg-accent/30"
                     }`}
                     key={node.id}
                     onClick={() => setSelectedNodeId(node.id)}
@@ -684,6 +735,14 @@ const GraphExplorerDialog = ({
                           {t("knowledge.issueCount", { count: node.issueCount || 0 })}
                         </Badge>
                       )}
+                      {node.dominantIssueKind && (
+                        <Badge
+                          className="h-5 rounded-full px-1.5 text-[10px]"
+                          variant={node.issueSeverity === "warning" ? "secondary" : "outline"}
+                        >
+                          {t(issueKindLabelKey(node.dominantIssueKind))}
+                        </Badge>
+                      )}
                     </div>
                   </button>
                 ))
@@ -703,7 +762,21 @@ const GraphExplorerDialog = ({
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="rounded-lg border border-border/60 bg-background p-4">
+                <GraphCanvas
+                  edges={displayedGraph.edges}
+                  nodes={displayedGraph.nodes}
+                  onOpenDocument={handleOpenDocument}
+                  onSelectNode={setSelectedNodeId}
+                  selectedNodeId={selectedNodeId}
+                />
+
+                <div
+                  className={`rounded-lg border bg-background p-4 ${
+                    selectedNode.issueSeverity === "warning"
+                      ? "border-amber-500/40 bg-amber-500/5"
+                      : "border-border/60"
+                  }`}
+                >
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0 space-y-2">
                       <div className="break-words text-lg font-semibold text-foreground">
@@ -722,6 +795,11 @@ const GraphExplorerDialog = ({
                             {t("knowledge.issueCount", { count: selectedNode.issueCount || 0 })}
                           </Badge>
                         )}
+                        {selectedNode.dominantIssueKind && (
+                          <Badge variant={selectedNode.issueSeverity === "warning" ? "secondary" : "outline"}>
+                            {t(issueKindLabelKey(selectedNode.dominantIssueKind))}
+                          </Badge>
+                        )}
                       </div>
                       {(isSourceChainNode || isTargetChainNode) && (
                         <p className="text-xs text-muted-foreground">
@@ -733,7 +811,7 @@ const GraphExplorerDialog = ({
                     </div>
                     <Button
                       className="shrink-0"
-                      onClick={() => handleOpenDocument(selectedNode.documentId)}
+                      onClick={() => handleOpenDocument(toGraphNavigationTarget(selectedNode))}
                       size="sm"
                       type="button"
                       variant="outline"
@@ -792,7 +870,7 @@ const GraphExplorerDialog = ({
                             ) : (
                               <Info className="h-3 w-3" />
                             )}
-                            {t(issueLabelKey(issue.kind))}
+                            {t(issueKindLabelKey(issue.kind))}
                           </div>
                           <p className="mt-2 text-xs leading-5 text-foreground/90">
                             {issue.message}
@@ -854,7 +932,7 @@ const GraphExplorerDialog = ({
                               {link.targetDocumentId && (
                                 <Button
                                   className="mt-2"
-                                  onClick={() => handleOpenDocument(link.targetDocumentId)}
+                                  onClick={() => handleOpenDocument({ documentId: link.targetDocumentId })}
                                   size="sm"
                                   type="button"
                                   variant="ghost"
@@ -899,7 +977,14 @@ const GraphExplorerDialog = ({
                   const neighbor = nodeById.get(isOutgoing ? edge.targetId : edge.sourceId);
 
                   return (
-                    <div className="rounded-md border border-border/60 bg-background p-3" key={edge.id}>
+                    <div
+                      className={`rounded-md border bg-background p-3 ${
+                        edge.group === "issue"
+                          ? "border-amber-500/40 bg-amber-500/5"
+                          : "border-border/60"
+                      }`}
+                      key={edge.id}
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 space-y-2">
                           <div className="flex flex-wrap gap-1">
@@ -922,7 +1007,11 @@ const GraphExplorerDialog = ({
                         </div>
                         <Button
                           className="shrink-0"
-                          onClick={() => handleOpenDocument((neighbor || selectedNode).documentId)}
+                          onClick={() => handleOpenDocument(
+                            neighbor
+                              ? toGraphNavigationTarget(neighbor)
+                              : toGraphNavigationTarget(selectedNode),
+                          )}
                           size="sm"
                           type="button"
                           variant="ghost"

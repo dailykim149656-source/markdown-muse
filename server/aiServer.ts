@@ -8,66 +8,60 @@ import {
   type SummaryRequest,
   type SummaryResponse,
 } from "../src/lib/ai/summaryContracts";
-import { generateStructuredJson, getGeminiModel, schemaType } from "./geminiClient";
+import { buildActionPrompt } from "./modules/agent/buildActionPrompt";
+import { actionResponseSchema, normalizeActionResponse } from "./modules/agent/actionResponse";
+import {
+  generateMultimodalStructuredJson,
+  getGeminiModel,
+  schemaType,
+} from "./modules/gemini/client";
+import { handleAuthRoute } from "./modules/auth/routes";
+import {
+  ALLOWED_ORIGINS,
+  HttpError,
+  json,
+  parseRequestBody,
+  writeHttpResponse,
+} from "./modules/http/http";
+import { handleWorkspaceRoute } from "./modules/workspace/routes";
 import type {
   GenerateTocRequest,
   GenerateTocResponse,
   GenerateSectionRequest,
   GenerateSectionResponse,
+  ProposeEditorActionRequest,
+  ProposeEditorActionResponse,
   SummarizeDocumentRequest,
   SummarizeDocumentResponse,
 } from "../src/types/aiAssistant";
 import type { Locale } from "../src/i18n/types";
 
-const PORT = Number(process.env.AI_SERVER_PORT || 8787);
-const ALLOWED_ORIGIN = process.env.AI_ALLOWED_ORIGIN || "http://localhost:8080";
+const PORT = Number(process.env.PORT || process.env.AI_SERVER_PORT || 8787);
 const MAX_CHUNKS = 8;
 
 const resolveAiLocale = (value: string | undefined): Locale => (value === "ko" ? "ko" : "en");
 
 const localePromptSuffix = (locale: Locale) => (locale === "ko" ? "Respond in Korean." : "Respond in English.");
 
-class HttpError extends Error {
-  statusCode: number;
-
-  constructor(statusCode: number, message: string) {
-    super(message);
-    this.name = "HttpError";
-    this.statusCode = statusCode;
-  }
-}
-
-const json = (responseBody: unknown, statusCode = 200) => ({
-  body: JSON.stringify(responseBody),
-  headers: {
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
-    "Content-Type": "application/json; charset=utf-8",
-  },
-  statusCode,
-});
-
-const parseRequestBody = async <TRequest>(request: import("node:http").IncomingMessage): Promise<TRequest> => {
-  const chunks: Buffer[] = [];
-
-  for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-
-  const rawBody = Buffer.concat(chunks).toString("utf8");
-
-  if (!rawBody) {
-    throw new HttpError(400, "Request body is required.");
-  }
-
-  return JSON.parse(rawBody) as TRequest;
-};
-
-const assertMarkdownDocument = (request: SummarizeDocumentRequest | GenerateSectionRequest | GenerateTocRequest) => {
+const assertMarkdownDocument = (
+  request: SummarizeDocumentRequest | GenerateSectionRequest | GenerateTocRequest | ProposeEditorActionRequest,
+) => {
   if (!request.document?.markdown?.trim()) {
     throw new HttpError(400, "Document markdown is required.");
   }
+};
+
+const getRequestImages = (
+  request: SummarizeDocumentRequest | GenerateSectionRequest | GenerateTocRequest | ProposeEditorActionRequest,
+) => {
+  if (!request.screenshot?.dataBase64?.trim() || !request.screenshot.mimeType?.trim()) {
+    return [];
+  }
+
+  return [{
+    dataBase64: request.screenshot.dataBase64.trim(),
+    mimeType: request.screenshot.mimeType.trim(),
+  }];
 };
 
 const normalizeMarkdownDocument = (request: SummarizeDocumentRequest | GenerateSectionRequest | GenerateTocRequest) =>
@@ -247,7 +241,8 @@ const handleSummarize = async (request: SummarizeDocumentRequest): Promise<Summa
   assertMarkdownDocument(request);
   const locale = resolveAiLocale(request.locale);
   const summaryRequest = buildGroundedSummaryRequest(request);
-  const summaryResponse = await generateStructuredJson<Omit<SummaryResponse, "requestId">>({
+  const summaryResponse = await generateMultimodalStructuredJson<Omit<SummaryResponse, "requestId">>({
+    images: getRequestImages(request),
     prompt: buildSummaryPrompt(summaryRequest, locale),
     responseSchema: summarizeResponseSchema,
   });
@@ -326,7 +321,8 @@ const handleGenerateSection = async (request: GenerateSectionRequest): Promise<G
   }
 
   const groundingChunks = buildSectionGrounding(request);
-  const result = await generateStructuredJson<GenerateSectionResponse>({
+  const result = await generateMultimodalStructuredJson<GenerateSectionResponse>({
+    images: getRequestImages(request),
     prompt: buildSectionPrompt(request, groundingChunks, resolveAiLocale(request.locale)),
     responseSchema: generateSectionResponseSchema,
   });
@@ -378,7 +374,8 @@ ${JSON.stringify(chunks, null, 2)}
 const handleGenerateToc = async (request: GenerateTocRequest): Promise<GenerateTocResponse> => {
   assertMarkdownDocument(request);
   const { chunks } = buildTocGrounding(request);
-  const result = await generateStructuredJson<GenerateTocResponse>({
+  const result = await generateMultimodalStructuredJson<GenerateTocResponse>({
+    images: getRequestImages(request),
     prompt: buildTocPrompt(request, chunks, resolveAiLocale(request.locale)),
     responseSchema: generateTocResponseSchema,
   });
@@ -389,12 +386,24 @@ const handleGenerateToc = async (request: GenerateTocRequest): Promise<GenerateT
     ...result,
     entries: result.entries
       .map((entry) => ({
-        level: entry.level <= 1 ? 1 : entry.level >= 3 ? 3 : 2,
+        level: (entry.level <= 1 ? 1 : entry.level >= 3 ? 3 : 2) as 1 | 2 | 3,
         title: entry.title.trim(),
       }))
       .filter((entry) => entry.title.length > 0),
-    maxDepth: result.maxDepth <= 1 ? 1 : result.maxDepth >= 3 ? 3 : 2,
+    maxDepth: (result.maxDepth <= 1 ? 1 : result.maxDepth >= 3 ? 3 : 2) as 1 | 2 | 3,
   };
+};
+
+const handleProposeAction = async (request: ProposeEditorActionRequest): Promise<ProposeEditorActionResponse> => {
+  assertMarkdownDocument(request);
+  const locale = resolveAiLocale(request.locale);
+  const response = await generateMultimodalStructuredJson<ProposeEditorActionResponse>({
+    images: getRequestImages(request),
+    prompt: buildActionPrompt(request, locale),
+    responseSchema: actionResponseSchema,
+  });
+
+  return normalizeActionResponse(response, request);
 };
 
 const server = createServer(async (request, response) => {
@@ -404,47 +413,59 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "OPTIONS") {
-      const result = json({ ok: true });
-      response.writeHead(result.statusCode, result.headers);
-      response.end(result.body);
+      writeHttpResponse(response, json({ ok: true }, 200, request.headers.origin));
+      return;
+    }
+
+    const authRouteResult = await handleAuthRoute(request);
+
+    if (authRouteResult) {
+      writeHttpResponse(response, authRouteResult);
+      return;
+    }
+
+    const workspaceRouteResult = await handleWorkspaceRoute(request);
+
+    if (workspaceRouteResult) {
+      writeHttpResponse(response, workspaceRouteResult);
       return;
     }
 
     if (request.method === "GET" && request.url === "/api/ai/health") {
-      const result = json({
+      writeHttpResponse(response, json({
+        allowedOrigins: ALLOWED_ORIGINS,
         configured: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
         model: getGeminiModel(),
         ok: true,
-      });
-      response.writeHead(result.statusCode, result.headers);
-      response.end(result.body);
+      }, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/summarize") {
       const payload = await parseRequestBody<SummarizeDocumentRequest>(request);
       const result = await handleSummarize(payload);
-      const output = json(result);
-      response.writeHead(output.statusCode, output.headers);
-      response.end(output.body);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/generate-section") {
       const payload = await parseRequestBody<GenerateSectionRequest>(request);
       const result = await handleGenerateSection(payload);
-      const output = json(result);
-      response.writeHead(output.statusCode, output.headers);
-      response.end(output.body);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/generate-toc") {
       const payload = await parseRequestBody<GenerateTocRequest>(request);
       const result = await handleGenerateToc(payload);
-      const output = json(result);
-      response.writeHead(output.statusCode, output.headers);
-      response.end(output.body);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/ai/propose-action") {
+      const payload = await parseRequestBody<ProposeEditorActionRequest>(request);
+      const result = await handleProposeAction(payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
@@ -452,9 +473,7 @@ const server = createServer(async (request, response) => {
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
     const message = error instanceof Error ? error.message : "Unexpected server error.";
-    const result = json({ error: message }, statusCode);
-    response.writeHead(result.statusCode, result.headers);
-    response.end(result.body);
+    writeHttpResponse(response, json({ error: message }, statusCode, request.headers.origin));
   }
 });
 

@@ -14,6 +14,10 @@ describe("buildDerivedDocumentIndex", () => {
         text: "System Overview",
       }),
     ]);
+    expect(index.images[0]).toEqual(expect.objectContaining({
+      nodeId: expect.any(String),
+      src: expect.any(String),
+    }));
     expect(index.labels["fig:system"]).toBeTruthy();
     expect(index.footnotes["fn-1"]).toBeTruthy();
   });

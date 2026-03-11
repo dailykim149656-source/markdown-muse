@@ -125,6 +125,9 @@ describe("workspaceInsights", () => {
       expect.objectContaining({ kind: "duplicate_document" }),
       expect.objectContaining({ kind: "unresolved_reference" }),
     ]));
+    expect(insights.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ group: "issue", kind: "issue_relation" }),
+    ]));
     expect(insights.summary.issueCount).toBeGreaterThanOrEqual(3);
     expect(insights.summary.staleIssueCount).toBe(1);
   });

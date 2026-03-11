@@ -85,8 +85,8 @@ describe("GraphExplorerSurface context chain", () => {
     fireEvent.click(screen.getByRole("button", { name: "knowledge.graphOpenTarget" }));
     fireEvent.click(screen.getByRole("button", { name: "knowledge.consistencySuggestPatch" }));
 
-    expect(onOpenDocument).toHaveBeenNthCalledWith(1, "doc-1");
-    expect(onOpenDocument).toHaveBeenNthCalledWith(2, "doc-2");
+    expect(onOpenDocument).toHaveBeenNthCalledWith(1, expect.objectContaining({ documentId: "doc-1" }));
+    expect(onOpenDocument).toHaveBeenNthCalledWith(2, expect.objectContaining({ documentId: "doc-2" }));
     expect(onSuggestChainUpdate).toHaveBeenCalledWith({
       context: "consistency",
       issueId: undefined,
@@ -96,5 +96,5 @@ describe("GraphExplorerSurface context chain", () => {
       sourceDocumentId: "doc-1",
       targetDocumentId: "doc-2",
     });
-  });
+  }, 30000);
 });

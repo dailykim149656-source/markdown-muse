@@ -16,6 +16,7 @@ interface UsePatchReviewOptions {
   activeDoc: DocumentData;
   activeEditor: TiptapEditor | null;
   bumpEditorKey: () => void;
+  onWorkspaceSync?: (document: DocumentData) => Promise<{ warnings?: string[] } | null | void> | { warnings?: string[] } | null | void;
   onVersionSnapshot?: (document: DocumentData, metadata?: DocumentVersionSnapshotMetadata) => Promise<unknown> | unknown;
   setLiveEditorHtml: (html: string) => void;
   updateActiveDoc: (patch: Partial<DocumentData>) => void;
@@ -41,6 +42,7 @@ export const usePatchReview = ({
   activeDoc,
   activeEditor,
   bumpEditorKey,
+  onWorkspaceSync,
   onVersionSnapshot,
   setLiveEditorHtml,
   updateActiveDoc,
@@ -151,12 +153,7 @@ export const usePatchReview = ({
 
       if (result.appliedPatchIds.length > 0) {
         const nextContent = serializeStructuredContent(result.value, activeDoc.mode);
-
-        updateActiveDoc({
-          content: nextContent,
-        });
-        bumpEditorKey();
-        void onVersionSnapshot?.({
+        const nextDocument: DocumentData = {
           ...activeDoc,
           content: nextContent,
           sourceSnapshots: {
@@ -165,10 +162,27 @@ export const usePatchReview = ({
           },
           tiptapJson: null,
           updatedAt: Date.now(),
-        }, {
+        };
+
+        updateActiveDoc({
+          content: nextContent,
+        });
+        bumpEditorKey();
+        void onVersionSnapshot?.(nextDocument, {
           patchCount: result.appliedPatchIds.length,
           patchSetTitle: patchSet.title,
         });
+
+        try {
+          const syncResult = await onWorkspaceSync?.(nextDocument);
+
+          if (syncResult?.warnings?.length) {
+            toast.warning(syncResult.warnings[0]);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";
+          toast.warning(message);
+        }
       }
 
       if (result.warnings.length > 0) {
@@ -226,11 +240,7 @@ export const usePatchReview = ({
       const nextMarkdown = renderAstToMarkdown(result.document);
       const nextContent = getContentForMode(activeDoc.mode, nextHtml, nextMarkdown, nextLatex);
       const nextUpdatedAt = Date.now();
-
-      updateActiveDoc({ content: nextContent });
-      setLiveEditorHtml(nextHtml);
-      bumpEditorKey();
-      void onVersionSnapshot?.({
+      const nextDocument: DocumentData = {
         ...activeDoc,
         ast: result.document,
         content: nextContent,
@@ -243,10 +253,26 @@ export const usePatchReview = ({
         },
         tiptapJson: null,
         updatedAt: nextUpdatedAt,
-      }, {
+      };
+
+      updateActiveDoc({ content: nextContent });
+      setLiveEditorHtml(nextHtml);
+      bumpEditorKey();
+      void onVersionSnapshot?.(nextDocument, {
         patchCount: result.appliedPatchIds.length,
         patchSetTitle: patchSet.title,
       });
+
+      try {
+        const syncResult = await onWorkspaceSync?.(nextDocument);
+
+        if (syncResult?.warnings?.length) {
+          toast.warning(syncResult.warnings[0]);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";
+        toast.warning(message);
+      }
     }
 
     if (result.warnings.length > 0) {
@@ -264,7 +290,7 @@ export const usePatchReview = ({
     setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
     setPatchReviewOpen(false);
     toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
-  }, [activeDoc, activeDoc.content, activeDoc.id, activeDoc.mode, activeEditor, bumpEditorKey, onVersionSnapshot, patchSet, setLiveEditorHtml, t, updateActiveDoc]);
+  }, [activeDoc, activeDoc.content, activeDoc.id, activeDoc.mode, activeEditor, bumpEditorKey, onVersionSnapshot, onWorkspaceSync, patchSet, setLiveEditorHtml, t, updateActiveDoc]);
 
   return {
     acceptedPatchCount,

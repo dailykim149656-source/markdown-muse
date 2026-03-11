@@ -9,6 +9,7 @@ import {
   tiptapDocumentHasDocumentContent,
 } from "./editorAdvancedContent";
 import { useEditorExtensions } from "./editorConfig";
+import { applyEditorSeed } from "./editorSeedSync";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
 
@@ -51,6 +52,7 @@ const HtmlEditor = ({
   const syncingFromSource = useRef(false);
   const syncingFromWysiwyg = useRef(false);
   const sourceSyncFrame = useRef<number | null>(null);
+  const seedSignatureRef = useRef<string | null>(null);
   const sourcePanelRef = useRef<HTMLDivElement | null>(null);
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const { editorPropsDefault, coreExtensions, extensions, extensionsReady } = useEditorExtensions(
@@ -97,22 +99,23 @@ const HtmlEditor = ({
   });
 
   useEffect(() => {
+    const nextHtml = initialContent || "";
+
+    setHtmlSource((current) => current === nextHtml ? current : nextHtml);
+  }, [initialContent]);
+
+  useEffect(() => {
     if (!editor || shouldHoldEditor) {
       return;
     }
 
-    const nextContent = initialTiptapDoc || initialHtml;
-    const hasSeedContent = typeof nextContent === "string"
-      ? nextContent.trim().length > 0
-      : Boolean(nextContent);
-
-    if (!hasSeedContent) {
-      return;
-    }
-
-    editor.commands.setContent(nextContent, { emitUpdate: false });
-    onHtmlChange?.(editor.getHTML());
-    onTiptapChange?.(editor.getJSON());
+    applyEditorSeed({
+      editor,
+      nextContent: initialTiptapDoc || initialHtml,
+      onHtmlChange,
+      onTiptapChange,
+      seedSignatureRef,
+    });
   }, [editor, initialHtml, initialTiptapDoc, onHtmlChange, onTiptapChange, shouldHoldEditor]);
 
   const applySourceTabIndent = useCallback((ta: HTMLTextAreaElement, shiftKey: boolean) => {

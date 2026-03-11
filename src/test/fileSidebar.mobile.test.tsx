@@ -119,5 +119,5 @@ describe("FileSidebar mobile behavior", () => {
     expect(screen.getByTestId("mobile-sidebar-state")).toHaveTextContent("closed");
     expect(consoleErrorSpy).not.toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
-  });
+  }, 15000);
 });

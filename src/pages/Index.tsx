@@ -14,10 +14,14 @@ import type { DocumentTemplate } from "@/components/editor/TemplateDialog";
 import type { PlainTextFindReplaceAdapter } from "@/components/editor/findReplaceTypes";
 import type { KnowledgeSuggestionContext, KnowledgeSuggestionQueueItem } from "@/components/editor/sidebarFeatureTypes";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
-import { MAX_IMPORT_FILE_SIZE_BYTES, useDocumentIO } from "@/hooks/useDocumentIO";
+import { MAX_IMPORT_FILE_SIZE_BYTES, resolveImportedDocumentOptions, useDocumentIO } from "@/hooks/useDocumentIO";
 import { useEditorUiState } from "@/hooks/useEditorUiState";
 import { useFormatConversion } from "@/hooks/useFormatConversion";
 import { usePatchReview } from "@/hooks/usePatchReview";
+import { useWorkspaceFiles } from "@/hooks/useWorkspaceFiles";
+import { useWorkspaceAuth } from "@/hooks/useWorkspaceAuth";
+import { useWorkspaceChanges } from "@/hooks/useWorkspaceChanges";
+import { useWorkspaceSync } from "@/hooks/useWorkspaceSync";
 import { useI18n } from "@/i18n/useI18n";
 import { useVersionHistory } from "@/hooks/useVersionHistory";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
@@ -28,6 +32,15 @@ import {
   writeAdvancedBlocksPreference,
   writeDocumentToolsPreference,
 } from "@/lib/editor/webEditorPreferences";
+import {
+  clearPendingEditorFocusTarget,
+  getPendingEditorFocusTarget,
+} from "@/lib/editor/editorFocusTarget";
+import { scrollToEditorFocusTarget } from "@/lib/editor/editorFocusNavigation";
+import {
+  getCrossFamilyModes,
+  getSameFamilyModes,
+} from "@/lib/editor/modeFamilies";
 import { DOC_SHARE_HASH_PREFIX } from "@/lib/share/shareConstants";
 import type { EditorMode } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
@@ -38,6 +51,8 @@ const LatexEditor = lazy(() => import("@/components/editor/LatexEditor"));
 const HtmlEditor = lazy(() => import("@/components/editor/HtmlEditor"));
 const JsonYamlEditor = lazy(() => import("@/components/editor/JsonYamlEditor"));
 const AiAssistantRuntime = lazy(() => import("@/components/editor/AiAssistantRuntime"));
+const WorkspaceConnectionDialog = lazy(() => import("@/components/editor/WorkspaceConnectionDialog"));
+const WorkspaceImportDialog = lazy(() => import("@/components/editor/WorkspaceImportDialog"));
 
 const EditorFallback = () => (
   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -262,6 +277,8 @@ const Index = () => {
   const [knowledgeEnabled, setKnowledgeEnabled] = useState(() => featureFlags.knowledgeOnInitialMount);
   const [structuredModesVisible, setStructuredModesVisible] = useState(() => featureFlags.structuredModesVisibleOnInitialMount);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [workspaceConnectionOpen, setWorkspaceConnectionOpen] = useState(false);
+  const [workspaceImportOpen, setWorkspaceImportOpen] = useState(false);
   const {
     activeDoc,
     activeDocId,
@@ -276,6 +293,7 @@ const Index = () => {
     hasRestoredDocuments,
     renameDocument,
     selectDocument,
+    updateDocument,
     updateActiveDoc,
   } = useDocumentManager();
   const lastCapturedAutoSaveAtRef = useRef<number | null>(null);
@@ -331,6 +349,11 @@ const Index = () => {
     updateActiveDoc,
   });
   const {
+    syncDocument,
+  } = useWorkspaceSync({
+    updateActiveDoc,
+  });
+  const {
     acceptedPatchCount,
     applyReviewedPatches,
     clearPatchSet,
@@ -347,6 +370,7 @@ const Index = () => {
     activeDoc,
     activeEditor,
     bumpEditorKey,
+    onWorkspaceSync: syncDocument,
     onVersionSnapshot: (document, metadata) => createVersionSnapshot(document, "patch_apply", metadata),
     setLiveEditorHtml,
     updateActiveDoc,
@@ -384,13 +408,58 @@ const Index = () => {
     renderableLatexDocument: currentRenderableLatexDocument,
     renderableMarkdown: currentRenderableMarkdown,
   });
-  const showStructuredModes = !isWebProfile
-    || structuredModesVisible
-    || activeDoc.mode === "json"
-    || activeDoc.mode === "yaml";
-  const availableModes = showStructuredModes
-    ? ["markdown", "latex", "html", "json", "yaml"] as EditorMode[]
-    : ["markdown", "latex", "html"] as EditorMode[];
+  const {
+    connected: workspaceConnected,
+    disconnect: disconnectWorkspace,
+    error: workspaceAuthError,
+    isConnecting: workspaceConnecting,
+    isDisconnecting: workspaceDisconnecting,
+    isLoading: workspaceAuthLoading,
+    openGoogleConnect,
+    refetch: refetchWorkspaceAuth,
+    session: workspaceSession,
+  } = useWorkspaceAuth();
+  const {
+    error: workspaceFilesError,
+    files: workspaceFiles,
+    importFile: importWorkspaceFile,
+    isImporting: workspaceImporting,
+    isLoading: workspaceFilesLoading,
+    isRefreshing: workspaceFilesRefreshing,
+    query: workspaceFileQuery,
+    refetch: refetchWorkspaceFiles,
+    setQuery: setWorkspaceFileQuery,
+  } = useWorkspaceFiles({
+    enabled: workspaceImportOpen && workspaceConnected,
+  });
+  const {
+    error: workspaceChangesError,
+    isRefreshingDocument: workspaceRefreshingDocument,
+    isRescanning: workspaceChangesRescanning,
+    lastRescannedAt: workspaceLastRescannedAt,
+    refreshDocument: refreshWorkspaceDocument,
+    remoteChangedSources,
+    rescan: rescanWorkspaceChanges,
+  } = useWorkspaceChanges({
+    documents,
+    enabled: workspaceConnected,
+    onImportRefresh: (importedDocument) => {
+      createDocument(resolveImportedDocumentOptions({
+        activeDocId,
+        documents,
+        importedDocument,
+      }));
+    },
+    updateDocument,
+  });
+  const availableModes = useMemo(
+    () => getSameFamilyModes(activeDoc.mode),
+    [activeDoc.mode],
+  );
+  const crossFamilyModes = useMemo(
+    () => getCrossFamilyModes(activeDoc.mode),
+    [activeDoc.mode],
+  );
   const documentFeaturesEnabled = !isWebProfile || documentToolsPreference;
   const advancedBlocksEnabled = !isWebProfile || advancedBlocksPreference;
   const canEnableDocumentFeatures = isWebProfile && activeDoc.mode !== "json" && activeDoc.mode !== "yaml";
@@ -463,7 +532,11 @@ const Index = () => {
         }));
       }
 
-      if (intent.openPatchReviewAfter) {
+      if (
+        (intent.openPatchReviewAfter || result?.actionProposal?.action === "open_patch_review")
+        && result?.patchSet
+        && (result.patchCount || 0) > 0
+      ) {
         openPatchReview();
       }
     } catch (error) {
@@ -661,6 +734,14 @@ const Index = () => {
 
     handleOpenSuggestionQueueItem(nextReadyEntry.id);
   }, [handleOpenSuggestionQueueItem, suggestionQueue]);
+  const clearWorkspaceAuthParams = useCallback(() => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("workspaceAuth");
+      next.delete("workspaceAuthError");
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const clearKnowledgeActionParams = useCallback(() => {
     setSearchParams((current) => {
@@ -680,6 +761,81 @@ const Index = () => {
       return next;
     }, { replace: true });
   }, [setSearchParams]);
+  const workspaceErrorMessage = workspaceAuthError instanceof Error ? workspaceAuthError.message : null;
+  const workspaceImportErrorMessage = workspaceFilesError instanceof Error ? workspaceFilesError.message : null;
+  const workspaceChangesErrorMessage = workspaceChangesError instanceof Error ? workspaceChangesError.message : null;
+  const handleOpenWorkspaceConnection = useCallback(() => {
+    setWorkspaceConnectionOpen(true);
+  }, []);
+  const handleOpenWorkspaceImport = useCallback(() => {
+    if (!workspaceConnected) {
+      setWorkspaceConnectionOpen(true);
+      return;
+    }
+
+    setWorkspaceImportOpen(true);
+  }, [workspaceConnected]);
+  const handleConnectWorkspace = useCallback(() => {
+    const returnTo = typeof window !== "undefined"
+      ? `${window.location.pathname}${window.location.search}`
+      : "/editor";
+
+    void openGoogleConnect(returnTo).catch((error) => {
+      const message = error instanceof Error ? error.message : "Failed to start Google Workspace auth.";
+      toast.error(message);
+    });
+  }, [openGoogleConnect]);
+  const handleDisconnectWorkspace = useCallback(() => {
+    void disconnectWorkspace()
+      .then(() => {
+        toast.success("Google Workspace disconnected.");
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to disconnect Google Workspace.";
+        toast.error(message);
+      });
+  }, [disconnectWorkspace]);
+  const handleImportWorkspaceFile = useCallback((fileId: string) => {
+    void importWorkspaceFile(fileId)
+      .then((result) => {
+        createDocument(resolveImportedDocumentOptions({
+          activeDocId,
+          documents,
+          importedDocument: result.document,
+        }));
+        setWorkspaceImportOpen(false);
+        toast.success(`Imported "${result.document.name || "Google document"}".`);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to import the selected Google document.";
+        toast.error(message);
+      });
+  }, [activeDocId, createDocument, documents, importWorkspaceFile]);
+  const handleRescanWorkspaceChanges = useCallback(() => {
+    void rescanWorkspaceChanges()
+      .then((result) => {
+        if (result.changes.length === 0) {
+          toast.info("No remote Google Docs changes were detected.");
+          return;
+        }
+
+        toast.warning(`Detected ${result.changes.length} changed Google document${result.changes.length === 1 ? "" : "s"}.`);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to rescan Google Workspace sources.";
+        toast.error(message);
+      });
+  }, [rescanWorkspaceChanges]);
+  const handleRefreshWorkspaceDocument = useCallback((documentId: string) => {
+    void refreshWorkspaceDocument(documentId)
+      .then(() => {
+        toast.success("Refreshed the Google document.");
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to refresh the Google document.";
+        toast.error(message);
+      });
+  }, [refreshWorkspaceDocument]);
 
   useEffect(() => {
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
@@ -698,6 +854,45 @@ const Index = () => {
     void runAiIntent(pendingAiIntent);
     setPendingAiIntent(null);
   }, [aiRuntimeState, pendingAiIntent, runAiIntent]);
+
+  useEffect(() => {
+    const authResult = searchParams.get("workspaceAuth");
+    const authError = searchParams.get("workspaceAuthError");
+
+    if (!authResult && !authError) {
+      return;
+    }
+
+    if (authResult === "connected") {
+      toast.success("Google Workspace connected.");
+      void refetchWorkspaceAuth();
+    } else if (authError) {
+      toast.error(authError);
+      setWorkspaceConnectionOpen(true);
+    }
+
+    clearWorkspaceAuthParams();
+  }, [clearWorkspaceAuthParams, refetchWorkspaceAuth, searchParams]);
+
+  useEffect(() => {
+    if (!workspaceConnected && workspaceImportOpen) {
+      setWorkspaceImportOpen(false);
+    }
+  }, [workspaceConnected, workspaceImportOpen]);
+
+  useEffect(() => {
+    if (!workspaceImportOpen && workspaceFileQuery) {
+      setWorkspaceFileQuery("");
+    }
+  }, [setWorkspaceFileQuery, workspaceFileQuery, workspaceImportOpen]);
+
+  useEffect(() => {
+    if (!workspaceChangesErrorMessage) {
+      return;
+    }
+
+    toast.error(workspaceChangesErrorMessage);
+  }, [workspaceChangesErrorMessage]);
 
   useEffect(() => {
     if (searchParams.get("knowledgeAction") !== "suggest-updates") {
@@ -920,6 +1115,41 @@ const Index = () => {
     updateActiveDoc,
   ]);
 
+  useEffect(() => {
+    const target = getPendingEditorFocusTarget();
+
+    if (!target || target.documentId !== activeDoc.id) {
+      return;
+    }
+
+    if (target.kind !== "section" && target.kind !== "image") {
+      clearPendingEditorFocusTarget();
+      return;
+    }
+
+    let attempts = 0;
+    let timer: number | null = null;
+
+    const tryScroll = () => {
+      attempts += 1;
+
+      if (scrollToEditorFocusTarget(target, activeDoc.ast) || attempts >= 12) {
+        clearPendingEditorFocusTarget();
+        return;
+      }
+
+      timer = window.setTimeout(tryScroll, 160);
+    };
+
+    timer = window.setTimeout(tryScroll, 80);
+
+    return () => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+    };
+  }, [activeDoc.ast, activeDoc.id, activeDoc.mode, activeEditor, currentRenderableHtml, editorKey]);
+
   const renderEditor = useCallback(() => {
     if (activeDoc.mode === "markdown") {
       return (
@@ -1010,9 +1240,19 @@ const Index = () => {
       onExtractProcedure: aiRuntimeState.extractProcedureFromActiveDocument,
       onGenerateSection: aiRuntimeState.generateSectionPatch,
       onGenerateToc: aiRuntimeState.generateTocSuggestion,
-      onLoadTocPatch: aiRuntimeState.loadTocPatch,
+      onLoadTocPatch: async (maxDepthOverride?: 1 | 2 | 3) => {
+        const patchSet = await aiRuntimeState.loadTocPatch(maxDepthOverride);
+
+        if (patchSet) {
+          openPatchReview();
+        }
+
+        return patchSet;
+      },
       onOpenChange: aiRuntimeState.setAssistantOpen,
-      onSuggestUpdates: aiRuntimeState.suggestUpdatesFromDocument,
+      onSuggestUpdates: async (targetDocumentId: string) => {
+        await runAiIntent({ targetDocumentId, type: "suggest-updates" });
+      },
       onSummarize: aiRuntimeState.summarizeActiveDocument,
       open: aiRuntimeState.assistantOpen,
       procedureResult: aiRuntimeState.procedureResult,
@@ -1082,9 +1322,13 @@ const Index = () => {
             size: `${Math.round(MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024))}MB`,
           }),
           availableModes,
+          crossFamilyModes,
           mode: activeDoc.mode,
+          onCreateDocument: handleNewDoc,
           onOpenAiAssistant: () => requestAiIntent({ type: "open" }),
           onOpenStructuredModes: enableStructuredModes,
+          onOpenWorkspaceConnection: handleOpenWorkspaceConnection,
+          onOpenWorkspaceImport: handleOpenWorkspaceImport,
           onOpenShare: () => {
             void prepareShareLink().finally(() => setShareDialogOpen(true));
           },
@@ -1115,8 +1359,12 @@ const Index = () => {
           onTogglePreview: togglePreview,
           onToggleTheme: toggleTheme,
           previewOpen,
-          showStructuredModeAction: isWebProfile && !showStructuredModes,
+          showStructuredModeAction: false,
           textStats,
+          workspaceBinding: activeDoc.workspaceBinding,
+          workspaceConnected,
+          workspaceConnectionPending: workspaceConnecting || workspaceDisconnecting || workspaceAuthLoading,
+          workspaceImportPending: workspaceImporting || workspaceFilesLoading,
         }}
         onFileChange={handleFileChange}
         patchReviewDialogProps={{
@@ -1186,6 +1434,8 @@ const Index = () => {
               },
               onOpenNextSuggestionQueueItem: handleOpenNextSuggestionQueueItem,
               onOpenPatchReview: openPatchReview,
+              onRefreshWorkspaceDocument: handleRefreshWorkspaceDocument,
+              onRescanWorkspaceSources: handleRescanWorkspaceChanges,
               onOpenSuggestionQueueItem: handleOpenSuggestionQueueItem,
               onRetryFailedSuggestionQueueItems: handleRetryFailedSuggestionQueueItems,
               onRetrySuggestionQueueItem: handleRetrySuggestionQueueItem,
@@ -1205,6 +1455,9 @@ const Index = () => {
               },
               patchCount,
               suggestionQueue: suggestionQueueItems,
+              workspaceChangedSources: remoteChangedSources,
+              workspaceLastRescannedAt,
+              workspaceRescanning: workspaceChangesRescanning || workspaceRefreshingDocument,
             },
             onDeleteDoc: handleDeleteDoc,
             onActivateHistory: () => setHistoryEnabled(true),
@@ -1214,7 +1467,7 @@ const Index = () => {
             onOpenTemplates: openTemplateDialog,
             onRenameDoc: renameDocument,
             onSelectDoc: selectDocument,
-            showStructuredCreateAction: isWebProfile && !showStructuredModes,
+            showStructuredCreateAction: isWebProfile && !structuredModesVisible,
           }}
         tabsProps={{
           activeDocId,
@@ -1229,6 +1482,39 @@ const Index = () => {
           open: templateOpen,
         }}
       />
+      {workspaceConnectionOpen && (
+        <Suspense fallback={null}>
+          <WorkspaceConnectionDialog
+            errorMessage={workspaceErrorMessage}
+            isConnecting={workspaceConnecting}
+            isDisconnecting={workspaceDisconnecting}
+            onConnect={handleConnectWorkspace}
+            onDisconnect={handleDisconnectWorkspace}
+            onOpenChange={setWorkspaceConnectionOpen}
+            open={workspaceConnectionOpen}
+            session={workspaceSession}
+          />
+        </Suspense>
+      )}
+      {workspaceImportOpen && (
+        <Suspense fallback={null}>
+          <WorkspaceImportDialog
+            errorMessage={workspaceImportErrorMessage}
+            files={workspaceFiles}
+            isImporting={workspaceImporting}
+            isLoading={workspaceFilesLoading}
+            isRefreshing={workspaceFilesRefreshing}
+            onImport={handleImportWorkspaceFile}
+            onOpenChange={setWorkspaceImportOpen}
+            onRefresh={() => {
+              void refetchWorkspaceFiles();
+            }}
+            onSearchChange={setWorkspaceFileQuery}
+            open={workspaceImportOpen}
+            query={workspaceFileQuery}
+          />
+        </Suspense>
+      )}
     </>
   );
 };

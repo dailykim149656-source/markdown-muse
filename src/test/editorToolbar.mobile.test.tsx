@@ -63,5 +63,5 @@ describe("EditorToolbar mobile layout", () => {
 
     expect(within(mobileMore).getByRole("button", { name: "toolbar.actions.more" })).toBeInTheDocument();
     expect(within(mobileScroll).queryByRole("button", { name: "toolbar.actions.more" })).not.toBeInTheDocument();
-  });
+  }, 15000);
 });

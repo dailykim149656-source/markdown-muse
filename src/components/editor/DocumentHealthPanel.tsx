@@ -66,6 +66,26 @@ const issueNextStepKey = (kind: KnowledgeHealthIssue["kind"]) => {
   }
 };
 
+const HEALTH_CARD_STYLE: Record<KnowledgeHealthIssue["kind"], string> = {
+  conflicting_procedure: "border-destructive/35 bg-destructive/5",
+  duplicate_document: "border-amber-500/35 bg-amber-500/5",
+  image_missing_description: "border-border/60 bg-muted/30",
+  missing_section: "border-amber-500/40 bg-amber-500/5",
+  outdated_source: "border-amber-500/35 bg-amber-500/5",
+  stale_index: "border-amber-500/35 bg-amber-500/5",
+  unresolved_reference: "border-amber-500/35 bg-amber-500/5",
+};
+
+const HEALTH_PILL_STYLE: Record<KnowledgeHealthIssue["kind"], string> = {
+  conflicting_procedure: "border-destructive/30 bg-destructive/10 text-destructive",
+  duplicate_document: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  image_missing_description: "border-border/60 bg-background text-muted-foreground",
+  missing_section: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  outdated_source: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  stale_index: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  unresolved_reference: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+};
+
 const DocumentHealthPanel = ({ issues }: DocumentHealthPanelProps) => {
   const { t } = useI18n();
 
@@ -97,11 +117,7 @@ const DocumentHealthPanel = ({ issues }: DocumentHealthPanelProps) => {
 
             return (
               <div
-                className={`rounded-md border px-3 py-2 ${
-                  issue.severity === "warning"
-                    ? "border-amber-500/40 bg-amber-500/5"
-                    : "border-border/60 bg-muted/30"
-                }`}
+                className={`rounded-md border px-3 py-2 ${HEALTH_CARD_STYLE[issue.kind]}`}
                 key={issue.id}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -112,6 +128,15 @@ const DocumentHealthPanel = ({ issues }: DocumentHealthPanelProps) => {
                       <Info className="h-3 w-3" />
                     )}
                     {t(issueLabelKey(issue.kind))}
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${HEALTH_PILL_STYLE[issue.kind]}`}>
+                      {issue.kind === "conflicting_procedure"
+                        ? "Conflict"
+                        : issue.kind === "missing_section"
+                          ? "Gap"
+                          : issue.severity === "warning"
+                            ? "Watch"
+                            : "Info"}
+                    </span>
                   </div>
                   <span className="text-[11px] text-muted-foreground">
                     {relatedCount > 0

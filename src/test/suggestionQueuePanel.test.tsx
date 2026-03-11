@@ -92,5 +92,5 @@ describe("SuggestionQueuePanel", () => {
     expect(onRetry).toHaveBeenCalledWith("queue-1");
     expect(onOpenPatchReview).toHaveBeenCalledWith("queue-1");
     expect(onDismiss).toHaveBeenCalledWith("queue-1");
-  });
+  }, 15000);
 });

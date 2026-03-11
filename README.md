@@ -1,73 +1,83 @@
-# Markdown Muse
+# Docsy
 
-Markdown Muse is a local-first technical document editor built around `.docsy`, `Document AST`, and review-first AI patch workflows.
+Docsy is a hackathon-ready AI document workflow agent built on top of the Markdown Muse editor.
 
-Core characteristics:
+It focuses on one core interaction:
 
-- Markdown, LaTeX, HTML, JSON, YAML, AsciiDoc, and RST support
-- rich-text editing and structured editing in one product
-- AI output flows through `Patch Review` instead of mutating documents directly
-- local knowledge indexing, graph inspection, and cross-document maintenance
-- landing page and `/guide` user documentation
+1. a user edits a technical document
+2. Gemini analyzes document context
+3. the system proposes a structured action or patch
+4. the user reviews the change before applying it
 
-![Markdown Muse preview](src/assets/editor-preview.png)
+![Docsy editor preview](src/assets/editor-preview.png)
 
 ## Language
 
 - [Korean README](README.ko.md)
 - [English README](README.en.md)
 
-## Quick Summary
+## Why this project exists
 
-- Multi-document editing with tabs and a file sidebar
-- Rich-text editing for Markdown, LaTeX, and HTML
-- Structured editing for JSON and YAML
-- `.docsy` save and restore
-- `Document AST` serialization, rendering, validation, and patch application
-- Review-first AI workflows for:
-  - summaries
-  - section generation
-  - comparison
-  - update suggestions
-  - procedure extraction
-  - TOC suggestions
-- Local knowledge indexing and retrieval
-- Version history with snapshot restore
-- Share link and QR document sharing
-- Clipboard export
-- Responsive editor shell for desktop, tablet, and mobile
+Technical documentation usually breaks in the same places:
 
-## Build Profiles
+- procedures drift across documents
+- updates are applied to one file but not related files
+- AI can draft text, but it rarely returns reviewable actions
 
-Markdown Muse currently ships with two runtime profiles.
+Docsy is designed to show a different pattern:
 
-- `desktop`
-  The full editing surface is available by default, including document tools, structured editing, AI, history, knowledge panels, and advanced blocks.
-- `web`
-  The default editor starts lighter. Heavier features are activated only when needed.
+- document-aware editing
+- review-first AI patch workflow
+- Gemini-powered structured output
+- a path to multimodal reasoning with editor screenshots
 
-Key commands:
+## Hackathon focus
 
-- `npm run build`
-  Desktop-oriented production build
-- `npm run build:web`
-  Web-oriented production build
+This repository is being prepared for a Gemini hackathon submission.
 
-Example:
+Current submission priorities:
 
-```bash
-# desktop profile
-npm run build
+- GenAI SDK based Gemini integration
+- Cloud Run deployment for the AI service
+- multimodal request path for editor screenshot + document context
+- action-oriented JSON response from Gemini
+- one real UI action wired from AI output
+- review-first patch workflow demo
 
-# web profile
-npm run build:web
+## Demo flow
+
+1. Open multiple technical documents in the editor.
+2. Update a procedure in one document.
+3. Send document context and editor state to the AI service.
+4. Gemini returns a structured action or patch proposal.
+5. The app opens the patch review flow.
+6. The user accepts or rejects the change.
+
+## Repository structure
+
+```text
+src/       frontend editor, patch review UI, workspace panels
+server/    Gemini-backed AI service for structured responses
+docs/      engineering notes, plans, and architecture docs
+PRD/       product requirement documents for the hackathon direction
+public/    static web assets
 ```
 
-## Getting Started
+## Core capabilities
+
+- multi-document editor with tabs and workspace sidebar
+- Markdown, LaTeX, HTML, JSON, and YAML editing
+- document AST generation and structured patch handling
+- AI-assisted summaries, section generation, TOC suggestions, and update proposals
+- patch review dialog instead of silent document mutation
+- local knowledge indexing and related document workflows
+- version history and share/export flows
+
+## Local development
 
 ### Requirements
 
-- Node.js 18 or newer
+- Node.js 18+
 - npm
 
 ### Install
@@ -76,27 +86,27 @@ npm run build:web
 npm install
 ```
 
-### Run The Frontend
+### Start the web app
 
 ```bash
 npm run dev
 ```
 
-### Run The AI Server
+### Start the AI service
 
-1. Create a local environment file
+Create a local env file:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Windows PowerShell:
+PowerShell:
 
 ```powershell
 Copy-Item .env.example .env.local
 ```
 
-2. Configure `.env.local`
+Set at least:
 
 - `GEMINI_API_KEY`
 - `GEMINI_MODEL`
@@ -104,62 +114,65 @@ Copy-Item .env.example .env.local
 - `AI_ALLOWED_ORIGIN`
 - `VITE_AI_API_BASE_URL`
 
-3. Start the AI server
+Then run:
 
 ```bash
 npm run ai:server
 ```
 
-4. Start the frontend in another terminal
+## Cloud Run deployment
 
-```bash
-npm run dev
-```
+The AI service is prepared for Cloud Run.
 
-## Scripts
+Runtime contract:
+
+- `PORT` is provided by Cloud Run
+- `GEMINI_API_KEY` should come from Secret Manager
+- `GEMINI_MODEL` selects the model
+- `AI_ALLOWED_ORIGIN` controls allowed frontend origins
+
+Build and deploy pipeline:
+
+- [Dockerfile.ai](Dockerfile.ai)
+- [cloudbuild.ai.yaml](cloudbuild.ai.yaml)
+
+Frontend deployment:
+
+- set `VITE_AI_API_BASE_URL` to the deployed AI service URL
+- if omitted in a non-localhost environment, the frontend falls back to same-origin
+
+Health check:
+
+- `GET /api/ai/health`
+
+## Main scripts
 
 - `npm run dev` - start the Vite dev server
-- `npm run build` - desktop production build
-- `npm run build:web` - web production build
-- `npm run build:dev` - development-mode build
-- `npm run preview` - preview the production build
+- `npm run ai:server` - start the AI service locally
+- `npm run build` - desktop-oriented production build
+- `npm run build:web` - web-oriented production build
+- `npm run preview` - preview the web build
 - `npm run lint` - run ESLint
 - `npm run test` - run Vitest
-- `npm run test:watch` - run Vitest in watch mode
-- `npm run ai:server` - start the Gemini proxy server
-- `npm run typecheck:server` - type-check server config
+- `npm run typecheck:server` - type-check server code
 
-## Current Product Documentation
+## Important documents
 
-- [Implemented Features Summary](docs/implemented-features-summary-2026-03-11.md)
-- [Implemented Features Summary (Korean)](docs/implemented-features-summary-ko-2026-03-11.md)
-- [Developer Feature Map](docs/developer-feature-map-2026-03-11.md)
-- [PRD Status Check](docs/prd-status-check-2026-03-11.md)
+- [Hackathon PRD](PRD/docsy_prd.md)
+- [Final submission package](docs/final-submission-package-2026-03-11.md)
+- [Hackathon implementation session summary](docs/session-summary-2026-03-11-hackathon-implementation.md)
+- [Docs index](docs/README.md)
+- [PRD index](PRD/README.md)
+- [GCP deployment guide](docs/gcp-deployment.md)
 
-## Documentation Map
+## Security notes
 
-Use each documentation surface for a different purpose:
+- `GEMINI_API_KEY` is never exposed to the browser bundle.
+- Gemini calls are routed through the server layer.
+- The frontend sends document payloads to the AI service, while secrets stay in server environment variables.
 
-- `/guide`
-  End-user guide inside the product. Use this when the goal is learning how to use the app.
-- `docs/`
-  Repository-facing product, implementation, planning, and release documents. Use this when the goal is understanding the current product state or engineering plan.
-- `PRD/`
-  Source requirement drafts and historical PRD material. Use this when the goal is tracing original requirements or older planning context.
+## Status
 
-## Main Documents
+This repository is under active hackathon preparation.
 
-- [Docs Index](docs/README.md)
-- [PRD Index](PRD/README.md)
-- [Architecture Overview](docs/architecture-overview-2026-03-10.md)
-- [Landing Guide Implementation Plan](docs/landing-guide-implementation-plan-2026-03-11.md)
-- [Release Gate and DoD for v1.0](docs/release-gate-and-dod-v1-2026-03-10.md)
-- [v0.8-v1.0 Execution Plan](docs/prd-v0.8-to-v1.0-execution-plan-2026-03-10.md)
-- [Web Performance Optimization Summary](docs/session-summary-2026-03-10-web-performance-optimization.md)
-- [GCP Deployment Guide](docs/gcp-deployment.md)
-
-## Security Notes
-
-- `GEMINI_API_KEY` is not shipped to the browser bundle.
-- Gemini calls are handled through `server/aiServer.ts`.
-- The frontend sends document payloads to the proxy, and secrets remain on the server through environment variables.
+The current implementation already contains editor, patch review, and document analysis building blocks. The remaining work is focused on tightening the Gemini demo path: screenshot input, multimodal prompting, action JSON, and one end-to-end UI action.

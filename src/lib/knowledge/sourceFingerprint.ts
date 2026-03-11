@@ -20,6 +20,7 @@ export interface SourceChangeRecord {
   documentName: string;
   previousScannedAt?: number;
   scannedAt: number;
+  sourceLabel?: string;
 }
 
 const hashString = (value: string) => {

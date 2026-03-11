@@ -66,6 +66,7 @@ const visitBlocks = (blocks: BlockNode[], visit: (node: BlockNode) => void) => {
 
 export const buildDerivedDocumentIndex = (document: DocumentAst): DerivedDocumentIndex => {
   const headings: DerivedDocumentIndex["headings"] = [];
+  const images: DerivedDocumentIndex["images"] = [];
   const labels: DerivedDocumentIndex["labels"] = {};
   const footnotes: DerivedDocumentIndex["footnotes"] = {};
 
@@ -76,6 +77,14 @@ export const buildDerivedDocumentIndex = (document: DocumentAst): DerivedDocumen
           nodeId: node.nodeId,
           level: node.level,
           text: collectInlineText(node.children),
+        });
+        break;
+      case "image":
+        images.push({
+          alt: node.alt,
+          nodeId: node.nodeId,
+          src: node.src,
+          title: node.title,
         });
         break;
       case "figure_caption":
@@ -93,6 +102,7 @@ export const buildDerivedDocumentIndex = (document: DocumentAst): DerivedDocumen
 
   return {
     headings,
+    images,
     labels,
     footnotes,
   };

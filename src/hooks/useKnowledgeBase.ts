@@ -46,6 +46,7 @@ interface UseKnowledgeBaseOptions {
   activeDocumentId: string;
   createDocument: (options?: CreateDocumentOptions) => DocumentData;
   documents: DocumentData[];
+  externalChangedSources?: SourceChangeRecord[];
   selectDocument: (id: string) => void;
 }
 
@@ -53,6 +54,7 @@ export const useKnowledgeBase = ({
   activeDocumentId,
   createDocument,
   documents,
+  externalChangedSources = [],
   selectDocument,
 }: UseKnowledgeBaseOptions) => {
   const { t } = useI18n();
@@ -160,13 +162,29 @@ export const useKnowledgeBase = ({
     () => knowledgeRecords.find((record) => record.documentId === activeDocumentId) || null,
     [activeDocumentId, knowledgeRecords],
   );
+  const combinedChangedSources = useMemo(() => {
+    const merged = new Map<string, SourceChangeRecord>();
+
+    for (const source of [...knowledgeChangedSources, ...externalChangedSources]) {
+      const key = `${source.documentId}:${source.sourceLabel || "local"}`;
+      const previous = merged.get(key);
+
+      if (!previous || previous.scannedAt <= source.scannedAt) {
+        merged.set(key, source);
+      }
+    }
+
+    return Array.from(merged.values()).sort((left, right) =>
+      Number(left.changeType === "changed") - Number(right.changeType === "changed")
+      || left.documentName.localeCompare(right.documentName));
+  }, [externalChangedSources, knowledgeChangedSources]);
   const knowledgeImpactQueue = useMemo(
     () => buildKnowledgeImpactQueue(
       knowledgeRecords,
       knowledgeInsights,
-      knowledgeChangedSources.map((source) => source.documentId),
+      combinedChangedSources.map((source) => source.documentId),
     ),
-    [knowledgeChangedSources, knowledgeInsights, knowledgeRecords],
+    [combinedChangedSources, knowledgeInsights, knowledgeRecords],
   );
   const knowledgeConsistencyIssues = useMemo<KnowledgeConsistencyIssue[]>(() => {
     if (!activeKnowledgeRecord || !knowledgeActiveImpact) {
@@ -355,7 +373,7 @@ export const useKnowledgeBase = ({
     knowledgeFreshCount: knowledgeSummary.freshCount,
     knowledgeImageCount: knowledgeSummary.imageCount,
     knowledgeActiveImpact,
-    knowledgeChangedSources,
+    knowledgeChangedSources: combinedChangedSources,
     knowledgeConsistencyIssues,
     knowledgeHealthIssues,
     knowledgeImpactQueue,

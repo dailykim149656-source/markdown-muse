@@ -63,6 +63,32 @@ const PRIORITY_ORDER: Record<KnowledgeConsistencyIssue["actionPriority"], number
   low: 2,
 };
 
+const ISSUE_CARD_STYLE: Record<KnowledgeConsistencyIssue["kind"], string> = {
+  changed_section: "border-blue-500/25 bg-blue-500/5",
+  conflicting_procedure: "border-destructive/35 bg-destructive/5",
+  missing_section: "border-amber-500/40 bg-amber-500/5",
+};
+
+const ISSUE_PILL_STYLE: Record<KnowledgeConsistencyIssue["kind"], string> = {
+  changed_section: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  conflicting_procedure: "border-destructive/30 bg-destructive/10 text-destructive",
+  missing_section: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+};
+
+const DELTA_CARD_STYLE: Record<DocumentComparisonDelta["kind"], string> = {
+  added: "border-emerald-500/25 bg-emerald-500/5",
+  changed: "border-blue-500/25 bg-blue-500/5",
+  inconsistent: "border-destructive/35 bg-destructive/5",
+  removed: "border-amber-500/35 bg-amber-500/5",
+};
+
+const DELTA_PILL_STYLE: Record<DocumentComparisonDelta["kind"], string> = {
+  added: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  changed: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  inconsistent: "border-destructive/30 bg-destructive/10 text-destructive",
+  removed: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+};
+
 const getDeltaTitle = (delta: DocumentComparisonDelta) =>
   delta.target?.title || delta.source?.title || "Untitled";
 
@@ -136,7 +162,7 @@ const ConsistencyIssuesPanel = ({
             const previewDeltas = issue.comparison.deltas.slice(0, 3);
 
             return (
-              <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2" key={issue.id}>
+              <div className={`rounded-md border px-3 py-2 ${ISSUE_CARD_STYLE[issue.kind]}`} key={issue.id}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                     {issue.severity === "warning" ? (
@@ -145,6 +171,13 @@ const ConsistencyIssuesPanel = ({
                       <CheckCircle2 className="h-3 w-3" />
                     )}
                     {t(KIND_LABEL_KEYS[issue.kind])}
+                    <span className={`rounded-full border px-2 py-0.5 text-[10px] ${ISSUE_PILL_STYLE[issue.kind]}`}>
+                      {issue.kind === "conflicting_procedure"
+                        ? "Conflict"
+                        : issue.kind === "missing_section"
+                          ? "Missing"
+                          : "Drift"}
+                    </span>
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] ${PRIORITY_STYLE[issue.actionPriority]}`}>
                       {PRIORITY_LABEL[issue.actionPriority]}
                     </span>
@@ -160,6 +193,19 @@ const ConsistencyIssuesPanel = ({
                 <p className="mt-2 text-xs leading-5 text-foreground/90">{issue.message}</p>
                 <div className="mt-2 rounded-md border border-border/60 bg-background px-2 py-1.5 text-[11px] text-muted-foreground">
                   {issue.actionReason}
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <div className={`rounded-md border px-2 py-1.5 text-[11px] ${issue.comparison.counts.removed > 0 ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300" : "border-border/60 bg-background text-muted-foreground"}`}>
+                    {t("knowledge.consistencyRemoved", { count: issue.comparison.counts.removed })}
+                  </div>
+                  <div className={`rounded-md border px-2 py-1.5 text-[11px] ${issue.comparison.counts.inconsistent > 0 ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-border/60 bg-background text-muted-foreground"}`}>
+                    {t("knowledge.consistencyInconsistent", { count: issue.comparison.counts.inconsistent })}
+                  </div>
+                  <div className={`rounded-md border px-2 py-1.5 text-[11px] ${issue.comparison.counts.changed + issue.comparison.counts.added > 0 ? "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300" : "border-border/60 bg-background text-muted-foreground"}`}>
+                    {t("knowledge.consistencyChanged", {
+                      count: issue.comparison.counts.changed + issue.comparison.counts.added,
+                    })}
+                  </div>
                 </div>
                 <div className="mt-2 text-[11px] text-muted-foreground">
                   {t("knowledge.consistencyReference")} {issue.relatedDocumentName}
@@ -182,17 +228,6 @@ const ConsistencyIssuesPanel = ({
                   </button>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
-                    {t("knowledge.consistencyRemoved", { count: issue.comparison.counts.removed })}
-                  </span>
-                  <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
-                    {t("knowledge.consistencyInconsistent", { count: issue.comparison.counts.inconsistent })}
-                  </span>
-                  <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
-                    {t("knowledge.consistencyChanged", {
-                      count: issue.comparison.counts.changed + issue.comparison.counts.added,
-                    })}
-                  </span>
                   <Button
                     className="h-7 gap-1 text-xs"
                     onClick={() => setExpandedIssueId(isExpanded ? null : issue.id)}
@@ -261,9 +296,9 @@ const ConsistencyIssuesPanel = ({
                     ) : (
                       <div className="space-y-2">
                         {previewDeltas.map((delta) => (
-                          <div className="rounded-md border border-border/60 bg-background px-3 py-3" key={delta.deltaId}>
+                          <div className={`rounded-md border px-3 py-3 ${DELTA_CARD_STYLE[delta.kind]}`} key={delta.deltaId}>
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full border border-border/60 px-2 py-1 text-[10px] text-muted-foreground">
+                              <span className={`rounded-full border px-2 py-1 text-[10px] ${DELTA_PILL_STYLE[delta.kind]}`}>
                                 {t(DELTA_KIND_LABEL_KEYS[delta.kind])}
                               </span>
                               {delta.kind !== "added" && delta.kind !== "removed" && (

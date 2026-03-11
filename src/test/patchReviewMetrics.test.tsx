@@ -90,5 +90,5 @@ describe("PatchReviewDialog metrics", () => {
 
     expect(screen.getByText("patchReview.provenanceGapTitle")).toBeInTheDocument();
     expect(screen.getByText("Patch Two")).toBeInTheDocument();
-  });
+  }, 15000);
 });

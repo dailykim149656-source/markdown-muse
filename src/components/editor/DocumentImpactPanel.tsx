@@ -97,11 +97,16 @@ const DocumentImpactPanel = ({
             </div>
           ) : (
             <div className="space-y-2">
-              {impact.relatedDocuments.slice(0, 5).map((document) => {
+              {impact.relatedDocuments.slice(0, 5).map((document, index) => {
                 const canSuggestUpdates = suggestableDocumentIds.includes(document.documentId);
+                const emphasisClass = index === 0
+                  ? "border-primary/40 bg-primary/5"
+                  : index < 3
+                    ? "border-border/60 bg-muted/10"
+                    : "border-border/60";
 
                 return (
-                  <div className="rounded-md border border-border/60 px-2 py-2" key={document.documentId}>
+                  <div className={`rounded-md border px-2 py-2 ${emphasisClass}`} key={document.documentId}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="truncate text-xs font-medium text-foreground">{document.name}</div>
@@ -109,6 +114,9 @@ const DocumentImpactPanel = ({
                           {describeRelations(document.relationKinds)}
                         </p>
                         <div className="mt-1 flex flex-wrap gap-1">
+                          <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant={index === 0 ? "default" : "outline"}>
+                            {document.recommendationScore}%
+                          </Badge>
                           {document.relationKinds.map((relation) => (
                             <Badge className="h-5 rounded-full px-1.5 text-[10px]" key={`${document.documentId}-${relation}`} variant="secondary">
                               {t(relationLabelKey(relation))}

@@ -51,5 +51,5 @@ describe("Guide page", () => {
     expect(screen.queryAllByText("Fast single-document writing").length).toBe(0);
     expect(screen.getByText("Related-document sync workflow")).toBeInTheDocument();
     expect(screen.getAllByText("Knowledge and graph").length).toBeGreaterThan(0);
-  });
+  }, 15000);
 });

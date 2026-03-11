@@ -7,18 +7,27 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
 import type {
   KnowledgeGraphEdge,
+  KnowledgeGraphNavigationTarget,
   KnowledgeWorkspaceInsights,
 } from "@/lib/knowledge/workspaceInsights";
 import { useNavigate } from "react-router-dom";
 import {
   type EdgeFilter,
+  type GraphMode,
+  type IssueFilter,
   type NodeFilter,
+  applyGraphMode,
+  applyIssueFilter,
   edgeBadgeVariant,
   edgeFilterKey,
   edgeGroupOrder,
   edgeKindLabelKey,
+  graphModeKey,
+  issueFilterKey,
+  issueKindLabelKey,
   nodeFilterKey,
   nodeKindOrder,
+  toGraphNavigationTarget,
 } from "@/components/editor/workspaceGraphUtils";
 
 const GraphExplorerSurface = lazy(() =>
@@ -48,7 +57,7 @@ const getWorkspaceScale = (insights: KnowledgeWorkspaceInsights) => {
 interface WorkspaceGraphPanelProps {
   activeDocumentId?: string;
   insights: KnowledgeWorkspaceInsights;
-  onOpenDocument: (documentId: string) => void;
+  onOpenDocument: (target: KnowledgeGraphNavigationTarget) => void;
 }
 
 const WorkspaceGraphPanel = ({
@@ -58,6 +67,8 @@ const WorkspaceGraphPanel = ({
 }: WorkspaceGraphPanelProps) => {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const [graphMode, setGraphMode] = useState<GraphMode>("full");
+  const [issueFilter, setIssueFilter] = useState<IssueFilter>("all");
   const [nodeFilter, setNodeFilter] = useState<NodeFilter>("all");
   const [edgeFilter, setEdgeFilter] = useState<EdgeFilter>("all");
   const [query, setQuery] = useState("");
@@ -78,6 +89,7 @@ const WorkspaceGraphPanel = ({
         && (!issuesOnly || (node.issueCount || 0) > 0))
       .sort((left, right) =>
         nodeKindOrder[left.kind] - nodeKindOrder[right.kind]
+        || Number(right.issueSeverity === "warning") - Number(left.issueSeverity === "warning")
         || (right.issueCount || 0) - (left.issueCount || 0)
         || left.label.localeCompare(right.label)),
     [insights.nodes, issuesOnly, nodeFilter],
@@ -145,10 +157,32 @@ const WorkspaceGraphPanel = ({
     };
   }, [baseEdges, baseNodes, nodeById, query]);
 
-  const visibleNodes = filteredGraph.nodes;
-  const visibleEdges = filteredGraph.edges;
+  const issueFilteredGraph = useMemo(
+    () => applyIssueFilter({
+      graph: filteredGraph,
+      issues: insights.issues,
+      value: issueFilter,
+    }),
+    [filteredGraph, insights.issues, issueFilter],
+  );
+
+  const modeGraph = useMemo(
+    () => applyGraphMode({
+      activeDocumentId,
+      graph: issueFilteredGraph,
+      mode: graphMode,
+    }),
+    [activeDocumentId, graphMode, issueFilteredGraph],
+  );
+
+  const visibleNodes = modeGraph.nodes;
+  const visibleEdges = modeGraph.edges;
   const hasQuery = query.trim().length > 0;
-  const emptyMessage = hasQuery ? t("knowledge.graphSearchEmpty") : t("knowledge.graphEmpty");
+  const emptyMessage = graphMode === "issues"
+    ? t("knowledge.graphIssuesEmpty")
+    : hasQuery
+      ? t("knowledge.graphSearchEmpty")
+      : t("knowledge.graphEmpty");
 
   const visibleNodeCount = visibleNodes.length;
   const visibleEdgeCount = visibleEdges.length;
@@ -192,6 +226,7 @@ const WorkspaceGraphPanel = ({
       })
       .sort((left, right) =>
         nodeKindOrder[left.node.kind] - nodeKindOrder[right.node.kind]
+        || Number(right.node.issueSeverity === "warning") - Number(left.node.issueSeverity === "warning")
         || right.totalConnections - left.totalConnections
         || (right.node.issueCount || 0) - (left.node.issueCount || 0)
         || left.node.label.localeCompare(right.node.label))
@@ -255,6 +290,20 @@ const WorkspaceGraphPanel = ({
       </div>
 
       <div className="space-y-2">
+        <div className="flex flex-wrap gap-1">
+          {(["full", "document", "issues"] as GraphMode[]).map((value) => (
+            <Button
+              className="h-6 px-2 text-[10px]"
+              key={`graph-mode-${value}`}
+              onClick={() => setGraphMode(value)}
+              size="sm"
+              type="button"
+              variant={graphMode === value ? "secondary" : "ghost"}
+            >
+              {t(graphModeKey(value))}
+            </Button>
+          ))}
+        </div>
         {workspaceScale !== "small" && (
           <div className="rounded-md border border-border/60 bg-muted/20 px-2 py-2 text-[11px] text-muted-foreground">
             <div className="font-medium text-foreground">
@@ -303,7 +352,7 @@ const WorkspaceGraphPanel = ({
           ))}
         </div>
         <div className="flex flex-wrap gap-1">
-          {(["all", "containment", "reference", "similarity"] as EdgeFilter[]).map((value) => (
+          {(["all", "containment", "reference", "similarity", "issue"] as EdgeFilter[]).map((value) => (
             <Button
               className="h-6 px-2 text-[10px]"
               key={`edge-filter-${value}`}
@@ -313,6 +362,20 @@ const WorkspaceGraphPanel = ({
               variant={edgeFilter === value ? "secondary" : "ghost"}
             >
               {t(edgeFilterKey(value))}
+            </Button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {(["all", "unresolved_reference", "duplicate_document", "missing_section", "conflicting_procedure", "outdated_source", "stale_index", "image_missing_description"] as IssueFilter[]).map((value) => (
+            <Button
+              className="h-6 px-2 text-[10px]"
+              key={`issue-filter-${value}`}
+              onClick={() => setIssueFilter(value)}
+              size="sm"
+              type="button"
+              variant={issueFilter === value ? "secondary" : "ghost"}
+            >
+              {t(issueFilterKey(value))}
             </Button>
           ))}
         </div>
@@ -351,7 +414,14 @@ const WorkspaceGraphPanel = ({
         <ScrollArea className="h-[320px] rounded-md border border-border/60">
           <div className="space-y-2 p-2">
             {visibleNodeCards.map(({ incoming, node, outgoing, previewEdges, totalConnections }) => (
-              <div className="rounded-md border border-border/60 bg-background px-2 py-2" key={node.id}>
+              <div
+                className={`rounded-md border bg-background px-2 py-2 ${
+                  node.issueSeverity === "warning"
+                    ? "border-amber-500/40 bg-amber-500/5"
+                    : "border-border/60"
+                }`}
+                key={node.id}
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-xs font-medium text-foreground">{node.label}</div>
@@ -362,6 +432,14 @@ const WorkspaceGraphPanel = ({
                       {(node.issueCount || 0) > 0 && (
                         <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant="secondary">
                           {t("knowledge.issueCount", { count: node.issueCount || 0 })}
+                        </Badge>
+                      )}
+                      {node.dominantIssueKind && (
+                        <Badge
+                          className="h-5 rounded-full px-1.5 text-[10px]"
+                          variant={node.issueSeverity === "warning" ? "secondary" : "outline"}
+                        >
+                          {t(issueKindLabelKey(node.dominantIssueKind))}
                         </Badge>
                       )}
                     </div>
@@ -381,7 +459,7 @@ const WorkspaceGraphPanel = ({
                     </Button>
                     <Button
                       className="h-6 px-2 text-[10px]"
-                      onClick={() => onOpenDocument(node.documentId)}
+                      onClick={() => onOpenDocument(toGraphNavigationTarget(node))}
                       size="sm"
                       type="button"
                       variant="ghost"
@@ -402,12 +480,21 @@ const WorkspaceGraphPanel = ({
                     {previewEdges.map((edge) => {
                       const isOutgoing = edge.sourceId === node.id;
                       const neighbor = nodeById.get(isOutgoing ? edge.targetId : edge.sourceId);
+                      const edgeTargetDocumentId = neighbor?.documentId || edge.targetDocumentId || edge.sourceDocumentId;
 
                       return (
                         <button
-                          className="w-full rounded-md border border-border/40 bg-background px-2 py-2 text-left transition-colors hover:bg-accent/40"
+                          className={`w-full rounded-md border bg-background px-2 py-2 text-left transition-colors hover:bg-accent/40 ${
+                            edge.group === "issue"
+                              ? "border-amber-500/30 bg-amber-500/5"
+                              : "border-border/40"
+                          }`}
                           key={edge.id}
-                          onClick={() => onOpenDocument((neighbor || node).documentId)}
+                          onClick={() => onOpenDocument(
+                            neighbor
+                              ? toGraphNavigationTarget(neighbor)
+                              : { documentId: edgeTargetDocumentId },
+                          )}
                           type="button"
                         >
                           <div className="flex items-center justify-between gap-2">
@@ -449,6 +536,7 @@ const WorkspaceGraphPanel = ({
       {explorerOpen && (
         <Suspense fallback={<GraphDialogFallback />}>
           <GraphExplorerSurface
+            activeDocumentId={activeDocumentId}
             insights={insights}
             onOpenChange={setExplorerOpen}
             onOpenDocument={onOpenDocument}

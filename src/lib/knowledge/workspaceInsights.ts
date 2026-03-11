@@ -1,8 +1,14 @@
 import type { KnowledgeDocumentRecord } from "@/lib/knowledge/knowledgeIndex";
 
 export type KnowledgeGraphNodeKind = "document" | "section" | "image";
-export type KnowledgeGraphEdgeKind = "contains_section" | "contains_image" | "references" | "similar_to" | "duplicate";
-export type KnowledgeGraphEdgeGroup = "containment" | "reference" | "similarity";
+export type KnowledgeGraphEdgeKind =
+  | "contains_section"
+  | "contains_image"
+  | "references"
+  | "similar_to"
+  | "duplicate"
+  | "issue_relation";
+export type KnowledgeGraphEdgeGroup = "containment" | "reference" | "similarity" | "issue";
 export type KnowledgeHealthIssueKind =
   | "stale_index"
   | "unresolved_reference"
@@ -14,11 +20,26 @@ export type KnowledgeHealthIssueKind =
 export type KnowledgeHealthSeverity = "info" | "warning";
 
 export interface KnowledgeGraphNode {
+  dominantIssueKind?: KnowledgeHealthIssueKind;
   documentId: string;
+  imageId?: string;
+  imageSrc?: string;
   id: string;
   issueCount?: number;
+  issueSeverity?: KnowledgeHealthSeverity;
   kind: KnowledgeGraphNodeKind;
   label: string;
+  sectionId?: string;
+}
+
+export interface KnowledgeGraphNavigationTarget {
+  documentId: string;
+  imageId?: string;
+  imageSrc?: string;
+  kind?: KnowledgeGraphNodeKind;
+  label?: string;
+  nodeId?: string;
+  sectionId?: string;
 }
 
 export interface KnowledgeGraphEdge {
@@ -66,6 +87,7 @@ export interface KnowledgeRelatedDocument {
   documentId: string;
   issueCount: number;
   name: string;
+  recommendationScore: number;
   relationKinds: KnowledgeDocumentRelationKind[];
 }
 
@@ -113,6 +135,16 @@ const relationKindWeight = (relationKind: KnowledgeDocumentRelationKind) => {
 
 const scoreRelationKinds = (relationKinds: KnowledgeDocumentRelationKind[]) =>
   relationKinds.reduce((score, relationKind) => score + relationKindWeight(relationKind), 0);
+
+const getRecommendationScore = (relationKinds: KnowledgeDocumentRelationKind[], issueCount: number) => {
+  const relationScore = scoreRelationKinds(relationKinds) * 14;
+  const issueBoost = Math.min(issueCount, 3) * 8;
+  const duplicateBoost = relationKinds.includes("duplicate") ? 10 : 0;
+  const referenceBoost = relationKinds.includes("references") || relationKinds.includes("referenced_by") ? 12 : 0;
+  const multiSignalBoost = relationKinds.length >= 2 ? 8 : 0;
+
+  return Math.max(12, Math.min(99, relationScore + issueBoost + duplicateBoost + referenceBoost + multiSignalBoost));
+};
 
 const REFERENCE_TARGET_PATTERN = /\b([a-z0-9._/-]+\.(?:md|markdown|html?|tex|adoc|asciidoc|rst|json|ya?ml))(#[a-z0-9._:-]+)?\b/gi;
 
@@ -187,6 +219,7 @@ export const buildKnowledgeWorkspaceInsights = (
         id: `section:${record.documentId}:${section.sectionId}`,
         kind: "section",
         label: section.title,
+        sectionId: section.sectionId,
       });
       edges.push({
         description: `${record.normalizedDocument.metadata.title || record.fileName} includes section ${section.title}.`,
@@ -204,9 +237,12 @@ export const buildKnowledgeWorkspaceInsights = (
     for (const image of record.normalizedDocument.images) {
       nodes.push({
         documentId: record.documentId,
+        imageId: image.imageId,
+        imageSrc: image.src,
         id: `image:${record.documentId}:${image.imageId}`,
         kind: "image",
         label: image.alt || image.caption || image.src,
+        sectionId: image.sectionId,
       });
       edges.push({
         description: `${record.normalizedDocument.metadata.title || record.fileName} includes image ${image.alt || image.caption || image.src}.`,
@@ -356,19 +392,34 @@ export const buildKnowledgeWorkspaceInsights = (
     }
   }
 
-  const dedupedEdges = Array.from(new Map(edges.map((edge) => [edge.id, edge])).values());
   const dedupedIssues = Array.from(new Map(issues.map((issue) => [issue.id, issue])).values());
-  const issueCountByDocumentId = dedupedIssues.reduce((counts, issue) => {
-    counts.set(issue.documentId, (counts.get(issue.documentId) || 0) + 1);
+  const issueEdges = dedupedIssues.flatMap((issue) => {
+    const relatedDocumentIds = Array.from(new Set(
+      issue.relatedDocumentIds.filter((relatedDocumentId) => relatedDocumentId !== issue.documentId),
+    ));
 
-    for (const relatedDocumentId of issue.relatedDocumentIds) {
-      counts.set(relatedDocumentId, Math.max(counts.get(relatedDocumentId) || 0, issue.documentId === relatedDocumentId
-        ? counts.get(relatedDocumentId) || 0
-        : (counts.get(relatedDocumentId) || 0) + 1));
+    return relatedDocumentIds.map((relatedDocumentId) => ({
+      description: issue.message,
+      group: "issue" as const,
+      id: `edge:issue:${issue.id}:${relatedDocumentId}`,
+      kind: "issue_relation" as const,
+      sourceId: `doc:${issue.documentId}`,
+      sourceDocumentId: issue.documentId,
+      targetId: `doc:${relatedDocumentId}`,
+      targetDocumentId: relatedDocumentId,
+      weight: issue.severity === "warning" ? 6 : 4,
+    }));
+  });
+  const dedupedEdges = Array.from(new Map([...edges, ...issueEdges].map((edge) => [edge.id, edge])).values());
+  const issuesByDocumentId = dedupedIssues.reduce((documents, issue) => {
+    const affectedDocumentIds = new Set([issue.documentId, ...issue.relatedDocumentIds]);
+
+    for (const documentId of affectedDocumentIds) {
+      documents.set(documentId, [...(documents.get(documentId) || []), issue]);
     }
 
-    return counts;
-  }, new Map<string, number>());
+    return documents;
+  }, new Map<string, KnowledgeHealthIssue[]>());
 
   return {
     edges: dedupedEdges,
@@ -377,7 +428,17 @@ export const buildKnowledgeWorkspaceInsights = (
       || left.message.localeCompare(right.message)),
     nodes: nodes.map((node) => ({
       ...node,
-      issueCount: issueCountByDocumentId.get(node.documentId) || 0,
+      dominantIssueKind: (issuesByDocumentId.get(node.documentId) || [])
+        .slice()
+        .sort((left, right) =>
+          Number(right.severity === "warning") - Number(left.severity === "warning")
+          || left.kind.localeCompare(right.kind))[0]?.kind,
+      issueCount: (issuesByDocumentId.get(node.documentId) || []).length,
+      issueSeverity: (issuesByDocumentId.get(node.documentId) || []).some((issue) => issue.severity === "warning")
+        ? "warning"
+        : (issuesByDocumentId.get(node.documentId) || []).length > 0
+          ? "info"
+          : undefined,
     })),
     summary: {
       documentNodeCount: nodes.filter((node) => node.kind === "document").length,
@@ -493,12 +554,14 @@ export const buildKnowledgeDocumentImpact = (
         documentId: relatedDocumentId,
         issueCount,
         name: getRecordName(relatedRecord),
+        recommendationScore: getRecommendationScore(Array.from(relationKinds).sort(), issueCount),
         relationKinds: Array.from(relationKinds).sort(),
       } satisfies KnowledgeRelatedDocument;
     })
     .filter((entry): entry is KnowledgeRelatedDocument => Boolean(entry))
     .sort((left, right) =>
-      scoreRelationKinds(right.relationKinds) - scoreRelationKinds(left.relationKinds)
+      right.recommendationScore - left.recommendationScore
+      || scoreRelationKinds(right.relationKinds) - scoreRelationKinds(left.relationKinds)
       || right.relationKinds.length - left.relationKinds.length
       || right.issueCount - left.issueCount
       || left.name.localeCompare(right.name));

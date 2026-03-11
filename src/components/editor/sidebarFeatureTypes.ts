@@ -60,6 +60,8 @@ export interface KnowledgeSidebarPanelsProps {
   onGenerateTocSuggestion?: () => void;
   onOpenNextSuggestionQueueItem: () => void;
   onOpenPatchReview: () => void;
+  onRefreshWorkspaceDocument?: (documentId: string) => void;
+  onRescanWorkspaceSources?: () => void;
   onOpenSuggestionQueueItem: (id: string) => void;
   onRetryFailedSuggestionQueueItems: () => void;
   onRetrySuggestionQueueItem: (id: string) => void;
@@ -71,5 +73,8 @@ export interface KnowledgeSidebarPanelsProps {
   ) => void;
   onSuggestKnowledgeUpdates: (documentId: string, context?: KnowledgeSuggestionContext) => void;
   patchCount: number;
+  workspaceChangedSources?: import("@/lib/knowledge/sourceFingerprint").SourceChangeRecord[];
+  workspaceLastRescannedAt?: number | null;
+  workspaceRescanning?: boolean;
   suggestionQueue: KnowledgeSuggestionQueueItem[];
 }

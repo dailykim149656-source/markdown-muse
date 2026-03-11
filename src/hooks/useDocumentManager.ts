@@ -153,15 +153,53 @@ export const useDocumentManager = () => {
           return doc;
         }
 
+        const nextWorkspaceBinding = doc.workspaceBinding && patch.content !== undefined && patch.content !== doc.content
+          ? {
+            ...doc.workspaceBinding,
+            syncStatus: "dirty_local" as const,
+          }
+          : patch.workspaceBinding ?? doc.workspaceBinding;
+
         return {
           ...doc,
           ...patch,
           updatedAt: patch.updatedAt ?? Date.now(),
+          workspaceBinding: nextWorkspaceBinding,
         };
       })
     );
     markAutosavePending();
   }, [activeDoc, activeDocId, markAutosavePending]);
+
+  const updateDocument = useCallback((documentId: string, patch: Partial<DocumentData>) => {
+    const targetDocument = documents.find((document) => document.id === documentId);
+
+    if (!targetDocument) {
+      return;
+    }
+
+    const hasChanges = Object.entries(patch)
+      .some(([key, value]) => !areValuesEqual(targetDocument[key as keyof DocumentData], value));
+
+    if (!hasChanges) {
+      return;
+    }
+
+    setDocuments((previousDocuments) =>
+      previousDocuments.map((document) => {
+        if (document.id !== documentId) {
+          return document;
+        }
+
+        return {
+          ...document,
+          ...patch,
+          updatedAt: patch.updatedAt ?? document.updatedAt,
+        };
+      }),
+    );
+    markAutosavePending();
+  }, [documents, markAutosavePending]);
 
   const handleContentChange = useCallback((content: string) => {
     const sourceSnapshots = {
@@ -185,6 +223,12 @@ export const useDocumentManager = () => {
           sourceSnapshots,
           storageKind: doc.storageKind ?? "docsy",
           updatedAt: Date.now(),
+          workspaceBinding: doc.workspaceBinding
+            ? {
+              ...doc.workspaceBinding,
+              syncStatus: "dirty_local",
+            }
+            : doc.workspaceBinding,
         };
       })
     );
@@ -204,6 +248,7 @@ export const useDocumentManager = () => {
       sourceSnapshots,
       storageKind = "docsy",
       tiptapJson = null,
+      workspaceBinding,
       updatedAt,
     } = options;
 
@@ -226,6 +271,7 @@ export const useDocumentManager = () => {
       storageKind,
       tiptapJson,
       updatedAt: updatedAt ?? Date.now(),
+      workspaceBinding,
     };
 
     setDocuments((previousDocuments) => {
@@ -333,6 +379,7 @@ export const useDocumentManager = () => {
     hasRestoredDocuments: Boolean(initialSavedData?.documents?.length),
     renameDocument,
     selectDocument,
+    updateDocument,
     updateActiveDoc,
   };
 };

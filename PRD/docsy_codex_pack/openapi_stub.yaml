@@ -1,0 +1,97 @@
+openapi: 3.1.0
+info:
+  title: Docsy Workspace Integration API
+  version: 0.1.0
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+  /api/auth/google/connect:
+    post:
+      summary: Start Google OAuth flow
+      responses:
+        '200':
+          description: Auth URL created
+  /api/auth/google/callback:
+    get:
+      summary: Handle Google OAuth callback
+      responses:
+        '200':
+          description: Connection established
+  /api/workspace/drive/files:
+    get:
+      summary: List Drive files
+      responses:
+        '200':
+          description: Drive files listed
+  /api/workspace/import:
+    post:
+      summary: Import Drive file into Docsy
+      responses:
+        '200':
+          description: Imported
+  /api/documents/analyze:
+    post:
+      summary: Run consistency analysis
+      responses:
+        '200':
+          description: Analysis complete
+  /api/documents/impact-analysis:
+    post:
+      summary: Analyze impact of changed sections
+      responses:
+        '200':
+          description: Impact analysis complete
+  /api/patches/generate:
+    post:
+      summary: Generate patch for an issue
+      responses:
+        '200':
+          description: Patch generated
+  /api/patches/{patchId}/review:
+    post:
+      summary: Accept or reject patch
+      parameters:
+        - in: path
+          name: patchId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Review saved
+  /api/patches/{patchId}/apply-google-docs:
+    post:
+      summary: Apply accepted patch to Google Docs
+      parameters:
+        - in: path
+          name: patchId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Patch applied
+  /api/workspace/comments/create:
+    post:
+      summary: Create Google Docs comment for a patch
+      responses:
+        '200':
+          description: Comment created
+  /api/workspace/sync/scan:
+    post:
+      summary: Scan Drive changes and sync
+      responses:
+        '200':
+          description: Sync completed
+  /api/workspace/sync/status:
+    get:
+      summary: Get sync status
+      responses:
+        '200':
+          description: Sync status returned

@@ -20,6 +20,12 @@ interface DiffRow {
   value: string;
 }
 
+interface DiffSummary {
+  added: number;
+  removed: number;
+  unchanged: number;
+}
+
 const getPatchPreviewText = (patch: DocumentPatch) => {
   if (patch.suggestedText !== undefined) {
     return patch.suggestedText;
@@ -91,6 +97,35 @@ const buildLineDiff = (original: string, suggested: string): DiffRow[] => {
   return rows;
 };
 
+const summarizeDiffRows = (rows: DiffRow[]): DiffSummary => rows.reduce<DiffSummary>((summary, row) => {
+  if (row.kind === "added") {
+    summary.added += 1;
+    return summary;
+  }
+
+  if (row.kind === "removed") {
+    summary.removed += 1;
+    return summary;
+  }
+
+  summary.unchanged += 1;
+  return summary;
+}, {
+  added: 0,
+  removed: 0,
+  unchanged: 0,
+});
+
+const countCharacters = (value: string) => value.length;
+
+const countLines = (value: string) => {
+  if (!value) {
+    return 0;
+  }
+
+  return splitLines(value).length;
+};
+
 const getStatusVariant = (status: PatchStatus) => {
   switch (status) {
     case "accepted":
@@ -151,7 +186,10 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
 
   const selectedIndex = filteredPatches.findIndex((patch) => patch.patchId === selectedPatch.patchId);
   const isEditable = canApplyEditedSuggestedText(selectedPatch);
-  const diffRows = buildLineDiff(selectedPatch.originalText || "", editedText);
+  const originalText = selectedPatch.originalText || "";
+  const suggestedText = editedText;
+  const diffRows = buildLineDiff(originalText, suggestedText);
+  const diffSummary = summarizeDiffRows(diffRows);
   const selectedPatchMissingProvenance = (selectedPatch.sources || []).length === 0;
 
   const moveSelection = (direction: "prev" | "next") => {
@@ -269,28 +307,73 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
         </div>
 
         <div className="grid gap-4 xl:grid-cols-2">
-          <div className="space-y-2">
-            <p className="text-sm font-medium">{t("patchReview.original")}</p>
-            <div className="min-h-[12rem] rounded-md border border-input bg-background px-3 py-2 text-sm whitespace-pre-wrap text-muted-foreground">
-              {selectedPatch.originalText || ""}
+          <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/10">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-background/80 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{t("patchReview.original")}</Badge>
+                <span className="text-xs text-muted-foreground">{countLines(originalText)}L</span>
+                <span className="text-xs text-muted-foreground">{countCharacters(originalText)}C</span>
+              </div>
+              <Badge variant="outline">{t(`patchReview.operations.${selectedPatch.operation}`)}</Badge>
+            </div>
+            <div className="min-h-[14rem] bg-background px-4 py-3 text-sm whitespace-pre-wrap text-muted-foreground">
+              {originalText}
             </div>
           </div>
-          <div className="space-y-2">
-            <p className="text-sm font-medium">{t("patchReview.suggested")}</p>
+          <div className="overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 bg-background/80 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600" variant="secondary">{t("patchReview.suggested")}</Badge>
+                <span className="text-xs text-muted-foreground">{countLines(suggestedText)}L</span>
+                <span className="text-xs text-muted-foreground">{countCharacters(suggestedText)}C</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {diffSummary.removed > 0 && (
+                  <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+                    -{diffSummary.removed}
+                  </span>
+                )}
+                {diffSummary.added > 0 && (
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                    +{diffSummary.added}
+                  </span>
+                )}
+              </div>
+            </div>
             <Textarea
               disabled={!isEditable}
               onChange={(event) => setEditedText(event.target.value)}
               rows={10}
               value={editedText}
+              className="min-h-[14rem] resize-y border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0"
             />
             {!isEditable && (
-              <p className="text-xs text-muted-foreground">{t("patchReview.nonEditable")}</p>
+              <p className="px-4 pb-3 text-xs text-muted-foreground">{t("patchReview.nonEditable")}</p>
             )}
           </div>
         </div>
 
         <div className="space-y-2">
-          <p className="text-sm font-medium">{t("patchReview.diffPreview")}</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium">{t("patchReview.diffPreview")}</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {diffSummary.removed > 0 && (
+                <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+                  -{diffSummary.removed}
+                </span>
+              )}
+              {diffSummary.added > 0 && (
+                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                  +{diffSummary.added}
+                </span>
+              )}
+              {diffSummary.unchanged > 0 && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  ={diffSummary.unchanged}
+                </span>
+              )}
+            </div>
+          </div>
           <ScrollArea className="max-h-56 rounded-md border border-input bg-background">
             <div className="space-y-1 p-3 font-mono text-xs">
               {diffRows.map((row, index) => (

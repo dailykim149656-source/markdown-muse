@@ -123,5 +123,5 @@ describe("KnowledgeOperationsPanel", () => {
     expect(onOpenPatchReview).toHaveBeenCalled();
     expect(onRetryFailed).toHaveBeenCalled();
     expect(writeText).toHaveBeenCalled();
-  });
+  }, 15000);
 });

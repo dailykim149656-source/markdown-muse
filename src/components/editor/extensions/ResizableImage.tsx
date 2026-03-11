@@ -56,6 +56,7 @@ const ResizableImageComponent = ({ node, updateAttributes, selected }: any) => {
 
   return (
     <NodeViewWrapper
+      data-node-id={node.attrs.nodeId || undefined}
       className={`relative block my-2 ${alignStyles[currentAlign]}`}
       style={{ width: width ? `${width}px` : "fit-content" }}
     >

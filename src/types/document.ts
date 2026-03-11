@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/core";
 import type { DocumentAst, DocumentMetadata } from "./documentAst";
+import type { WorkspaceBinding } from "./workspace";
 
 export type EditorMode = "markdown" | "latex" | "html" | "json" | "yaml";
 export type StorageKind = "legacy" | "docsy";
@@ -18,6 +19,7 @@ export interface DocumentData {
   sourceSnapshots?: SourceSnapshots;
   storageKind?: StorageKind;
   tiptapJson?: JSONContent | null;
+  workspaceBinding?: WorkspaceBinding;
 }
 
 export interface AutoSaveData {
@@ -66,5 +68,6 @@ export interface CreateDocumentOptions {
   sourceSnapshots?: SourceSnapshots;
   storageKind?: StorageKind;
   tiptapJson?: JSONContent | null;
+  workspaceBinding?: WorkspaceBinding;
   updatedAt?: number;
 }

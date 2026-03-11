@@ -80,4 +80,59 @@ describe("useDocumentManager", () => {
     expect(ids[1]).not.toBe("shared-id");
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it("marks workspace-bound documents as dirty when content changes", () => {
+    const { result } = renderHook(() => useDocumentManager());
+
+    act(() => {
+      result.current.createDocument({
+        content: "<p>Imported</p>",
+        id: "google-doc:abc123",
+        mode: "html",
+        name: "Imported Google Doc",
+        replaceDocumentId: result.current.activeDocId,
+        sourceSnapshots: { html: "<p>Imported</p>" },
+        workspaceBinding: {
+          documentKind: "google_docs",
+          fileId: "abc123",
+          importedAt: Date.now(),
+          mimeType: "application/vnd.google-apps.document",
+          provider: "google_drive",
+          revisionId: "17",
+          syncStatus: "imported",
+        },
+      });
+    });
+
+    act(() => {
+      result.current.handleContentChange("<p>Changed locally</p>");
+    });
+
+    expect(result.current.activeDoc.workspaceBinding?.syncStatus).toBe("dirty_local");
+  });
+
+  it("can update a non-active document directly", () => {
+    const { result } = renderHook(() => useDocumentManager());
+
+    let secondaryId = "";
+
+    act(() => {
+      const created = result.current.createDocument({
+        content: "# Secondary",
+        id: "secondary-doc",
+        mode: "markdown",
+        name: "Secondary",
+        sourceSnapshots: { markdown: "# Secondary" },
+      });
+      secondaryId = created.id;
+    });
+
+    act(() => {
+      result.current.updateDocument(secondaryId, {
+        name: "Updated Secondary",
+      });
+    });
+
+    expect(result.current.documents.find((document) => document.id === secondaryId)?.name).toBe("Updated Secondary");
+  });
 });

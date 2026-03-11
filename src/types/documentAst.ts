@@ -334,8 +334,16 @@ export interface DerivedHeadingIndexEntry {
   text: string;
 }
 
+export interface DerivedImageIndexEntry {
+  alt?: string;
+  nodeId: NodeId;
+  src: string;
+  title?: string;
+}
+
 export interface DerivedDocumentIndex {
   headings: DerivedHeadingIndexEntry[];
+  images: DerivedImageIndexEntry[];
   labels: Record<string, NodeId>;
   footnotes: Record<string, NodeId>;
 }

@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import type { KnowledgeSuggestionContext } from "@/components/editor/sidebarFeatureTypes";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
 import { buildDerivedDocumentIndex } from "@/lib/ast/documentIndex";
+import { captureWorkspaceScreenshot } from "@/lib/ai/captureWorkspaceScreenshot";
 import { buildComparisonPatchSet, compareDocuments } from "@/lib/ai/compareDocuments";
 import { useI18n } from "@/i18n/useI18n";
 import type { DocumentComparisonResult } from "@/lib/ai/compareDocuments";
@@ -14,6 +15,7 @@ import type { DocumentPatchSet } from "@/types/documentPatch";
 import type {
   GenerateTocEntry,
   GenerateTocResponse,
+  ProposeEditorActionResponse,
   SummarizeDocumentResponse,
 } from "@/types/aiAssistant";
 
@@ -27,6 +29,7 @@ export type AiBusyAction =
   | null;
 
 export interface PatchPreviewResult {
+  actionProposal?: ProposeEditorActionResponse | null;
   comparison: DocumentComparisonResult;
   patchCount: number;
   patchSet?: DocumentPatchSet | null;
@@ -154,6 +157,18 @@ export const useAiAssistant = ({
     });
   }, [activeDoc.id, activeDoc.mode, activeDoc.name, activeDoc.updatedAt, currentRenderableMarkdown, ensureActiveRichText]);
 
+  const captureAiScreenshot = useCallback(async () => {
+    try {
+      return await captureWorkspaceScreenshot({
+        documentName: activeDoc.name,
+        markdown: currentRenderableMarkdown,
+        mode: activeDoc.mode,
+      });
+    } catch {
+      return undefined;
+    }
+  }, [activeDoc.mode, activeDoc.name, currentRenderableMarkdown]);
+
   const buildSourceAst = useCallback(async () => {
     if (!activeEditor) {
       throw new Error(t("hooks.ai.editorNotReady"));
@@ -191,6 +206,7 @@ export const useAiAssistant = ({
 
     try {
       const { summarizeDocument } = await import("@/lib/ai/client");
+      const screenshot = await captureAiScreenshot();
       const result = await summarizeDocument({
         document: {
           documentId: activeDoc.id,
@@ -200,6 +216,7 @@ export const useAiAssistant = ({
         },
         objective,
         locale,
+        screenshot,
       });
 
       setSummaryResult(result);
@@ -211,7 +228,7 @@ export const useAiAssistant = ({
     } finally {
       setBusyAction((current) => (current === "summarize" ? null : current));
     }
-  }, [activeDoc.id, activeDoc.mode, activeDoc.name, currentRenderableMarkdown, ensureActiveRichText, locale, t]);
+  }, [activeDoc.id, activeDoc.mode, activeDoc.name, captureAiScreenshot, currentRenderableMarkdown, ensureActiveRichText, locale, t]);
 
   const generateSectionPatch = useCallback(async (prompt: string) => {
     ensureActiveRichText();
@@ -228,6 +245,7 @@ export const useAiAssistant = ({
       const sourceAst = await buildSourceAst();
       const headings = buildDerivedDocumentIndex(sourceAst).headings;
       const lastBlock = sourceAst.blocks.at(-1);
+      const screenshot = await captureAiScreenshot();
 
       if (!lastBlock) {
         throw new Error(t("hooks.ai.emptyInsert"));
@@ -247,6 +265,7 @@ export const useAiAssistant = ({
         })),
         prompt,
         locale,
+        screenshot,
       });
 
       const patchSet = buildSectionGenerationPatchSet({
@@ -272,7 +291,7 @@ export const useAiAssistant = ({
     } finally {
       setBusyAction((current) => (current === "generate-section" ? null : current));
     }
-  }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, currentRenderableMarkdown, ensureActiveRichText, locale, loadPatchSet, t]);
+  }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, captureAiScreenshot, currentRenderableMarkdown, ensureActiveRichText, locale, loadPatchSet, t]);
 
   const generateTocSuggestion = useCallback(async () => {
     ensureActiveRichText();
@@ -288,6 +307,7 @@ export const useAiAssistant = ({
       ]);
       const sourceAst = await buildSourceAst();
       const headings = buildDerivedDocumentIndex(sourceAst).headings;
+      const screenshot = await captureAiScreenshot();
       const result = await generateToc({
         document: {
           documentId: activeDoc.id,
@@ -301,6 +321,7 @@ export const useAiAssistant = ({
           text: heading.text,
         })),
         locale,
+        screenshot,
       });
       const analysis = analyzeTocSuggestion(sourceAst, result.entries, result.maxDepth);
       const patchSet = buildTocPatchSetWithAst(sourceAst, {
@@ -336,7 +357,7 @@ export const useAiAssistant = ({
     } finally {
       setBusyAction((current) => (current === "generate-toc" ? null : current));
     }
-  }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, currentRenderableMarkdown, ensureActiveRichText, locale, t]);
+  }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, captureAiScreenshot, currentRenderableMarkdown, ensureActiveRichText, locale, t]);
 
   const loadTocPatch = useCallback(async (maxDepthOverride?: 1 | 2 | 3) => {
     ensureActiveRichText();
@@ -448,7 +469,10 @@ export const useAiAssistant = ({
     setBusyAction("suggest-updates");
 
     try {
-      const { suggestDocumentUpdates } = await import("@/lib/ai/suggestDocumentUpdates");
+      const [{ proposeEditorAction }, { suggestDocumentUpdates }] = await Promise.all([
+        import("@/lib/ai/client"),
+        import("@/lib/ai/suggestDocumentUpdates"),
+      ]);
       const sourceAst = await buildSourceAst();
       const sourceNormalized = await buildActiveNormalizedDocument();
       const { normalized: targetNormalized, targetDocument } = await buildTargetNormalizedDocument(targetDocumentId);
@@ -462,8 +486,37 @@ export const useAiAssistant = ({
         patchSetId: `suggest-updates-${activeDoc.id}-${targetDocument.id}-${Date.now()}`,
         title: `${t("hooks.ai.updateTitle", { source: activeDoc.name, target: targetDocument.name })}${titleSuffix}`,
       });
+      let actionProposal: ProposeEditorActionResponse | null = null;
+
+      try {
+        const headings = buildDerivedDocumentIndex(sourceAst).headings;
+        const screenshot = await captureAiScreenshot();
+        actionProposal = await proposeEditorAction({
+          candidatePatchCount: result.patchBuild.patchSet.patches.length,
+          document: {
+            documentId: activeDoc.id,
+            fileName: activeDoc.name,
+            markdown: currentRenderableMarkdown,
+            mode: activeDoc.mode,
+          },
+          existingHeadings: headings.map((heading) => ({
+            level: heading.level,
+            nodeId: heading.nodeId,
+            text: heading.text,
+          })),
+          intent: "review_patch_suggestion",
+          issueSummary: context?.issueReason,
+          locale,
+          screenshot,
+          targetDocumentId: targetDocument.id,
+          targetDocumentName: targetDocument.name,
+        });
+      } catch {
+        actionProposal = null;
+      }
 
       const nextPreview = {
+        actionProposal,
         comparison: result.comparison,
         patchCount: result.patchBuild.patchSet.patches.length,
         patchSet: result.patchBuild.patchSet,
@@ -500,7 +553,11 @@ export const useAiAssistant = ({
     buildActiveNormalizedDocument,
     buildSourceAst,
     buildTargetNormalizedDocument,
+    captureAiScreenshot,
     ensureActiveRichText,
+    currentRenderableMarkdown,
+    activeDoc.mode,
+    locale,
     loadPatchSet,
     t,
   ]);

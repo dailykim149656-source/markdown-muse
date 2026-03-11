@@ -10,6 +10,7 @@ interface ChangeMonitoringPanelProps {
   isRescanning: boolean;
   lastRescannedAt: number | null;
   onOpenDocument: (documentId: string) => void;
+  onRefreshDocument?: (documentId: string) => void;
   onOpenGraph?: (request: {
     context: "change";
     nodeDocumentId: string;
@@ -157,15 +158,34 @@ const ChangeMonitoringPanel = ({
                 >
                   {source.documentName}
                 </button>
-                <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
-                  {t(changeTypeLabelKey(source.changeType))}
-                </span>
+                <div className="flex items-center gap-2">
+                  {source.sourceLabel && (
+                    <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
+                      {source.sourceLabel}
+                    </span>
+                  )}
+                  <span className="rounded-full border border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
+                    {t(changeTypeLabelKey(source.changeType))}
+                  </span>
+                </div>
               </div>
               <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
                 {source.changeType === "new"
                   ? t("knowledge.changeMonitoringNewDescription")
                   : t("knowledge.changeMonitoringChangedDescription")}
               </p>
+              {onRefreshDocument && source.sourceLabel && (
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    className="h-7 text-xs"
+                    onClick={() => onRefreshDocument(source.documentId)}
+                    size="sm"
+                    variant="outline"
+                  >
+                    Refresh doc
+                  </Button>
+                </div>
+              )}
             </div>
           ))
         )}

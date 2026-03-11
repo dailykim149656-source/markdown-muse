@@ -7,6 +7,10 @@ import { createMarkedInstance, createTurndownService } from "@/components/editor
 import { getRenderableHtml } from "@/lib/ast/getRenderableHtml";
 import { getRenderableLatex } from "@/lib/ast/getRenderableLatex";
 import { getRenderableMarkdown } from "@/lib/ast/getRenderableMarkdown";
+import {
+  canSwitchModeWithinDocument,
+} from "@/lib/editor/modeFamilies";
+import { useI18n } from "@/i18n/useI18n";
 
 interface UseFormatConversionOptions {
   activeEditor: TiptapEditor | null;
@@ -54,6 +58,7 @@ export const useFormatConversion = ({
   editorKey,
   updateActiveDoc,
 }: UseFormatConversionOptions) => {
+  const { t } = useI18n();
   const turndownService = useMemo(() => createTurndownService(), []);
   const markedInstance = useMemo(() => createMarkedInstance(), []);
   const currentTiptapDocument = activeEditor?.getJSON() || activeDoc.tiptapJson || undefined;
@@ -124,9 +129,18 @@ export const useFormatConversion = ({
       return;
     }
 
-    if (oldMode === "json" || oldMode === "yaml" || newMode === "json" || newMode === "yaml") {
+    if (!canSwitchModeWithinDocument(oldMode, newMode)) {
+      toast.info(t("toasts.modeFamilySwitchBlocked"));
+      return;
+    }
+
+    if (oldMode === "json" || oldMode === "yaml") {
       updateActiveDoc({ mode: newMode });
       bumpEditorKey();
+      toast.success(t("toasts.modeSwitched", {
+        from: oldMode.toUpperCase(),
+        to: newMode.toUpperCase(),
+      }));
       return;
     }
 
@@ -147,8 +161,11 @@ export const useFormatConversion = ({
 
     updateActiveDoc({ mode: newMode, content: convertedContent });
     bumpEditorKey();
-    toast.success(`${oldMode.toUpperCase()} -> ${newMode.toUpperCase()} converted.`);
-  }, [activeDoc.content, activeDoc.mode, bumpEditorKey, currentRenderableHtml, currentRenderableLatex, currentRenderableMarkdown, updateActiveDoc]);
+    toast.success(t("toasts.modeConverted", {
+      from: oldMode.toUpperCase(),
+      to: newMode.toUpperCase(),
+    }));
+  }, [activeDoc.content, activeDoc.mode, bumpEditorKey, currentRenderableHtml, currentRenderableLatex, currentRenderableMarkdown, t, updateActiveDoc]);
 
   const textStats = useMemo<TextStats>(() => {
     const text = getReadableText(activeDoc.mode, activeDoc.content);
