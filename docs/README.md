@@ -34,6 +34,7 @@ Read these if you are changing code or need implementation context:
 - [Hackathon Architecture](architecture-hackathon-2026-03-11.md)
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
+- [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
 - [Developer Feature Map](developer-feature-map-2026-03-11.md)
 - [Workspace Graph, Editor, and i18n Session Summary](session-summary-2026-03-11-workspace-graph-editor-i18n-polish.md)
 - [Architecture Overview](architecture-overview-2026-03-10.md)
@@ -69,8 +70,10 @@ Read these if you are validating release readiness or operational review state:
 ### If you are working on roadmap execution
 
 1. [Release Gate and DoD for v1.0](release-gate-and-dod-v1-2026-03-10.md)
-2. [v0.8-v1.0 Execution Plan](prd-v0.8-to-v1.0-execution-plan-2026-03-10.md)
-3. [Sprint 0 Stabilization Backlog](sprint-0-stabilization-backlog-2026-03-10.md)
+2. [PRD Status Check (2026-03-11)](prd-status-check-2026-03-11.md)
+3. [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
+4. [v0.8-v1.0 Execution Plan](prd-v0.8-to-v1.0-execution-plan-2026-03-10.md)
+5. [Sprint 0 Stabilization Backlog](sprint-0-stabilization-backlog-2026-03-10.md)
 
 ### If you are preparing a release or handoff
 
@@ -91,6 +94,7 @@ Read these if you are validating release readiness or operational review state:
 - [Developer Feature Map](developer-feature-map-2026-03-11.md)
 - [PRD Status Check (2026-03-11)](prd-status-check-2026-03-11.md)
 - [Landing Guide Implementation Plan](landing-guide-implementation-plan-2026-03-11.md)
+- [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
 
 ### Architecture and deployment
 
@@ -108,6 +112,7 @@ Read these if you are validating release readiness or operational review state:
 ### Planning docs
 
 - [Release Gate and DoD for v1.0](release-gate-and-dod-v1-2026-03-10.md)
+- [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
 - [Sprint 0 Stabilization Backlog](sprint-0-stabilization-backlog-2026-03-10.md)
 - [v0.8-v1.0 Execution Plan](prd-v0.8-to-v1.0-execution-plan-2026-03-10.md)
 - [v0.7 Implementation Plan](prd-v0.7-implementation-plan-2026-03-10.md)
