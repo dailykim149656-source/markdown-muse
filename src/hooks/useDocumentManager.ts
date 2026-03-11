@@ -125,6 +125,21 @@ export const useDocumentManager = () => {
     setEditorKey((key) => key + 1);
   }, []);
 
+  const resolveUniqueDocumentId = useCallback((requestedId: string, replaceDocumentId?: string) => {
+    const occupiedIds = new Set(
+      documents
+        .filter((document) => document.id !== replaceDocumentId)
+        .map((document) => document.id),
+    );
+    let nextId = requestedId;
+
+    while (occupiedIds.has(nextId)) {
+      nextId = crypto.randomUUID();
+    }
+
+    return nextId;
+  }, [documents]);
+
   const updateActiveDoc = useCallback((patch: Partial<DocumentData>) => {
     const hasChanges = Object.entries(patch).some(([key, value]) => !areValuesEqual(activeDoc[key as keyof DocumentData], value));
 
@@ -185,6 +200,7 @@ export const useDocumentManager = () => {
       metadata = {},
       mode = "markdown",
       name = "Untitled",
+      replaceDocumentId,
       sourceSnapshots,
       storageKind = "docsy",
       tiptapJson = null,
@@ -192,12 +208,13 @@ export const useDocumentManager = () => {
     } = options;
 
     const baseDocument = createNewDocument(name, mode);
+    const resolvedId = resolveUniqueDocumentId(id ?? baseDocument.id, replaceDocumentId);
     const newDoc: DocumentData = {
       ...baseDocument,
       ast,
       content,
       createdAt: createdAt ?? baseDocument.createdAt,
-      id: id ?? baseDocument.id,
+      id: resolvedId,
       metadata,
       mode,
       name,
@@ -211,7 +228,13 @@ export const useDocumentManager = () => {
       updatedAt: updatedAt ?? Date.now(),
     };
 
-    setDocuments((previousDocuments) => [...previousDocuments, newDoc]);
+    setDocuments((previousDocuments) => {
+      if (replaceDocumentId && previousDocuments.some((document) => document.id === replaceDocumentId)) {
+        return previousDocuments.map((document) => document.id === replaceDocumentId ? newDoc : document);
+      }
+
+      return [...previousDocuments, newDoc];
+    });
     setActiveDocId(newDoc.id);
     setEditorKey((key) => key + 1);
     setAutoSaveState((previousState) => ({
@@ -221,7 +244,7 @@ export const useDocumentManager = () => {
     }));
 
     return newDoc;
-  }, []);
+  }, [resolveUniqueDocumentId]);
 
   const selectDocument = useCallback((id: string) => {
     saveImmediate();
@@ -253,8 +276,41 @@ export const useDocumentManager = () => {
   }, [activeDocId, markAutosavePending]);
 
   const deleteDocument = useCallback((id: string) => {
-    closeDocument(id);
-  }, [closeDocument]);
+    let nextActiveDocumentId: string | null = null;
+    let shouldResetEditor = false;
+
+    if (documents.length <= 1) {
+      const replacementDocument = createNewDocument();
+      nextActiveDocumentId = replacementDocument.id;
+      shouldResetEditor = true;
+      setDocuments([replacementDocument]);
+    } else {
+      const deleteIndex = documents.findIndex((document) => document.id === id);
+
+      if (deleteIndex === -1) {
+        return;
+      }
+
+      const nextDocuments = documents.filter((document) => document.id !== id);
+
+      if (id === activeDocId) {
+        nextActiveDocumentId = nextDocuments[Math.min(deleteIndex, nextDocuments.length - 1)]?.id || null;
+        shouldResetEditor = true;
+      }
+
+      setDocuments(nextDocuments);
+    }
+
+    if (nextActiveDocumentId) {
+      setActiveDocId(nextActiveDocumentId);
+    }
+
+    if (shouldResetEditor) {
+      setEditorKey((key) => key + 1);
+    }
+
+    markAutosavePending();
+  }, [activeDocId, documents, markAutosavePending]);
 
   const renameDocument = useCallback((id: string, name: string) => {
     setDocuments((previousDocuments) =>

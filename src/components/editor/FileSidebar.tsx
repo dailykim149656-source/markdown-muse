@@ -321,19 +321,17 @@ const FileSidebar = ({
                                   >
                                     <Pencil className="h-3 w-3 text-muted-foreground" />
                                   </button>
-                                  {documents.length > 1 && (
-                                    <button
-                                      className="rounded p-0.5 hover:bg-destructive/10"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        onDeleteDoc(document.id);
-                                      }}
-                                      title={t("sidebar.delete")}
-                                      type="button"
-                                    >
-                                      <Trash2 className="h-3 w-3 text-destructive" />
-                                    </button>
-                                  )}
+                                  <button
+                                    className="rounded p-0.5 hover:bg-destructive/10"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      onDeleteDoc(document.id);
+                                    }}
+                                    title={t("sidebar.delete")}
+                                    type="button"
+                                  >
+                                    <Trash2 className="h-3 w-3 text-destructive" />
+                                  </button>
                                 </div>
                               </div>
                             )}

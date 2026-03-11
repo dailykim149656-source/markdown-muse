@@ -22,6 +22,7 @@ import type { SourceFileReference } from "@/types/documentAst";
 interface UseDocumentIOOptions {
   activeDoc: DocumentData;
   createDocument: (options?: CreateDocumentOptions) => void;
+  documents: DocumentData[];
   onPatchSetLoad?: (patchSet: DocumentPatchSet) => void;
   onVersionSnapshot?: (metadata?: DocumentVersionSnapshotMetadata) => Promise<unknown> | unknown;
   renderableEditorHtml: string;
@@ -57,6 +58,69 @@ export interface ShareLinkInfo {
   available: boolean;
   link: string | null;
 }
+
+const hasMeaningfulMetadata = (metadata: DocumentData["metadata"] | undefined) => {
+  if (!metadata) {
+    return false;
+  }
+
+  return Boolean(
+    metadata.title
+    || metadata.description
+    || metadata.tags?.length
+    || metadata.authors?.length
+    || metadata.sourceFiles?.length
+    || Object.keys(metadata.labels || {}).length,
+  );
+};
+
+export const isReplaceableBlankDocument = (document: Pick<
+  DocumentData,
+  "ast" | "content" | "metadata" | "mode" | "name" | "sourceSnapshots" | "tiptapJson"
+>) => {
+  const primarySourceContent = document.sourceSnapshots?.[document.mode] || "";
+
+  return (document.name || "").trim() === "Untitled"
+    && document.content.trim().length === 0
+    && primarySourceContent.trim().length === 0
+    && !hasMeaningfulMetadata(document.metadata);
+};
+
+export const resolveImportedDocumentOptions = ({
+  activeDocId,
+  documents,
+  importedDocument,
+}: {
+  activeDocId: string;
+  documents: DocumentData[];
+  importedDocument: CreateDocumentOptions;
+}): CreateDocumentOptions => {
+  const matchingDocument = importedDocument.id
+    ? documents.find((document) => document.id === importedDocument.id) || null
+    : null;
+
+  if (matchingDocument) {
+    return {
+      ...importedDocument,
+      replaceDocumentId: matchingDocument.id,
+    };
+  }
+
+  if (documents.length !== 1) {
+    return importedDocument;
+  }
+
+  const activeDocument = documents.find((document) => document.id === activeDocId) || documents[0];
+
+  if (!activeDocument || !isReplaceableBlankDocument(activeDocument)) {
+    return importedDocument;
+  }
+
+  return {
+    ...importedDocument,
+    replaceDocumentId: activeDocument.id,
+  };
+};
 
 const loadDocsyFileFormat = () => import("@/lib/docsy/fileFormat");
 const loadDocShare = () => import("@/lib/share/docShare");
@@ -276,6 +340,7 @@ export const buildShareLinkInfo = async (
 export const useDocumentIO = ({
   activeDoc,
   createDocument,
+  documents,
   onPatchSetLoad,
   onVersionSnapshot,
   renderableEditorHtml,
@@ -551,7 +616,11 @@ export const useDocumentIO = ({
           if (lowerName.endsWith(".docsy")) {
             const { buildDocumentDataFromDocsyFile, parseDocsyFile } = await loadDocsyFileFormat();
             const parsed = parseDocsyFile(content);
-            createDocument(buildDocumentDataFromDocsyFile(parsed));
+            createDocument(resolveImportedDocumentOptions({
+              activeDocId: activeDoc.id,
+              documents,
+              importedDocument: buildDocumentDataFromDocsyFile(parsed),
+            }));
             setImportState(createIdleImportState());
             toast.success(t("hooks.io.loadedDocument", { name: parsed.document.name }));
             event.target.value = "";
@@ -606,7 +675,10 @@ export const useDocumentIO = ({
             sourceFormat = "markdown";
           }
 
-          createDocument({
+          createDocument(resolveImportedDocumentOptions({
+            activeDocId: activeDoc.id,
+            documents,
+            importedDocument: {
             content: finalContent,
             metadata: {
               sourceFiles: [buildSourceFileReference(file.name, sourceFormat, importedAt)],
@@ -615,7 +687,8 @@ export const useDocumentIO = ({
             mode,
             name,
             sourceSnapshots,
-          });
+            },
+          }));
           setImportState(createIdleImportState());
           toast.success(t("hooks.io.loadedDocument", { name }));
         } catch (error) {
@@ -637,7 +710,7 @@ export const useDocumentIO = ({
     };
 
     reader.readAsText(file);
-  }, [buildSourceFileReference, createDocument, onPatchSetLoad, t]);
+  }, [activeDoc.id, buildSourceFileReference, createDocument, documents, onPatchSetLoad, t]);
 
   return {
     fileInputRef,

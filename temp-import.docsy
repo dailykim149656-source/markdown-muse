@@ -1,0 +1,56 @@
+{
+  "format": "docsy",
+  "version": "1.0",
+  "savedAt": 1,
+  "document": {
+    "docId": "import-test-doc",
+    "kind": "rich_text",
+    "name": "Imported Spec",
+    "primaryMode": "markdown",
+    "createdAt": 1,
+    "updatedAt": 2,
+    "version": "1.0",
+    "metadata": {},
+    "ast": {
+      "type": "document",
+      "nodeId": "doc-import-test-doc",
+      "blocks": [
+        {
+          "type": "heading",
+          "kind": "block",
+          "nodeId": "heading-1",
+          "level": 1,
+          "children": [
+            { "type": "text", "text": "Imported Spec" }
+          ]
+        },
+        {
+          "type": "paragraph",
+          "kind": "block",
+          "nodeId": "paragraph-1",
+          "children": [
+            { "type": "text", "text": "Imported through Playwright." }
+          ]
+        }
+      ]
+    }
+  },
+  "sourceSnapshots": {
+    "markdown": "# Imported Spec\n\nImported through Playwright.\n"
+  },
+  "tiptap": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": { "level": 1, "nodeId": "heading-1" },
+        "content": [{ "type": "text", "text": "Imported Spec" }]
+      },
+      {
+        "type": "paragraph",
+        "attrs": { "nodeId": "paragraph-1" },
+        "content": [{ "type": "text", "text": "Imported through Playwright." }]
+      }
+    ]
+  }
+}

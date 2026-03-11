@@ -62,6 +62,7 @@ export interface CreateDocumentOptions {
   metadata?: DocumentMetadata;
   mode?: EditorMode;
   name?: string;
+  replaceDocumentId?: string;
   sourceSnapshots?: SourceSnapshots;
   storageKind?: StorageKind;
   tiptapJson?: JSONContent | null;

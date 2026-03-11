@@ -20,6 +20,8 @@ Read these if you are changing code or need implementation context:
 
 - [Developer Feature Map](developer-feature-map-2026-03-11.md)
 - [Architecture Overview](architecture-overview-2026-03-10.md)
+- [Docsy Import/Delete/Duplication Fixes](session-summary-2026-03-11-docsy-import-delete-duplication-fixes.md)
+- [Tech Stack Overview (Korean)](tech-stack-overview-ko-2026-03-11.md)
 - [v0.8-v1.0 Execution Plan](prd-v0.8-to-v1.0-execution-plan-2026-03-10.md)
 - [Sprint 0 Stabilization Backlog](sprint-0-stabilization-backlog-2026-03-10.md)
 - [Web Performance Optimization Summary](session-summary-2026-03-10-web-performance-optimization.md)
@@ -66,6 +68,7 @@ Read these if you are validating release readiness or operational review state:
 ### Architecture and deployment
 
 - [Architecture Overview](architecture-overview-2026-03-10.md)
+- [Tech Stack Overview (Korean)](tech-stack-overview-ko-2026-03-11.md)
 - [Web Performance Optimization Summary](session-summary-2026-03-10-web-performance-optimization.md)
 - [GCP Deployment Guide](gcp-deployment.md)
 
@@ -81,6 +84,7 @@ Read these if you are validating release readiness or operational review state:
 
 ### Implementation notes
 
+- [2026-03-11 Docsy Import/Delete/Duplication Fixes](session-summary-2026-03-11-docsy-import-delete-duplication-fixes.md)
 - [v0.7 Implementation Update](session-summary-2026-03-10-v0.7-implementation-update.md)
 - [2026-03-09 Session Summary](session-summary-2026-03-09.md)
 - [2026-03-09 Docsy Storage Update](session-summary-2026-03-09-docsy.md)

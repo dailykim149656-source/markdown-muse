@@ -51,6 +51,63 @@ describe("autosave migration", () => {
     expect(migrated?.documents[0]?.sourceSnapshots?.json).toBe("{}");
   });
 
+  it("deduplicates identical imported documents and removes an older blank draft", () => {
+    const migrated = migrateLegacyAutoSaveData({
+      version: 2,
+      documents: [
+        {
+          id: "blank-doc",
+          name: "Untitled",
+          mode: "markdown",
+          content: "",
+          createdAt: 1,
+          updatedAt: 1,
+          storageKind: "docsy",
+          sourceSnapshots: {
+            markdown: "",
+            html: "<p data-node-id=\"blk_0\"></p>",
+            latex: "\n",
+          },
+          metadata: {},
+          tiptapJson: null,
+          ast: null,
+        },
+        {
+          id: "imported-doc",
+          name: "Imported Spec",
+          mode: "markdown",
+          content: "# Imported Spec\n",
+          createdAt: 2,
+          updatedAt: 2,
+          storageKind: "docsy",
+          sourceSnapshots: { markdown: "# Imported Spec\n" },
+          metadata: {},
+          tiptapJson: null,
+          ast: null,
+        },
+        {
+          id: "imported-doc-copy",
+          name: "Imported Spec",
+          mode: "markdown",
+          content: "# Imported Spec\n",
+          createdAt: 2,
+          updatedAt: 2,
+          storageKind: "docsy",
+          sourceSnapshots: { markdown: "# Imported Spec\n" },
+          metadata: {},
+          tiptapJson: null,
+          ast: null,
+        },
+      ],
+      activeDocId: "imported-doc",
+      lastSaved: 200,
+    });
+
+    expect(migrated?.documents).toHaveLength(1);
+    expect(migrated?.documents[0]?.name).toBe("Imported Spec");
+    expect(migrated?.activeDocId).toBe("imported-doc");
+  });
+
   it("reports an autosave write failure when storage is unavailable", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("quota exceeded");

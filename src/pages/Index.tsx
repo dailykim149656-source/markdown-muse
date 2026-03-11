@@ -377,6 +377,7 @@ const Index = () => {
   } = useDocumentIO({
     activeDoc,
     createDocument,
+    documents,
     onPatchSetLoad: loadPatchSet,
     onVersionSnapshot: (metadata) => createVersionSnapshot(activeDoc, "export", metadata),
     renderableEditorHtml: currentRenderableHtml,
