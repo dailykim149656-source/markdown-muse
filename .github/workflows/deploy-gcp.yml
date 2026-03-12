@@ -141,10 +141,13 @@ jobs:
           npm ci
           npm run build:web
 
-      - name: Deploy dist to Cloud Storage bucket
-        run: |
-          set -euo pipefail
-          gcloud storage cp --recursive dist/* gs://"${BUCKET}"/
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_URBAN_DDS }}'
+          projectId: urban-dds
+          channelId: live
 
       - name: Verify frontend file
         run: |
