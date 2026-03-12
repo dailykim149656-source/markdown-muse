@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { createCoreEditorExtensions, editorPropsDefault } from "./editorConfigBase";
+import { createAdvancedEditorExtensions } from "./editorConfigAdvanced";
 
 export const createEditorExtensions = (placeholder: string) =>
   createCoreEditorExtensions(placeholder);
 
 let createDocumentExtensionsFactory: (() => unknown[]) | null = null;
-let createAdvancedExtensionsFactory: (() => unknown[]) | null = null;
+const createAdvancedExtensionsFactory: (() => unknown[]) | null = createAdvancedEditorExtensions;
 let documentExtensionsFactoryPromise: Promise<(() => unknown[])> | null = null;
-let advancedExtensionsFactoryPromise: Promise<(() => unknown[])> | null = null;
 
 const loadDocumentExtensionsFactory = async () => {
   if (createDocumentExtensionsFactory) {
@@ -23,22 +23,6 @@ const loadDocumentExtensionsFactory = async () => {
   }
 
   return documentExtensionsFactoryPromise;
-};
-
-const loadAdvancedExtensionsFactory = async () => {
-  if (createAdvancedExtensionsFactory) {
-    return createAdvancedExtensionsFactory;
-  }
-
-  if (!advancedExtensionsFactoryPromise) {
-    advancedExtensionsFactoryPromise = import("./editorConfigAdvanced")
-      .then(({ createAdvancedEditorExtensions }) => {
-        createAdvancedExtensionsFactory = createAdvancedEditorExtensions;
-        return createAdvancedEditorExtensions;
-      });
-  }
-
-  return advancedExtensionsFactoryPromise;
 };
 
 export const useEditorExtensions = (
@@ -82,28 +66,12 @@ export const useEditorExtensions = (
   }, [documentFeaturesEnabled]);
 
   useEffect(() => {
-    let cancelled = false;
-
     if (!advancedBlocksEnabled) {
       setAdvancedExtensions([]);
       return;
     }
 
-    if (createAdvancedExtensionsFactory) {
-      setAdvancedExtensions(createAdvancedExtensionsFactory());
-      return;
-    }
-
-    void loadAdvancedExtensionsFactory()
-      .then((factory) => {
-        if (!cancelled) {
-          setAdvancedExtensions(factory());
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    setAdvancedExtensions(createAdvancedExtensionsFactory ? createAdvancedExtensionsFactory() : []);
   }, [advancedBlocksEnabled]);
 
   const extensions = useMemo(() => [

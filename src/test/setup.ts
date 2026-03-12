@@ -24,3 +24,13 @@ Object.defineProperty(window, "ResizeObserver", {
   writable: true,
   value: ResizeObserverMock,
 });
+
+if (!HTMLElement.prototype.getClientRects) {
+  HTMLElement.prototype.getClientRects = function () {
+    return {
+      item: () => null,
+      length: 0,
+      [Symbol.iterator]: function* iterator() {},
+    } as DOMRectList;
+  };
+}

@@ -265,6 +265,7 @@ const templateRequiresAdvancedBlocks = (mode: EditorMode, content: string) => {
 const Index = () => {
   const { locale, t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
+  const isE2E = searchParams.get("e2e") === "1";
   const [activeEditor, setActiveEditor] = useState<TiptapEditor | null>(null);
   const [pendingImpactSuggestions, setPendingImpactSuggestions] = useState<PendingImpactSuggestionEntry[]>([]);
   const [plainTextSearchAdapter, setPlainTextSearchAdapter] = useState<PlainTextFindReplaceAdapter | null>(null);
@@ -938,6 +939,66 @@ const Index = () => {
 
     setPlainTextSearchAdapter(null);
   }, [activeDoc.mode]);
+
+  useEffect(() => {
+    const e2eWindow = window as Window & {
+      __docsyE2E?: {
+        hasFontSizeCommand: () => boolean;
+        selectText: (value: string) => boolean;
+      };
+    };
+
+    if (!isE2E) {
+      delete e2eWindow.__docsyE2E;
+      return;
+    }
+
+    e2eWindow.__docsyE2E = {
+      hasFontSizeCommand: () =>
+        Boolean(activeEditor && typeof activeEditor.commands.setFontSize === "function"),
+      selectText: (value: string) => {
+        if (!activeEditor || !value) {
+          return false;
+        }
+
+        let editorDom: HTMLElement;
+        try {
+          editorDom = activeEditor.view.dom;
+        } catch {
+          return false;
+        }
+
+        const walker = document.createTreeWalker(editorDom, NodeFilter.SHOW_TEXT);
+        let textNode: Node | null = null;
+
+        while (walker.nextNode()) {
+          if (walker.currentNode.textContent?.includes(value)) {
+            textNode = walker.currentNode;
+            break;
+          }
+        }
+
+        if (!textNode) {
+          return false;
+        }
+
+        const text = textNode.textContent ?? "";
+        const start = text.indexOf(value);
+        if (start < 0) {
+          return false;
+        }
+
+        const from = activeEditor.view.posAtDOM(textNode, start);
+        const to = activeEditor.view.posAtDOM(textNode, start + value.length);
+        activeEditor.commands.setTextSelection({ from, to });
+        return true;
+      },
+    };
+
+    return () => {
+      delete e2eWindow.__docsyE2E;
+    };
+  }, [activeEditor, isE2E]);
 
   useEffect(() => {
     if (!aiRuntimeState || !pendingAiIntent) {

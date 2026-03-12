@@ -129,17 +129,50 @@ jobs:
             exit 1
           fi
 
-          AI_API_BASE_URL="${{ needs.deploy-ai.outputs.ai_service_url }}"
+          AI_API_BASE_URL="${{ secrets.GCP_WEB_VITE_AI_API_BASE_URL }}"
+          if [ -z "${AI_API_BASE_URL}" ]; then
+            AI_API_BASE_URL="${{ needs.deploy-ai.outputs.ai_service_url }}"
+          fi
 
           if [ -z "${AI_API_BASE_URL}" ] && [ "${{ github.event.inputs.force_frontend }}" != "true" ]; then
-            echo "AI service URL was not resolved. Use workflow_dispatch with force_frontend=true to override."
+            echo "AI service URL was not resolved. Set GCP_WEB_VITE_AI_API_BASE_URL or use workflow_dispatch with force_frontend=true to override."
             exit 1
           fi
+
+          if [ -z "${AI_API_BASE_URL}" ]; then
+            echo "VITE_AI_API_BASE_URL is empty. Refusing to build a frontend that would fall back to /api."
+            exit 1
+          fi
+
+          case "${AI_API_BASE_URL}" in
+            http://*|https://*)
+              ;;
+            *)
+              echo "VITE_AI_API_BASE_URL must be an absolute http(s) URL. Current value: ${AI_API_BASE_URL}"
+              exit 1
+              ;;
+          esac
+
+          echo "Building frontend with VITE_AI_API_BASE_URL=${AI_API_BASE_URL}"
 
           printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\n" "${AI_API_BASE_URL}" > .env.production.local
 
           npm ci
           npm run build:web
+
+      - name: Verify bundled AI API URL
+        run: |
+          set -euo pipefail
+          AI_API_BASE_URL="${{ secrets.GCP_WEB_VITE_AI_API_BASE_URL }}"
+          if [ -z "${AI_API_BASE_URL}" ]; then
+            AI_API_BASE_URL="${{ needs.deploy-ai.outputs.ai_service_url }}"
+          fi
+
+          if ! grep -R --fixed-strings "${AI_API_BASE_URL}" dist >/dev/null 2>&1; then
+            echo "Built frontend does not appear to contain the configured AI API URL."
+            echo "Expected URL: ${AI_API_BASE_URL}"
+            exit 1
+          fi
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0

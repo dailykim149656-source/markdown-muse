@@ -9,6 +9,7 @@ import {
   tiptapDocumentHasDocumentContent,
 } from "./editorAdvancedContent";
 import { useEditorExtensions } from "./editorConfig";
+import { rememberEditorSelection } from "./editorSelectionMemory";
 import { applyEditorSeed } from "./editorSeedSync";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
@@ -60,11 +61,9 @@ const HtmlEditor = ({
     documentFeaturesEnabled,
     advancedBlocksEnabled,
   );
-  const requiresEnabledExtensions = (requiresDocumentFeatures && documentFeaturesEnabled)
-    || (requiresAdvancedBlocks && advancedBlocksEnabled);
   const shouldHoldEditor = (requiresDocumentFeatures && !documentFeaturesEnabled)
     || (requiresAdvancedBlocks && !advancedBlocksEnabled)
-    || (requiresEnabledExtensions && !extensionsReady);
+    || ((documentFeaturesEnabled || advancedBlocksEnabled) && !extensionsReady);
 
   useEffect(() => {
     if (requiresDocumentFeatures && !documentFeaturesEnabled) {
@@ -94,9 +93,21 @@ const HtmlEditor = ({
   const editor = useEditor({
     extensions: shouldHoldEditor ? coreExtensions : extensions,
     content: shouldHoldEditor ? "" : (initialTiptapDoc || initialHtml),
-    onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML(), editor.getJSON()),
+    onCreate: ({ editor }) => {
+      rememberEditorSelection(editor);
+    },
+    onFocus: ({ editor }) => {
+      rememberEditorSelection(editor);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      rememberEditorSelection(editor);
+    },
+    onUpdate: ({ editor }) => {
+      rememberEditorSelection(editor);
+      handleWysiwygUpdate(editor.getHTML(), editor.getJSON());
+    },
     editorProps: editorPropsDefault,
-  });
+  }, [advancedBlocksEnabled, documentFeaturesEnabled, extensionsReady, shouldHoldEditor]);
 
   useEffect(() => {
     const nextHtml = initialContent || "";

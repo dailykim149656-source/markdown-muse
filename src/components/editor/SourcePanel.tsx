@@ -2,6 +2,13 @@ import type { ChangeEvent, FocusEvent, KeyboardEvent, ReactNode, RefObject } fro
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ArrowLeftRight, Code2, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SourcePanelHeaderProps {
   label: string;
@@ -15,42 +22,52 @@ const SourcePanelHeader = ({
   onSwap,
   onClose,
   onButtonKeyDown,
-}: SourcePanelHeaderProps) => (
-  <div className="h-8 flex items-center justify-between px-3 bg-secondary/50 border-b border-border shrink-0">
-    <div className="flex items-center gap-1.5">
+}: SourcePanelHeaderProps) => {
+  const isMobile = useIsMobile();
+
+  return (
+  <div className={`border-b border-border bg-secondary/50 shrink-0 ${isMobile ? "min-h-11 px-3 py-2" : "h-8 px-3"}`}>
+    <div className="flex h-full items-center justify-between gap-2">
+    <div className="flex min-w-0 flex-1 items-center gap-1.5">
       <Code2 className="h-3.5 w-3.5 text-muted-foreground" />
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="text-[10px] text-muted-foreground/60 ml-1">
+      <span className="truncate text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="ml-1 hidden text-[10px] text-muted-foreground/60 sm:block">
         Tip: Tab to indent, Shift+Tab to outdent
       </span>
     </div>
-    <div className="flex items-center gap-0.5">
+    <div className="flex shrink-0 items-center gap-0.5">
+      {!isMobile && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0"
+          onClick={onSwap}
+          title="Move source panel"
+          tabIndex={-1}
+          onKeyDownCapture={onButtonKeyDown}
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          <ArrowLeftRight className="h-3.5 w-3.5" />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="sm"
         className="h-6 w-6 p-0"
-        onClick={onSwap}
-        title="Move source panel"
-        tabIndex={-1}
-        onKeyDownCapture={onButtonKeyDown}
-        onMouseDown={(event) => event.preventDefault()}
-      >
-        <ArrowLeftRight className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-6 w-6 p-0"
+        aria-label="Close source panel"
         onClick={onClose}
+        title="Close source panel"
         tabIndex={-1}
         onKeyDownCapture={onButtonKeyDown}
         onMouseDown={(event) => event.preventDefault()}
       >
-          <PanelRightClose className="h-3.5 w-3.5" />
+        <PanelRightClose className="h-3.5 w-3.5" />
       </Button>
     </div>
   </div>
-);
+  </div>
+  );
+};
 
 interface SourcePanelProps {
   label: string;
@@ -84,6 +101,8 @@ const SourcePanel = ({
   textareaRef,
   children,
 }: SourcePanelProps) => {
+  const isMobile = useIsMobile();
+
   const handlePanelKeyDownCapture = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Tab") {
       if (onPanelKeyDownCapture) {
@@ -128,7 +147,7 @@ const SourcePanel = ({
 
   return (
     <div
-      className="h-full flex flex-col bg-background"
+      className={`flex h-full min-h-0 flex-col bg-background ${isMobile ? "rounded-t-2xl" : ""}`}
       ref={rootRef}
       onKeyDownCapture={handlePanelKeyDownCapture}
       onFocusCapture={onPanelFocusCapture}
@@ -147,7 +166,7 @@ const SourcePanel = ({
           onKeyDownCapture={onKeyDownCapture}
           onKeyDown={onKeyDown}
           spellCheck={false}
-          className="flex-1 w-full bg-background text-foreground font-mono text-xs p-4 resize-none outline-none leading-relaxed"
+          className="flex-1 min-h-0 w-full resize-none bg-background p-4 font-mono text-xs leading-relaxed text-foreground outline-none"
           placeholder={placeholder}
         />
       )}
@@ -170,14 +189,16 @@ const SplitEditorLayout = ({
   editorContent,
   sourcePanel,
 }: SplitEditorLayoutProps) => {
-  if (!showPanel) {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
     return (
-      <div className="flex-1 overflow-y-auto tiptap-editor relative">
+      <div className="relative flex-1 overflow-y-auto tiptap-editor">
         {editorContent}
         <Button
           variant="ghost"
           size="sm"
-          className="absolute right-2 top-2 h-7 gap-1 px-2 text-xs text-muted-foreground z-10"
+          className="absolute right-2 top-2 z-10 h-7 gap-1 px-2 text-xs text-muted-foreground"
           onClick={() => onShowPanel(true)}
           tabIndex={-1}
           onKeyDownCapture={(event) => {
@@ -191,29 +212,83 @@ const SplitEditorLayout = ({
           <PanelRightOpen className="h-3.5 w-3.5" />
           Source
         </Button>
+        <Sheet onOpenChange={onShowPanel} open={showPanel}>
+          <SheetContent
+            className="h-[88svh] gap-0 overflow-hidden rounded-t-2xl border-x-0 border-b-0 px-0 pb-0 pt-0 [&>button]:hidden"
+            side="bottom"
+          >
+            <div className="sr-only">
+              <SheetTitle>Source panel</SheetTitle>
+              <SheetDescription>
+                Edit and review the raw source for the current document on mobile.
+              </SheetDescription>
+            </div>
+            {sourcePanel}
+          </SheetContent>
+        </Sheet>
       </div>
     );
   }
 
   return (
     <ResizablePanelGroup direction="horizontal" className="flex-1">
-      {sourceLeft ? (
+      {showPanel && sourceLeft && (
         <>
-          <ResizablePanel defaultSize={40} minSize={20} maxSize={70}>
+          <ResizablePanel
+            collapsible
+            collapsedSize={0}
+            defaultSize={40}
+            id="desktop-source-panel"
+            maxSize={70}
+            minSize={20}
+            order={1}
+          >
             {sourcePanel}
           </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={60} minSize={20}>
-            <div className="h-full overflow-y-auto tiptap-editor">{editorContent}</div>
-          </ResizablePanel>
+          <ResizableHandle id="desktop-source-handle-left" withHandle />
         </>
-      ) : (
+      )}
+      <ResizablePanel
+        defaultSize={showPanel ? 60 : 100}
+        id="desktop-editor-panel"
+        minSize={20}
+        order={showPanel && sourceLeft ? 2 : 1}
+      >
+        <div className="relative h-full overflow-y-auto tiptap-editor">
+          {editorContent}
+          {!showPanel && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute right-2 top-2 h-7 gap-1 px-2 text-xs text-muted-foreground z-10"
+              onClick={() => onShowPanel(true)}
+              tabIndex={-1}
+              onKeyDownCapture={(event) => {
+                if (event.key === "Tab") {
+                  event.preventDefault();
+                  onShowPanel(true);
+                }
+              }}
+              onMouseDown={(event) => event.preventDefault()}
+            >
+              <PanelRightOpen className="h-3.5 w-3.5" />
+              Source
+            </Button>
+          )}
+        </div>
+      </ResizablePanel>
+      {showPanel && !sourceLeft && (
         <>
-          <ResizablePanel defaultSize={60} minSize={20}>
-            <div className="h-full overflow-y-auto tiptap-editor">{editorContent}</div>
-          </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={40} minSize={20} maxSize={70}>
+          <ResizableHandle id="desktop-source-handle-right" withHandle />
+          <ResizablePanel
+            collapsible
+            collapsedSize={0}
+            defaultSize={40}
+            id="desktop-source-panel"
+            maxSize={70}
+            minSize={20}
+            order={2}
+          >
             {sourcePanel}
           </ResizablePanel>
         </>

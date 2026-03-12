@@ -9,6 +9,7 @@ import {
   tiptapDocumentHasDocumentContent,
 } from "./editorAdvancedContent";
 import { useEditorExtensions } from "./editorConfig";
+import { rememberEditorSelection } from "./editorSelectionMemory";
 import { applyEditorSeed } from "./editorSeedSync";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import { createMarkedInstance, createTurndownService } from "./utils/markdownRoundtrip";
@@ -49,11 +50,13 @@ const MarkdownEditor = ({
   const [sourceLeft, setSourceLeft] = useState(false);
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const sourcePanelRef = useRef<HTMLDivElement | null>(null);
+  const pendingSourceSyncHtmlRef = useRef<string | null>(null);
 
   const syncingFromWysiwyg = useRef(false);
   const syncingFromSource = useRef(false);
   const sourceSyncFrame = useRef<number | null>(null);
   const seedSignatureRef = useRef<string | null>(null);
+  const [sourceSyncRevision, setSourceSyncRevision] = useState(0);
 
   const turndownService = useMemo(() => createTurndownService(), []);
   const markedInstance = useMemo(() => createMarkedInstance(), []);
@@ -74,11 +77,9 @@ const MarkdownEditor = ({
     documentFeaturesEnabled,
     advancedBlocksEnabled,
   );
-  const requiresEnabledExtensions = (requiresDocumentFeatures && documentFeaturesEnabled)
-    || (requiresAdvancedBlocks && advancedBlocksEnabled);
   const shouldHoldEditor = (requiresDocumentFeatures && !documentFeaturesEnabled)
     || (requiresAdvancedBlocks && !advancedBlocksEnabled)
-    || (requiresEnabledExtensions && !extensionsReady);
+    || ((documentFeaturesEnabled || advancedBlocksEnabled) && !extensionsReady);
 
   useEffect(() => {
     if (requiresDocumentFeatures && !documentFeaturesEnabled) {
@@ -94,7 +95,7 @@ const MarkdownEditor = ({
 
   const handleWysiwygUpdate = useCallback(
     (html: string, document: JSONContent) => {
-      if (syncingFromSource.current) return;
+      if (shouldHoldEditor || syncingFromSource.current) return;
       syncingFromWysiwyg.current = true;
       const md = turndownService.turndown(html);
       setMdSource(md);
@@ -103,15 +104,27 @@ const MarkdownEditor = ({
       onTiptapChange?.(document);
       queueMicrotask(() => { syncingFromWysiwyg.current = false; });
     },
-    [onContentChange, onHtmlChange, onTiptapChange, turndownService]
+    [onContentChange, onHtmlChange, onTiptapChange, shouldHoldEditor, turndownService]
   );
 
   const editor = useEditor({
     extensions: shouldHoldEditor ? coreExtensions : extensions,
     content: shouldHoldEditor ? "" : (initialTiptapDoc || initialHtml),
-    onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML(), editor.getJSON()),
+    onCreate: ({ editor }) => {
+      rememberEditorSelection(editor);
+    },
+    onFocus: ({ editor }) => {
+      rememberEditorSelection(editor);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      rememberEditorSelection(editor);
+    },
+    onUpdate: ({ editor }) => {
+      rememberEditorSelection(editor);
+      handleWysiwygUpdate(editor.getHTML(), editor.getJSON());
+    },
     editorProps: editorPropsDefault,
-  });
+  }, [advancedBlocksEnabled, documentFeaturesEnabled, extensionsReady, shouldHoldEditor]);
 
   useEffect(() => {
     const nextMarkdown = initialContent || "";
@@ -136,7 +149,7 @@ const MarkdownEditor = ({
   useEffect(() => {
     onEditorReady?.(editor);
 
-    if (editor) {
+    if (editor && !shouldHoldEditor) {
       onHtmlChange?.(editor.getHTML());
       onTiptapChange?.(editor.getJSON());
     }
@@ -144,7 +157,7 @@ const MarkdownEditor = ({
     return () => {
       onEditorReady?.(null);
     };
-  }, [editor, onEditorReady, onHtmlChange, onTiptapChange]);
+  }, [editor, onEditorReady, onHtmlChange, onTiptapChange, shouldHoldEditor]);
 
   const focusSourceTextarea = useCallback(() => {
     const textarea = sourceTextareaRef.current;
@@ -157,6 +170,34 @@ const MarkdownEditor = ({
     });
   }, []);
 
+  const commitSourceMarkdown = useCallback((nextMarkdown: string) => {
+    const html = markedInstance.parse(nextMarkdown, { async: false }) as string;
+
+    setMdSource(nextMarkdown);
+    onContentChange?.(nextMarkdown);
+    onHtmlChange?.(html);
+
+    pendingSourceSyncHtmlRef.current = html;
+    setSourceSyncRevision((current) => current + 1);
+
+    if (!documentFeaturesEnabled && htmlHasDocumentContent(html)) {
+      onEnableDocumentFeatures?.();
+      return;
+    }
+
+    if (!advancedBlocksEnabled && htmlHasAdvancedContent(html)) {
+      onEnableAdvancedBlocks?.();
+    }
+  }, [
+    advancedBlocksEnabled,
+    documentFeaturesEnabled,
+    markedInstance,
+    onContentChange,
+    onEnableAdvancedBlocks,
+    onEnableDocumentFeatures,
+    onHtmlChange,
+  ]);
+
   const applySourceTabIndent = useCallback((ta: HTMLTextAreaElement, shiftKey: boolean) => {
     const start = ta.selectionStart ?? 0;
     const end = ta.selectionEnd ?? 0;
@@ -165,7 +206,7 @@ const MarkdownEditor = ({
       shiftKey,
     });
 
-    setMdSource(next.value);
+    commitSourceMarkdown(next.value);
 
     requestAnimationFrame(() => {
       if (document.activeElement !== ta) {
@@ -173,7 +214,7 @@ const MarkdownEditor = ({
       }
       ta.setSelectionRange(next.selectionStart, next.selectionEnd);
     });
-  }, []);
+  }, [commitSourceMarkdown]);
 
   useEffect(() => {
     if (!showPanel) return;
@@ -182,42 +223,56 @@ const MarkdownEditor = ({
 
   const handleSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newMd = e.target.value;
-      const html = markedInstance.parse(newMd, { async: false }) as string;
-      setMdSource(newMd);
-      onContentChange?.(newMd);
-      onHtmlChange?.(html);
-      if (!documentFeaturesEnabled && htmlHasDocumentContent(html)) {
-        onEnableDocumentFeatures?.();
-        return;
-      }
-      if (!advancedBlocksEnabled && htmlHasAdvancedContent(html)) {
-        onEnableAdvancedBlocks?.();
+      commitSourceMarkdown(e.target.value);
+    },
+    [commitSourceMarkdown]
+  );
+
+  useEffect(() => {
+    if (sourceSyncFrame.current !== null) {
+      cancelAnimationFrame(sourceSyncFrame.current);
+    }
+
+    if (!editor || shouldHoldEditor || syncingFromWysiwyg.current || !pendingSourceSyncHtmlRef.current) {
+      return;
+    }
+
+    sourceSyncFrame.current = requestAnimationFrame(() => {
+      sourceSyncFrame.current = null;
+      const nextHtml = pendingSourceSyncHtmlRef.current;
+
+      if (!editor || syncingFromWysiwyg.current || !nextHtml) {
         return;
       }
 
+      if (editor.getHTML() === nextHtml) {
+        pendingSourceSyncHtmlRef.current = null;
+        return;
+      }
+
+      syncingFromSource.current = true;
+      pendingSourceSyncHtmlRef.current = null;
+      editor.commands.setContent(nextHtml, { emitUpdate: false });
+      onTiptapChange?.(editor.getJSON());
+      queueMicrotask(() => {
+        syncingFromSource.current = false;
+      });
+    });
+
+    return () => {
       if (sourceSyncFrame.current !== null) {
         cancelAnimationFrame(sourceSyncFrame.current);
-      }
-
-      sourceSyncFrame.current = requestAnimationFrame(() => {
         sourceSyncFrame.current = null;
-        if (!editor || syncingFromWysiwyg.current) return;
-        if (editor.getHTML() === html) return;
-        syncingFromSource.current = true;
-        editor.commands.setContent(html, { emitUpdate: false });
-        onTiptapChange?.(editor.getJSON());
-        queueMicrotask(() => { syncingFromSource.current = false; });
-      });
-    },
-    [advancedBlocksEnabled, documentFeaturesEnabled, editor, markedInstance, onContentChange, onEnableAdvancedBlocks, onEnableDocumentFeatures, onHtmlChange, onTiptapChange]
-  );
+      }
+    };
+  }, [editor, onTiptapChange, shouldHoldEditor, sourceSyncRevision]);
 
   useEffect(() => () => {
     if (sourceSyncFrame.current !== null) {
       cancelAnimationFrame(sourceSyncFrame.current);
       sourceSyncFrame.current = null;
     }
+    pendingSourceSyncHtmlRef.current = null;
   }, []);
 
   const handleSourceKeyDown = useCallback(
