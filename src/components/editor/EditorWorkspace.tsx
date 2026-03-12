@@ -12,9 +12,9 @@ import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { useIsTabletLayout } from "@/hooks/use-mobile";
 
 const SIDEBAR_WIDTH_COOKIE_KEY = "docsy-sidebar-width";
-const SIDEBAR_MIN_WIDTH = 360;
+const SIDEBAR_MIN_WIDTH = 400;
 const SIDEBAR_MAX_WIDTH = 560;
-const SIDEBAR_DEFAULT_WIDTH = 360;
+const SIDEBAR_DEFAULT_WIDTH = 400;
 const SIDEBAR_RESIZE_HANDLE_WIDTH = 6;
 const SIDEBAR_ICON_WIDTH = 48;
 

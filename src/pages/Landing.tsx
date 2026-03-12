@@ -134,15 +134,15 @@ const Landing = () => {
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <motion.nav
         animate={{ opacity: 1, y: 0 }}
-        className="sticky top-0 z-50 flex items-center justify-between border-b border-border bg-background/80 px-6 py-4 backdrop-blur-xl sm:px-10"
+        className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/80 px-6 py-4 backdrop-blur-xl sm:flex-nowrap sm:items-center sm:px-10"
         initial={{ opacity: 0, y: -20 }}
         transition={{ duration: 0.4 }}
       >
-        <div className="flex items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <img alt={t("common.appName")} className="h-8 w-8" src={docslyLogoSmall} />
           <span className="text-lg font-bold tracking-tight">{t("common.appName")}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
           <div className="flex items-center gap-1 rounded-lg border border-border p-1">
             <Languages className="ml-1 h-4 w-4 text-muted-foreground" />
             {LOCALES.map((nextLocale) => (
@@ -252,7 +252,7 @@ const Landing = () => {
 
         <motion.div
           animate="visible"
-          className="mt-8 flex items-center gap-6 text-sm text-muted-foreground"
+          className="mt-8 flex flex-wrap items-center gap-3 text-sm text-muted-foreground"
           custom={4}
           initial="hidden"
           variants={fadeUp}

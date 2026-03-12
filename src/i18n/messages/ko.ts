@@ -1144,6 +1144,9 @@ const ko: MessageTree = {
       sharedDocumentFailed: "공유 문서를 열지 못했습니다.",
       loadedDocument: "\"{name}\" 문서를 불러왔습니다.",
     },
+    workspace: {
+      apiUnreachable: "Google Workspace API에 연결할 수 없습니다. VITE_AI_API_BASE_URL 값을 확인하세요. 현재 대상: {target}. 개발 서버를 다시 시작해야 할 수 있습니다.",
+    },
   },
 };
 

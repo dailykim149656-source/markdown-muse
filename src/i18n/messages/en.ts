@@ -1067,6 +1067,9 @@ const en: MessageTree = {
       sharedDocumentFailed: "Failed to open the shared document.",
       loadedDocument: "Loaded document \"{name}\".",
     },
+    workspace: {
+      apiUnreachable: "Google Workspace API is not reachable. Check VITE_AI_API_BASE_URL (current: {target}) and restart the dev server.",
+    },
   },
 };
 

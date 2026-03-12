@@ -6,14 +6,14 @@
       "connectionId": "google:107423509289228120824",
       "provider": "google_drive",
       "tokens": {
-        "accessToken": "ya29.a0ATkoCc5PDRYyaWxWCDufhfK-oU8E27gD_DPL0UntPSBAGer8Ztgk1S9oyTssb-vaj6VD8uoIO10Fx_7aoB23imUcPofQ-GHrSOmvGl8rrS_D5l068uw4TMczsDzU_JSZpJPcAm9GDdM032_Qxl4GTIiLEy1FxNy_GR1ntNr4VN6pGprU7U0DS4g9OsQkUVg98PDXqyAaCgYKATQSARQSFQHGX2Mi_X4N-zU_7K-Z1pqlQhLXQA0206",
-        "expiryDate": 1773299611937,
-        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjUzMDcyNGQ0OTE3M2EzZWQ2YjRhMDBhYTYzNDQyMDMwMGQ3MmFlNWIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiIzOTkzNTk3ODExOTEtb244Y2tzMzEzMmNrcWsybTZtMDN1cWVoaTRsbWl0MDkuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiIzOTkzNTk3ODExOTEtb244Y2tzMzEzMmNrcWsybTZtMDN1cWVoaTRsbWl0MDkuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMDc0MjM1MDkyODkyMjgxMjA4MjQiLCJlbWFpbCI6ImRhaWx5a2ltMTQ5NjU2QGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJhdF9oYXNoIjoiSTN2RUw2ZGpJU0t6c3FYeGxyOW9pQSIsIm5hbWUiOiLquYDtmqjsl7QiLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSXVmaW8zMTJCdk91Q29FSjZIVTFHWUhFSHBMR3BsVGoxOXdWSlZlX2F4WGpNUnRzaEs9czk2LWMiLCJnaXZlbl9uYW1lIjoi7Zqo7Je0IiwiZmFtaWx5X25hbWUiOiLquYAiLCJpYXQiOjE3NzMyOTYwMTksImV4cCI6MTc3MzI5OTYxOX0.mDlkRMeD_Z5YooB3WWF6yTHi7UeuIGIUx6KTlEr9UrKDVAytdxJzW3vXleMp974I8qUIbbrf5mwGdI1uAjzoQ3Fo_yyB4ypSCFzAbFDIBrw-ljkKlmy8YVTqMU-cA2LiD4RFmz44h6lNiLtF0xGnpLJvUibsN-rFS5fIoywLPj72eO2yrEKTlUQb0zeE0XiqtY9fRs8f1CbUeJ1CzJH6e6xsskuqdjbLMytz43Sw0hzAc2cOpzRrznFkiJpFEk3PFHGP5ysvSflfYYWINFyr1Fc7_Wi2PDwcWuoMuSmVJzjSfh-0hqTZLUmmdTbk0A5RDiIkgKLH4lT1YSMKyJcVjQ",
+        "accessToken": "ya29.a0ATkoCc7u_Dv_Y_mglEvquBsTQk7TztAq3VP_BKLsvllvltyOael0E0oYkgjKsLf4qUbMh_Mup3-nWDZ27LXjHHf44sWVY93mxV9tWJopgaHggDlDU0GHqbGMFQJR8DTwcSsDzwvLam1vWllmYBACg5B6cHPdP9xrrOim1yrHRumNpiFECoXFjjLkGDHkYAfL5qNG5tn7aCgYKAb4SARQSFQHGX2MipE-UJc7mjI_cQpjhrKGJxw0207",
+        "expiryDate": 1773319587652,
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjUzMDcyNGQ0OTE3M2EzZWQ2YjRhMDBhYTYzNDQyMDMwMGQ3MmFlNWIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiIzOTkzNTk3ODExOTEtb244Y2tzMzEzMmNrcWsybTZtMDN1cWVoaTRsbWl0MDkuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiIzOTkzNTk3ODExOTEtb244Y2tzMzEzMmNrcWsybTZtMDN1cWVoaTRsbWl0MDkuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMDc0MjM1MDkyODkyMjgxMjA4MjQiLCJlbWFpbCI6ImRhaWx5a2ltMTQ5NjU2QGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJhdF9oYXNoIjoiYkNPM1N4VUNrRXFlaXRJeFVETEZfdyIsIm5hbWUiOiLquYDtmqjsl7QiLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSXVmaW8zMTJCdk91Q29FSjZIVTFHWUhFSHBMR3BsVGoxOXdWSlZlX2F4WGpNUnRzaEs9czk2LWMiLCJnaXZlbl9uYW1lIjoi7Zqo7Je0IiwiZmFtaWx5X25hbWUiOiLquYAiLCJpYXQiOjE3NzMzMTU5OTUsImV4cCI6MTc3MzMxOTU5NX0.Kul1l6oJX6cU_X-GMCi13foahJTGg8L5Ks1t0fNJokW-DChIbDH7c7vwRyjhIvXfZuraCypAFXx5fb6smS1BSmNEL_OHTur1M9IovC_Qg_wFg9U7C4ykOZ9YplVn0r2dMXpqGsdSqyi5x5qlWrU8EoM-NzKXouc7ivtyS9xLL1weYqPhrnvKzNt4zCuxIDcwIXP9K0Eam_hQbiLPFuOgiMxUVkPxx6GdSLcnaIXAOv2hmi_ntBD7FJB-iITb7Kqhaz7oe6-iCqqkf7WnjIME-Onn9H7t_QB-XGwMiHVprcKpUI4tOS_W8H9SMljrSZhn_ItCKg2Tud8SDIoG8Xd1Gg",
         "refreshToken": "1//0eEXmxjbB4XClCgYIARAAGA4SNwF-L9IrK9dmj6N3evAUQs_20d3ArUl2YbBr6ftZVRytC6XwZMSAqiH7H1HQh2NBudfsCQuFpg4",
-        "scope": "https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email openid https://www.googleapis.com/auth/drive.metadata.readonly",
+        "scope": "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/drive.metadata.readonly openid https://www.googleapis.com/auth/drive.readonly",
         "tokenType": "Bearer"
       },
-      "updatedAt": 1773296012937,
+      "updatedAt": 1773315989652,
       "user": {
         "email": "dailykim149656@gmail.com",
         "name": "김효열",
@@ -6179,14 +6179,6 @@
       "updatedAt": 1773292437967
     }
   },
-  "sessions": {
-    "463cd4b2-3f4a-4fde-a5df-1a0f031298db": {
-      "connectionId": "google:107423509289228120824",
-      "createdAt": 1773291845170,
-      "expiresAt": 1775883845170,
-      "sessionId": "463cd4b2-3f4a-4fde-a5df-1a0f031298db",
-      "updatedAt": 1773291845170
-    }
-  },
+  "sessions": {},
   "version": 1
 }

@@ -257,9 +257,10 @@ const FileSidebar = ({
                     <SidebarMenuItem key={document.id}>
                       <SidebarMenuButton
                         asChild
-                        className={`group/item w-full ${isActive ? "bg-accent text-accent-foreground" : ""}`}
+                        className={`group/item w-full !h-auto !min-h-[4.75rem] !overflow-visible items-start py-2 ${isActive ? "bg-accent text-accent-foreground" : ""}`}
                       >
                         <div
+                          className="flex min-h-0 w-full items-start gap-2"
                           onClick={() => !isEditing && onSelectDoc(document.id)}
                           onKeyDown={(event) => {
                             if (isEditing) {
@@ -274,13 +275,13 @@ const FileSidebar = ({
                           role="button"
                           tabIndex={0}
                         >
-                          <Icon className="h-4 w-4 shrink-0" />
-                          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                          <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                          <div className="min-w-0 flex-1 overflow-hidden group-data-[collapsible=icon]:hidden">
                             {isEditing ? (
-                              <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                              <div className="flex min-w-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
                                 <Input
                                   autoFocus
-                                  className="h-5 px-1 text-xs"
+                                  className="h-5 w-full min-w-0 px-1 text-xs"
                                   onChange={(event) => setEditName(event.target.value)}
                                   onKeyDown={(event) => {
                                     if (event.key === "Enter") {
@@ -301,46 +302,46 @@ const FileSidebar = ({
                                 </Button>
                               </div>
                             ) : (
-                              <div className="flex items-center justify-between">
-                                <div className="min-w-0">
-                                  <div className="truncate text-xs font-medium">
+                              <div className="flex min-h-0 min-w-0 flex-col gap-1">
+                                <div className="grid min-w-0 grid-cols-[1fr_auto] items-start gap-2">
+                                  <div className="truncate text-xs font-medium leading-normal">
                                     {document.name || t("common.untitled")}
                                     <span className="ml-0.5 text-muted-foreground/60">{modeExtension(document.mode)}</span>
                                   </div>
-                                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                    <Clock className="h-2.5 w-2.5" />
-                                    {formatDate(document.updatedAt)}
+                                  <div className="flex flex-shrink-0 items-center gap-0.5 self-start opacity-0 transition-opacity group-hover/item:opacity-100">
+                                    <button
+                                      className="rounded p-0.5 hover:bg-secondary"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        startRename(document);
+                                      }}
+                                      title={t("sidebar.rename")}
+                                      type="button"
+                                    >
+                                      <Pencil className="h-3 w-3 text-muted-foreground" />
+                                    </button>
+                                    <button
+                                      className="rounded p-0.5 hover:bg-destructive/10"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        onDeleteDoc(document.id);
+                                      }}
+                                      title={t("sidebar.delete")}
+                                      type="button"
+                                    >
+                                      <Trash2 className="h-3 w-3 text-destructive" />
+                                    </button>
                                   </div>
-                                  {workspaceProviderLabel && workspaceSyncLabel && (
-                                    <div className="mt-1 text-[10px] text-muted-foreground">
-                                      {workspaceProviderLabel} • {workspaceSyncLabel}
-                                    </div>
-                                  )}
                                 </div>
-                                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
-                                  <button
-                                    className="rounded p-0.5 hover:bg-secondary"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      startRename(document);
-                                    }}
-                                    title={t("sidebar.rename")}
-                                    type="button"
-                                  >
-                                    <Pencil className="h-3 w-3 text-muted-foreground" />
-                                  </button>
-                                  <button
-                                    className="rounded p-0.5 hover:bg-destructive/10"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      onDeleteDoc(document.id);
-                                    }}
-                                    title={t("sidebar.delete")}
-                                    type="button"
-                                  >
-                                    <Trash2 className="h-3 w-3 text-destructive" />
-                                  </button>
+                                <div className="flex min-w-0 items-center gap-1 text-[10px] leading-snug text-muted-foreground">
+                                  <Clock className="h-2.5 w-2.5 shrink-0" />
+                                  <span>{formatDate(document.updatedAt)}</span>
                                 </div>
+                                {workspaceProviderLabel && workspaceSyncLabel ? (
+                                  <div className="break-words text-[10px] leading-snug text-muted-foreground">
+                                    {workspaceProviderLabel} ??{workspaceSyncLabel}
+                                  </div>
+                                ) : null}
                               </div>
                             )}
                           </div>
@@ -468,3 +469,4 @@ const FileSidebar = ({
 };
 
 export default FileSidebar;
+

@@ -88,7 +88,7 @@ const EditorToolbarAdvancedTools = ({
   const { t } = useI18n();
 
   return (
-    <div className={mobile ? "flex flex-wrap items-center gap-1" : "flex items-center gap-0.5"}>
+    <div className={mobile ? "flex flex-wrap items-center gap-1" : "flex flex-wrap items-center gap-0.5"}>
       <MathMenu editor={editor} />
       <Toggle
         className="h-8 w-8 rounded-sm p-0 hover:bg-toolbar-active/50"

@@ -219,8 +219,8 @@ const EditorHeader = ({
 
   return (
     <header className="border-b border-border bg-background">
-      <div className="flex min-h-12 items-center justify-between gap-2 px-2 sm:px-4">
-        <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
+      <div className="flex min-h-12 w-full flex-wrap items-start justify-between gap-2 px-2 py-1 sm:px-4 sm:py-1 xl:flex-nowrap xl:items-center">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:gap-2">
           <Button
             variant="ghost"
             size="sm"
@@ -230,7 +230,7 @@ const EditorHeader = ({
           >
             <PanelLeft className="h-4 w-4" />
           </Button>
-          <Link to="/" className="hidden shrink-0 items-center gap-2 transition-opacity hover:opacity-80 sm:flex">
+          <Link to="/" className="hidden min-w-0 shrink-0 items-center gap-2 transition-opacity hover:opacity-80 sm:flex">
             <img src={docslyLogoSmall} alt={t("common.appName")} className="h-6 w-6" />
             <span className="mr-1 text-sm font-bold text-foreground">{t("common.appName")}</span>
           </Link>
@@ -275,7 +275,7 @@ const EditorHeader = ({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                className="h-7 shrink-0 gap-1 px-2 text-xs"
+                className="h-7 min-w-0 shrink-0 gap-1 px-2 text-xs"
                 size="sm"
                 title={`${currentFamilyLabel}: ${renderModeLabel(mode)}`}
                 variant="outline"
@@ -332,7 +332,7 @@ const EditorHeader = ({
           </DropdownMenu>
         </div>
 
-        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+        <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-0.5 sm:gap-1 xl:w-auto xl:flex-nowrap">
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>

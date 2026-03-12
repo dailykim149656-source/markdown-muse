@@ -179,8 +179,11 @@ const EditorToolbar = ({
     alignmentGroup,
   ];
 
-  const renderToolbarGroups = (keyPrefix: string) => toolbarGroups.map((group, groupIndex) => (
-    <div className="flex shrink-0 snap-start items-center gap-0.5" key={`${keyPrefix}-group-${groupIndex}`}>
+  const renderToolbarGroups = (keyPrefix: string, mobile: boolean) => toolbarGroups.map((group, groupIndex) => (
+    <div
+      className={mobile ? "flex shrink-0 snap-start items-center gap-0.5" : "flex flex-wrap items-center gap-0.5"}
+      key={`${keyPrefix}-group-${groupIndex}`}
+    >
       {groupIndex > 0 && <Separator className="mx-1.5 h-5" orientation="vertical" />}
       {group.map((item) => (
         <Toggle
@@ -207,7 +210,7 @@ const EditorToolbar = ({
             className="scrollbar-thin flex w-full min-w-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain [scroll-snap-type:x_proximity] [scrollbar-width:thin] [touch-action:pan-x] [-webkit-overflow-scrolling:touch]"
             data-testid="toolbar-mobile-scroll"
           >
-            {renderToolbarGroups("mobile")}
+            {renderToolbarGroups("mobile", true)}
             <div className="flex shrink-0 snap-start items-center gap-0.5">
               <Separator className="mx-1.5 h-5" orientation="vertical" />
               <CoreInsertTools editor={editor} />
@@ -255,14 +258,14 @@ const EditorToolbar = ({
         </div>
       </div>
 
-      <div className="hidden w-full min-w-max items-center gap-0.5 overflow-x-auto overscroll-x-contain px-3 py-1.5 [scroll-snap-type:x_proximity] [scrollbar-width:thin] [touch-action:pan-x] [-webkit-overflow-scrolling:touch] sm:flex">
-        {renderToolbarGroups("desktop")}
-        <div className="flex shrink-0 snap-start items-center gap-0.5">
+      <div className="hidden w-full flex-wrap items-start gap-x-0.5 gap-y-1 overflow-visible px-3 py-1.5 sm:flex">
+        {renderToolbarGroups("desktop", false)}
+        <div className="flex flex-wrap items-center gap-0.5">
           <Separator className="mx-1.5 h-5" orientation="vertical" />
           <CoreInsertTools editor={editor} />
         </div>
         {documentFeaturesEnabled && (
-          <div className="flex shrink-0 snap-start items-center gap-0.5">
+          <div className="flex flex-wrap items-center gap-0.5">
             <Separator className="mx-1.5 h-5" orientation="vertical" />
             <Suspense fallback={null}>
               <EditorToolbarDocumentTools editor={editor} />
@@ -270,7 +273,7 @@ const EditorToolbar = ({
           </div>
         )}
         {!documentFeaturesEnabled && canEnableDocumentFeatures && onEnableDocumentFeatures && (
-          <div className="flex shrink-0 snap-start items-center gap-0.5">
+          <div className="flex flex-wrap items-center gap-0.5">
             <Separator className="mx-1.5 h-5" orientation="vertical" />
             <Button className="h-8 gap-1 px-2 text-xs font-normal hover:bg-toolbar-active/50" onClick={onEnableDocumentFeatures} size="sm" variant="ghost">
               {t("toolbar.actions.enableDocumentTools")}
@@ -278,7 +281,7 @@ const EditorToolbar = ({
           </div>
         )}
         {advancedBlocksEnabled && (
-          <div className="flex shrink-0 snap-start items-center gap-0.5">
+          <div className="flex flex-wrap items-center gap-0.5">
             <Separator className="mx-1.5 h-5" orientation="vertical" />
             <Suspense fallback={null}>
               <EditorToolbarAdvancedTools editor={editor} />
@@ -286,7 +289,7 @@ const EditorToolbar = ({
           </div>
         )}
         {!advancedBlocksEnabled && canEnableAdvancedBlocks && onEnableAdvancedBlocks && (
-          <div className="flex shrink-0 snap-start items-center gap-0.5">
+          <div className="flex flex-wrap items-center gap-0.5">
             <Separator className="mx-1.5 h-5" orientation="vertical" />
             <Button className="h-8 gap-1 px-2 text-xs font-normal hover:bg-toolbar-active/50" onClick={onEnableAdvancedBlocks} size="sm" variant="ghost">
               {t("toolbar.actions.enableAdvancedBlocks")}

@@ -78,6 +78,13 @@ export default defineConfig(({ mode }) => {
     hmr: {
       overlay: false,
     },
+    proxy: {
+      "/api": {
+        changeOrigin: true,
+        secure: false,
+        target: "http://localhost:8787",
+      },
+    },
   },
   plugins: [react(), bundleReportPlugin(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

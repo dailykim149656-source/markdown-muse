@@ -424,6 +424,7 @@ const Index = () => {
   });
   const {
     connected: workspaceConnected,
+    connectivityDiagnostic,
     disconnect: disconnectWorkspace,
     error: workspaceAuthError,
     isConnecting: workspaceConnecting,
@@ -778,7 +779,19 @@ const Index = () => {
       return next;
     }, { replace: true });
   }, [setSearchParams]);
-  const workspaceErrorMessage = workspaceAuthError instanceof Error ? workspaceAuthError.message : null;
+  const workspaceErrorMessage = useMemo(() => {
+    if (!(workspaceAuthError instanceof Error)) {
+      return null;
+    }
+
+    if (workspaceAuthError.message.includes("Workspace API is not reachable")) {
+      return t("hooks.workspace.apiUnreachable", {
+        target: connectivityDiagnostic?.target || "/api",
+      });
+    }
+
+    return workspaceAuthError.message;
+  }, [connectivityDiagnostic?.target, t, workspaceAuthError]);
   const workspaceExportErrorMessage = workspaceExportError instanceof Error ? workspaceExportError.message : null;
   const workspaceImportErrorMessage = workspaceFilesError instanceof Error ? workspaceFilesError.message : null;
   const workspaceChangesErrorMessage = workspaceChangesError instanceof Error ? workspaceChangesError.message : null;
@@ -941,6 +954,16 @@ const Index = () => {
     void runAiIntent(pendingAiIntent);
     setPendingAiIntent(null);
   }, [activeEditor, aiRuntimeState, currentRenderableMarkdown, pendingAiIntent, runAiIntent]);
+
+  useEffect(() => {
+    if (!workspaceErrorMessage) {
+      return;
+    }
+
+    toast.error(workspaceErrorMessage, {
+      id: "workspace-auth-startup-error",
+    });
+  }, [workspaceErrorMessage]);
 
   useEffect(() => {
     const authResult = searchParams.get("workspaceAuth");
