@@ -150,22 +150,13 @@ jobs:
 
           printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\n" "${AI_API_BASE_URL}" > .env.production.local
 
-          npm ci
-          npm run build:web
-
-      - name: Verify bundled AI API URL
-        run: |
-          set -euo pipefail
-          AI_API_BASE_URL="${{ secrets.GCP_WEB_VITE_AI_API_BASE_URL }}"
-          if [ -z "${AI_API_BASE_URL}" ]; then
-            AI_API_BASE_URL="${{ needs.deploy-ai.outputs.ai_service_url }}"
-          fi
-
-          if ! grep -R --fixed-strings "${AI_API_BASE_URL}" dist >/dev/null 2>&1; then
-            echo "Built frontend does not appear to contain the configured AI API URL."
-            echo "Expected URL: ${AI_API_BASE_URL}"
+          if ! grep -F "VITE_AI_API_BASE_URL=${AI_API_BASE_URL}" .env.production.local >/dev/null 2>&1; then
+            echo "Failed to write VITE_AI_API_BASE_URL to .env.production.local"
             exit 1
           fi
+
+          npm ci
+          npm run build:web
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
