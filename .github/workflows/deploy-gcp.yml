@@ -27,7 +27,6 @@ jobs:
       ARTIFACT_REPOSITORY: docsy
       GEMINI_MODEL: gemini-2.5-flash
       GEMINI_API_KEY_SECRET: gemini-api-key
-      GCP_DEPLOYER_SERVICE_ACCOUNT_EMAIL: ${{ fromJson(secrets.GCP_SA_KEY).client_email }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,19 +67,10 @@ jobs:
             "$GEMINI_API_KEY_SECRET" \
             "$RUN_SERVICE_ACCOUNT")
 
-          # Try explicit service account first. If act-as permission is blocked
-          # by IAM policy, retry without explicit service-account.
-          if ! gcloud builds submit \
+          gcloud builds submit \
             --config cloudbuild.ai.yaml \
             --substitutions="${SUBSTITUTIONS}" \
-            --service-account="projects/${PROJECT_ID}/serviceAccounts/${GCP_DEPLOYER_SERVICE_ACCOUNT_EMAIL}" \
-            .; then
-            echo "Build submit failed with explicit service account. Retrying without explicit service-account."
-            gcloud builds submit \
-              --config cloudbuild.ai.yaml \
-              --substitutions="${SUBSTITUTIONS}" \
-              .
-          fi
+            .
 
           AI_URL="$(gcloud run services describe ${AI_SERVICE_NAME} --region ${GCP_REGION} --format='value(status.url)')"
 
