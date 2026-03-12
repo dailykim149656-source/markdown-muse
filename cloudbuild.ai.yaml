@@ -27,13 +27,18 @@ steps:
       - --port=8080
       - --ingress=all
       - --service-account=${_RUN_SERVICE_ACCOUNT}
-      - --set-env-vars=GEMINI_MODEL=${_GEMINI_MODEL},AI_ALLOWED_ORIGIN=${_AI_ALLOWED_ORIGIN}
+      - --set-env-vars=GEMINI_MODEL=${_GEMINI_MODEL},AI_ALLOWED_ORIGIN=${_AI_ALLOWED_ORIGIN},GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID},GOOGLE_CLIENT_SECRET=${_GOOGLE_CLIENT_SECRET},GOOGLE_OAUTH_REDIRECT_URI=${_GOOGLE_OAUTH_REDIRECT_URI},WORKSPACE_FRONTEND_ORIGIN=${_WORKSPACE_FRONTEND_ORIGIN},GOOGLE_WORKSPACE_SCOPES=${_GOOGLE_WORKSPACE_SCOPES}
       - --update-secrets=GEMINI_API_KEY=${_GEMINI_API_KEY_SECRET}:latest
 substitutions:
   _REGION: asia-northeast3
   _SERVICE_NAME: docsy
   _GEMINI_MODEL: gemini-2.5-flash
   _AI_ALLOWED_ORIGIN: "*"
+  _GOOGLE_CLIENT_ID: ""
+  _GOOGLE_CLIENT_SECRET: ""
+  _GOOGLE_OAUTH_REDIRECT_URI: ""
+  _WORKSPACE_FRONTEND_ORIGIN: ""
+  _GOOGLE_WORKSPACE_SCOPES: "openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents"
   _GEMINI_API_KEY_SECRET: gemini-api-key
   _RUN_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
 images:
