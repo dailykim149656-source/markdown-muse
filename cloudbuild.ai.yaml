@@ -25,6 +25,7 @@ steps:
       - --platform=managed
       - --allow-unauthenticated
       - --port=8080
+      - --ingress=all
       - --service-account=${_RUN_SERVICE_ACCOUNT}
       - --set-env-vars=GEMINI_MODEL=${_GEMINI_MODEL},AI_ALLOWED_ORIGIN=${_AI_ALLOWED_ORIGIN}
       - --update-secrets=GEMINI_API_KEY=${_GEMINI_API_KEY_SECRET}:latest
