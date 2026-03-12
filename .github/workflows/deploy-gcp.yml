@@ -145,7 +145,7 @@ jobs:
         run: |
           set -euo pipefail
           gcloud storage cp --recursive dist/. gs://"${BUCKET}"/
-          gcloud storage buckets update gs://"${BUCKET}" --web-main-page-suffix=index.html --web-not-found-page=index.html
+          gcloud storage buckets update gs://"${BUCKET}" --web-main-page-suffix=index.html --web-error-page=index.html
 
       - name: Verify frontend file
         run: |
