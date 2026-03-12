@@ -27,6 +27,7 @@ jobs:
       ARTIFACT_REPOSITORY: docsy
       GEMINI_MODEL: gemini-2.5-flash
       GEMINI_API_KEY_SECRET: gemini-api-key
+      GCP_DEPLOYER_SERVICE_ACCOUNT_EMAIL: ${{ fromJson(secrets.GCP_SA_KEY).client_email }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -66,6 +67,7 @@ jobs:
           gcloud builds submit \
             --config cloudbuild.ai.yaml \
             --substitutions="${SUBSTITUTIONS}" \
+            --service-account="${GCP_DEPLOYER_SERVICE_ACCOUNT_EMAIL}" \
             .
 
           AI_URL="$(gcloud run services describe ${AI_SERVICE_NAME} --region ${GCP_REGION} --format='value(status.url)')"
