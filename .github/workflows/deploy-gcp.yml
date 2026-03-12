@@ -148,10 +148,10 @@ jobs:
 
           echo "Building frontend with VITE_AI_API_BASE_URL=${AI_API_BASE_URL}"
 
-          printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\n" "${AI_API_BASE_URL}" > .env.production.local
+          printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\n" "${AI_API_BASE_URL}" > .env.web.local
 
-          if ! grep -F "VITE_AI_API_BASE_URL=${AI_API_BASE_URL}" .env.production.local >/dev/null 2>&1; then
-            echo "Failed to write VITE_AI_API_BASE_URL to .env.production.local"
+          if ! grep -F "VITE_AI_API_BASE_URL=${AI_API_BASE_URL}" .env.web.local >/dev/null 2>&1; then
+            echo "Failed to write VITE_AI_API_BASE_URL to .env.web.local"
             exit 1
           fi
 
