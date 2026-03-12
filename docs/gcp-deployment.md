@@ -2,7 +2,7 @@
 
 Markdown Muse is deployed to GCP in two parts:
 
-- frontend: static web build
+- frontend: static web build on Firebase Hosting
 - AI API: Cloud Run service
 
 The desktop profile is not part of the GCP deployment path. GCP should serve the
@@ -35,28 +35,20 @@ npm run build:web
 
 The generated `dist/` folder is the deployable frontend artifact.
 
-### 3. Upload to Cloud Storage
+### 3. Deploy to Firebase Hosting
 
-Upload the static bundle to a bucket that will sit behind HTTPS Load Balancer +
-Cloud CDN.
+Deploy the static bundle with Firebase Hosting.
 
 ```bash
-gcloud storage cp --recursive dist gs://YOUR_BUCKET
+firebase deploy --only hosting
 ```
 
 ### 4. Configure static hosting
 
-Recommended shape:
+Firebase Hosting must rewrite unknown SPA paths such as `/editor` to
+`/index.html`.
 
-- Cloud Storage bucket for static files
-- HTTPS Load Balancer in front of the bucket
-- Cloud CDN enabled on the backend bucket
-
-Important routing rule:
-
-- unknown SPA paths such as `/editor` must rewrite to `/index.html`
-
-Without this rewrite, direct navigation and refresh on editor routes will fail.
+This repository already includes that rewrite in `firebase.json`.
 
 ### 5. Cache guidance
 
@@ -122,7 +114,7 @@ Required repository secrets:
 - `GCP_SA_KEY` (service account JSON, or replace with workload identity auth)
 - `GCP_PROJECT_ID`
 - `GCP_AI_ALLOWED_ORIGIN` (exact frontend origin)
-- `GCP_FRONTEND_BUCKET`
+- `FIREBASE_SERVICE_ACCOUNT_URBAN_DDS`
 
 The workflow does:
 
@@ -131,16 +123,20 @@ The workflow does:
 - web profile build (`npm run build:web`) with:
   - `VITE_APP_PROFILE=web`
   - `VITE_AI_API_BASE_URL` from deployed Cloud Run URL
-- upload `dist/` to Cloud Storage and set SPA fallback to `index.html`
+- deploy `dist/` to Firebase Hosting with SPA fallback to `index.html`
+
+Recommended repository secret:
+
+- `GCP_WEB_VITE_AI_API_BASE_URL` (explicit Cloud Run base URL for frontend builds)
 
 ## Recommended rollout shape
 
 1. Deploy the AI API first.
 2. Confirm `GET /api/ai/health` works from the public URL.
 3. Build the frontend with `VITE_AI_API_BASE_URL` pointing to that Cloud Run URL.
-4. Upload frontend assets.
-5. Update the load balancer rewrite rule for SPA routes.
-6. Turn on CDN caching for hashed assets.
+4. Deploy the frontend to Firebase Hosting.
+5. Confirm SPA rewrites for routes such as `/editor`.
+6. Turn on appropriate caching for hashed assets.
 
 ## 도메인이 없을 때 가장 쉬운 배포(기본 제공 도메인)
 
@@ -157,7 +153,7 @@ The workflow does:
 
 - `GCP_PROJECT_ID`
 - `GCP_SA_KEY`
-- `GCP_FRONTEND_BUCKET`
+- `FIREBASE_SERVICE_ACCOUNT_URBAN_DDS`
 - `GCP_AI_ALLOWED_ORIGIN`는 임시 배포 단계에서는 생략 가능(워크플로우에서 기본 `*`로 동작)
 
 2) AI CORS
@@ -187,6 +183,108 @@ Verify all of the following:
 - refresh on `/editor` works
 - share-link hash routes still open correctly
 - web build loads the `web` profile, not the desktop profile
+
+## Deployment Checklist
+
+### Cloud Run env
+
+Required:
+
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+- `GEMINI_MODEL`
+- `AI_ALLOWED_ORIGIN`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_OAUTH_REDIRECT_URI`
+- `WORKSPACE_FRONTEND_ORIGIN`
+
+Recommended:
+
+- `GOOGLE_WORKSPACE_SCOPES`
+- `WORKSPACE_STATE_PATH`
+
+Expected shape:
+
+- `AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- `WORKSPACE_FRONTEND_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- `GOOGLE_OAUTH_REDIRECT_URI=https://YOUR_CLOUD_RUN_URL/api/auth/google/callback`
+
+### GitHub repository secrets
+
+Required:
+
+- `GCP_SA_KEY`
+- `GCP_PROJECT_ID`
+- `GCP_AI_ALLOWED_ORIGIN`
+- `FIREBASE_SERVICE_ACCOUNT_URBAN_DDS`
+
+Recommended:
+
+- `GCP_WEB_VITE_AI_API_BASE_URL`
+
+Expected shape:
+
+- `GCP_AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- `GCP_WEB_VITE_AI_API_BASE_URL=https://YOUR_CLOUD_RUN_URL`
+
+### Frontend build env
+
+Required:
+
+- `VITE_APP_PROFILE=web`
+- `VITE_AI_API_BASE_URL=https://YOUR_CLOUD_RUN_URL`
+
+## Troubleshooting
+
+### Google Workspace API error after deploy
+
+Symptom:
+
+- `Google Workspace API is not reachable`
+- `Unexpected token '<'`
+- frontend requests appear to target `/api`
+
+Cause:
+
+- the frontend was built without `VITE_AI_API_BASE_URL`
+- in static hosting, `/api` points to the frontend host unless you configured a real reverse proxy
+- the browser receives `index.html` instead of JSON from the AI API
+
+Fix:
+
+1. Confirm the Cloud Run service is healthy:
+   - `GET https://YOUR_CLOUD_RUN_URL/api/ai/health`
+2. Set frontend build env:
+   - `VITE_APP_PROFILE=web`
+   - `VITE_AI_API_BASE_URL=https://YOUR_CLOUD_RUN_URL`
+3. Rebuild and redeploy the frontend
+4. If you intentionally use `/api`, configure an actual reverse proxy from the frontend host to Cloud Run
+
+### Google OAuth redirect mismatch
+
+Symptom:
+
+- Google login fails after consent
+- callback errors mention redirect mismatch or missing callback parameters
+
+Fix:
+
+- Cloud Run env:
+  - `GOOGLE_OAUTH_REDIRECT_URI=https://YOUR_CLOUD_RUN_URL/api/auth/google/callback`
+  - `WORKSPACE_FRONTEND_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- Google Cloud OAuth client:
+  - add the exact same callback URL to `Authorized redirect URIs`
+
+### CORS failure between frontend and AI API
+
+Symptom:
+
+- browser requests to Cloud Run fail only in deployed frontend
+
+Fix:
+
+- set `AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- use the exact frontend origin, including protocol
 
 ## Notes
 

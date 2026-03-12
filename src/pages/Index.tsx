@@ -812,12 +812,12 @@ const Index = () => {
     }
 
     if (!workspaceExportEnabled) {
-      toast.error("Google Docs export is only available for unlinked rich-text documents.");
+      toast.error(t("hooks.workspace.exportUnavailable"));
       return;
     }
 
     setWorkspaceExportOpen(true);
-  }, [workspaceConnected, workspaceExportEnabled]);
+  }, [t, workspaceConnected, workspaceExportEnabled]);
   const handleOpenWorkspaceImport = useCallback(() => {
     if (!workspaceConnected) {
       setWorkspaceConnectionOpen(true);
@@ -832,20 +832,20 @@ const Index = () => {
       : "/editor";
 
     void openGoogleConnect(returnTo).catch((error) => {
-      const message = error instanceof Error ? error.message : "Failed to start Google Workspace auth.";
+      const message = error instanceof Error ? error.message : t("hooks.workspace.authStartFailed");
       toast.error(message);
     });
-  }, [openGoogleConnect]);
+  }, [openGoogleConnect, t]);
   const handleDisconnectWorkspace = useCallback(() => {
     void disconnectWorkspace()
       .then(() => {
-        toast.success("Google Workspace disconnected.");
+        toast.success(t("hooks.workspace.disconnected"));
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : "Failed to disconnect Google Workspace.";
+        const message = error instanceof Error ? error.message : t("hooks.workspace.disconnectFailed");
         toast.error(message);
       });
-  }, [disconnectWorkspace]);
+  }, [disconnectWorkspace, t]);
   const handleImportWorkspaceFile = useCallback((fileId: string) => {
     void importWorkspaceFile({ fileId })
       .then((result) => {
@@ -855,13 +855,15 @@ const Index = () => {
           importedDocument: result.document,
         }));
         setWorkspaceImportOpen(false);
-        toast.success(`Imported "${result.document.name || "Google document"}".`);
+        toast.success(t("hooks.workspace.importSuccess", {
+          name: result.document.name || "Google document",
+        }));
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : "Failed to import the selected Google document.";
+        const message = error instanceof Error ? error.message : t("hooks.workspace.importFailed");
         toast.error(message);
       });
-  }, [activeDocId, createDocument, documents, importWorkspaceFile]);
+  }, [activeDocId, createDocument, documents, importWorkspaceFile, t]);
   const handleExportWorkspaceDocument = useCallback((title: string) => {
     void exportWorkspaceDocument(activeDoc, {
       markdown: resolveActiveWorkspaceMarkdown(),
@@ -872,14 +874,16 @@ const Index = () => {
         if (result.warnings.length > 0) {
           toast.warning(result.warnings[0]);
         } else {
-          toast.success(`Exported "${title.trim() || activeDoc.name || "Untitled"}" to Google Docs.`);
+          toast.success(t("hooks.workspace.exportSuccess", {
+            name: title.trim() || activeDoc.name || t("common.untitled"),
+          }));
         }
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : "Failed to export the Google document.";
+        const message = error instanceof Error ? error.message : t("hooks.workspace.exportFailed");
         toast.error(message);
       });
-  }, [activeDoc, exportWorkspaceDocument, resolveActiveWorkspaceMarkdown]);
+  }, [activeDoc, exportWorkspaceDocument, resolveActiveWorkspaceMarkdown, t]);
   const handleSaveWorkspaceDocument = useCallback(() => {
     if (!activeDoc.workspaceBinding) {
       return;
@@ -898,38 +902,41 @@ const Index = () => {
           return;
         }
 
-        toast.success("Saved to Google Docs.");
+        toast.success(t("hooks.workspace.saveSuccess"));
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : "Failed to save the Google document.";
+        const message = error instanceof Error ? error.message : t("hooks.workspace.saveFailed");
         toast.error(message);
       });
-  }, [activeDoc, resolveActiveWorkspaceMarkdown, syncDocument]);
+  }, [activeDoc, resolveActiveWorkspaceMarkdown, syncDocument, t]);
   const handleRescanWorkspaceChanges = useCallback(() => {
     void rescanWorkspaceChanges()
       .then((result) => {
         if (result.changes.length === 0) {
-          toast.info("No remote Google Docs changes were detected.");
+          toast.info(t("hooks.workspace.rescanNone"));
           return;
         }
 
-        toast.warning(`Detected ${result.changes.length} changed Google document${result.changes.length === 1 ? "" : "s"}.`);
+        toast.warning(t("hooks.workspace.rescanDetected", {
+          count: result.changes.length,
+          suffix: result.changes.length === 1 ? "" : "s",
+        }));
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : "Failed to rescan Google Workspace sources.";
+        const message = error instanceof Error ? error.message : t("hooks.workspace.rescanFailed");
         toast.error(message);
       });
-  }, [rescanWorkspaceChanges]);
+  }, [rescanWorkspaceChanges, t]);
   const handleRefreshWorkspaceDocument = useCallback((documentId: string) => {
     void refreshWorkspaceDocument(documentId)
       .then(() => {
-        toast.success("Refreshed the Google document.");
+        toast.success(t("hooks.workspace.refreshSuccess"));
       })
       .catch((error) => {
-        const message = error instanceof Error ? error.message : "Failed to refresh the Google document.";
+        const message = error instanceof Error ? error.message : t("hooks.workspace.refreshFailed");
         toast.error(message);
       });
-  }, [refreshWorkspaceDocument]);
+  }, [refreshWorkspaceDocument, t]);
 
   useEffect(() => {
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
@@ -1035,7 +1042,7 @@ const Index = () => {
     }
 
     if (authResult === "connected") {
-      toast.success("Google Workspace connected.");
+      toast.success(t("hooks.workspace.connected"));
       void refetchWorkspaceAuth();
     } else if (authError) {
       toast.error(authError);
@@ -1043,7 +1050,7 @@ const Index = () => {
     }
 
     clearWorkspaceAuthParams();
-  }, [clearWorkspaceAuthParams, refetchWorkspaceAuth, searchParams]);
+  }, [clearWorkspaceAuthParams, refetchWorkspaceAuth, searchParams, t]);
 
   useEffect(() => {
     if (!workspaceConnected && workspaceImportOpen) {
