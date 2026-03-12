@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
 import {
   ArrowRight,
@@ -585,6 +585,10 @@ const Landing = () => {
           <span className="text-sm font-semibold">{t("common.appName")}</span>
         </div>
         <p className="text-xs text-muted-foreground">{t("landing.footer")}</p>
+        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+          <Link className="transition-colors hover:text-foreground" to="/privacy">Privacy</Link>
+          <Link className="transition-colors hover:text-foreground" to="/terms">Terms</Link>
+        </div>
       </footer>
     </div>
   );
