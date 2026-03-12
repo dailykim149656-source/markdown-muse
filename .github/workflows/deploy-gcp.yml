@@ -144,8 +144,7 @@ jobs:
       - name: Deploy dist to Cloud Storage bucket
         run: |
           set -euo pipefail
-          gcloud storage cp --recursive dist/. gs://"${BUCKET}"/
-          gcloud storage buckets update gs://"${BUCKET}" --web-main-page-suffix=index.html --web-error-page=index.html
+          gcloud storage cp --recursive dist/* gs://"${BUCKET}"/
 
       - name: Verify frontend file
         run: |

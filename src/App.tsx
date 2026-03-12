@@ -30,6 +30,7 @@ const App = () => (
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<Landing />} />
+              <Route path="/index.html" element={<Landing />} />
               <Route path="/guide" element={<Guide />} />
               <Route path="/editor" element={<Index />} />
               <Route path="/editor/graph" element={<WorkspaceGraph />} />
