@@ -2,6 +2,19 @@
 
 Date: 2026-03-09
 
+## Historical Note
+
+This document records the post-v0.6 epic view from 2026-03-09.
+
+Parts of this document have since been implemented, especially around graph
+visualization and release-closeout productization.
+
+For the current repository-state view, use:
+
+- `docs/prd-status-check-2026-03-11.md`
+- `docs/remaining-work-execution-plan-2026-03-11.md`
+- `docs/release-closeout-checklist-2026-03-11.md`
+
 ## Context
 
 The currently implemented scope now covers the practical and lower-risk portion of the PRD direction:

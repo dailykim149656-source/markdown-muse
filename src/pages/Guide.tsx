@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Languages, Moon, Search, Sun } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Languages, Link2, Moon, Network, RefreshCw, ShieldCheck, Search, Sun } from "lucide-react";
 import docslyLogo from "@/assets/docsly-logo.png";
 import docslyLogoSmall from "@/assets/docsly-logo-small.png";
-import editorPreview from "@/assets/editor-preview.png";
-import editorPreviewSmall from "@/assets/editor-preview-small.png";
+import marketingEditorSurface from "@/assets/marketing-editor-surface.png";
+import marketingGoogleWorkspaceSurface from "@/assets/marketing-google-workspace-surface.png";
+import marketingGraphSurface from "@/assets/marketing-graph-surface.png";
+import marketingOperationsSurface from "@/assets/marketing-operations-surface.png";
+import marketingPatchReviewSurface from "@/assets/marketing-patch-review-surface.png";
+import marketingQueueSurface from "@/assets/marketing-queue-surface.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getGuideContent } from "@/content/guideContent";
@@ -75,6 +79,79 @@ const Guide = () => {
 
   const hasGuideResults =
     visibleScenarioItems.length > 0 || visibleSections.length > 0 || visibleFaqItems.length > 0;
+  const surfaceGallery = useMemo(() => ([
+    {
+      description: t("guide.currentBuildReviewDescription"),
+      image: marketingPatchReviewSurface,
+      title: t("guide.currentBuildReviewTitle"),
+    },
+    {
+      description: t("guide.currentBuildGraphDescription"),
+      image: marketingGraphSurface,
+      title: t("guide.currentBuildGraphTitle"),
+    },
+    {
+      description: t("guide.currentBuildQueueDescription"),
+      image: marketingQueueSurface,
+      title: t("guide.currentBuildQueueTitle"),
+    },
+    {
+      description: t("guide.currentBuildOperationsDescription"),
+      image: marketingOperationsSurface,
+      title: t("guide.currentBuildOperationsTitle"),
+    },
+    {
+      description: t("guide.currentBuildWorkspaceDescription"),
+      image: marketingGoogleWorkspaceSurface,
+      title: t("guide.currentBuildWorkspaceTitle"),
+    },
+    {
+      description: guideContent.guidePage.visualTourDescription,
+      image: marketingEditorSurface,
+      title: guideContent.guidePage.visualTourTitle,
+    },
+  ]), [guideContent.guidePage.visualTourDescription, guideContent.guidePage.visualTourTitle, t]);
+  const sectionSurfaceMap = useMemo<Record<string, { description: string; image: string; title: string }>>(() => ({
+    "first-document": {
+      description: guideContent.guidePage.visualTourDescription,
+      image: marketingEditorSurface,
+      title: guideContent.guidePage.visualTourTitle,
+    },
+    "basic-editing": {
+      description: guideContent.guidePage.visualTourDescription,
+      image: marketingEditorSurface,
+      title: guideContent.guidePage.visualTourTitle,
+    },
+    "knowledge-and-graph": {
+      description: t("guide.currentBuildGraphDescription"),
+      image: marketingGraphSurface,
+      title: t("guide.currentBuildGraphTitle"),
+    },
+    "patch-review": {
+      description: t("guide.currentBuildReviewDescription"),
+      image: marketingPatchReviewSurface,
+      title: t("guide.currentBuildReviewTitle"),
+    },
+    "multi-document-maintenance": {
+      description: t("guide.currentBuildQueueDescription"),
+      image: marketingQueueSurface,
+      title: t("guide.currentBuildQueueTitle"),
+    },
+    "google-workspace-sync": {
+      description: t("guide.currentBuildWorkspaceDescription"),
+      image: marketingGoogleWorkspaceSurface,
+      title: t("guide.currentBuildWorkspaceTitle"),
+    },
+    "operations-and-release": {
+      description: t("guide.currentBuildOperationsDescription"),
+      image: marketingOperationsSurface,
+      title: t("guide.currentBuildOperationsTitle"),
+    },
+  }), [guideContent.guidePage.visualTourDescription, guideContent.guidePage.visualTourTitle, t]);
+  const workflowSurfaceHighlights = useMemo(() => ([
+    sectionSurfaceMap["google-workspace-sync"],
+    sectionSurfaceMap["operations-and-release"],
+  ].filter(Boolean)), [sectionSurfaceMap]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -177,9 +254,7 @@ const Guide = () => {
               <img
                 alt={guideContent.guidePage.visualTourImageAlt}
                 className="w-full"
-                sizes="(max-width: 1024px) 960px, 1280px"
-                src={editorPreviewSmall}
-                srcSet={`${editorPreviewSmall} 960w, ${editorPreview} 1280w`}
+                src={marketingEditorSurface}
               />
               {guideContent.guidePage.visualTourItems.map((item, index) => (
                 <div
@@ -208,6 +283,144 @@ const Guide = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="px-6 py-12 sm:px-10">
+        <div className="mx-auto max-w-6xl rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
+          <div className="mb-6 max-w-2xl">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              {t("guide.currentBuildTitle")}
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
+              {t("guide.currentBuildDescription")}
+            </p>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+            {[
+              {
+                description: t("guide.currentBuildReviewDescription"),
+                icon: ShieldCheck,
+                title: t("guide.currentBuildReviewTitle"),
+              },
+              {
+                description: t("guide.currentBuildGraphDescription"),
+                icon: Network,
+                title: t("guide.currentBuildGraphTitle"),
+              },
+              {
+                description: t("guide.currentBuildQueueDescription"),
+                icon: RefreshCw,
+                title: t("guide.currentBuildQueueTitle"),
+              },
+              {
+                description: t("guide.currentBuildOperationsDescription"),
+                icon: ShieldCheck,
+                title: t("guide.currentBuildOperationsTitle"),
+              },
+              {
+                description: t("guide.currentBuildWorkspaceDescription"),
+                icon: Link2,
+                title: t("guide.currentBuildWorkspaceTitle"),
+              },
+            ].map(({ description, icon: Icon, title }) => (
+              <div className="rounded-2xl border border-border/70 bg-muted/20 p-5" key={title}>
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="mt-4 text-lg font-semibold text-foreground">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-6 py-12 sm:px-10">
+        <div className="mx-auto max-w-6xl rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
+          <div className="mb-6 max-w-3xl">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              {t("guide.surfaceGalleryTitle")}
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
+              {t("guide.surfaceGalleryDescription")}
+            </p>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {surfaceGallery.map(({ description, image, title }) => (
+              <div className="overflow-hidden rounded-2xl border border-border/70 bg-muted/20" key={title}>
+                <div className="aspect-[16/10] overflow-hidden border-b border-border/70 bg-background">
+                  <img alt={title} className="h-full w-full object-cover object-top" loading="lazy" src={image} />
+                </div>
+                <div className="p-5">
+                  <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-6 py-12 sm:px-10">
+        <div className="mx-auto max-w-6xl rounded-3xl border border-border bg-card p-5 shadow-sm sm:p-6">
+          <div className="mb-6 max-w-3xl">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+              {t("guide.workspaceFlowTitle")}
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-muted-foreground sm:text-base">
+              {t("guide.workspaceFlowDescription")}
+            </p>
+          </div>
+
+          <div className="mb-6 grid gap-5 md:grid-cols-2">
+            {workflowSurfaceHighlights.map((surface) => (
+              <div className="overflow-hidden rounded-2xl border border-border/70 bg-muted/20" key={surface.title}>
+                <div className="aspect-[16/10] overflow-hidden border-b border-border/70 bg-background">
+                  <img
+                    alt={surface.title}
+                    className="h-full w-full object-cover object-top"
+                    loading="lazy"
+                    src={surface.image}
+                  />
+                </div>
+                <div className="p-5">
+                  <h3 className="text-lg font-semibold text-foreground">{surface.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{surface.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <ol className="space-y-3">
+              {[
+                t("guide.workspaceFlowStepConnect"),
+                t("guide.workspaceFlowStepRescan"),
+                t("guide.workspaceFlowStepConflict"),
+                t("guide.workspaceFlowStepWarnings"),
+              ].map((step, index) => (
+                <li className="flex gap-3 rounded-2xl border border-border/70 bg-muted/20 px-4 py-4" key={step}>
+                  <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
+                    {index + 1}
+                  </span>
+                  <span className="pt-0.5 text-sm leading-6 text-foreground">{step}</span>
+                </li>
+              ))}
+            </ol>
+
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 px-5 py-5 text-sm leading-6 text-amber-700 dark:text-amber-300">
+              <div className="flex items-center gap-2 font-semibold text-foreground">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                {t("guide.currentBuildWorkspaceTitle")}
+              </div>
+              <p className="mt-2">
+                {t("guide.currentBuildWorkspaceDescription")}
+              </p>
             </div>
           </div>
         </div>
@@ -327,6 +540,24 @@ const Guide = () => {
               <>
                 {visibleSections.map((section, index) => (
                   <section className="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6" id={section.id} key={section.id}>
+                    {sectionSurfaceMap[section.id] && (
+                      <div className="mb-5 overflow-hidden rounded-2xl border border-border/70 bg-muted/20">
+                        <div className="aspect-[16/9] overflow-hidden border-b border-border/70 bg-background">
+                          <img
+                            alt={sectionSurfaceMap[section.id].title}
+                            className="h-full w-full object-cover object-top"
+                            loading="lazy"
+                            src={sectionSurfaceMap[section.id].image}
+                          />
+                        </div>
+                        <div className="px-4 py-3">
+                          <div className="text-sm font-semibold text-foreground">{sectionSurfaceMap[section.id].title}</div>
+                          <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                            {sectionSurfaceMap[section.id].description}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-start gap-4">
                       <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-sm font-semibold text-amber-600 dark:text-amber-400">
                         {index + 1}

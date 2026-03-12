@@ -20,8 +20,12 @@ import {
 } from "lucide-react";
 import docslyLogo from "@/assets/docsly-logo.png";
 import docslyLogoSmall from "@/assets/docsly-logo-small.png";
-import editorPreview from "@/assets/editor-preview.png";
-import editorPreviewSmall from "@/assets/editor-preview-small.png";
+import marketingEditorSurface from "@/assets/marketing-editor-surface.png";
+import marketingGoogleWorkspaceSurface from "@/assets/marketing-google-workspace-surface.png";
+import marketingGraphSurface from "@/assets/marketing-graph-surface.png";
+import marketingOperationsSurface from "@/assets/marketing-operations-surface.png";
+import marketingPatchReviewSurface from "@/assets/marketing-patch-review-surface.png";
+import marketingQueueSurface from "@/assets/marketing-queue-surface.png";
 import { Button } from "@/components/ui/button";
 import { getGuideContent } from "@/content/guideContent";
 import { useI18n } from "@/i18n/useI18n";
@@ -91,6 +95,38 @@ const Landing = () => {
     { description: t("landing.features.themeDesc"), icon: Moon, title: t("landing.features.themeTitle") },
   ]), [t]);
   const guideContent = useMemo(() => getGuideContent(locale), [locale]);
+  const currentSurfaces = useMemo(() => ([
+    {
+      description: t("landing.features.markdownDesc"),
+      image: marketingEditorSurface,
+      title: t("landing.features.markdownTitle"),
+    },
+    {
+      description: t("landing.features.htmlDesc"),
+      image: marketingGraphSurface,
+      title: t("landing.features.htmlTitle"),
+    },
+    {
+      description: t("landing.features.rstDesc"),
+      image: marketingPatchReviewSurface,
+      title: t("landing.features.rstTitle"),
+    },
+    {
+      description: t("landing.features.tableDesc"),
+      image: marketingQueueSurface,
+      title: t("landing.features.tableTitle"),
+    },
+    {
+      description: t("landing.features.templateDesc"),
+      image: marketingGoogleWorkspaceSurface,
+      title: t("landing.features.templateTitle"),
+    },
+    {
+      description: t("landing.features.exportDesc"),
+      image: marketingOperationsSurface,
+      title: t("landing.features.exportTitle"),
+    },
+  ]), [t]);
 
   const formats = ["Markdown", "LaTeX", "HTML", "Typst", "RST", "AsciiDoc", "JSON", "YAML", "PDF"];
 
@@ -249,17 +285,53 @@ const Landing = () => {
               </div>
               <span className="ml-2 text-xs text-muted-foreground">docsy.app/editor</span>
             </div>
-            <img
-              alt={t("landing.previewAlt")}
-              className="w-full"
-              loading="lazy"
-              sizes="(max-width: 1024px) 960px, 1280px"
-              src={editorPreviewSmall}
-              srcSet={`${editorPreviewSmall} 960w, ${editorPreview} 1280w`}
-            />
+            <img alt={t("landing.previewAlt")} className="w-full" loading="lazy" src={marketingEditorSurface} />
           </motion.div>
         </div>
       </motion.section>
+
+      <section className="px-6 pb-16 sm:px-10">
+        <div className="mx-auto max-w-6xl">
+          <motion.div
+            className="mb-10 text-center"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            <span className="mb-4 inline-block rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
+              {t("landing.surfacesBadge")}
+            </span>
+            <h2 className="mb-4 text-3xl font-bold sm:text-4xl">{t("landing.surfacesTitle")}</h2>
+            <p className="mx-auto max-w-3xl text-lg text-muted-foreground">{t("landing.surfacesDescription")}</p>
+          </motion.div>
+
+          <motion.div
+            className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
+            initial="hidden"
+            variants={staggerContainer}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            {currentSurfaces.map(({ description, image, title }, index) => (
+              <motion.div
+                className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+                custom={index}
+                key={title}
+                variants={fadeUp}
+              >
+                <div className="aspect-[16/10] overflow-hidden border-b border-border bg-muted/20">
+                  <img alt={title} className="h-full w-full object-cover object-top" loading="lazy" src={image} />
+                </div>
+                <div className="p-5">
+                  <h3 className="text-lg font-semibold">{title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
 
       <section className="border-y border-border bg-muted/30 py-10">
         <div className="mx-auto max-w-5xl px-6">

@@ -82,7 +82,13 @@ const renderDialog = (overrides: Record<string, unknown> = {}) =>
       value={{
         locale: "en",
         setLocale: vi.fn(),
-        t: (key) => key,
+        t: (key, params) => {
+          if (!params) {
+            return key;
+          }
+
+          return `${key}:${JSON.stringify(params)}`;
+        },
       }}
     >
       <GraphExplorerDialog
@@ -139,7 +145,13 @@ describe("GraphExplorerDialog", () => {
         value={{
           locale: "en",
           setLocale: vi.fn(),
-          t: (key) => key,
+          t: (key, params) => {
+            if (!params) {
+              return key;
+            }
+
+            return `${key}:${JSON.stringify(params)}`;
+          },
         }}
       >
         <GraphExplorerDialog
@@ -161,6 +173,7 @@ describe("GraphExplorerDialog", () => {
 
     expect(screen.getByText("knowledge.graphScaleLarge")).toBeInTheDocument();
     expect(screen.getByText("knowledge.graphScaleHintLarge")).toBeInTheDocument();
+    expect(screen.getByText('knowledge.graphValidatedRangeValue:{"edges":900,"nodes":480}')).toBeInTheDocument();
   });
 
   it("supports an issues graph mode", async () => {

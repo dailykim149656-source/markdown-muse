@@ -32,7 +32,7 @@ Implemented now:
 
 Not yet fixed as a final release artifact:
 
-- Formalized release checklist usage by operators
+- Release-closeout execution and operator sign-off still need to be completed
 - Synonym coverage beyond heuristic expansion
 - Medium and large workspace usability thresholds documented as hard limits
 
@@ -142,6 +142,10 @@ Current product surface:
 ## Manual verification checklist
 
 Use this list before a release candidate is declared ready.
+
+For the operational execution version of this checklist, use:
+
+- `docs/release-closeout-checklist-2026-03-11.md`
 
 1. Open a consistency issue and move into graph.
 2. Confirm `source -> target` chain is visible.

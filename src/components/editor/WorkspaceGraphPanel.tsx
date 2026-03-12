@@ -5,6 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
+import {
+  VALIDATED_REVIEW_MAX_EDGES,
+  VALIDATED_REVIEW_MAX_NODES,
+  resolveWorkspaceScale,
+} from "@/lib/knowledge/workspaceScale";
 import type {
   KnowledgeGraphEdge,
   KnowledgeGraphNavigationTarget,
@@ -38,22 +43,6 @@ const GraphExplorerSurface = lazy(() =>
 
 const GraphDialogFallback = () => null;
 
-const getWorkspaceScale = (insights: KnowledgeWorkspaceInsights) => {
-  const nodeCount = insights.summary.documentNodeCount
-    + insights.summary.sectionNodeCount
-    + insights.summary.imageNodeCount;
-
-  if (nodeCount <= 120 && insights.summary.edgeCount <= 180) {
-    return "small";
-  }
-
-  if (nodeCount <= 480 && insights.summary.edgeCount <= 900) {
-    return "medium";
-  }
-
-  return "large";
-};
-
 interface WorkspaceGraphPanelProps {
   activeDocumentId?: string;
   insights: KnowledgeWorkspaceInsights;
@@ -75,7 +64,10 @@ const WorkspaceGraphPanel = ({
   const [issuesOnly, setIssuesOnly] = useState(false);
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [explorerSelectedNodeId, setExplorerSelectedNodeId] = useState<string | null>(null);
-  const workspaceScale = useMemo(() => getWorkspaceScale(insights), [insights]);
+  const workspaceScale = useMemo(() => resolveWorkspaceScale(
+    insights.summary.documentNodeCount + insights.summary.sectionNodeCount + insights.summary.imageNodeCount,
+    insights.summary.edgeCount,
+  ), [insights.summary.documentNodeCount, insights.summary.edgeCount, insights.summary.imageNodeCount, insights.summary.sectionNodeCount]);
 
   const nodeById = useMemo(
     () => new Map(insights.nodes.map((node) => [node.id, node])),
@@ -311,6 +303,12 @@ const WorkspaceGraphPanel = ({
             </div>
             <p className="mt-1 leading-4">
               {t(workspaceScale === "medium" ? "knowledge.graphScaleHintMedium" : "knowledge.graphScaleHintLarge")}
+            </p>
+            <p className="mt-1 leading-4">
+              {t("knowledge.graphValidatedRangeValue", {
+                edges: VALIDATED_REVIEW_MAX_EDGES,
+                nodes: VALIDATED_REVIEW_MAX_NODES,
+              })}
             </p>
           </div>
         )}

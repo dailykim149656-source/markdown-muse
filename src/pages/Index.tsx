@@ -83,6 +83,9 @@ interface PendingImpactSuggestionEntry {
   targetDocumentId: string;
 }
 
+const aiIntentRequiresRichTextReadiness = (intent: PendingAiIntent) =>
+  intent.type === "generate-toc" || intent.type === "suggest-updates";
+
 const createSuggestionQueueId = () =>
   `suggestion-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -556,14 +559,17 @@ const Index = () => {
   }, [aiRuntimeState, openPatchReview, t, updateSuggestionQueueEntry]);
 
   const requestAiIntent = useCallback((intent: PendingAiIntent) => {
-    if (aiRuntimeState) {
+    const richTextReady = !aiIntentRequiresRichTextReadiness(intent)
+      || (Boolean(activeEditor) && currentRenderableMarkdown.trim().length > 0);
+
+    if (aiRuntimeState && richTextReady) {
       void runAiIntent(intent);
       return;
     }
 
     setAiRuntimeEnabled(true);
     setPendingAiIntent(intent);
-  }, [aiRuntimeState, runAiIntent]);
+  }, [activeEditor, aiRuntimeState, currentRenderableMarkdown, runAiIntent]);
   const queueKnowledgeSuggestion = useCallback(({
     context,
     forceQueue = false,
@@ -851,9 +857,16 @@ const Index = () => {
       return;
     }
 
+    if (
+      aiIntentRequiresRichTextReadiness(pendingAiIntent)
+      && (!activeEditor || currentRenderableMarkdown.trim().length === 0)
+    ) {
+      return;
+    }
+
     void runAiIntent(pendingAiIntent);
     setPendingAiIntent(null);
-  }, [aiRuntimeState, pendingAiIntent, runAiIntent]);
+  }, [activeEditor, aiRuntimeState, currentRenderableMarkdown, pendingAiIntent, runAiIntent]);
 
   useEffect(() => {
     const authResult = searchParams.get("workspaceAuth");
@@ -1385,6 +1398,7 @@ const Index = () => {
           onReject: handleRejectPatch,
           open: patchReviewOpen,
           patchSet,
+          workspaceSyncWarnings: activeDoc.workspaceBinding?.syncWarnings,
         }}
         shareLinkDialogProps={{
           link: shareLinkInfo.link,

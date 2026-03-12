@@ -65,7 +65,13 @@ describe("WorkspaceGraphPanel", () => {
           value={{
             locale: "en",
             setLocale: vi.fn(),
-            t: (key) => key,
+            t: (key, params) => {
+              if (!params) {
+                return key;
+              }
+
+              return `${key}:${JSON.stringify(params)}`;
+            },
           }}
         >
           <Routes>
@@ -102,7 +108,13 @@ describe("WorkspaceGraphPanel", () => {
           value={{
             locale: "en",
             setLocale: vi.fn(),
-            t: (key) => key,
+            t: (key, params) => {
+              if (!params) {
+                return key;
+              }
+
+              return `${key}:${JSON.stringify(params)}`;
+            },
           }}
         >
           <WorkspaceGraphPanel
@@ -124,6 +136,7 @@ describe("WorkspaceGraphPanel", () => {
 
     expect(screen.getByText("knowledge.graphScaleMedium")).toBeInTheDocument();
     expect(screen.getByText("knowledge.graphScaleHintMedium")).toBeInTheDocument();
+    expect(screen.getByText('knowledge.graphValidatedRangeValue:{"edges":900,"nodes":480}')).toBeInTheDocument();
   });
 
   it("supports an issues graph mode in the panel", () => {
@@ -133,7 +146,13 @@ describe("WorkspaceGraphPanel", () => {
           value={{
             locale: "en",
             setLocale: vi.fn(),
-            t: (key) => key,
+            t: (key, params) => {
+              if (!params) {
+                return key;
+              }
+
+              return `${key}:${JSON.stringify(params)}`;
+            },
           }}
         >
           <WorkspaceGraphPanel

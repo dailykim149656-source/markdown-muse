@@ -35,7 +35,7 @@ Read these if you are changing code or need implementation context:
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
 - [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
-- [Developer Feature Map](developer-feature-map-2026-03-11.md)
+- [Release Closeout Checklist](release-closeout-checklist-2026-03-11.md)
 - [Workspace Graph, Editor, and i18n Session Summary](session-summary-2026-03-11-workspace-graph-editor-i18n-polish.md)
 - [Architecture Overview](architecture-overview-2026-03-10.md)
 - [Docsy Import/Delete/Duplication Fixes](session-summary-2026-03-11-docsy-import-delete-duplication-fixes.md)
@@ -49,11 +49,14 @@ Read these if you are changing code or need implementation context:
 Read these if you are validating release readiness or operational review state:
 
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
+- [Google Workspace Live Validation Runbook](google-workspace-live-validation-runbook-2026-03-12.md)
+- [Release Closeout Results Template](release-closeout-results-template-2026-03-12.md)
 - [Demo Runbook](demo-runbook-2026-03-11.md)
 - [Hackathon Submission Brief](hackathon-submission-brief-2026-03-11.md)
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 - [Submission Checklist](submission-checklist-2026-03-11.md)
 - [Release Gate and DoD for v1.0](release-gate-and-dod-v1-2026-03-10.md)
+- [Release Closeout Checklist](release-closeout-checklist-2026-03-11.md)
 - [PRD Status Check (2026-03-11)](prd-status-check-2026-03-11.md)
 - [Implemented Features Summary](implemented-features-summary-2026-03-11.md)
 
@@ -72,16 +75,20 @@ Read these if you are validating release readiness or operational review state:
 1. [Release Gate and DoD for v1.0](release-gate-and-dod-v1-2026-03-10.md)
 2. [PRD Status Check (2026-03-11)](prd-status-check-2026-03-11.md)
 3. [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
-4. [v0.8-v1.0 Execution Plan](prd-v0.8-to-v1.0-execution-plan-2026-03-10.md)
-5. [Sprint 0 Stabilization Backlog](sprint-0-stabilization-backlog-2026-03-10.md)
+4. [Release Closeout Checklist](release-closeout-checklist-2026-03-11.md)
+5. [v0.8-v1.0 Execution Plan](prd-v0.8-to-v1.0-execution-plan-2026-03-10.md)
+6. [Sprint 0 Stabilization Backlog](sprint-0-stabilization-backlog-2026-03-10.md)
 
 ### If you are preparing a release or handoff
 
 1. [Hackathon Submission Brief](hackathon-submission-brief-2026-03-11.md)
-2. [Demo Runbook](demo-runbook-2026-03-11.md)
-3. [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
-4. [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
-5. [Submission Checklist](submission-checklist-2026-03-11.md)
+2. [Release Closeout Checklist](release-closeout-checklist-2026-03-11.md)
+3. [Google Workspace Live Validation Runbook](google-workspace-live-validation-runbook-2026-03-12.md)
+4. [Release Closeout Results Template](release-closeout-results-template-2026-03-12.md)
+5. [Demo Runbook](demo-runbook-2026-03-11.md)
+6. [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
+7. [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
+8. [Submission Checklist](submission-checklist-2026-03-11.md)
 
 ## Full document catalog
 
@@ -91,15 +98,17 @@ Read these if you are validating release readiness or operational review state:
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 - [Implemented Features Summary](implemented-features-summary-2026-03-11.md)
 - [Implemented Features Summary (Korean)](implemented-features-summary-ko-2026-03-11.md)
-- [Developer Feature Map](developer-feature-map-2026-03-11.md)
 - [PRD Status Check (2026-03-11)](prd-status-check-2026-03-11.md)
 - [Landing Guide Implementation Plan](landing-guide-implementation-plan-2026-03-11.md)
 - [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
+- [Release Closeout Checklist](release-closeout-checklist-2026-03-11.md)
 
 ### Architecture and deployment
 
 - [Hackathon Architecture](architecture-hackathon-2026-03-11.md)
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
+- [Google Workspace Live Validation Runbook](google-workspace-live-validation-runbook-2026-03-12.md)
+- [Release Closeout Results Template](release-closeout-results-template-2026-03-12.md)
 - [Demo Script](demo-script-2026-03-11.md)
 - [Demo Runbook](demo-runbook-2026-03-11.md)
 - [Submission Checklist](submission-checklist-2026-03-11.md)
@@ -111,8 +120,12 @@ Read these if you are validating release readiness or operational review state:
 
 ### Planning docs
 
+- Current-state planning and execution docs:
 - [Release Gate and DoD for v1.0](release-gate-and-dod-v1-2026-03-10.md)
 - [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
+- [Release Closeout Checklist](release-closeout-checklist-2026-03-11.md)
+
+- Historical planning docs:
 - [Sprint 0 Stabilization Backlog](sprint-0-stabilization-backlog-2026-03-10.md)
 - [v0.8-v1.0 Execution Plan](prd-v0.8-to-v1.0-execution-plan-2026-03-10.md)
 - [v0.7 Implementation Plan](prd-v0.7-implementation-plan-2026-03-10.md)

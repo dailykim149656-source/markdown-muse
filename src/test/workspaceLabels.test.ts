@@ -25,11 +25,13 @@ describe("workspaceLabels", () => {
     expect(getWorkspaceSyncLabel({ ...baseBinding, syncStatus: "imported" })).toBe("Imported");
     expect(getWorkspaceSyncLabel({ ...baseBinding, syncStatus: "dirty_local" })).toBe("Local changes");
     expect(getWorkspaceSyncLabel({ ...baseBinding, syncStatus: "synced" })).toBe("Synced");
+    expect(getWorkspaceSyncLabel({ ...baseBinding, syncStatus: "synced", syncWarnings: ["Tables are flattened."] })).toBe("Synced with warnings");
     expect(getWorkspaceSyncLabel({ ...baseBinding, syncStatus: "conflict" })).toBe("Conflict");
   });
 
   it("returns distinct badge classes for synced and conflict states", () => {
     expect(getWorkspaceSyncBadgeClassName({ ...baseBinding, syncStatus: "synced" })).toContain("emerald");
+    expect(getWorkspaceSyncBadgeClassName({ ...baseBinding, syncStatus: "synced", syncWarnings: ["Tables are flattened."] })).toContain("amber");
     expect(getWorkspaceSyncBadgeClassName({ ...baseBinding, syncStatus: "conflict" })).toContain("destructive");
   });
 });

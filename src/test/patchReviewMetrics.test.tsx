@@ -72,6 +72,7 @@ describe("PatchReviewDialog metrics", () => {
         onReject={vi.fn()}
         open
         patchSet={patchSet}
+        workspaceSyncWarnings={["Markdown tables are not preserved in Google Docs sync."]}
       />,
     );
 
@@ -85,6 +86,9 @@ describe("PatchReviewDialog metrics", () => {
     expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByText('patchReview.provenanceHintMissing:{"count":1}')).toBeInTheDocument();
     expect(screen.getByText('patchReview.provenanceGapCount:{"count":1}')).toBeInTheDocument();
+    expect(screen.getByText("patchReview.workspaceSyncWarningsTitle")).toBeInTheDocument();
+    expect(screen.getByText("patchReview.workspaceSyncWarningsDescription")).toBeInTheDocument();
+    expect(screen.getByText("Markdown tables are not preserved in Google Docs sync.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "patchReview.provenanceGapsOnly" }));
 

@@ -59,6 +59,7 @@ export const useWorkspaceChanges = ({
             ...workspaceBinding,
             driveModifiedTime: change.modifiedTime || workspaceBinding.driveModifiedTime,
             syncError: "Remote Google Doc changed. Refresh before syncing.",
+            syncWarnings: undefined,
             syncStatus: "conflict",
           },
         });
@@ -94,6 +95,7 @@ export const useWorkspaceChanges = ({
           ...workspaceBinding,
           driveModifiedTime: change.modifiedTime || workspaceBinding.driveModifiedTime,
           syncError: "Remote Google Doc changed. Refresh before syncing.",
+          syncWarnings: undefined,
           syncStatus: "conflict",
         },
       });

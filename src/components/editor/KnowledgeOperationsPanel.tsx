@@ -2,6 +2,12 @@ import { Activity, CheckCircle2, CircleAlert, ClipboardCheck, Copy, Gauge } from
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n/useI18n";
+import {
+  VALIDATED_REVIEW_MAX_EDGES,
+  VALIDATED_REVIEW_MAX_NODES,
+  resolveRecommendedReviewBatchSize,
+  resolveWorkspaceScale,
+} from "@/lib/knowledge/workspaceScale";
 import type { KnowledgeSuggestionQueueItem } from "@/components/editor/sidebarFeatureTypes";
 import { toast } from "sonner";
 
@@ -58,17 +64,13 @@ const KnowledgeOperationsPanel = ({
   const reviewProgress = patchCount === 0
     ? 100
     : Math.min(100, Math.round((acceptedPatchCount / patchCount) * 100));
-  const workspaceScale = nodeCount <= 120 && edgeCount <= 180
-    ? "small"
-    : nodeCount <= 480 && edgeCount <= 900
-      ? "medium"
-      : "large";
+  const workspaceScale = resolveWorkspaceScale(nodeCount, edgeCount);
   const validatedRangeExceeded = workspaceScale === "large";
-  const recommendedBatchSize = workspaceScale === "small"
-    ? 4
-    : workspaceScale === "medium"
-      ? 2
-      : 1;
+  const recommendedBatchSize = resolveRecommendedReviewBatchSize(workspaceScale);
+  const validatedRangeLabel = t("knowledge.operationsValidatedRangeValue", {
+    edges: VALIDATED_REVIEW_MAX_EDGES,
+    nodes: VALIDATED_REVIEW_MAX_NODES,
+  });
   const gateChecks = [
     {
       hold: failedCount > 0,
@@ -88,9 +90,15 @@ const KnowledgeOperationsPanel = ({
     {
       hold: validatedRangeExceeded,
       key: "knowledge.operationsCheckValidatedRange",
-      value: t(validatedRangeExceeded
-        ? "knowledge.operationsScaleLarge"
-        : "knowledge.operationsScaleSupported"),
+      value: t(
+        validatedRangeExceeded
+          ? "knowledge.operationsValidatedRangeExceededValue"
+          : "knowledge.operationsValidatedRangeValue",
+        {
+          edges: VALIDATED_REVIEW_MAX_EDGES,
+          nodes: VALIDATED_REVIEW_MAX_NODES,
+        },
+      ),
     },
     {
       hold: !checklistComplete,
@@ -190,6 +198,10 @@ const KnowledgeOperationsPanel = ({
       nodes: nodeCount,
       scale: t(`knowledge.operationsScale${workspaceScale.charAt(0).toUpperCase()}${workspaceScale.slice(1)}`),
     }),
+    t("knowledge.operationsSummaryValidatedRange", {
+      edges: VALIDATED_REVIEW_MAX_EDGES,
+      nodes: VALIDATED_REVIEW_MAX_NODES,
+    }),
     t("knowledge.operationsSummaryBatch", {
       count: recommendedBatchSize,
     }),
@@ -205,7 +217,10 @@ const KnowledgeOperationsPanel = ({
   ].join("\n");
 
   return (
-    <section className="space-y-3 rounded-lg border border-border/60 bg-background/70 p-3 group-data-[collapsible=icon]:hidden">
+    <section
+      className="space-y-3 rounded-lg border border-border/60 bg-background/70 p-3 group-data-[collapsible=icon]:hidden"
+      data-testid="operations-gate-panel"
+    >
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -311,6 +326,9 @@ const KnowledgeOperationsPanel = ({
           <div className="font-medium text-foreground">{t("knowledge.operationsPerformanceBudget")}</div>
           <p className="mt-1 leading-4">
             {t("knowledge.operationsBatchHint", { count: recommendedBatchSize })}
+          </p>
+          <p className="mt-1 leading-4">
+            {validatedRangeLabel}
           </p>
           <p className="mt-1 leading-4">
             {t(validatedRangeExceeded

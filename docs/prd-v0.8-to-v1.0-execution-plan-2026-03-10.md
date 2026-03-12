@@ -2,6 +2,16 @@
 
 Date: 2026-03-10
 
+## Historical Note
+
+This document is a historical execution plan from 2026-03-10.
+
+For the current repository-state view, use:
+
+- `docs/prd-status-check-2026-03-11.md`
+- `docs/remaining-work-execution-plan-2026-03-11.md`
+- `docs/release-closeout-checklist-2026-03-11.md`
+
 ## References
 
 - `PRD/docsy_prd.docx`

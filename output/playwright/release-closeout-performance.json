@@ -1,0 +1,33 @@
+{
+  "baseUrl": "http://127.0.0.1:4177",
+  "capturedAt": "2026-03-12T01:12:39.535Z",
+  "results": [
+    {
+      "documentCount": 10,
+      "editorLoadMs": 631,
+      "graphFilterSearchMs": 105,
+      "graphRouteOpenMs": 1002,
+      "knowledgeSearchMs": 477,
+      "queueCreationToReadyMs": 14013,
+      "tier": "small"
+    },
+    {
+      "documentCount": 40,
+      "editorLoadMs": 432,
+      "graphFilterSearchMs": 128,
+      "graphRouteOpenMs": 954,
+      "knowledgeSearchMs": 498,
+      "queueCreationToReadyMs": 14854,
+      "tier": "medium"
+    },
+    {
+      "documentCount": 90,
+      "editorLoadMs": 592,
+      "graphFilterSearchMs": 310,
+      "graphRouteOpenMs": 1222,
+      "knowledgeSearchMs": 514,
+      "queueCreationToReadyMs": 15712,
+      "tier": "large"
+    }
+  ]
+}

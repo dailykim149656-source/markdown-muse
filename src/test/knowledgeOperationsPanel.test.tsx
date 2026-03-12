@@ -96,8 +96,9 @@ describe("KnowledgeOperationsPanel", () => {
     expect(screen.getByText("knowledge.operationsScaleHintMedium")).toBeInTheDocument();
     expect(screen.getByText("knowledge.operationsPerformanceBudget")).toBeInTheDocument();
     expect(screen.getByText('knowledge.operationsBatchHint:{"count":2}')).toBeInTheDocument();
+    expect(screen.getByText('knowledge.operationsValidatedRangeValue:{"edges":900,"nodes":480}')).toBeInTheDocument();
     expect(screen.getByText("knowledge.operationsValidatedRangeHealthy")).toBeInTheDocument();
-    expect(screen.getByText('knowledge.operationsCheckValidatedRange:{"value":"knowledge.operationsScaleSupported"}')).toBeInTheDocument();
+    expect(screen.getByText('knowledge.operationsCheckValidatedRange:{"value":"knowledge.operationsValidatedRangeValue:{\\"edges\\":900,\\"nodes\\":480}"}')).toBeInTheDocument();
     expect(screen.getAllByText('knowledge.operationsCheckChecklist:{"value":"3/10"}').length).toBeGreaterThan(0);
     expect(screen.getByText("knowledge.operationsRecommendationTitle")).toBeInTheDocument();
     expect(screen.getByText("knowledge.operationsRecommendationRetryFailed")).toBeInTheDocument();
@@ -109,6 +110,7 @@ describe("KnowledgeOperationsPanel", () => {
     expect(screen.getByText("knowledge.operationsOldestAge")).toBeInTheDocument();
     expect(screen.getByText('knowledge.operationsOldestAgeValue:{"count":45}')).toBeInTheDocument();
     expect(screen.getByText('knowledge.operationsRetryPressure:{"count":1}')).toBeInTheDocument();
+    expect(screen.getByText("knowledge.operationsSummaryTitle").parentElement).toHaveTextContent("knowledge.operationsSummaryValidatedRange");
 
     const nextReadyButton = screen.getByRole("button", { name: "knowledge.operationsOpenNextReview" });
     expect(nextReadyButton.className).toContain("w-full");

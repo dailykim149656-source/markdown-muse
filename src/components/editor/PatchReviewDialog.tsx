@@ -1,4 +1,4 @@
-import { Gauge, Link2, ShieldCheck, Sparkles } from "lucide-react";
+import { AlertTriangle, Gauge, Link2, ShieldCheck, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +23,7 @@ interface PatchReviewDialogProps {
   onReject: (patch: DocumentPatch) => void;
   open: boolean;
   patchSet: DocumentPatchSet | null;
+  workspaceSyncWarnings?: string[];
 }
 
 const getConfidenceLabelKey = (patchSet: DocumentPatchSet) => {
@@ -58,6 +59,7 @@ const PatchReviewDialog = ({
   onReject,
   open,
   patchSet,
+  workspaceSyncWarnings = [],
 }: PatchReviewDialogProps) => {
   const { t } = useI18n();
   const patchCount = patchSet?.patches.length || 0;
@@ -128,6 +130,22 @@ const PatchReviewDialog = ({
                 ? t("patchReview.provenanceHintMissing", { count: patchCount - attributedPatchCount })
                 : t("patchReview.provenanceHintReady")}
             </div>
+            {workspaceSyncWarnings.length > 0 && (
+              <div className="md:col-span-4 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
+                <div className="flex items-center gap-2 font-medium text-foreground">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                  {t("patchReview.workspaceSyncWarningsTitle")}
+                </div>
+                <p className="mt-1 leading-4">
+                  {t("patchReview.workspaceSyncWarningsDescription")}
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {workspaceSyncWarnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 

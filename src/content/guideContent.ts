@@ -465,6 +465,10 @@ const enGuideContent: GuideContent = {
         answer: "The safest order is templates first, then basic editing and version history, then Patch Review, and only after that the workspace-level tools like Knowledge, Graph, and Suggestion Queue.",
         question: "What should I learn first?",
       },
+      {
+        answer: "It means the document synced successfully, but Google Docs could not preserve some structures perfectly. Check the warning badge, review the Patch Review warning summary, and compare the remote document before treating the sync as lossless.",
+        question: "What does Synced with warnings mean?",
+      },
     ],
     faqTitle: "Frequently asked questions",
     heroDescription: "This guide explains Docsy in task order. It covers document creation, editing, versioning, knowledge panels, patch review, and multi-document maintenance in the order users actually encounter them.",
@@ -476,6 +480,7 @@ const enGuideContent: GuideContent = {
       "Learn toolbar editing and version history first.",
       "Use Patch Review whenever AI suggestions appear.",
       "Open Knowledge, Graph, and Suggestion Queue only when the workspace grows.",
+      "Use Google Workspace connect/import and the release checklist only when documents are shared beyond the local editor.",
     ],
     recommendedPathTitle: "Recommended path for first-time users",
     scenarioDescription: "Most users understand Docsy faster through realistic scenarios than through a flat feature list.",
@@ -683,6 +688,22 @@ const enGuideContent: GuideContent = {
         title: "Multi-document maintenance",
       },
       {
+        audience: ["advanced"],
+        bullets: [
+          "Google Workspace lets the editor import real Google Docs into the local review flow.",
+          "Rescan and refresh make remote changes visible before sync and patch application.",
+          "Conflict and warning state are part of the product model, not edge cases hidden behind logs.",
+        ],
+        id: "google-workspace-sync",
+        steps: [
+          "Connect Google Workspace and import the target Google Doc.",
+          "Use rescan when the upstream Google Doc may have changed remotely.",
+          "Refresh stale imports and treat conflict or warning badges as part of the review workflow.",
+        ],
+        summary: "Google Workspace integration matters when the source of truth lives outside the local editor. Docsy is designed to bring remote change visibility and sync safety into the same workflow as review and maintenance.",
+        title: "Google Workspace and sync state",
+      },
+      {
         audience: ["beginner"],
         bullets: [
           "Share links and QR are for quick distribution.",
@@ -697,6 +718,22 @@ const enGuideContent: GuideContent = {
         ],
         summary: "Sharing and export are the last step. The more complex the document is, the more valuable it is to confirm review state before delivery.",
         title: "Share and export",
+      },
+      {
+        audience: ["advanced"],
+        bullets: [
+          "Operations Gate summarizes queue health, review progress, provenance coverage, and validated range.",
+          "Release checklist is for the final operator pass before treating the workspace as handoff-ready.",
+          "The summary copy is designed to support release and handoff communication, not just local editing.",
+        ],
+        id: "operations-and-release",
+        steps: [
+          "Open Operations Gate after queue and review work begins to see whether blockers remain.",
+          "Use Release checklist to confirm graph, queue, review, and build checks are complete.",
+          "Copy the release summary only after the workspace is in a healthy review state.",
+        ],
+        summary: "Once the product is used as a maintenance workflow, release readiness is a visible product surface. Operations Gate and Release checklist turn that state into something operators can inspect and communicate.",
+        title: "Operations and release readiness",
       },
       {
         audience: ["beginner"],
@@ -731,7 +768,7 @@ const enGuideContent: GuideContent = {
         useWhen: "You need to undo a bad change or compare before-and-after states.",
       },
       {
-        description: "The first workspace-level inspection surface for related docs and health issues.",
+        description: "The first workspace-level inspection surface for related docs, health, consistency, and change signals.",
         title: "Knowledge",
         useWhen: "You need to understand which documents are connected before making changes.",
       },
@@ -750,8 +787,18 @@ const enGuideContent: GuideContent = {
         title: "Suggestion Queue",
         useWhen: "One source document produces work for several related targets.",
       },
+      {
+        description: "A live import and sync layer for Google Docs with rescan, refresh, conflict handling, and warning state.",
+        title: "Google Workspace",
+        useWhen: "The document source of truth lives in Google Docs or is shared outside the local editor.",
+      },
+      {
+        description: "An operator-facing release surface for queue health, provenance coverage, and final checklist state.",
+        title: "Operations Gate",
+        useWhen: "You are validating release-readiness or handing off a workspace after cross-document maintenance.",
+      },
     ],
-    featureDescription: "Not every feature should be used all the time. The important part is knowing which tool matches which stage of the workflow.",
+    featureDescription: "The important question is not which feature exists. It is which product surface matches the current stage of the maintenance workflow.",
     featureEyebrow: "Use the right tool",
     featureTitle: "When should you use each feature?",
     quickStartDescription: "Most first sessions only need three ideas: create the document, review changes safely, and deliver the result.",
@@ -795,12 +842,769 @@ const enGuideContent: GuideContent = {
         emphasis: "Queue orchestration",
         title: "Maintain multiple docs",
       },
+      {
+        description: "Import Google Docs, rescan remote changes, refresh stale copies, and resolve sync conflicts before applying reviewed patches.",
+        emphasis: "Shared source of truth",
+        title: "Sync with Google Workspace",
+      },
+      {
+        description: "Use Operations Gate and Release checklist to decide whether the workspace is ready for handoff, export, or release.",
+        emphasis: "Operator visibility",
+        title: "Validate release readiness",
+      },
     ],
-    workflowDescription: "Docsy starts as an editor, but it becomes most valuable when review, traceability, and multi-document maintenance are part of the workflow.",
+    workflowDescription: "Docsy starts as an editor, but its real value appears when review, traceability, workspace sync, and release visibility become part of the workflow.",
     workflowEyebrow: "Core workflows",
     workflowTitle: "Think in workflows, not in isolated features",
   },
 };
 
+const koGuideContentNormalized: GuideContent = {
+  guidePage: {
+    faqDescription: "처음 사용하는 사용자와 운영자가 실제로 자주 막히는 질문을 현재 구현 상태 기준으로 정리했습니다.",
+    faqItems: [
+      {
+        answer: "아니요. 단일 문서만 다룬다면 템플릿, 기본 편집, 버전 기록만으로도 충분합니다. Knowledge와 Graph는 관련 문서가 늘어나고 변경 영향이 생길 때 더 중요해집니다.",
+        question: "Knowledge나 Graph를 처음부터 꼭 써야 하나요?",
+      },
+      {
+        answer: "아니요. Docsy는 review-first가 기본입니다. AI가 만든 결과는 Patch Review에서 confidence와 provenance를 확인한 뒤 수락 또는 거절해야 합니다.",
+        question: "AI 제안이 문서에 바로 적용되나요?",
+      },
+      {
+        answer: "모바일에서는 toolbar 먼저, More 두 번째, sidebar panel은 필요할 때 여는 방식이 가장 좋습니다. 데스크톱과 같은 밀도의 레이아웃을 그대로 따라가기보다 핵심 접근성을 유지하는 데 초점이 있습니다.",
+        question: "모바일에서는 어떻게 쓰는 것이 가장 좋나요?",
+      },
+      {
+        answer: "가장 안전한 순서는 템플릿과 기본 편집, 버전 기록을 먼저 익힌 뒤 Patch Review를 이해하고, 그 다음에 Knowledge, Graph, Suggestion Queue 같은 workspace 단위 기능으로 확장하는 것입니다.",
+        question: "무엇부터 익히는 것이 좋나요?",
+      },
+      {
+        answer: "`Synced with warnings`는 동기화는 성공했지만 Google Docs가 일부 구조를 완전히 보존하지 못했음을 뜻합니다. badge, Patch Review warning summary, 실제 Google Doc 결과를 함께 확인해야 합니다.",
+        question: "`Synced with warnings`는 무슨 뜻인가요?",
+      },
+    ],
+    faqTitle: "자주 묻는 질문",
+    heroDescription: "이 가이드는 Docsy를 기능 목록이 아니라 실제 작업 순서로 설명합니다. 문서 생성, 편집, 버전 복구, 그래프 추적, Patch Review, Google Workspace sync, release readiness까지 사용자가 실제로 만나는 흐름으로 정리했습니다.",
+    heroEyebrow: "사용 가이드",
+    heroTitle: "기능 이름이 아니라 작업 흐름으로 Docsy 이해하기",
+    recommendedPathDescription: "처음 사용할 때 가장 덜 복잡한 순서입니다.",
+    recommendedPathSteps: [
+      "빈 문서나 템플릿으로 첫 문서를 만든다.",
+      "toolbar 편집과 version history를 먼저 익힌다.",
+      "AI 제안이 생기면 Patch Review에서 검토한다.",
+      "문서가 연결되기 시작하면 Knowledge, Graph, Suggestion Queue를 연다.",
+      "Google Docs와 공유되는 문서라면 마지막에 Google Workspace import/sync와 release checklist를 확인한다.",
+    ],
+    recommendedPathTitle: "처음 사용자에게 추천하는 경로",
+    scenarioDescription: "기능 설명보다 실제 상황을 기준으로 보면 Docsy를 훨씬 빨리 이해할 수 있습니다.",
+    scenarioItems: [
+      {
+        audience: ["beginner"],
+        caution: "단일 문서 작업에서 모든 고급 surface를 동시에 열면 오히려 복잡해집니다.",
+        role: "하나의 문서를 빠르게 끝내야 하는 사용자",
+        steps: [
+          "템플릿이나 빈 문서로 시작합니다.",
+          "기본 편집과 version history까지만 사용합니다.",
+          "최종 상태를 확인한 뒤 share 또는 export로 전달합니다.",
+        ],
+        summary: "보고서, 회의록, 인수인계 문서처럼 한 문서 중심 작업에 가장 적합한 흐름입니다.",
+        title: "빠른 단일 문서 작성",
+      },
+      {
+        audience: ["advanced"],
+        caution: "관련 문서가 여러 개라면 본문을 하나씩 직접 수정하기보다 impact, graph, queue 상태를 먼저 보는 편이 안전합니다.",
+        role: "상위 문서 변경 후 관련 문서를 함께 유지보수하는 사용자",
+        steps: [
+          "Change Monitoring이나 Consistency 이슈에서 시작합니다.",
+          "Graph로 source-target 경로를 확인합니다.",
+          "Suggestion Queue와 Patch Review로 타깃 문서를 순서대로 처리합니다.",
+        ],
+        summary: "하나의 source 문서가 여러 downstream 문서에 영향을 줄 때 가장 적합한 흐름입니다.",
+        title: "관련 문서 동기화 워크플로우",
+      },
+      {
+        audience: ["beginner"],
+        caution: "모바일에서는 데스크톱을 그대로 따라 하기보다 짧은 수정과 검토 중심으로 접근하는 것이 좋습니다.",
+        role: "이동 중 빠르게 확인하고 수정하고 공유해야 하는 사용자",
+        steps: [
+          "sidebar에서 대상 문서를 엽니다.",
+          "toolbar와 More로 작은 수정만 처리합니다.",
+          "변경을 확인한 뒤 share 또는 export로 전달합니다.",
+        ],
+        summary: "빠른 검토와 전달이 필요한 모바일 사용에 가장 현실적인 흐름입니다.",
+        title: "모바일 빠른 수정과 공유",
+      },
+    ],
+    scenarioTitle: "실제 사용 시나리오",
+    visualTourDescription: "주요 작업 구역을 먼저 이해하면 나머지 기능도 훨씬 빠르게 따라갈 수 있습니다.",
+    visualTourImageAlt: "업데이트된 Docsy 편집기 화면",
+    visualTourItems: [
+      {
+        description: "문서를 열고, 바꾸고, 새 문서를 시작하는 기본 진입점입니다. 모바일에서는 이 제목을 눌러 sidebar를 닫을 수도 있습니다.",
+        title: "파일 탐색기",
+        x: 2,
+        y: 42,
+      },
+      {
+        description: "현재 문서 이름, 확장자, 편집 모드와 workspace 상태를 확인하는 영역입니다.",
+        title: "문서 정보와 상태",
+        x: 34,
+        y: 3.5,
+      },
+      {
+        description: "구조와 서식을 빠르게 바꾸는 editor toolbar입니다.",
+        title: "편집 툴바",
+        x: 42,
+        y: 8.5,
+      },
+      {
+        description: "공유, Patch Review, AI, export 같은 상단 action이 모이는 곳입니다.",
+        title: "상단 작업 영역",
+        x: 88,
+        y: 3.5,
+      },
+      {
+        description: "리치 텍스트와 source-aware 동작이 만나는 기본 작성 surface입니다.",
+        title: "문서 캔버스",
+        x: 44,
+        y: 22,
+      },
+    ],
+    visualTourTitle: "화면으로 먼저 이해하는 Docsy",
+    sections: [
+      {
+        audience: ["beginner"],
+        bullets: [
+          "Docsy는 local-first 편집과 review-first AI 유지보수를 결합한 워크플로우입니다.",
+          "단일 문서 작성과 다중 문서 유지보수 흐름을 모두 지원합니다.",
+          "고급 surface는 workspace 복잡도가 커질수록 가치가 커집니다.",
+        ],
+        id: "getting-started",
+        steps: [
+          "문서를 만들거나 엽니다.",
+          "문서 형식에 맞는 편집 모드를 고릅니다.",
+          "workspace가 복잡해질 때만 Knowledge, Graph, Patch Review를 엽니다.",
+        ],
+        summary: "Docsy는 가장 단순한 경로에서 시작하고, 필요할 때 graph, diagnostics, review 흐름으로 확장할 때 가장 잘 작동합니다.",
+        title: "시작하기",
+      },
+      {
+        audience: ["beginner"],
+        bullets: [
+          "템플릿은 구조화된 문서를 가장 빠르게 시작하는 방법입니다.",
+          "Markdown, LaTeX, HTML은 rich-text 편집 흐름을 사용합니다.",
+          "JSON과 YAML은 structured editing 흐름으로 다룹니다.",
+        ],
+        id: "first-document",
+        steps: [
+          "랜딩이나 editor에서 시작합니다.",
+          "빈 문서 또는 템플릿을 선택합니다.",
+          "문서 이름과 기본 섹션을 먼저 정리합니다.",
+        ],
+        summary: "대부분의 경우 template-first가 가장 안전한 시작입니다. 목적과 형식을 먼저 정하고 세부 내용을 채우는 편이 좋습니다.",
+        title: "첫 문서 만들기",
+      },
+      {
+        audience: ["beginner"],
+        bullets: [
+          "rich-text 편집기는 source와 WYSIWYG를 함께 유지합니다.",
+          "toolbar는 자주 쓰는 구조와 서식 작업에 최적화되어 있습니다.",
+          "document tools와 advanced blocks는 필요할 때만 열면 됩니다.",
+        ],
+        id: "basic-editing",
+        steps: [
+          "heading, list, block 구조를 먼저 만듭니다.",
+          "table, caption, footnote 같은 richer element는 document tools로 추가합니다.",
+          "JSON/YAML은 structured editor에서 직접 다룹니다.",
+        ],
+        summary: "기본 편집과 고급 삽입 도구를 분리해서 생각하면 편집 모델이 훨씬 단순해집니다.",
+        title: "기본 편집",
+      },
+      {
+        audience: ["beginner"],
+        bullets: [
+          "데스크톱에서는 shortcut으로 편집 속도를 크게 높일 수 있습니다.",
+          "shortcut은 주로 rich-text editor에 적용됩니다.",
+          "모바일에서는 toolbar와 More가 shortcut-heavy 흐름을 대체합니다.",
+        ],
+        id: "keyboard-shortcuts",
+        steps: [
+          "shortcut modal을 열어 현재 플랫폼 기준 modifier key를 확인합니다.",
+          "undo, formatting, heading, alignment부터 익힙니다.",
+          "모바일에서는 keyboard 대신 toolbar/More를 사용합니다.",
+        ],
+        summary: "shortcut은 생산성 도구이지만, 어떤 editor mode에서 동작하는지를 먼저 이해하는 것이 중요합니다.",
+        title: "Keyboard shortcuts",
+      },
+      {
+        audience: ["beginner"],
+        bullets: [
+          "autosave는 최근 상태를 자동으로 유지합니다.",
+          "Version History는 snapshot을 열고 복원할 수 있게 해줍니다.",
+          "patch apply 전후 상태를 비교할 때 특히 중요합니다.",
+        ],
+        id: "versioning-and-recovery",
+        steps: [
+          "sidebar에서 History 탭을 엽니다.",
+          "최근 snapshot을 미리 보고 필요한 시점을 고릅니다.",
+          "복원 후 이어서 작업합니다.",
+        ],
+        summary: "Version History는 단순 복구 기능이 아니라, patch 기반 변경을 추적하는 검토 도구이기도 합니다.",
+        title: "Versioning and recovery",
+      },
+      {
+        audience: ["advanced"],
+        bullets: [
+          "Knowledge는 열린 문서를 기반으로 local index와 관련 문서 신호를 만듭니다.",
+          "Graph는 source-target 관계와 issue chain을 시각적으로 추적하는 surface입니다.",
+          "workspace가 커질수록 broad browsing보다 issue-driven graph entry가 더 효율적입니다.",
+        ],
+        id: "knowledge-and-graph",
+        steps: [
+          "먼저 Knowledge에서 impact, health, consistency, change monitoring을 봅니다.",
+          "관계가 불명확하면 Graph를 엽니다.",
+          "Graph에서 source 문서, target 문서, suggestion 흐름으로 이동합니다.",
+        ],
+        summary: "Knowledge와 Graph는 단순 검색 도구가 아니라, 문서가 왜 서로 영향을 주는지 설명해 주는 inspection surface입니다.",
+        title: "Knowledge and graph",
+      },
+      {
+        audience: ["beginner", "advanced"],
+        bullets: [
+          "AI 변경안은 문서에 직접 적용되지 않습니다.",
+          "Patch Review는 patch count, confidence, provenance, source attribution을 보여줍니다.",
+          "provenance gap이 있는 패치는 더 보수적으로 다뤄야 합니다.",
+        ],
+        id: "patch-review",
+        steps: [
+          "비교, 업데이트 제안, graph-driven action에서 Patch Review를 엽니다.",
+          "원문과 제안 내용을 나란히 보고 metadata를 확인합니다.",
+          "문서가 실제로 바뀌기 전에 명시적으로 수락 또는 거절합니다.",
+        ],
+        summary: "Patch Review는 Docsy의 안전 경계입니다. AI 변경이 human inspection을 우회하지 못하게 합니다.",
+        title: "Patch Review",
+      },
+      {
+        audience: ["advanced"],
+        bullets: [
+          "Suggestion Queue는 여러 문서에 대한 후속 작업을 한 줄씩 관리합니다.",
+          "queue item은 change monitoring, impact analysis, consistency drift에서 올 수 있습니다.",
+          "retry, graph re-entry, review reopen이 모두 지원됩니다.",
+        ],
+        id: "multi-document-maintenance",
+        steps: [
+          "diagnostics에서 영향을 받은 문서 쌍을 queue에 넣습니다.",
+          "ready item을 Patch Review에서 하나씩 처리합니다.",
+          "실패 항목은 retry하고, 더 확인이 필요하면 graph로 다시 들어갑니다.",
+        ],
+        summary: "하나의 source가 여러 target에 영향을 줄 때는 inline 수정보다 queue 기반 검토가 훨씬 안전합니다.",
+        title: "Multi-document maintenance",
+      },
+      {
+        audience: ["advanced"],
+        bullets: [
+          "Google Workspace는 실제 Google Docs를 local review 흐름 안으로 가져옵니다.",
+          "rescan과 refresh는 remote 변경을 sync 이전에 보이게 만듭니다.",
+          "conflict와 warning state는 숨겨진 예외가 아니라 제품 UI의 일부입니다.",
+        ],
+        id: "google-workspace-sync",
+        steps: [
+          "Google Workspace를 연결하고 Drive Import로 문서를 가져옵니다.",
+          "remote 변경이 의심되면 rescan을 실행합니다.",
+          "stale import는 refresh하고, conflict나 warning badge를 review workflow의 일부로 다룹니다.",
+        ],
+        summary: "Google Workspace integration은 source of truth가 local editor 밖에 있을 때 중요합니다. Docsy는 remote change visibility와 sync safety를 review 흐름 안으로 가져옵니다.",
+        title: "Google Workspace and sync state",
+      },
+      {
+        audience: ["beginner"],
+        bullets: [
+          "share link와 QR은 빠른 전달용입니다.",
+          "export는 결과 형식 자체가 중요할 때 선택합니다.",
+          "전달 전에 patch-review와 format 상태를 확인하는 편이 더 안전합니다.",
+        ],
+        id: "share-and-export",
+        steps: [
+          "live share와 export 중 목적에 맞는 전달 방식을 고릅니다.",
+          "가벼운 접근이면 share link / QR을 사용합니다.",
+          "파일 결과물이 중요하면 export를 선택합니다.",
+        ],
+        summary: "공유와 export는 마지막 단계입니다. 문서가 복잡할수록 전달 전에 review 상태를 확인하는 가치가 더 커집니다.",
+        title: "Share and export",
+      },
+      {
+        audience: ["advanced"],
+        bullets: [
+          "Operations Gate는 queue health, review progress, provenance coverage, validated range를 요약합니다.",
+          "Release checklist는 최종 운영자 확인을 위한 수동 surface입니다.",
+          "summary copy는 handoff와 release communication을 위한 결과물입니다.",
+        ],
+        id: "operations-and-release",
+        steps: [
+          "queue와 review가 시작되면 먼저 Operations Gate를 열어 blocker를 확인합니다.",
+          "Release checklist로 graph, queue, review, build 상태를 점검합니다.",
+          "workspace가 healthy review state에 들어간 뒤 summary를 복사합니다.",
+        ],
+        summary: "Docsy가 유지보수 워크플로우로 쓰이는 순간 release readiness도 제품 표면이 됩니다. Operations Gate와 Release checklist는 그 상태를 운영자가 확인하고 전달할 수 있게 만듭니다.",
+        title: "Operations and release readiness",
+      },
+      {
+        audience: ["beginner"],
+        bullets: [
+          "모바일은 desktop보다 navigation과 editing surface가 더 압축됩니다.",
+          "고급 도구는 More나 drawer형 UI로 이동합니다.",
+          "dense desktop layout을 복제하기보다 접근 가능한 action을 보존하는 데 초점을 둡니다.",
+        ],
+        id: "mobile-usage",
+        steps: [
+          "파일 탐색기 제목으로 모바일 sidebar를 닫습니다.",
+          "핵심 action은 toolbar, 확장 도구는 More에서 엽니다.",
+          "keyboard-heavy 흐름 대신 toolbar/More/sidebar panel 조합으로 작업합니다.",
+        ],
+        summary: "모바일은 desktop과 같은 모델을 유지하지만, 더 압축된 navigation과 지연 노출 도구를 사용합니다.",
+        title: "Mobile usage tips",
+      },
+    ],
+  },
+  landing: {
+    ctaDescription: "긴 기능 목록보다, 실제 작업 순서로 정리된 가이드를 보면 Docsy의 현재 제품 모델을 더 빠르게 이해할 수 있습니다.",
+    ctaTitle: "기능 홍보보다 실제 사용 가이드가 필요하신가요?",
+    featureCards: [
+      {
+        description: "반복되는 문서를 빠르게 시작하게 해주는 가장 효율적인 출발점입니다.",
+        title: "Templates",
+        useWhen: "runbook, handover, report, spec처럼 구조가 반복되는 문서를 시작할 때",
+      },
+      {
+        description: "최근 local snapshot을 기준으로 복구와 비교를 지원하는 surface입니다.",
+        title: "Version History",
+        useWhen: "잘못된 변경을 되돌리거나 patch 적용 전후 상태를 비교할 때",
+      },
+      {
+        description: "관련 문서, health, consistency, change 신호를 모아 보는 첫 번째 workspace surface입니다.",
+        title: "Knowledge",
+        useWhen: "문서를 바꾸기 전에 어떤 문서가 연결돼 있는지 이해해야 할 때",
+      },
+      {
+        description: "source-target 경로와 영향 관계를 시각적으로 추적하는 route입니다.",
+        title: "Graph",
+        useWhen: "consistency나 impact 이슈가 왜 생겼는지 추적해야 할 때",
+      },
+      {
+        description: "AI가 제안한 변경을 confidence와 provenance 기준으로 검토하는 안전 경계입니다.",
+        title: "Patch Review",
+        useWhen: "AI 제안을 적용하기 전에 근거와 신뢰도를 확인해야 할 때",
+      },
+      {
+        description: "여러 문서에 걸친 후속 작업을 순서대로 처리하는 queue surface입니다.",
+        title: "Suggestion Queue",
+        useWhen: "하나의 source 문서가 여러 target 문서를 밀어내는 유지보수 작업을 다룰 때",
+      },
+      {
+        description: "Google Docs import, rescan, refresh, conflict, warning state를 포함한 실연동 layer입니다.",
+        title: "Google Workspace",
+        useWhen: "source of truth가 Google Docs에 있거나 외부와 공유된 문서를 유지보수할 때",
+      },
+      {
+        description: "queue health와 release checklist 상태를 operator 관점에서 요약해 주는 surface입니다.",
+        title: "Operations Gate",
+        useWhen: "release readiness를 확인하거나 cross-document maintenance 결과를 handoff할 때",
+      },
+    ],
+    featureDescription: "중요한 것은 기능 이름이 아니라 지금 작업 단계에 어떤 surface가 맞는지를 아는 것입니다.",
+    featureEyebrow: "맞는 surface를 고르기",
+    featureTitle: "어느 단계에서 어떤 기능을 써야 하나요?",
+    quickStartDescription: "처음 세션에서는 문서를 만들고, 변경을 안전하게 검토하고, 결과를 전달하는 세 가지 흐름만 이해하면 충분합니다.",
+    quickStartEyebrow: "빠른 시작",
+    quickStartSteps: [
+      {
+        description: "빈 문서나 템플릿으로 시작하고, 먼저 맞는 document mode를 선택합니다.",
+        detail: "문서 종류를 알고 있다면 template-first가 가장 빠른 진입입니다.",
+        title: "문서 만들기",
+      },
+      {
+        description: "문서를 작성하되 AI 변경은 Patch Review에서 검토하고 바로 적용하지 않습니다.",
+        detail: "Docsy는 review-first mutation을 기본으로 설계되었습니다.",
+        title: "편집과 검토",
+      },
+      {
+        description: "workspace가 커지면 Knowledge, Graph, Queue로 관련 문서를 관리한 뒤 share 또는 export로 전달합니다.",
+        detail: "이 지점부터 Docsy는 단일 파일 편집기를 넘어 문서 유지보수 워크플로우가 됩니다.",
+        title: "관련 작업 추적과 전달",
+      },
+    ],
+    quickStartTitle: "시작할 때 필요한 핵심 개념은 세 가지뿐입니다",
+    workflowCards: [
+      {
+        description: "template과 rich-text editing으로 문서를 빠르게 시작합니다.",
+        emphasis: "첫 초안",
+        title: "만들고 작성하기",
+      },
+      {
+        description: "AI가 만든 변경을 문서에 넣기 전에 Patch Review에서 명시적으로 검토합니다.",
+        emphasis: "Review-first",
+        title: "안전하게 변경 검토하기",
+      },
+      {
+        description: "Knowledge와 Graph로 관련 문서, 이슈 체인, source-target 경로를 추적합니다.",
+        emphasis: "관계 추적",
+        title: "문서 영향 이해하기",
+      },
+      {
+        description: "영향받은 target 문서를 queue 순서대로 처리하고 retry와 graph re-entry를 사용합니다.",
+        emphasis: "Queue orchestration",
+        title: "여러 문서 유지보수하기",
+      },
+      {
+        description: "Google Docs를 가져오고 remote change를 rescan하며 conflict와 warning 상태를 관리합니다.",
+        emphasis: "Shared source of truth",
+        title: "Google Workspace와 동기화하기",
+      },
+      {
+        description: "Operations Gate와 Release checklist로 workspace가 handoff-ready인지 판단합니다.",
+        emphasis: "Operator visibility",
+        title: "릴리스 준비 상태 확인하기",
+      },
+    ],
+    workflowDescription: "Docsy는 편집기에서 시작하지만, review, traceability, workspace sync, release visibility가 workflow 안에 들어올 때 가장 가치가 커집니다.",
+    workflowEyebrow: "핵심 워크플로우",
+    workflowTitle: "기능이 아니라 흐름으로 생각하세요",
+  },
+};
+
+const replaceGuideSection = (sections: GuideSection[], nextSection: GuideSection): GuideSection[] =>
+  sections.map((section) => (section.id === nextSection.id ? nextSection : section));
+
+const enGuideSectionsLatest = [
+  {
+    audience: ["beginner"] as GuideAudience[],
+    bullets: [
+      "Templates are still the fastest way to start structured writing.",
+      "The header format dropdown is now the single place for switching Markdown, LaTeX, and HTML within the current document.",
+      "JSON and YAML stay in a separate structured family, so cross-family actions create a new document instead of converting the current one in place.",
+    ],
+    id: "first-document",
+    steps: [
+      "Open the editor from landing.",
+      "Start from a blank file or a template.",
+      "Use the header format dropdown to confirm whether the document should stay in rich text or move into a separate structured document flow.",
+    ],
+    summary: "The first decision is no longer only which template to pick. The current build also expects users to choose the right document family early, using the top format dropdown as the control point.",
+    title: "Create your first document",
+  },
+  {
+    audience: ["beginner"] as GuideAudience[],
+    bullets: [
+      "Rich-text editors keep source and WYSIWYG in sync.",
+      "Use the header format dropdown when you want to stay inside the current rich-text family without hunting through button groups.",
+      "Document tools and advanced blocks can stay hidden until they are needed.",
+    ],
+    id: "basic-editing",
+    steps: [
+      "Start with headings, lists, and block structure.",
+      "Use the header dropdown for Markdown, LaTeX, and HTML switches that should happen inside the current document.",
+      "Use document tools for richer elements like tables, captions, and footnotes, and structured editors directly for JSON or YAML.",
+    ],
+    summary: "Basic editing now has a clearer split: the top dropdown handles mode choice, the toolbar handles structure and formatting, and advanced insert tools stay optional.",
+    title: "Basic editing",
+  },
+  {
+    audience: ["beginner", "advanced"] as GuideAudience[],
+    bullets: [
+      "AI changes still never mutate the document directly.",
+      "Patch Review exposes patch count, confidence, provenance, and source attribution.",
+      "If the active document came from Google Docs, sync warnings also surface here so lossy round-trips stay visible during review.",
+    ],
+    id: "patch-review",
+    steps: [
+      "Open Patch Review from comparison, update suggestions, or graph-driven actions.",
+      "Inspect original vs suggested changes, metadata, and any workspace sync warning summary that appears above the diff.",
+      "Treat provenance gaps, sync warnings, or low-confidence patches as reasons to slow down before accepting.",
+    ],
+    summary: "Patch Review is still the safety boundary, but it now also carries workspace-sync risk forward so reviewers can see fidelity warnings at the same moment they inspect AI changes.",
+    title: "Patch Review",
+  },
+  {
+    audience: ["advanced"] as GuideAudience[],
+    bullets: [
+      "Connect Google, import Docs, and keep the local review workflow as the control point.",
+      "Rescan and refresh make remote changes visible before sync and patch application.",
+      "\"Synced with warnings\" and conflict state are first-class UI states, not diagnostics hidden behind logs.",
+    ],
+    id: "google-workspace-sync",
+    steps: [
+      "Connect Google Workspace and import the target Google Doc.",
+      "Use rescan when the upstream Google Doc may have changed remotely and inspect Change Monitoring or Queue state before syncing.",
+      "Refresh stale imports and treat warning or conflict badges as blockers until review catches up.",
+    ],
+    summary: "Google Workspace integration is no longer just about importing a file. The current build makes remote change visibility, conflict handling, and fidelity warnings part of the same review-first maintenance workflow.",
+    title: "Google Workspace and sync state",
+  },
+  {
+    audience: ["advanced"] as GuideAudience[],
+    bullets: [
+      "Operations Gate summarizes queue health, review progress, provenance coverage, validated range, and the recommended next step.",
+      "Release checklist is the final operator pass before treating the workspace as handoff-ready.",
+      "Validated range matters: once the workspace grows, release decisions should move from broad browsing to focused graph paths and queue-first review.",
+    ],
+    id: "operations-and-release",
+    steps: [
+      "Open Operations Gate after queue and review work begins to see whether blockers remain.",
+      "Use Release checklist together with the validated range hints to decide whether to stay in broad exploration or switch to targeted review.",
+      "Copy the release summary only after blockers, warnings, and the review backlog are understood.",
+    ],
+    summary: "Release readiness is now an explicit surface in the product. Operations Gate and Release checklist turn workspace state, scale pressure, and review risk into something operators can inspect and communicate.",
+    title: "Operations and release readiness",
+  },
+] satisfies GuideSection[];
+
+const koGuideSectionsLatest = [
+  {
+    audience: ["beginner"] as GuideAudience[],
+    bullets: [
+      "템플릿은 여전히 문서를 가장 빨리 시작하는 방법입니다.",
+      "상단 양식 드롭다운은 이제 현재 문서 안에서 Markdown, LaTeX, HTML을 전환하는 기본 위치입니다.",
+      "JSON과 YAML은 구조화 계열로 분리되어 있어서, 다른 계열로 바꿀 때는 현재 문서를 직접 변환하지 않고 새 문서를 만드는 흐름으로 들어갑니다.",
+    ],
+    id: "first-document",
+    steps: [
+      "랜딩에서 편집기로 들어갑니다.",
+      "빈 문서나 템플릿으로 시작합니다.",
+      "상단 양식 드롭다운으로 이 문서가 리치 텍스트에 남을지, 구조화 문서로 분리될지를 먼저 결정합니다.",
+    ],
+    summary: "첫 문서에서는 템플릿만이 아니라 문서 계열 선택도 중요합니다. 현재 빌드에서는 상단 양식 드롭다운이 그 판단의 기준점 역할을 합니다.",
+    title: "첫 문서 만들기",
+  },
+  {
+    audience: ["beginner"] as GuideAudience[],
+    bullets: [
+      "리치 텍스트 편집기는 source와 WYSIWYG를 함께 유지합니다.",
+      "상단 양식 드롭다운은 기존 버튼 묶음 대신 같은 리치 텍스트 계열 전환을 담당합니다.",
+      "문서 도구와 고급 블록은 필요할 때만 열어도 됩니다.",
+    ],
+    id: "basic-editing",
+    steps: [
+      "heading, list, block 구조부터 잡습니다.",
+      "현재 문서 안에서 Markdown, LaTeX, HTML을 바꿔야 할 때는 상단 드롭다운을 사용합니다.",
+      "table, caption, footnote 같은 요소는 document tools에서 넣고, JSON/YAML은 구조화 편집기로 직접 다룹니다.",
+    ],
+    summary: "기본 편집 흐름은 더 분명해졌습니다. 상단 드롭다운은 모드 선택, 툴바는 구조와 서식, 고급 삽입 도구는 선택 기능으로 나뉩니다.",
+    title: "기본 편집",
+  },
+  {
+    audience: ["beginner", "advanced"] as GuideAudience[],
+    bullets: [
+      "AI 변경안은 여전히 문서에 직접 적용되지 않습니다.",
+      "Patch Review에서는 patch count, confidence, provenance, source attribution을 함께 확인합니다.",
+      "현재 문서가 Google Docs에서 왔다면 sync warning도 여기서 같이 보여서 손실 가능성을 검토 단계에서 바로 볼 수 있습니다.",
+    ],
+    id: "patch-review",
+    steps: [
+      "비교, 업데이트 제안, graph 기반 액션에서 Patch Review를 엽니다.",
+      "원본과 제안 diff뿐 아니라 메타데이터와 workspace sync warning summary도 함께 확인합니다.",
+      "provenance gap, sync warning, low confidence가 있으면 수락 전에 한 번 더 천천히 검토합니다.",
+    ],
+    summary: "Patch Review는 여전히 안전 경계입니다. 최근 변경으로는 Google Workspace 동기화 위험도 같은 화면에서 이어서 보이기 때문에, 검토 시점에 fidelity 위험을 놓치지 않게 됐습니다.",
+    title: "Patch Review",
+  },
+  {
+    audience: ["advanced"] as GuideAudience[],
+    bullets: [
+      "Google을 연결하고 문서를 가져오더라도 제어 지점은 여전히 로컬 review workflow에 있습니다.",
+      "rescan과 refresh는 remote 변경을 sync와 patch apply 이전에 보이게 만듭니다.",
+      "`Synced with warnings`와 conflict 상태는 로그 뒤에 숨는 예외가 아니라 UI에서 직접 드러나는 상태입니다.",
+    ],
+    id: "google-workspace-sync",
+    steps: [
+      "Google Workspace를 연결하고 대상 Google Doc를 import합니다.",
+      "upstream Google Doc가 바뀌었을 수 있으면 rescan을 실행하고 Change Monitoring이나 Queue 상태를 먼저 봅니다.",
+      "stale import는 refresh하고, warning이나 conflict badge가 남아 있으면 review가 따라잡기 전까지 blocker로 취급합니다.",
+    ],
+    summary: "Google Workspace 연동은 더 이상 단순 import 기능이 아닙니다. 현재 빌드는 remote change visibility, conflict 처리, fidelity warning을 review-first 유지보수 흐름 안으로 가져옵니다.",
+    title: "Google Workspace와 동기화 상태",
+  },
+  {
+    audience: ["advanced"] as GuideAudience[],
+    bullets: [
+      "Operations Gate는 queue health, review progress, provenance coverage, validated range, recommended next step을 함께 보여줍니다.",
+      "Release checklist는 workspace를 handoff-ready로 보기 전 마지막 운영자 점검 단계입니다.",
+      "validated range를 넘기기 시작하면 broad browsing보다 focused graph path와 queue-first review가 중요해집니다.",
+    ],
+    id: "operations-and-release",
+    steps: [
+      "queue와 review가 시작되면 먼저 Operations Gate를 열어 blocker가 남아 있는지 확인합니다.",
+      "Release checklist와 validated range 힌트를 같이 보면서 넓은 탐색을 계속할지, 목표 지점 검토로 전환할지 결정합니다.",
+      "blocker, warning, review backlog를 이해한 뒤에만 release summary를 복사합니다.",
+    ],
+    summary: "릴리스 준비 상태는 이제 제품 안에서 직접 보이는 표면입니다. Operations Gate와 Release checklist는 workspace 상태, 규모 압박, review 위험을 운영자가 판단하고 전달할 수 있는 형태로 바꿉니다.",
+    title: "운영과 릴리스 준비 상태",
+  },
+] satisfies GuideSection[];
+
+const enGuideContentLatest: GuideContent = {
+  ...enGuideContent,
+  guidePage: {
+    ...enGuideContent.guidePage,
+    faqItems: [
+      ...enGuideContent.guidePage.faqItems,
+      {
+        answer: "The top dropdown switches Markdown, LaTeX, and HTML inside the current document family. Choosing JSON or YAML should be treated as a new structured-document flow rather than an in-place conversion of the active rich-text document.",
+        question: "How does the format dropdown work?",
+      },
+    ],
+    sections: enGuideSectionsLatest.reduce(replaceGuideSection, enGuideContent.guidePage.sections),
+    visualTourDescription: "Start with the zones that changed most recently: the unified format dropdown in the header, the editing toolbar, the review entry points, and the main canvas. Once those are familiar, the rest of the workspace surfaces become easier to follow.",
+    visualTourItems: [
+      enGuideContent.guidePage.visualTourItems[0],
+      {
+        description: "This header area now holds a single format dropdown. Switch Markdown, LaTeX, and HTML here, and use the same menu to branch into a new JSON or YAML document when structured editing is the better fit.",
+        title: "Document info and format dropdown",
+        x: 34,
+        y: 3.5,
+      },
+      enGuideContent.guidePage.visualTourItems[2],
+      enGuideContent.guidePage.visualTourItems[3],
+      enGuideContent.guidePage.visualTourItems[4],
+    ],
+  },
+  landing: {
+    ...enGuideContent.landing,
+    featureCards: enGuideContent.landing.featureCards.map((card) => {
+      if (card.title === "Google Workspace") {
+        return {
+          ...card,
+          description: "A live Drive Import and sync layer for Google Docs with search, refresh, conflict handling, and warning state that now remains visible during review.",
+          useWhen: "The document source of truth lives in Google Docs and you need Drive Import plus warning or conflict state to stay visible while reviewing changes.",
+        };
+      }
+
+      if (card.title === "Operations Gate") {
+        return {
+          ...card,
+          description: "An operator-facing release surface for queue health, provenance coverage, validated range, and final checklist state.",
+          useWhen: "You are validating release-readiness or deciding whether a growing workspace should stay in broad exploration or move into targeted review.",
+        };
+      }
+
+      return card;
+    }),
+    quickStartSteps: enGuideContent.landing.quickStartSteps.map((step, index) => (
+      index === 0
+        ? {
+          ...step,
+          detail: "Use the header format dropdown to confirm whether the document stays in rich text or becomes a separate structured document.",
+        }
+        : step
+    )),
+    workflowCards: enGuideContent.landing.workflowCards.map((card) => {
+      if (card.title === "Create and write") {
+        return {
+          ...card,
+          description: "Start a document quickly with templates, the header format dropdown, and rich-text editing.",
+        };
+      }
+
+      if (card.title === "Sync with Google Workspace") {
+        return {
+          ...card,
+          description: "Open Drive Import, search and import Google Docs, rescan remote changes, refresh stale copies, and keep warning or conflict state visible while reviewed patches are still pending.",
+        };
+      }
+
+      if (card.title === "Validate release readiness") {
+        return {
+          ...card,
+          description: "Use Operations Gate, validated range hints, and Release checklist to decide whether the workspace is ready for handoff, export, or release.",
+        };
+      }
+
+      return card;
+    }),
+  },
+};
+
+const koGuideContentLatest: GuideContent = {
+  ...koGuideContentNormalized,
+  guidePage: {
+    ...koGuideContentNormalized.guidePage,
+    faqItems: [
+      ...koGuideContentNormalized.guidePage.faqItems,
+      {
+        answer: "상단 드롭다운에서는 같은 계열의 Markdown, LaTeX, HTML을 현재 문서 안에서 전환합니다. JSON이나 YAML은 현재 리치 텍스트 문서를 직접 변환하는 방식이 아니라, 별도의 구조화 문서 흐름으로 들어간다고 이해하면 됩니다.",
+        question: "상단 양식 드롭다운은 어떻게 동작하나요?",
+      },
+    ],
+    sections: koGuideSectionsLatest.reduce(replaceGuideSection, koGuideContentNormalized.guidePage.sections),
+    visualTourDescription: "최근 빌드에서 가장 자주 바뀐 표면은 상단 양식 드롭다운, 편집 툴바, review 진입점, 메인 캔버스입니다. 이 구역들만 먼저 익혀도 나머지 workspace surface를 따라가기가 훨씬 쉬워집니다.",
+    visualTourItems: [
+      koGuideContentNormalized.guidePage.visualTourItems[0],
+      {
+        description: "이제 상단 헤더에는 단일 양식 드롭다운이 있습니다. 여기서 Markdown, LaTeX, HTML을 전환하고, 필요하면 같은 메뉴에서 JSON이나 YAML 새 문서 흐름으로 넘어갑니다.",
+        title: "문서 정보와 양식 드롭다운",
+        x: 34,
+        y: 3.5,
+      },
+      koGuideContentNormalized.guidePage.visualTourItems[2],
+      koGuideContentNormalized.guidePage.visualTourItems[3],
+      koGuideContentNormalized.guidePage.visualTourItems[4],
+    ],
+  },
+  landing: {
+    ...koGuideContentNormalized.landing,
+    featureCards: koGuideContentNormalized.landing.featureCards.map((card) => {
+      if (card.title === "Google Workspace") {
+        return {
+          ...card,
+          description: "Google Docs를 review 흐름 안으로 가져오는 Drive Import/sync 계층으로, 검색, refresh, conflict, warning 상태가 검토 단계에서도 계속 보입니다.",
+          useWhen: "문서의 source of truth가 Google Docs에 있고, Drive Import와 warning/conflict 상태를 review 중에도 놓치면 안 될 때 사용합니다.",
+        };
+      }
+
+      if (card.title === "Operations Gate") {
+        return {
+          ...card,
+          description: "queue health, provenance coverage, validated range, checklist 상태를 함께 보여주는 운영자용 release surface입니다.",
+          useWhen: "릴리스 준비 상태를 판단하거나, 커진 workspace를 넓게 볼지 목표 지점 검토로 전환할지 결정해야 할 때 사용합니다.",
+        };
+      }
+
+      return card;
+    }),
+    quickStartSteps: koGuideContentNormalized.landing.quickStartSteps.map((step, index) => (
+      index === 0
+        ? {
+          ...step,
+          detail: "상단 양식 드롭다운으로 이 문서가 리치 텍스트에 남을지, 구조화 문서로 분리될지를 먼저 확인합니다.",
+        }
+        : step
+    )),
+    workflowCards: koGuideContentNormalized.landing.workflowCards.map((card) => {
+      if (card.title === "Create and write") {
+        return {
+          ...card,
+          description: "템플릿, 상단 양식 드롭다운, 리치 텍스트 편집을 기준으로 문서를 빠르게 시작합니다.",
+        };
+      }
+
+      if (card.title === "Sync with Google Workspace") {
+        return {
+          ...card,
+          description: "Drive Import로 Google Docs를 검색·import하고 remote change를 rescan하며, stale copy를 refresh하고, warning이나 conflict 상태를 reviewed patch가 남아 있는 동안에도 계속 추적합니다.",
+        };
+      }
+
+      if (card.title === "Validate release readiness") {
+        return {
+          ...card,
+          description: "Operations Gate, validated range 힌트, Release checklist를 함께 보면서 handoff, export, release 가능 상태인지 판단합니다.",
+        };
+      }
+
+      return card;
+    }),
+  },
+};
+
 export const getGuideContent = (locale: Locale): GuideContent =>
-  locale === "ko" ? koGuideContent : enGuideContent;
+  locale === "ko" ? koGuideContentLatest : enGuideContentLatest;

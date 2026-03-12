@@ -70,6 +70,7 @@ describe("Dialog smoke paths", () => {
         onReject={vi.fn()}
         open
         patchSet={null}
+        workspaceSyncWarnings={[]}
       />,
     );
 

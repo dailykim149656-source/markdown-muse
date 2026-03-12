@@ -19,6 +19,7 @@ import {
   HttpError,
   getRequestUrl,
   json,
+  ALLOWED_ORIGINS,
   parseOptionalRequestBody,
   redirect,
   type HttpResponse,
@@ -30,6 +31,7 @@ interface ConnectRequestBody {
 }
 
 const AUTH_STATE_TTL_MS = 1000 * 60 * 10;
+const WORKSPACE_FRONTEND_DEFAULT_ORIGIN = "http://localhost:8080";
 
 const normalizeReturnTo = (value?: string | null) => {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -39,14 +41,39 @@ const normalizeReturnTo = (value?: string | null) => {
   return value;
 };
 
-const buildRedirectLocation = (returnTo: string, params: Record<string, string>) => {
-  const url = new URL(returnTo, "http://docsy.local");
+const resolveFrontendOrigin = (requestOrigin?: string) => {
+  const configured = process.env.WORKSPACE_FRONTEND_ORIGIN?.trim();
+
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  if (requestOrigin && requestOrigin !== "*") {
+    return requestOrigin;
+  }
+
+  const configuredOrigin = ALLOWED_ORIGINS.find((origin) => origin !== "*" && origin.startsWith("http"));
+
+  if (configuredOrigin) {
+    return configuredOrigin.replace(/\/$/, "");
+  }
+
+  return WORKSPACE_FRONTEND_DEFAULT_ORIGIN;
+};
+
+const buildRedirectLocation = (
+  returnTo: string,
+  params: Record<string, string>,
+  requestOrigin?: string,
+) => {
+  const frontendOrigin = resolveFrontendOrigin(requestOrigin);
+  const url = new URL(returnTo, frontendOrigin);
 
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
 
-  return `${url.pathname}${url.search}${url.hash}`;
+  return url.toString();
 };
 
 const createConnectionId = (userSub?: string) => userSub ? `google:${userSub}` : randomUUID();
@@ -84,7 +111,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
 
     if (authError) {
       return redirect(
-        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: authError }),
+        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: authError }, resolveFrontendOrigin(requestOrigin)),
         302,
         requestOrigin,
       );
@@ -92,7 +119,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
 
     if (!code || !stateId) {
       return redirect(
-        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: "missing_oauth_callback_parameters" }),
+        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: "missing_oauth_callback_parameters" }, resolveFrontendOrigin(requestOrigin)),
         302,
         requestOrigin,
       );
@@ -102,7 +129,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
 
     if (!authState || authState.expiresAt <= Date.now()) {
       return redirect(
-        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: "oauth_state_expired" }),
+        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: "oauth_state_expired" }, resolveFrontendOrigin(requestOrigin)),
         302,
         requestOrigin,
       );
@@ -125,7 +152,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
       const session = await createWorkspaceSession(connectionId);
 
       return redirect(
-        buildRedirectLocation(authState.returnTo, { workspaceAuth: "connected" }),
+        buildRedirectLocation(authState.returnTo, { workspaceAuth: "connected" }, resolveFrontendOrigin(requestOrigin)),
         302,
         requestOrigin,
         {
@@ -135,7 +162,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
     } catch (error) {
       const message = error instanceof Error ? error.message : "oauth_callback_failed";
       return redirect(
-        buildRedirectLocation(authState.returnTo, { workspaceAuthError: message }),
+        buildRedirectLocation(authState.returnTo, { workspaceAuthError: message }, resolveFrontendOrigin(requestOrigin)),
         302,
         requestOrigin,
       );

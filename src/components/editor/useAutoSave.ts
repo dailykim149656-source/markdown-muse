@@ -38,6 +38,9 @@ const normalizeWorkspaceBinding = (value: unknown): WorkspaceBinding | undefined
     provider: "google_drive",
     revisionId: typeof value.revisionId === "string" ? value.revisionId : undefined,
     syncError: typeof value.syncError === "string" ? value.syncError : undefined,
+    syncWarnings: Array.isArray(value.syncWarnings)
+      ? value.syncWarnings.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+      : undefined,
     syncStatus: value.syncStatus as WorkspaceBinding["syncStatus"],
   };
 };

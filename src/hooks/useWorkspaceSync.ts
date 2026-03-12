@@ -27,6 +27,7 @@ export const useWorkspaceSync = ({
       workspaceBinding: {
         ...binding,
         syncError: undefined,
+        syncWarnings: undefined,
         syncStatus: "syncing",
       },
     });
@@ -46,6 +47,7 @@ export const useWorkspaceSync = ({
           lastSyncedAt: result.appliedAt,
           revisionId: result.revisionId,
           syncError: undefined,
+          syncWarnings: result.warnings.length > 0 ? result.warnings : undefined,
           syncStatus: result.syncStatus,
         },
       });
@@ -57,6 +59,7 @@ export const useWorkspaceSync = ({
         workspaceBinding: {
           ...binding,
           syncError: message,
+          syncWarnings: undefined,
           syncStatus: error instanceof WorkspaceApiError && error.statusCode === 409 ? "conflict" : "error",
         },
       });

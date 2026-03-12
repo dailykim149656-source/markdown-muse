@@ -92,6 +92,8 @@ const clearGraphState = async (page: Page) => {
   });
 };
 
+const getPrimaryEditor = (page: Page) => page.locator(".ProseMirror").first();
+
 test.describe("workspace graph regressions", () => {
   test.beforeEach(async ({ page }) => {
     await clearGraphState(page);
@@ -128,5 +130,87 @@ test.describe("workspace graph regressions", () => {
     await expect(page.getByTestId("graph-canvas-node-doc:doc-beta")).toBeVisible();
     await expect(page.getByTestId("graph-canvas-node-doc:doc-gamma")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Broken reference", exact: true })).toBeVisible();
+  });
+
+  test("graph context can create a queue item and open patch review", async ({ page }) => {
+    await page.goto("/editor/graph?e2e=1&context=change&source=doc%3Adoc-alpha&target=doc%3Adoc-beta&node=doc%3Adoc-beta");
+
+    await expect(page.getByText("Context chain")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Suggest update" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Suggest update" }).click();
+    await expect(page).toHaveURL(/\/editor/);
+
+    await page.getByRole("button", { name: "Toggle sidebar" }).click();
+    await page.getByRole("button", { name: "Knowledge" }).click();
+
+    await expect(page.getByRole("heading", { name: "Suggestion Queue" })).toBeVisible();
+    await expect(page.getByText("alpha").first()).toBeVisible();
+    await expect(page.getByText("beta").first()).toBeVisible();
+    await expect(page.getByText("Editor is not ready yet.").first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Retry", exact: true }).click();
+    const patchReviewDialog = page.getByRole("dialog");
+    await expect(patchReviewDialog.getByText("Patch Review", { exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(patchReviewDialog.getByText("Patches", { exact: true })).toBeVisible();
+    await expect(patchReviewDialog.getByText("Provenance", { exact: true })).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(patchReviewDialog).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Open review" })).toBeEnabled();
+
+    await page.getByRole("button", { name: "Open review" }).click();
+    await expect(page.getByRole("dialog").getByText("Patch Review", { exact: true })).toBeVisible();
+  });
+
+  test("queue item can reopen graph context", async ({ page }) => {
+    await page.goto("/editor/graph?e2e=1&context=change&source=doc%3Adoc-alpha&target=doc%3Adoc-beta&node=doc%3Adoc-beta");
+
+    await expect(page.getByText("Context chain")).toBeVisible();
+    await page.getByRole("button", { name: "Suggest update" }).click();
+    await expect(page).toHaveURL(/\/editor/);
+
+    await page.getByRole("button", { name: "Toggle sidebar" }).click();
+    await page.getByRole("button", { name: "Knowledge" }).click();
+    await expect(page.getByRole("heading", { name: "Suggestion Queue" })).toBeVisible();
+
+    const suggestionQueueSection = page.locator("section").filter({
+      has: page.getByRole("heading", { name: "Suggestion Queue" }),
+    });
+    await suggestionQueueSection.getByRole("button", { name: "Explore", exact: true }).click();
+
+    await expect(page).toHaveURL(/\/editor\/graph/);
+    await expect(page.getByText("Context chain")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open source" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open target" })).toBeVisible();
+  });
+
+  test("ai-assisted suggestions do not mutate the target document before explicit apply", async ({ page }) => {
+    await page.goto("/editor/graph?e2e=1&context=change&source=doc%3Adoc-alpha&target=doc%3Adoc-beta&node=doc%3Adoc-beta");
+
+    await expect(page.getByText("Context chain")).toBeVisible();
+    await page.getByRole("button", { name: "Suggest update" }).click();
+    await expect(page).toHaveURL(/\/editor/);
+
+    await page.getByRole("button", { name: "Toggle sidebar" }).click();
+    await page.getByRole("button", { name: "Knowledge" }).click();
+    await expect(page.getByRole("heading", { name: "Suggestion Queue" })).toBeVisible();
+    await expect(page.getByText("Editor is not ready yet.").first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Retry", exact: true }).click();
+    const patchReviewDialog = page.getByRole("dialog");
+    await expect(patchReviewDialog.getByText("Patch Review", { exact: true })).toBeVisible({ timeout: 30000 });
+
+    await page.keyboard.press("Escape");
+    await expect(patchReviewDialog).toHaveCount(0);
+
+    await page.getByRole("button", { name: /beta\s*\.md/i }).click();
+    await expect(getPrimaryEditor(page)).toBeVisible();
+    await expect(getPrimaryEditor(page)).toContainText("Reference target.");
+
+    const betaEditorText = (await getPrimaryEditor(page).innerText())
+      .trim()
+      .replace(/\n{2,}/g, "\n");
+    expect(betaEditorText).toBe("Beta\nIntro\nReference target.");
   });
 });

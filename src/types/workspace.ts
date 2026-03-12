@@ -23,6 +23,7 @@ export interface WorkspaceBinding {
   provider: WorkspaceProvider;
   revisionId?: string;
   syncError?: string;
+  syncWarnings?: string[];
   syncStatus: WorkspaceSyncStatus;
 }
 

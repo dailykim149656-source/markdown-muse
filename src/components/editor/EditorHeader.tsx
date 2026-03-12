@@ -1,5 +1,6 @@
 import {
   Braces,
+  Check,
   ChevronDown,
   Copy,
   Download,
@@ -14,6 +15,7 @@ import {
   Minimize,
   Moon,
   PanelLeft,
+  Plus,
   Printer,
   QrCode,
   Sparkles,
@@ -27,6 +29,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -150,8 +153,6 @@ const EditorHeader = ({
   const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : mode === "json" ? ".json" : mode === "yaml" ? ".yaml" : ".md";
   const modeFamily = getEditorModeFamily(mode);
   const currentFamilyLabel = t(`header.modeGroups.${modeFamily}`);
-  const crossFamily = modeFamily === "richText" ? "structured" : "richText";
-  const crossFamilyLabel = t(`header.modeGroups.${crossFamily}`);
   const renderModeLabel = (editorMode: EditorMode) => (
     editorMode === "markdown"
       ? "Markdown"
@@ -200,6 +201,8 @@ const EditorHeader = ({
   const workspaceProviderLabel = getWorkspaceProviderLabel(workspaceBinding);
   const workspaceSyncLabel = getWorkspaceSyncLabel(workspaceBinding);
   const workspaceSyncTone = getWorkspaceSyncBadgeClassName(workspaceBinding);
+  const shouldShowCrossFamilyCreateActions = crossFamilyModes.length > 0 && Boolean(onCreateDocument);
+  const shouldShowStructuredSwitchActions = showStructuredModeAction && !shouldShowCrossFamilyCreateActions;
 
   return (
     <header className="border-b border-border bg-background">
@@ -256,92 +259,47 @@ const EditorHeader = ({
             )}
           </div>
 
-          <div className="ml-3 hidden items-center gap-3 lg:flex">
-            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-secondary/40 px-2 py-1">
-              <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                {currentFamilyLabel}
-              </span>
-              <div className="flex items-center rounded-md bg-secondary p-0.5">
-                {availableModes.map((editorMode) => (
-                  <button
-                    key={editorMode}
-                    className={`rounded-sm px-3 py-1 text-xs transition-colors ${mode === editorMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                    onClick={() => onModeChange(editorMode)}
-                    type="button"
-                  >
-                    {renderModeLabel(editorMode)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {crossFamilyModes.length > 0 && onCreateDocument && (
-              <div className="flex items-center gap-2 rounded-md border border-dashed border-border/60 px-2 py-1">
-                <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  {crossFamilyLabel}
-                </span>
-                <div className="flex items-center gap-1">
-                  {crossFamilyModes.map((editorMode) => (
-                    <Button
-                      className="h-7 px-2 text-xs"
-                      key={`create-${editorMode}`}
-                      onClick={() => handleCrossFamilyAction(editorMode)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {t("header.newMode", { mode: renderModeLabel(editorMode) })}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          {showStructuredModeAction && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="hidden h-7 gap-1 px-2 text-xs lg:inline-flex">
-                  <Braces className="h-3.5 w-3.5" />
-                  {t("header.structuredEditor")}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-36">
-                <DropdownMenuItem onClick={() => openStructuredMode("json")} className="text-xs">
-                  JSON
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openStructuredMode("yaml")} className="text-xs">
-                  YAML
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 shrink-0 gap-1 px-2 text-xs lg:hidden">
-                {mode === "markdown" ? "MD" : mode === "latex" ? "TeX" : mode.toUpperCase()}
+              <Button
+                className="h-7 shrink-0 gap-1 px-2 text-xs"
+                size="sm"
+                title={`${currentFamilyLabel}: ${renderModeLabel(mode)}`}
+                variant="outline"
+              >
+                {modeFamily === "structured" ? <Braces className="h-3.5 w-3.5" /> : null}
+                {renderModeLabel(mode)}
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-36">
+            <DropdownMenuContent align="start" className="w-44">
+              <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {currentFamilyLabel}
+              </DropdownMenuLabel>
               {availableModes.map((editorMode) => (
                 <DropdownMenuItem
                   key={editorMode}
                   onClick={() => onModeChange(editorMode)}
                   className={`text-xs ${mode === editorMode ? "bg-accent" : ""}`}
                 >
+                  {mode === editorMode ? <Check className="mr-2 h-3.5 w-3.5" /> : <span className="mr-2 h-3.5 w-3.5" />}
                   {renderModeLabel(editorMode)}
                 </DropdownMenuItem>
               ))}
-              {(crossFamilyModes.length > 0 && onCreateDocument) || showStructuredModeAction ? (
+              {shouldShowCrossFamilyCreateActions || shouldShowStructuredSwitchActions ? (
                 <>
                   <DropdownMenuSeparator />
-                  {crossFamilyModes.length > 0 && onCreateDocument ? (
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                    {t(`header.modeGroups.${modeFamily === "richText" ? "structured" : "richText"}`)}
+                  </DropdownMenuLabel>
+                  {shouldShowCrossFamilyCreateActions ? (
                     crossFamilyModes.map((editorMode) => (
                       <DropdownMenuItem
-                        key={`mobile-create-${editorMode}`}
+                        key={`create-${editorMode}`}
                         onClick={() => handleCrossFamilyAction(editorMode)}
                         className="text-xs"
                       >
+                        <Plus className="mr-2 h-3.5 w-3.5" />
                         {t("header.newMode", { mode: renderModeLabel(editorMode) })}
                       </DropdownMenuItem>
                     ))

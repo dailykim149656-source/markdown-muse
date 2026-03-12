@@ -32,9 +32,19 @@ describe("Guide page", () => {
     expect(screen.getAllByText("Getting started").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Keyboard shortcuts").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Patch Review").length).toBeGreaterThan(0);
-    expect(screen.getByText("Understand Docsy through the screen first")).toBeInTheDocument();
+    expect(screen.getAllByText("Understand Docsy through the screen first").length).toBeGreaterThan(0);
+    expect(screen.getByText("guide.currentBuildTitle")).toBeInTheDocument();
+    expect(screen.getByText("guide.surfaceGalleryTitle")).toBeInTheDocument();
+    expect(screen.getByText("guide.workspaceFlowTitle")).toBeInTheDocument();
+    expect(screen.getAllByAltText("Understand Docsy through the screen first").length).toBeGreaterThan(0);
+    expect(screen.getAllByAltText("guide.currentBuildGraphTitle").length).toBeGreaterThan(0);
+    expect(screen.getAllByAltText("guide.currentBuildReviewTitle").length).toBeGreaterThan(0);
+    expect(screen.getAllByAltText("guide.currentBuildQueueTitle").length).toBeGreaterThan(0);
+    expect(screen.getAllByAltText("guide.currentBuildOperationsTitle").length).toBeGreaterThan(0);
+    expect(screen.getAllByAltText("guide.currentBuildWorkspaceTitle").length).toBeGreaterThan(0);
     expect(screen.getByText("Recommended path for first-time users")).toBeInTheDocument();
     expect(screen.getByText("Frequently asked questions")).toBeInTheDocument();
+    expect(screen.getByText("How does the format dropdown work?")).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("guide.searchPlaceholder"), {
       target: { value: "zzz-not-found" },

@@ -156,6 +156,7 @@ export const useDocumentManager = () => {
         const nextWorkspaceBinding = doc.workspaceBinding && patch.content !== undefined && patch.content !== doc.content
           ? {
             ...doc.workspaceBinding,
+            syncWarnings: undefined,
             syncStatus: "dirty_local" as const,
           }
           : patch.workspaceBinding ?? doc.workspaceBinding;
