@@ -26,6 +26,10 @@ This repository is being prepared for a Gemini hackathon submission that demonst
 - a path to multimodal reasoning with editor screenshots
 - a practical document maintenance use case
 
+## Google Workspace note for judges
+
+Google Workspace sign-in is currently running in Google OAuth testing mode for the hackathon build. If you would like to test Google login directly, please share the Google account email you plan to use so it can be added to the OAuth test-user allowlist. Core editor and AI workflows remain available without Google login.
+
 ## Demo scenario
 
 1. Open multiple technical documents.
