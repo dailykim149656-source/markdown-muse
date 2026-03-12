@@ -50,6 +50,8 @@ jobs:
             exit 1
           fi
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+          RUN_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
           ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
           if [ -z "$ALLOWED_ORIGIN" ]; then
@@ -57,13 +59,14 @@ jobs:
           fi
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GEMINI_API_KEY_SECRET=%s' \
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GEMINI_API_KEY_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$AI_SERVICE_NAME" \
             "$GEMINI_MODEL" \
             "$ALLOWED_ORIGIN" \
-            "$GEMINI_API_KEY_SECRET")
+            "$GEMINI_API_KEY_SECRET" \
+            "$RUN_SERVICE_ACCOUNT")
 
           # Try explicit service account first. If act-as permission is blocked
           # by IAM policy, retry without explicit service-account.
