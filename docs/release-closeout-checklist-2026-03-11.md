@@ -84,6 +84,8 @@ Record the actual dataset used for sign-off:
 ### E. Google Workspace integration
 
 - [ ] Connect a Google Workspace account
+- [ ] Export a local rich-text document to a new Google Doc
+- [ ] Save a bound document back to Google Docs from the Google dropdown
 - [ ] List importable Google Docs files
 - [ ] Import a Google Doc into the editor
 - [ ] Rescan workspace changes and confirm changed sources surface correctly
@@ -135,6 +137,7 @@ Validated in code or automated tests:
 - `npx vitest run src/test/workspaceGraphPanel.test.tsx src/test/graphExplorerDialog.test.tsx src/test/i18nCoverage.test.ts`
 - `npx vitest run src/test/graphExplorerContext.test.tsx src/test/suggestionQueuePanel.test.tsx src/test/dialogSmoke.test.tsx`
 - `npx vitest run src/test/useWorkspaceSync.test.tsx src/test/useWorkspaceChanges.test.tsx`
+- `npx vitest run src/test/useWorkspaceSync.test.tsx src/test/useWorkspaceChanges.test.tsx src/test/useWorkspaceExport.test.tsx`
 - `npx vitest run src/test/workspaceLabels.test.ts src/test/useWorkspaceSync.test.tsx src/test/useWorkspaceChanges.test.tsx src/test/docsyAutosaveMigration.test.ts`
 - `npx vitest run src/test/workspaceDialogs.test.tsx`
 - `npx vitest run src/test/workspaceWarningSurfaces.test.tsx`
@@ -164,10 +167,13 @@ Automated flow coverage now includes:
 - workspace sync warning visibility inside Patch Review
 - workspace rescan conflict marking and refresh pass-through
 - Google Workspace connection and import dialog UI actions
+- Google Docs export hook behavior and export dialog interaction
+- refresh/import payload behavior for exported and imported documents
 
 Still not covered by the current automated results:
 
 - representative real-account Google Workspace end-to-end validation
+- real export to a newly created Google Doc with live credentials
 - real medium and large workspace manual sign-off
 - lossy Google Docs sync warning verification through a live sync session
 
@@ -184,6 +190,7 @@ Fill this section when release-closeout work is complete.
 - Performance thresholds documented: Partially complete in product UI and closeout docs; seeded benchmark values are recorded, but real-workspace measurements are still open
 - Docs cleanup complete: Complete for the current docs index and historical-plan labeling pass
 - Open blockers: real-workspace manual QA, live Google Workspace validation, lossy sync validation
+- Additional note: Google Docs export is implemented, but still needs real-account smoke validation
 - Release-closeout decision: Not ready to close yet; automated baseline improved, manual and benchmark closure still pending
 
 ## Immediate execution order
@@ -191,5 +198,5 @@ Fill this section when release-closeout work is complete.
 1. Complete build and focused regression runs
 2. Validate the small and medium datasets end to end
 3. Measure graph/search limits and write explicit thresholds
-4. Validate Google Workspace import, rescan, and sync conflict flows
+4. Validate Google Workspace export, import, save, rescan, and sync conflict flows
 5. Finish docs cleanup and record release-closeout decision

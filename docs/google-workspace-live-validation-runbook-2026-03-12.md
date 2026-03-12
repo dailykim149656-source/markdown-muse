@@ -2,7 +2,7 @@
 
 Date: 2026-03-12
 Status: Active manual validation runbook
-Scope: Real-account Google Workspace import, rescan, refresh, sync, conflict, and warning validation
+Scope: Real-account Google Workspace export, import, save, rescan, refresh, sync, conflict, and warning validation
 
 ## References
 
@@ -28,12 +28,14 @@ This is the manual counterpart to the current automated coverage for:
 Confirm all of the following with a real Google account and a real Google Doc:
 
 1. account connection works end to end
-2. Google Docs file search and import work end to end
-3. remote changes become visible through rescan
-4. refresh replaces stale imported content
-5. patch apply to Google Docs succeeds when the revision is current
-6. sync conflict is surfaced when the remote revision changed
-7. lossy sync warnings are visible after a real sync
+2. local Docsy export to a new Google Doc works end to end
+3. bound-document save to Google Docs works end to end
+4. Google Docs file search and import work end to end
+5. remote changes become visible through rescan
+6. refresh replaces stale imported content
+7. patch apply to Google Docs succeeds when the revision is current
+8. sync conflict is surfaced when the remote revision changed
+9. lossy sync warnings are visible after a real sync
 
 ## Prerequisites
 
@@ -41,6 +43,7 @@ Confirm all of the following with a real Google account and a real Google Doc:
 - a working AI/workspace server with Google auth configured
 - a Google account with access to a test Drive space
 - at least two Google Docs files prepared for testing
+- at least one local rich-text Docsy document prepared for export testing
 
 Required environment assumptions:
 
@@ -113,7 +116,28 @@ Record:
 - connected account email
 - any cookie or redirect issue
 
-### B. Search and import a Google Doc
+### B. Export a local document to Google Docs
+
+1. Open a local markdown, HTML, or LaTeX document that is not already bound.
+2. Open the Google dropdown.
+3. Click `Export to Google Docs`.
+4. Confirm or edit the title.
+5. Complete export.
+
+Expected result:
+
+- a new Google Doc is created
+- the current tab remains open and becomes Google-bound
+- workspace binding status becomes `Synced` or equivalent
+- `Save to Google Docs` becomes available in the same dropdown
+
+Record:
+
+- exported title
+- returned sync state
+- whether the created Google Doc opens correctly in the Google Docs web UI
+
+### C. Search and import a Google Doc
 
 1. Open `Drive Import`.
 2. Search for the baseline doc by name.
@@ -132,7 +156,26 @@ Record:
 - imported document mode
 - any parsing or rendering issue
 
-### C. Rescan and remote-change detection
+### D. Save a bound document back to Google Docs
+
+1. Use the document exported in step B or an imported bound document.
+2. Make a local change in the editor.
+3. Open the Google dropdown.
+4. Click `Save to Google Docs`.
+
+Expected result:
+
+- local document remains open
+- remote Google Doc updates to match local content
+- binding status becomes `Synced` or `Synced with warnings`
+
+Record:
+
+- pass / fail
+- whether the remote Google Doc text matches local content
+- whether warnings were returned
+
+### E. Rescan and remote-change detection
 
 1. While the imported doc is open, edit the source Google Doc directly in the
    Google Docs web UI.
@@ -151,7 +194,7 @@ Record:
 - time between remote edit and detected rescan result
 - any false negatives
 
-### D. Refresh imported content
+### F. Refresh imported content
 
 1. From the changed imported doc, trigger refresh.
 
@@ -166,7 +209,7 @@ Record:
 - pass / fail
 - whether imported content changed as expected
 
-### E. Clean patch apply to Google Docs
+### G. Clean patch apply to Google Docs
 
 1. Open a rich-text imported document with current revision state.
 2. Generate or load a reviewable patch set.
@@ -186,7 +229,7 @@ Record:
 - resulting workspace status
 - whether Google Docs content matches local result
 
-### F. Conflict on apply
+### H. Conflict on apply
 
 1. Import a Google Doc.
 2. Make a local reviewable change but do not apply yet.
@@ -205,7 +248,7 @@ Record:
 - exact error text shown
 - whether local content remained reviewable after failure
 
-### G. Lossy sync warning visibility
+### I. Lossy sync warning visibility
 
 1. Import the lossy-structure doc.
 2. Apply a reviewed patch back to Google Docs.
@@ -249,6 +292,8 @@ Recommended artifact folder:
 Validation is considered complete only if all of the following are true:
 
 - real Google auth succeeds
+- local export to a new Google Doc succeeds
+- direct save from a bound document succeeds
 - real file search and import succeed
 - remote change rescan produces a visible conflict state
 - refresh succeeds on a changed imported doc

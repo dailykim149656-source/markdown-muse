@@ -2,6 +2,7 @@ import {
   Braces,
   Check,
   ChevronDown,
+  Cloud,
   Copy,
   Download,
   Ellipsis,
@@ -88,10 +89,15 @@ interface EditorHeaderProps {
   onTogglePreview?: () => void;
   loadFileTitle?: string;
   onOpenWorkspaceConnection?: () => void;
+  onOpenWorkspaceExport?: () => void;
   onOpenWorkspaceImport?: () => void;
+  onSaveWorkspaceDocument?: () => void;
   workspaceConnected?: boolean;
   workspaceConnectionPending?: boolean;
+  workspaceExportEnabled?: boolean;
+  workspaceExportPending?: boolean;
   workspaceImportPending?: boolean;
+  workspaceSyncPending?: boolean;
   workspaceBinding?: WorkspaceBinding;
 }
 
@@ -142,10 +148,15 @@ const EditorHeader = ({
   onTogglePreview,
   loadFileTitle,
   onOpenWorkspaceConnection,
+  onOpenWorkspaceExport,
   onOpenWorkspaceImport,
+  onSaveWorkspaceDocument,
   workspaceConnected = false,
   workspaceConnectionPending = false,
+  workspaceExportEnabled = true,
+  workspaceExportPending = false,
   workspaceImportPending = false,
+  workspaceSyncPending = false,
   workspaceBinding,
 }: EditorHeaderProps) => {
   const { locale, setLocale, t } = useI18n();
@@ -201,6 +212,8 @@ const EditorHeader = ({
   const workspaceProviderLabel = getWorkspaceProviderLabel(workspaceBinding);
   const workspaceSyncLabel = getWorkspaceSyncLabel(workspaceBinding);
   const workspaceSyncTone = getWorkspaceSyncBadgeClassName(workspaceBinding);
+  const showWorkspaceExportAction = Boolean(onOpenWorkspaceExport) && !workspaceBinding;
+  const showWorkspaceSyncAction = Boolean(onSaveWorkspaceDocument) && Boolean(workspaceBinding);
   const shouldShowCrossFamilyCreateActions = crossFamilyModes.length > 0 && Boolean(onCreateDocument);
   const shouldShowStructuredSwitchActions = showStructuredModeAction && !shouldShowCrossFamilyCreateActions;
 
@@ -366,35 +379,61 @@ const EditorHeader = ({
           </Button>
 
           {onOpenWorkspaceConnection && (
-            <Button
-              className="hidden h-8 px-2 text-xs sm:inline-flex"
-              disabled={workspaceConnectionPending}
-              onClick={onOpenWorkspaceConnection}
-              size="sm"
-              title={workspaceConnected ? "Google Workspace connected" : "Connect Google Workspace"}
-              type="button"
-              variant={workspaceConnected ? "secondary" : "outline"}
-            >
-              {workspaceConnectionPending
-                ? "Google..."
-                : workspaceConnected
-                  ? "Google Connected"
-                  : "Connect Google"}
-            </Button>
-          )}
-
-          {onOpenWorkspaceImport && workspaceConnected && (
-            <Button
-              className="hidden h-8 px-2 text-xs sm:inline-flex"
-              disabled={workspaceImportPending}
-              onClick={onOpenWorkspaceImport}
-              size="sm"
-              title="Import from Google Drive"
-              type="button"
-              variant="outline"
-            >
-              {workspaceImportPending ? "Importing..." : "Drive Import"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  className="h-8 gap-1 px-2"
+                  size="sm"
+                  title={workspaceConnected ? "Google Workspace connected" : "Google Workspace"}
+                  type="button"
+                  variant={workspaceConnected ? "secondary" : "outline"}
+                >
+                  <Cloud className="h-4 w-4" />
+                  <span className="hidden text-xs sm:inline">Google</span>
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                  Google Workspace
+                </DropdownMenuLabel>
+                <DropdownMenuItem disabled={workspaceConnectionPending} onClick={onOpenWorkspaceConnection}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  {workspaceConnectionPending
+                    ? "Google..."
+                    : workspaceConnected
+                      ? "Manage Connection"
+                      : "Connect Google"}
+                </DropdownMenuItem>
+                {onOpenWorkspaceImport && (
+                  <DropdownMenuItem
+                    disabled={!workspaceConnected || workspaceImportPending}
+                    onClick={() => onOpenWorkspaceImport()}
+                  >
+                    <FileDown className="mr-2 h-4 w-4" />
+                    {workspaceImportPending ? "Importing..." : "Import from Google Drive"}
+                  </DropdownMenuItem>
+                )}
+                {showWorkspaceExportAction && (
+                  <DropdownMenuItem
+                    disabled={!workspaceConnected || workspaceExportPending || !workspaceExportEnabled}
+                    onClick={() => onOpenWorkspaceExport?.()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {workspaceExportPending ? "Exporting..." : "Export to Google Docs"}
+                  </DropdownMenuItem>
+                )}
+                {showWorkspaceSyncAction && (
+                  <DropdownMenuItem
+                    disabled={!workspaceConnected || workspaceSyncPending}
+                    onClick={() => onSaveWorkspaceDocument?.()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {workspaceSyncPending ? "Saving..." : "Save to Google Docs"}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
 
           <DropdownMenu>
@@ -596,20 +635,6 @@ const EditorHeader = ({
               <DropdownMenuItem onClick={onToggleTheme}>
                 {isDark ? t("header.lightMode") : t("header.darkMode")}
               </DropdownMenuItem>
-              {onOpenWorkspaceConnection && (
-                <DropdownMenuItem disabled={workspaceConnectionPending} onClick={onOpenWorkspaceConnection}>
-                  {workspaceConnectionPending
-                    ? "Google..."
-                    : workspaceConnected
-                      ? "Google Connected"
-                      : "Connect Google"}
-                </DropdownMenuItem>
-              )}
-              {onOpenWorkspaceImport && workspaceConnected && (
-                <DropdownMenuItem disabled={workspaceImportPending} onClick={onOpenWorkspaceImport}>
-                  {workspaceImportPending ? "Importing..." : "Drive Import"}
-                </DropdownMenuItem>
-              )}
               <DropdownMenuSeparator />
               {LOCALES.map((nextLocale) => (
                 <DropdownMenuItem

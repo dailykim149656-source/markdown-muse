@@ -14,14 +14,19 @@ export const useWorkspaceSync = ({
     mutationFn: applyWorkspaceDocument,
   });
 
-  const syncDocument = useCallback(async (document: DocumentData) => {
+  const syncDocument = useCallback(async (
+    document: DocumentData,
+    options?: {
+      markdown?: string;
+    },
+  ) => {
     const binding = document.workspaceBinding;
 
     if (!binding || binding.provider !== "google_drive") {
       return null;
     }
 
-    const markdown = document.sourceSnapshots?.markdown || document.content;
+    const markdown = options?.markdown ?? document.sourceSnapshots?.markdown ?? document.content;
 
     updateActiveDoc({
       workspaceBinding: {

@@ -108,6 +108,31 @@ gcloud run deploy markdown-muse-ai \
 Set `GEMINI_API_KEY` through Secret Manager or Cloud Run secrets rather than
 inline CLI flags when possible.
 
+### 4. GitHub Actions deployment (recommended)
+
+You do not need to manually `git clone` in GCP.  
+`github.com` repository is your source of truth, and CI handles the build/deploy.
+
+Use:
+
+- [deploy-gcp.yml](/.github/workflows/deploy-gcp.yml)
+
+Required repository secrets:
+
+- `GCP_SA_KEY` (service account JSON, or replace with workload identity auth)
+- `GCP_PROJECT_ID`
+- `GCP_AI_ALLOWED_ORIGIN` (exact frontend origin)
+- `GCP_FRONTEND_BUCKET`
+
+The workflow does:
+
+- Cloud Build deploy for AI API (`cloudbuild.ai.yaml`)
+- health check `GET /api/ai/health`
+- web profile build (`npm run build:web`) with:
+  - `VITE_APP_PROFILE=web`
+  - `VITE_AI_API_BASE_URL` from deployed Cloud Run URL
+- upload `dist/` to Cloud Storage and set SPA fallback to `index.html`
+
 ## Recommended rollout shape
 
 1. Deploy the AI API first.
@@ -116,6 +141,41 @@ inline CLI flags when possible.
 4. Upload frontend assets.
 5. Update the load balancer rewrite rule for SPA routes.
 6. Turn on CDN caching for hashed assets.
+
+## 도메인이 없을 때 가장 쉬운 배포(기본 제공 도메인)
+
+도메인이 없을 때는 기본 URL만 써도 바로 배포할 수 있습니다.
+
+- AI API: Cloud Run 기본 URL 사용
+  - 예) `https://markdown-muse-ai-xxxxx.a.run.app`
+- 프런트엔드: Cloud Storage 정적 호스팅 기본 URL 사용
+  - 예) `https://storage.googleapis.com/YOUR_BUCKET/index.html`
+
+### 필요한 값(최소)
+
+1) GitHub Secrets
+
+- `GCP_PROJECT_ID`
+- `GCP_SA_KEY`
+- `GCP_FRONTEND_BUCKET`
+- `GCP_AI_ALLOWED_ORIGIN`는 임시 배포 단계에서는 생략 가능(워크플로우에서 기본 `*`로 동작)
+
+2) AI CORS
+
+- 도메인 미보유면 우선 `AI_ALLOWED_ORIGIN=*`이 편합니다.
+- 보안상 위험이 있다면 도메인이 생기면 추후 `https://storage.googleapis.com/YOUR_BUCKET` 형태로 정확히 제한하세요.
+
+### GUI 중심 단계
+
+1. Cloud Console에서 Artifact Registry, Secret Manager, Cloud Run, Cloud Storage 항목이 준비되었는지 확인
+2. GitHub Secrets를 등록
+3. GitHub에 `main` 푸시 또는 Actions 수동 실행
+4. 배포 완료 후 확인:
+   - `https://YOUR_CLOUD_RUN_URL/api/ai/health`가 200
+   - `https://storage.googleapis.com/YOUR_BUCKET/index.html` 접속
+   - `/editor`를 직접 입력하고 새로고침해도 동작
+
+> `docs`에 있는 `cloudbuild.ai.yaml`은 Cloud Run 배포용이고, 프런트는 기존처럼 `build:web` 결과를 Cloud Storage에 올려 사용하는 방식입니다.
 
 ## Post-deploy checks
 

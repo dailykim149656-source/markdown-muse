@@ -50,6 +50,7 @@ public/    static assets
 - multi-document editing with tabs and sidebar workflows
 - Markdown, LaTeX, HTML, JSON, and YAML editing
 - document AST generation and structured patch support
+- Google Workspace connection, Google Docs import/export, and bound-document save
 - AI-assisted summaries, section generation, TOC suggestions, and update proposals
 - patch review dialog instead of direct document mutation
 - local knowledge indexing and related document workflows
@@ -143,6 +144,7 @@ Health endpoint:
 - [Hackathon PRD](PRD/docsy_prd.md)
 - [Final submission package](docs/final-submission-package-2026-03-11.md)
 - [Hackathon implementation session summary](docs/session-summary-2026-03-11-hackathon-implementation.md)
+- [Google Docs export session summary](docs/session-summary-2026-03-12-google-docs-export-and-google-dropdown.md)
 - [Docs index](docs/README.md)
 - [PRD index](PRD/README.md)
 - [GCP deployment guide](docs/gcp-deployment.md)

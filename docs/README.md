@@ -24,6 +24,7 @@ Read these first if you want to understand what the product currently does:
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 - [Implemented Features Summary](implemented-features-summary-2026-03-11.md)
 - [Implemented Features Summary (Korean)](implemented-features-summary-ko-2026-03-11.md)
+- [Google Docs Export Session Summary (Korean)](session-summary-2026-03-12-google-docs-export-and-google-dropdown-ko.md)
 - [PRD Status Check (2026-03-11)](prd-status-check-2026-03-11.md)
 - [Landing Guide Implementation Plan](landing-guide-implementation-plan-2026-03-11.md)
 
@@ -36,6 +37,8 @@ Read these if you are changing code or need implementation context:
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
 - [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
 - [Release Closeout Checklist](release-closeout-checklist-2026-03-11.md)
+- [Google Docs Export and Dropdown Summary](session-summary-2026-03-12-google-docs-export-and-google-dropdown.md)
+- [Google Docs Export Session Summary (Korean)](session-summary-2026-03-12-google-docs-export-and-google-dropdown-ko.md)
 - [Workspace Graph, Editor, and i18n Session Summary](session-summary-2026-03-11-workspace-graph-editor-i18n-polish.md)
 - [Architecture Overview](architecture-overview-2026-03-10.md)
 - [Docsy Import/Delete/Duplication Fixes](session-summary-2026-03-11-docsy-import-delete-duplication-fixes.md)
@@ -50,6 +53,7 @@ Read these if you are validating release readiness or operational review state:
 
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
 - [Google Workspace Live Validation Runbook](google-workspace-live-validation-runbook-2026-03-12.md)
+- [Google Docs Sync Support Matrix](google-docs-sync-support-matrix-2026-03-12.md)
 - [Release Closeout Results Template](release-closeout-results-template-2026-03-12.md)
 - [Demo Runbook](demo-runbook-2026-03-11.md)
 - [Hackathon Submission Brief](hackathon-submission-brief-2026-03-11.md)
@@ -108,6 +112,8 @@ Read these if you are validating release readiness or operational review state:
 - [Hackathon Architecture](architecture-hackathon-2026-03-11.md)
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
 - [Google Workspace Live Validation Runbook](google-workspace-live-validation-runbook-2026-03-12.md)
+- [Google Docs Sync Support Matrix](google-docs-sync-support-matrix-2026-03-12.md)
+- [Google Docs Export and Dropdown Summary](session-summary-2026-03-12-google-docs-export-and-google-dropdown.md)
 - [Release Closeout Results Template](release-closeout-results-template-2026-03-12.md)
 - [Demo Script](demo-script-2026-03-11.md)
 - [Demo Runbook](demo-runbook-2026-03-11.md)
@@ -136,6 +142,9 @@ Read these if you are validating release readiness or operational review state:
 ### Implementation notes
 
 - [2026-03-11 Hackathon Implementation Summary](session-summary-2026-03-11-hackathon-implementation.md)
+- [2026-03-12 Google Docs Export and Dropdown Summary](session-summary-2026-03-12-google-docs-export-and-google-dropdown.md)
+- [2026-03-12 Google Docs Export and Dropdown Summary (Korean)](session-summary-2026-03-12-google-docs-export-and-google-dropdown-ko.md)
+- [2026-03-12 Google Docs Sync Support Matrix](google-docs-sync-support-matrix-2026-03-12.md)
 - [2026-03-11 Workspace Graph, Editor, and i18n Session Summary](session-summary-2026-03-11-workspace-graph-editor-i18n-polish.md)
 - [2026-03-11 Docsy Import/Delete/Duplication Fixes](session-summary-2026-03-11-docsy-import-delete-duplication-fixes.md)
 - [v0.7 Implementation Update](session-summary-2026-03-10-v0.7-implementation-update.md)

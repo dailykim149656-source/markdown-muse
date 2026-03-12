@@ -28,6 +28,7 @@ Current repository position:
 | Share and export | Implemented | `src/components/editor/ShareLinkDialog.tsx`, `src/hooks/useDocumentIO.ts` | Share links, QR, clipboard export, print, file export |
 | AI authoring and analysis | Implemented | `src/components/editor/AiAssistantDialog.tsx`, `src/components/editor/AiAssistantRuntime.tsx`, `src/hooks/useAiAssistant.ts` | Summary, section generation, compare, update suggestions, procedure extraction, TOC |
 | Patch Review | Implemented | `src/components/editor/PatchReviewDialog.tsx`, `src/components/editor/PatchReviewPanel.tsx`, `src/hooks/usePatchReview.ts` | Accept/reject/edit/apply, confidence metrics, provenance metrics, provenance-gap filtering |
+| Google Workspace docs integration | Implemented | `src/components/editor/EditorHeader.tsx`, `src/components/editor/WorkspaceImportDialog.tsx`, `src/components/editor/WorkspaceExportDialog.tsx`, `src/hooks/useWorkspaceExport.ts`, `src/hooks/useWorkspaceSync.ts`, `server/modules/workspace/routes.ts` | Connect Google, import existing Google Docs, export local rich-text docs to new Google Docs, save bound docs, rescan, refresh, conflict handling |
 | Knowledge index and retrieval | Implemented | `src/hooks/useKnowledgeBase.ts`, `src/lib/knowledge/knowledgeIndex.ts`, `src/components/editor/KnowledgeSearchPanel.tsx` | Local index, stale/fresh state, image retrieval, semantic rerank, strict keyword mode |
 | Workspace Graph | Implemented | `src/pages/WorkspaceGraph.tsx`, `src/components/editor/GraphExplorerDialog.tsx`, `src/components/editor/WorkspaceGraphPanel.tsx` | Graph route, search, filters, issues-only, source-target chain, graph handoff |
 | Diagnostics | Implemented | `src/components/editor/DocumentImpactPanel.tsx`, `src/components/editor/DocumentHealthPanel.tsx`, `src/components/editor/ConsistencyIssuesPanel.tsx`, `src/components/editor/ChangeMonitoringPanel.tsx` | Impact, health, consistency, change monitoring, priority/reason, causal explanation |
@@ -51,6 +52,7 @@ Current repository position:
 | RST import/export | Implemented | Import/export surface |
 | PDF output | Implemented | Export and print-oriented workflow |
 | `.docsy` persistence | Implemented | Richer editor-state preservation |
+| Google Docs import/export/save | Implemented | Google Workspace dropdown and bound-document workflow |
 
 ## Review-first guarantees
 

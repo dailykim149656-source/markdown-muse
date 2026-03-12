@@ -31,7 +31,7 @@ Already implemented in product terms:
 - review-first AI authoring and patch review
 - workspace graph, diagnostics, suggestion queue, and operations gate
 - landing and guide surfaces
-- Google Workspace connect, import, rescan, and sync routes
+- Google Workspace connect, import, export, rescan, and sync routes
 
 Still open in meaningful terms:
 
@@ -66,7 +66,7 @@ Main tasks:
   - editor creation and template hydration
   - graph exploration and graph-to-editor handoff
   - diagnostics to queue to patch review
-  - workspace import, rescan, refresh, and sync conflict handling
+  - workspace export, import, save, rescan, refresh, and sync conflict handling
 - define benchmark-backed thresholds for supported workspace sizes
 - align docs so the newest state documents are the clear source of truth
 - clean broken or stale doc references in the docs index

@@ -49,6 +49,11 @@ export interface GoogleConnectResponse {
   provider: WorkspaceProvider;
 }
 
+export interface WorkspaceImportRequest {
+  documentId?: string;
+  fileId: string;
+}
+
 export interface WorkspaceFileListItem {
   fileId: string;
   iconLink?: string;
@@ -82,6 +87,18 @@ export interface WorkspaceApplyResponse {
   revisionId?: string;
   syncStatus: "synced";
   warnings: string[];
+}
+
+export interface WorkspaceExportRequest {
+  documentId: string;
+  markdown: string;
+  title?: string;
+}
+
+export interface WorkspaceExportResponse {
+  ok: true;
+  warnings: string[];
+  workspaceBinding: WorkspaceBinding;
 }
 
 export interface WorkspaceRemoteChange {

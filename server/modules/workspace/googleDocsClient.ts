@@ -32,6 +32,28 @@ export const getGoogleDocument = async (accessToken: string, fileId: string) => 
   return response.json() as Promise<unknown>;
 };
 
+export const createGoogleDocument = async (accessToken: string, title: string) => {
+  const url = new URL(`${GOOGLE_DOCS_API_URL}/documents`);
+  const body = JSON.stringify({
+    title,
+  });
+
+  const response = await fetch(url, {
+    body,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new HttpError(502, await readGoogleError(response));
+  }
+
+  return response.json() as Promise<unknown>;
+};
+
 export const batchUpdateGoogleDocument = async (
   accessToken: string,
   fileId: string,

@@ -171,6 +171,10 @@ These items do not block the statement that the core PRD was implemented, but th
 - the older plan and release docs describe some items as still pending even though they were implemented afterward
 - this document should be treated as the current state reference
 
+5. Live Google Workspace export and save validation
+- Google Workspace now includes export-to-Google-Docs and bound-document save flows
+- those paths still need real-account validation before final release sign-off
+
 ## Final assessment
 
 If the question is "Was the PRD execution plan progressed?":

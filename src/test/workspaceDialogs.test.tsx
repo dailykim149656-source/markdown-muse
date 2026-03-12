@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import WorkspaceConnectionDialog from "@/components/editor/WorkspaceConnectionDialog";
+import WorkspaceExportDialog from "@/components/editor/WorkspaceExportDialog";
 import WorkspaceImportDialog from "@/components/editor/WorkspaceImportDialog";
 
 describe("WorkspaceConnectionDialog", () => {
@@ -129,5 +130,30 @@ describe("WorkspaceImportDialog", () => {
     );
 
     expect(screen.getByText("No Google Docs files match the current search.")).toBeInTheDocument();
+  });
+});
+
+describe("WorkspaceExportDialog", () => {
+  it("shows the current title and triggers export", () => {
+    const onExport = vi.fn();
+
+    render(
+      <WorkspaceExportDialog
+        defaultTitle="Runbook"
+        onExport={onExport}
+        onOpenChange={vi.fn()}
+        open
+      />,
+    );
+
+    expect(screen.getByText("Export to Google Docs")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Runbook")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText("Untitled"), {
+      target: { value: "Operations Runbook" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+
+    expect(onExport).toHaveBeenCalledWith("Operations Runbook");
   });
 });

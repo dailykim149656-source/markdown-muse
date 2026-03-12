@@ -149,7 +149,10 @@ describe("useWorkspaceChanges", () => {
       await result.current.refreshDocument("doc-google");
     });
 
-    expect(importWorkspaceFile).toHaveBeenCalledWith("file-123");
+    expect(importWorkspaceFile).toHaveBeenCalledWith({
+      documentId: "doc-google",
+      fileId: "file-123",
+    });
     expect(onImportRefresh).toHaveBeenCalledWith(expect.objectContaining({
       content: "<h1>Refreshed</h1>",
       id: "doc-google",

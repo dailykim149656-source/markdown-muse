@@ -48,6 +48,8 @@ This document is intended to become the final handoff record for release-closeou
 ## Google Workspace Live Validation
 
 - Connect Google result:
+- Export local document result:
+- Save bound document result:
 - Search/import result:
 - Rescan result:
 - Refresh result:

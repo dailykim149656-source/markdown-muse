@@ -5,7 +5,10 @@ import type {
   WorkspaceApplyResponse,
   WorkspaceAuthSession,
   WorkspaceChangesResponse,
+  WorkspaceExportRequest,
+  WorkspaceExportResponse,
   WorkspaceFileListResponse,
+  WorkspaceImportRequest,
   WorkspaceImportResponse,
 } from "@/types/workspace";
 
@@ -123,9 +126,15 @@ export const listWorkspaceFiles = (params?: {
   });
 };
 
-export const importWorkspaceFile = (fileId: string) =>
+export const importWorkspaceFile = (body: WorkspaceImportRequest) =>
   requestJson<WorkspaceImportResponse>("/api/workspace/import", {
-    body: JSON.stringify({ fileId }),
+    body: JSON.stringify(body),
+    method: "POST",
+  });
+
+export const exportWorkspaceDocument = (body: WorkspaceExportRequest) =>
+  requestJson<WorkspaceExportResponse>("/api/workspace/export", {
+    body: JSON.stringify(body),
     method: "POST",
   });
 

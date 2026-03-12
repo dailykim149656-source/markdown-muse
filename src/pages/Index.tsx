@@ -21,6 +21,7 @@ import { usePatchReview } from "@/hooks/usePatchReview";
 import { useWorkspaceFiles } from "@/hooks/useWorkspaceFiles";
 import { useWorkspaceAuth } from "@/hooks/useWorkspaceAuth";
 import { useWorkspaceChanges } from "@/hooks/useWorkspaceChanges";
+import { useWorkspaceExport } from "@/hooks/useWorkspaceExport";
 import { useWorkspaceSync } from "@/hooks/useWorkspaceSync";
 import { useI18n } from "@/i18n/useI18n";
 import { useVersionHistory } from "@/hooks/useVersionHistory";
@@ -52,6 +53,7 @@ const HtmlEditor = lazy(() => import("@/components/editor/HtmlEditor"));
 const JsonYamlEditor = lazy(() => import("@/components/editor/JsonYamlEditor"));
 const AiAssistantRuntime = lazy(() => import("@/components/editor/AiAssistantRuntime"));
 const WorkspaceConnectionDialog = lazy(() => import("@/components/editor/WorkspaceConnectionDialog"));
+const WorkspaceExportDialog = lazy(() => import("@/components/editor/WorkspaceExportDialog"));
 const WorkspaceImportDialog = lazy(() => import("@/components/editor/WorkspaceImportDialog"));
 
 const EditorFallback = () => (
@@ -281,6 +283,7 @@ const Index = () => {
   const [structuredModesVisible, setStructuredModesVisible] = useState(() => featureFlags.structuredModesVisibleOnInitialMount);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [workspaceConnectionOpen, setWorkspaceConnectionOpen] = useState(false);
+  const [workspaceExportOpen, setWorkspaceExportOpen] = useState(false);
   const [workspaceImportOpen, setWorkspaceImportOpen] = useState(false);
   const {
     activeDoc,
@@ -352,8 +355,16 @@ const Index = () => {
     updateActiveDoc,
   });
   const {
+    isSyncing: workspaceSyncing,
     syncDocument,
   } = useWorkspaceSync({
+    updateActiveDoc,
+  });
+  const {
+    error: workspaceExportError,
+    exportDocument: exportWorkspaceDocument,
+    isExporting: workspaceExporting,
+  } = useWorkspaceExport({
     updateActiveDoc,
   });
   const {
@@ -768,11 +779,31 @@ const Index = () => {
     }, { replace: true });
   }, [setSearchParams]);
   const workspaceErrorMessage = workspaceAuthError instanceof Error ? workspaceAuthError.message : null;
+  const workspaceExportErrorMessage = workspaceExportError instanceof Error ? workspaceExportError.message : null;
   const workspaceImportErrorMessage = workspaceFilesError instanceof Error ? workspaceFilesError.message : null;
   const workspaceChangesErrorMessage = workspaceChangesError instanceof Error ? workspaceChangesError.message : null;
+  const workspaceExportEnabled = activeDoc.mode !== "json" && activeDoc.mode !== "yaml" && !activeDoc.workspaceBinding;
+  const resolveActiveWorkspaceMarkdown = useCallback(() => (
+    activeDoc.mode === "json" || activeDoc.mode === "yaml"
+      ? activeDoc.content
+      : currentRenderableMarkdown
+  ), [activeDoc.content, activeDoc.mode, currentRenderableMarkdown]);
   const handleOpenWorkspaceConnection = useCallback(() => {
     setWorkspaceConnectionOpen(true);
   }, []);
+  const handleOpenWorkspaceExport = useCallback(() => {
+    if (!workspaceConnected) {
+      setWorkspaceConnectionOpen(true);
+      return;
+    }
+
+    if (!workspaceExportEnabled) {
+      toast.error("Google Docs export is only available for unlinked rich-text documents.");
+      return;
+    }
+
+    setWorkspaceExportOpen(true);
+  }, [workspaceConnected, workspaceExportEnabled]);
   const handleOpenWorkspaceImport = useCallback(() => {
     if (!workspaceConnected) {
       setWorkspaceConnectionOpen(true);
@@ -802,7 +833,7 @@ const Index = () => {
       });
   }, [disconnectWorkspace]);
   const handleImportWorkspaceFile = useCallback((fileId: string) => {
-    void importWorkspaceFile(fileId)
+    void importWorkspaceFile({ fileId })
       .then((result) => {
         createDocument(resolveImportedDocumentOptions({
           activeDocId,
@@ -817,6 +848,49 @@ const Index = () => {
         toast.error(message);
       });
   }, [activeDocId, createDocument, documents, importWorkspaceFile]);
+  const handleExportWorkspaceDocument = useCallback((title: string) => {
+    void exportWorkspaceDocument(activeDoc, {
+      markdown: resolveActiveWorkspaceMarkdown(),
+      title,
+    })
+      .then((result) => {
+        setWorkspaceExportOpen(false);
+        if (result.warnings.length > 0) {
+          toast.warning(result.warnings[0]);
+        } else {
+          toast.success(`Exported "${title.trim() || activeDoc.name || "Untitled"}" to Google Docs.`);
+        }
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to export the Google document.";
+        toast.error(message);
+      });
+  }, [activeDoc, exportWorkspaceDocument, resolveActiveWorkspaceMarkdown]);
+  const handleSaveWorkspaceDocument = useCallback(() => {
+    if (!activeDoc.workspaceBinding) {
+      return;
+    }
+
+    void syncDocument(activeDoc, {
+      markdown: resolveActiveWorkspaceMarkdown(),
+    })
+      .then((result) => {
+        if (!result) {
+          return;
+        }
+
+        if (result.warnings.length > 0) {
+          toast.warning(result.warnings[0]);
+          return;
+        }
+
+        toast.success("Saved to Google Docs.");
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : "Failed to save the Google document.";
+        toast.error(message);
+      });
+  }, [activeDoc, resolveActiveWorkspaceMarkdown, syncDocument]);
   const handleRescanWorkspaceChanges = useCallback(() => {
     void rescanWorkspaceChanges()
       .then((result) => {
@@ -892,6 +966,12 @@ const Index = () => {
       setWorkspaceImportOpen(false);
     }
   }, [workspaceConnected, workspaceImportOpen]);
+
+  useEffect(() => {
+    if (!workspaceConnected && workspaceExportOpen) {
+      setWorkspaceExportOpen(false);
+    }
+  }, [workspaceConnected, workspaceExportOpen]);
 
   useEffect(() => {
     if (!workspaceImportOpen && workspaceFileQuery) {
@@ -1341,7 +1421,9 @@ const Index = () => {
           onOpenAiAssistant: () => requestAiIntent({ type: "open" }),
           onOpenStructuredModes: enableStructuredModes,
           onOpenWorkspaceConnection: handleOpenWorkspaceConnection,
+          onOpenWorkspaceExport: handleOpenWorkspaceExport,
           onOpenWorkspaceImport: handleOpenWorkspaceImport,
+          onSaveWorkspaceDocument: handleSaveWorkspaceDocument,
           onOpenShare: () => {
             void prepareShareLink().finally(() => setShareDialogOpen(true));
           },
@@ -1377,7 +1459,10 @@ const Index = () => {
           workspaceBinding: activeDoc.workspaceBinding,
           workspaceConnected,
           workspaceConnectionPending: workspaceConnecting || workspaceDisconnecting || workspaceAuthLoading,
+          workspaceExportEnabled,
+          workspaceExportPending: workspaceExporting,
           workspaceImportPending: workspaceImporting || workspaceFilesLoading,
+          workspaceSyncPending: workspaceSyncing,
         }}
         onFileChange={handleFileChange}
         patchReviewDialogProps={{
@@ -1526,6 +1611,18 @@ const Index = () => {
             onSearchChange={setWorkspaceFileQuery}
             open={workspaceImportOpen}
             query={workspaceFileQuery}
+          />
+        </Suspense>
+      )}
+      {workspaceExportOpen && (
+        <Suspense fallback={null}>
+          <WorkspaceExportDialog
+            defaultTitle={activeDoc.name}
+            errorMessage={workspaceExportErrorMessage}
+            isExporting={workspaceExporting}
+            onExport={handleExportWorkspaceDocument}
+            onOpenChange={setWorkspaceExportOpen}
+            open={workspaceExportOpen}
           />
         </Suspense>
       )}

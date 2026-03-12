@@ -1,0 +1,142 @@
+name: Deploy to GCP
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      force_frontend:
+        description: "Deploy frontend even if AI URL cannot be derived from Cloud Run yet"
+        default: "false"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-ai:
+    name: Deploy AI service (Cloud Run)
+    runs-on: ubuntu-latest
+    outputs:
+      ai_service_url: ${{ steps.ai.outputs.url }}
+    env:
+      GCP_REGION: asia-northeast3
+      AI_SERVICE_NAME: markdown-muse-ai
+      ARTIFACT_REPOSITORY: docsy
+      GEMINI_MODEL: gemini-2.5-flash
+      GEMINI_API_KEY_SECRET: gemini-api-key
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy AI service via Cloud Build
+        id: ai
+        run: |
+          set -euo pipefail
+
+          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
+            echo "GCP_PROJECT_ID is required."
+            exit 1
+          fi
+
+          ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          if [ -z "$ALLOWED_ORIGIN" ]; then
+            ALLOWED_ORIGIN="*"
+          fi
+
+          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
+
+          gcloud builds submit \
+            --config cloudbuild.ai.yaml \
+            --substitutions \
+              _IMAGE_URI=${IMAGE_URI},\
+              _REGION=${GCP_REGION},\
+              _SERVICE_NAME=${AI_SERVICE_NAME},\
+              _GEMINI_MODEL=${GEMINI_MODEL},\
+              _AI_ALLOWED_ORIGIN=${ALLOWED_ORIGIN},\
+              _GEMINI_API_KEY_SECRET=${GEMINI_API_KEY_SECRET} \
+            .
+
+          AI_URL="$(gcloud run services describe ${AI_SERVICE_NAME} --region ${GCP_REGION} --format='value(status.url)')"
+
+          if [ -z "${AI_URL}" ]; then
+            echo "Cloud Run service URL could not be resolved."
+            exit 1
+          fi
+
+          echo "url=${AI_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify AI health
+        run: |
+          set -euo pipefail
+          curl -fsS "${{ steps.ai.outputs.url }}/api/ai/health" >/dev/null
+
+  deploy-web:
+    name: Deploy web profile frontend to Cloud Storage
+    needs: deploy-ai
+    runs-on: ubuntu-latest
+    env:
+      BUCKET: ${{ secrets.GCP_FRONTEND_BUCKET }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build web profile frontend
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BUCKET}" ]; then
+            echo "GCP_FRONTEND_BUCKET is required."
+            exit 1
+          fi
+
+          AI_API_BASE_URL="${{ needs.deploy-ai.outputs.ai_service_url }}"
+
+          if [ -z "${AI_API_BASE_URL}" ] && [ "${{ github.event.inputs.force_frontend }}" != "true" ]; then
+            echo "AI service URL was not resolved. Use workflow_dispatch with force_frontend=true to override."
+            exit 1
+          fi
+
+          printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\n" "${AI_API_BASE_URL}" > .env.production.local
+
+          npm ci
+          npm run build:web
+
+      - name: Deploy dist to Cloud Storage bucket
+        run: |
+          set -euo pipefail
+          gcloud storage cp --recursive dist gs://"${BUCKET}"
+          gcloud storage buckets update gs://"${BUCKET}" --web-main-page-suffix=index.html --web-not-found-page=index.html
+
+      - name: Verify frontend file
+        run: |
+          set -euo pipefail
+          if [ ! -f "dist/index.html" ]; then
+            echo "dist/index.html not found after build."
+            exit 1
+          fi
+          echo "Frontend deployed to gs://${BUCKET}"
