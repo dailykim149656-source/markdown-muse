@@ -67,7 +67,7 @@ jobs:
           gcloud builds submit \
             --config cloudbuild.ai.yaml \
             --substitutions="${SUBSTITUTIONS}" \
-            --service-account="${GCP_DEPLOYER_SERVICE_ACCOUNT_EMAIL}" \
+            --service-account="projects/${{ secrets.GCP_PROJECT_ID }}/serviceAccounts/${GCP_DEPLOYER_SERVICE_ACCOUNT_EMAIL}" \
             .
 
           AI_URL="$(gcloud run services describe ${AI_SERVICE_NAME} --region ${GCP_REGION} --format='value(status.url)')"
