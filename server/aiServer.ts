@@ -417,20 +417,6 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    const authRouteResult = await handleAuthRoute(request);
-
-    if (authRouteResult) {
-      writeHttpResponse(response, authRouteResult);
-      return;
-    }
-
-    const workspaceRouteResult = await handleWorkspaceRoute(request);
-
-    if (workspaceRouteResult) {
-      writeHttpResponse(response, workspaceRouteResult);
-      return;
-    }
-
     if (request.method === "GET" && request.url === "/api/ai/health") {
       writeHttpResponse(response, json({
         allowedOrigins: ALLOWED_ORIGINS,
@@ -440,6 +426,8 @@ const server = createServer(async (request, response) => {
       }, 200, request.headers.origin));
       return;
     }
+
+    const authRouteResult = await handleAuthRoute(request);
 
     if (request.method === "POST" && request.url === "/api/ai/summarize") {
       const payload = await parseRequestBody<SummarizeDocumentRequest>(request);

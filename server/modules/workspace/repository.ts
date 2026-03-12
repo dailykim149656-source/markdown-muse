@@ -122,21 +122,32 @@ class FileWorkspaceRepository {
 
   async pruneExpired(now = Date.now()) {
     return this.enqueue(async () => {
-      const state = await readRepositoryState();
+      try {
+        const state = await readRepositoryState();
+        let changed = false;
 
-      for (const [stateId, authState] of Object.entries(state.authStates)) {
-        if (authState.expiresAt <= now) {
-          delete state.authStates[stateId];
+        for (const [stateId, authState] of Object.entries(state.authStates)) {
+          if (authState.expiresAt <= now) {
+            delete state.authStates[stateId];
+            changed = true;
+          }
         }
-      }
 
-      for (const [sessionId, session] of Object.entries(state.sessions)) {
-        if (session.expiresAt <= now) {
-          delete state.sessions[sessionId];
+        for (const [sessionId, session] of Object.entries(state.sessions)) {
+          if (session.expiresAt <= now) {
+            delete state.sessions[sessionId];
+            changed = true;
+          }
         }
-      }
 
-      await writeRepositoryState(state);
+        if (changed) {
+          await writeRepositoryState(state);
+        }
+      } catch (error) {
+        // In read-only environments like Cloud Run with local filesystem,
+        // we might not be able to write state. We ignore this during background pruning.
+        console.warn("Failed to prune expired repository state:", error instanceof Error ? error.message : String(error));
+      }
     });
   }
 
