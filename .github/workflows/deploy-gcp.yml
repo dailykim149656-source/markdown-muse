@@ -23,7 +23,7 @@ jobs:
       ai_service_url: ${{ steps.ai.outputs.url }}
     env:
       GCP_REGION: asia-northeast3
-      AI_SERVICE_NAME: markdown-muse-ai
+      AI_SERVICE_NAME: docsy
       ARTIFACT_REPOSITORY: docsy
       GEMINI_MODEL: gemini-2.5-flash
       GEMINI_API_KEY_SECRET: gemini-api-key
@@ -129,7 +129,7 @@ jobs:
       - name: Deploy dist to Cloud Storage bucket
         run: |
           set -euo pipefail
-          gcloud storage cp --recursive dist gs://"${BUCKET}"
+          gcloud storage cp --recursive dist/. gs://"${BUCKET}"/
           gcloud storage buckets update gs://"${BUCKET}" --web-main-page-suffix=index.html --web-not-found-page=index.html
 
       - name: Verify frontend file

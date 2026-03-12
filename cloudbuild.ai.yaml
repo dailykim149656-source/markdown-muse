@@ -26,7 +26,7 @@ steps:
       - --update-secrets=GEMINI_API_KEY=${_GEMINI_API_KEY_SECRET}:latest
 substitutions:
   _REGION: asia-northeast3
-  _SERVICE_NAME: markdown-muse-ai
+  _SERVICE_NAME: docsy
   _GEMINI_MODEL: gemini-2.5-flash
   _AI_ALLOWED_ORIGIN: "*"
   _GEMINI_API_KEY_SECRET: gemini-api-key
