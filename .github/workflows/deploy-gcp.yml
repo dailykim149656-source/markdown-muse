@@ -68,19 +68,24 @@ jobs:
             GOOGLE_WORKSPACE_SCOPES="openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents"
           fi
 
+          GOOGLE_CLIENT_SECRET_SECRET="${{ secrets.GCP_GOOGLE_CLIENT_SECRET_SECRET_NAME }}"
+          if [ -z "${GOOGLE_CLIENT_SECRET_SECRET}" ]; then
+            GOOGLE_CLIENT_SECRET_SECRET="google-client-secret"
+          fi
+
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_CLIENT_SECRET=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_GEMINI_API_KEY_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_GEMINI_API_KEY_SECRET=%s,_GOOGLE_CLIENT_SECRET_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$AI_SERVICE_NAME" \
             "$GEMINI_MODEL" \
             "$ALLOWED_ORIGIN" \
             "${{ secrets.GCP_GOOGLE_CLIENT_ID }}" \
-            "${{ secrets.GCP_GOOGLE_CLIENT_SECRET }}" \
             "${GOOGLE_OAUTH_REDIRECT_URI}" \
             "${WORKSPACE_FRONTEND_ORIGIN}" \
             "${GOOGLE_WORKSPACE_SCOPES}" \
             "$GEMINI_API_KEY_SECRET" \
+            "${GOOGLE_CLIENT_SECRET_SECRET}" \
             "$RUN_SERVICE_ACCOUNT")
 
           gcloud builds submit \
