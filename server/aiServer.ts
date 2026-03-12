@@ -36,8 +36,10 @@ import type {
 } from "../src/types/aiAssistant";
 import type { Locale } from "../src/i18n/types";
 
-const PORT = Number(process.env.PORT || process.env.AI_SERVER_PORT || 8787);
+console.log("[AI Server] Initializing modules...");
+const PORT = Number(process.env.PORT || process.env.AI_SERVER_PORT || 8080);
 const MAX_CHUNKS = 8;
+console.log(`[AI Server] Configuration: PORT=${PORT}, MAX_CHUNKS=${MAX_CHUNKS}`);
 
 const resolveAiLocale = (value: string | undefined): Locale => (value === "ko" ? "ko" : "en");
 
@@ -407,6 +409,9 @@ const handleProposeAction = async (request: ProposeEditorActionRequest): Promise
 };
 
 const server = createServer(async (request, response) => {
+  const requestId = randomUUID();
+  console.log(`[AI Server] [${requestId}] ${request.method} ${request.url}`);
+
   try {
     if (!request.url) {
       throw new HttpError(404, "Unknown request.");
@@ -417,7 +422,9 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    if (request.method === "GET" && request.url === "/api/ai/health") {
+    // Health check - ABSOLUTELY FIRST
+    if (request.method === "GET" && (request.url === "/api/ai/health" || request.url === "/health")) {
+      console.log(`[AI Server] [${requestId}] Health check passed`);
       writeHttpResponse(response, json({
         allowedOrigins: ALLOWED_ORIGINS,
         configured: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
@@ -427,7 +434,21 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    console.log(`[AI Server] [${requestId}] Handling auth route...`);
     const authRouteResult = await handleAuthRoute(request);
+    if (authRouteResult) {
+      console.log(`[AI Server] [${requestId}] Auth route matched`);
+      writeHttpResponse(response, authRouteResult);
+      return;
+    }
+
+    console.log(`[AI Server] [${requestId}] Handling workspace route...`);
+    const workspaceRouteResult = await handleWorkspaceRoute(request);
+    if (workspaceRouteResult) {
+      console.log(`[AI Server] [${requestId}] Workspace route matched`);
+      writeHttpResponse(response, workspaceRouteResult);
+      return;
+    }
 
     if (request.method === "POST" && request.url === "/api/ai/summarize") {
       const payload = await parseRequestBody<SummarizeDocumentRequest>(request);
@@ -457,14 +478,17 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    console.log(`[AI Server] [${requestId}] Route not found: ${request.url}`);
     throw new HttpError(404, "Route not found.");
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
     const message = error instanceof Error ? error.message : "Unexpected server error.";
+    console.error(`[AI Server] [${requestId}] Error [${statusCode}]: ${message}`, error);
     writeHttpResponse(response, json({ error: message }, statusCode, request.headers.origin));
   }
 });
 
+console.log("[AI Server] Starting listener...");
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Gemini AI server listening on http://0.0.0.0:${PORT}`);
+  console.log(`[AI Server] Listening on http://0.0.0.0:${PORT}`);
 });
