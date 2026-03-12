@@ -465,6 +465,6 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Gemini AI server listening on http://localhost:${PORT}`);
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Gemini AI server listening on http://0.0.0.0:${PORT}`);
 });
