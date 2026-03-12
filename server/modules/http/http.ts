@@ -41,14 +41,18 @@ export const resolveCorsOrigin = (requestOrigin: string | undefined) => {
 
 const buildCorsHeaders = (requestOrigin?: string) => {
   const origin = resolveCorsOrigin(requestOrigin);
-
-  return {
-    "Access-Control-Allow-Credentials": origin === "*" ? undefined : "true",
+  const headers: OutgoingHttpHeaders = {
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Origin": origin,
     Vary: "Origin",
-  } satisfies OutgoingHttpHeaders;
+  };
+
+  if (origin !== "*") {
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
+
+  return headers;
 };
 
 export const json = (

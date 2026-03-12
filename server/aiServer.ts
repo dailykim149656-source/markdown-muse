@@ -79,7 +79,7 @@ const buildFallbackSummaryRequest = (
   normalizedDocument: ReturnType<typeof normalizeMarkdownDocument>,
   objective: string,
 ): SummaryRequest => ({
-  chunkInputs: normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk) => ({
+  chunkInputs: normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk: any) => ({
     chunkId: chunk.chunkId,
     ingestionId: normalizedDocument.ingestionId,
     metadata: chunk.metadata,
@@ -307,7 +307,7 @@ const buildSectionGrounding = (request: GenerateSectionRequest) => {
     }));
   }
 
-  return normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk) => ({
+  return normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk: any) => ({
     chunkId: chunk.chunkId,
     ingestionId: normalizedDocument.ingestionId,
     sectionId: chunk.sectionId,
@@ -335,7 +335,7 @@ const handleGenerateSection = async (request: GenerateSectionRequest): Promise<G
 
 const buildTocGrounding = (request: GenerateTocRequest) => {
   const normalizedDocument = normalizeMarkdownDocument(request);
-  const chunks = normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk) => ({
+  const chunks = normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk: any) => ({
     chunkId: chunk.chunkId,
     ingestionId: normalizedDocument.ingestionId,
     sectionId: chunk.sectionId,
