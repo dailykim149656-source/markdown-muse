@@ -55,16 +55,17 @@ jobs:
           fi
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GEMINI_API_KEY_SECRET=%s' \
+            "$IMAGE_URI" \
+            "$GCP_REGION" \
+            "$AI_SERVICE_NAME" \
+            "$GEMINI_MODEL" \
+            "$ALLOWED_ORIGIN" \
+            "$GEMINI_API_KEY_SECRET")
 
           gcloud builds submit \
             --config cloudbuild.ai.yaml \
-            --substitutions \
-              _IMAGE_URI=${IMAGE_URI},\
-              _REGION=${GCP_REGION},\
-              _SERVICE_NAME=${AI_SERVICE_NAME},\
-              _GEMINI_MODEL=${GEMINI_MODEL},\
-              _AI_ALLOWED_ORIGIN=${ALLOWED_ORIGIN},\
-              _GEMINI_API_KEY_SECRET=${GEMINI_API_KEY_SECRET} \
+            --substitutions="${SUBSTITUTIONS}" \
             .
 
           AI_URL="$(gcloud run services describe ${AI_SERVICE_NAME} --region ${GCP_REGION} --format='value(status.url)')"
