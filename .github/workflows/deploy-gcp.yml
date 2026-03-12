@@ -49,13 +49,14 @@ jobs:
             echo "GCP_PROJECT_ID is required."
             exit 1
           fi
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
 
           ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
           if [ -z "$ALLOWED_ORIGIN" ]; then
             ALLOWED_ORIGIN="*"
           fi
 
-          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
+          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
           SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GEMINI_API_KEY_SECRET=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
@@ -69,7 +70,7 @@ jobs:
           if ! gcloud builds submit \
             --config cloudbuild.ai.yaml \
             --substitutions="${SUBSTITUTIONS}" \
-            --service-account="projects/${GCP_PROJECT_ID}/serviceAccounts/${GCP_DEPLOYER_SERVICE_ACCOUNT_EMAIL}" \
+            --service-account="projects/${PROJECT_ID}/serviceAccounts/${GCP_DEPLOYER_SERVICE_ACCOUNT_EMAIL}" \
             .; then
             echo "Build submit failed with explicit service account. Retrying without explicit service-account."
             gcloud builds submit \
