@@ -130,6 +130,120 @@ describe("EditorToolbar mobile behavior", () => {
   });
 });
 
+describe("EditorToolbar desktop behavior", () => {
+  it("keeps only five quick actions inline and exposes eleven labeled panel triggers", () => {
+    const { editor } = createMockEditor();
+
+    renderWithI18n(<EditorToolbar editor={editor as never} />);
+
+    const quickActions = within(screen.getByTestId("toolbar-desktop-quick-actions"));
+    const panels = within(screen.getByTestId("toolbar-desktop-panels"));
+
+    expect(quickActions.getByRole("button", { name: "toolbar.actions.undo" })).toBeInTheDocument();
+    expect(quickActions.getByRole("button", { name: "toolbar.actions.redo" })).toBeInTheDocument();
+    expect(quickActions.getByRole("button", { name: "toolbar.actions.bold" })).toBeInTheDocument();
+    expect(quickActions.getByRole("button", { name: "toolbar.actions.italic" })).toBeInTheDocument();
+    expect(quickActions.getByRole("button", { name: "toolbar.actions.underline" })).toBeInTheDocument();
+    expect(quickActions.queryByRole("button", { name: "toolbar.actions.heading1" })).not.toBeInTheDocument();
+    expect(quickActions.queryByRole("button", { name: "toolbar.link.title" })).not.toBeInTheDocument();
+
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.moreFormatting" })).toBeInTheDocument();
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.structure" })).toBeInTheDocument();
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.alignment" })).toBeInTheDocument();
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.link" })).toBeInTheDocument();
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.color" })).toBeInTheDocument();
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.documentTools" })).toBeInTheDocument();
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.fontFamily" })).toBeInTheDocument();
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.fontSize" })).toBeInTheDocument();
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.caption" })).toBeInTheDocument();
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.mathInsert" })).toBeInTheDocument();
+    expect(panels.getByRole("button", { name: "toolbar.desktopTriggers.mermaidInsert" })).toBeInTheDocument();
+  });
+
+  it("restores selection before running structure and link panel actions", async () => {
+    const { editor, run, tr } = createMockEditor();
+    rememberEditorSelection(editor as never);
+
+    renderWithI18n(<EditorToolbar editor={editor as never} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "toolbar.desktopTriggers.structure" }));
+    fireEvent.click(
+      within(await screen.findByTestId("toolbar-desktop-panel-content-structure")).getByRole("button", {
+        name: "toolbar.actions.heading1",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "toolbar.desktopTriggers.link" }));
+    const linksPanel = within(await screen.findByTestId("toolbar-desktop-panel-content-link"));
+    fireEvent.change(linksPanel.getByPlaceholderText("https://..."), {
+      target: { value: "https://example.com/desktop" },
+    });
+    fireEvent.click(linksPanel.getByRole("button", { name: "toolbar.link.apply" }));
+
+    expect(tr.setSelection).toHaveBeenCalledTimes(2);
+    expect(editor.view.dispatch).toHaveBeenCalledTimes(2);
+    expect(editor.calls.some((call) => call.name === "toggleHeading")).toBe(true);
+    expect(
+      editor.calls.some(
+        (call) =>
+          call.name === "setLink" &&
+          call.args[0] &&
+          (call.args[0] as { href: string }).href === "https://example.com/desktop",
+      ),
+    ).toBe(true);
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows enable actions inside separated document and advanced triggers", async () => {
+    const { editor } = createMockEditor();
+    const onEnableDocumentFeatures = vi.fn();
+    const onEnableAdvancedBlocks = vi.fn();
+
+    renderWithI18n(
+      <EditorToolbar
+        advancedBlocksEnabled={false}
+        canEnableAdvancedBlocks
+        canEnableDocumentFeatures
+        documentFeaturesEnabled={false}
+        editor={editor as never}
+        onEnableAdvancedBlocks={onEnableAdvancedBlocks}
+        onEnableDocumentFeatures={onEnableDocumentFeatures}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "toolbar.desktopTriggers.fontFamily" }));
+    fireEvent.click(
+      within(await screen.findByTestId("toolbar-desktop-panel-content-fontFamily")).getByRole("button", {
+        name: "toolbar.actions.enableDocumentTools",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "toolbar.desktopTriggers.caption" }));
+    fireEvent.click(
+      within(await screen.findByTestId("toolbar-desktop-panel-content-caption")).getByRole("button", {
+        name: "toolbar.actions.enableDocumentTools",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "toolbar.desktopTriggers.mathInsert" }));
+    fireEvent.click(
+      within(await screen.findByTestId("toolbar-desktop-panel-content-mathInsert")).getByRole("button", {
+        name: "toolbar.actions.enableAdvancedBlocks",
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "toolbar.desktopTriggers.mermaidInsert" }));
+    fireEvent.click(
+      within(await screen.findByTestId("toolbar-desktop-panel-content-mermaidInsert")).getByRole("button", {
+        name: "toolbar.actions.enableAdvancedBlocks",
+      }),
+    );
+
+    expect(onEnableDocumentFeatures).toHaveBeenCalledTimes(2);
+    expect(onEnableAdvancedBlocks).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("MobileEditorFormatSheet", () => {
   it("restores selection for link, font size, and color actions", () => {
     const { editor, run } = createMockEditor();

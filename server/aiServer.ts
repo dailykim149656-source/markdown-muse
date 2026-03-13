@@ -9,15 +9,20 @@ import {
   type SummaryResponse,
 } from "../src/lib/ai/summaryContracts";
 import { buildActionPrompt } from "./modules/agent/buildActionPrompt";
+import { buildActiveDocumentRetrievalContext } from "./modules/agent/buildActiveDocumentRetrievalContext";
 import {
-  buildNewDraftFallbackPrompt,
-  buildTurnPrompt,
-  hasExplicitNewDraftRequestInConversation,
-  isExplicitNewDraftRequest,
-} from "./modules/agent/buildTurnPrompt";
+  buildPlannerPrompt,
+  plannerNeedsFollowup,
+} from "./modules/agent/buildPlannerPrompt";
+import { executePlannedAction } from "./modules/agent/executePlannedAction";
 import { actionResponseSchema, normalizeActionResponse } from "./modules/agent/actionResponse";
-import { agentTurnResponseSchema, normalizeAgentTurnResponse } from "./modules/agent/turnResponse";
 import {
+  agentPlannerResponseSchema,
+  normalizePlannerResponse,
+} from "./modules/agent/plannerResponse";
+import { normalizeAgentTurnResponse } from "./modules/agent/turnResponse";
+import {
+  getGeminiFallbackModel,
   generateStructuredJson,
   generateMultimodalStructuredJson,
   getGeminiModel,
@@ -25,18 +30,24 @@ import {
   schemaType,
 } from "./modules/gemini/client";
 import { handleAuthRoute } from "./modules/auth/routes";
+import { getWorkspaceSession } from "./modules/auth/sessionStore";
 import {
   ALLOWED_ORIGINS,
+  binary,
   HttpError,
   json,
   parseRequestBody,
   writeHttpResponse,
 } from "./modules/http/http";
+import {
+  exportTexPdf,
+  getTexHealth as getTexServiceHealth,
+  previewTex as previewTexWithService,
+  validateTex as validateTexWithService,
+} from "./modules/tex/client";
 import { handleWorkspaceRoute } from "./modules/workspace/routes";
 import {
   loadDriveReferenceDocuments,
-  searchDriveDocuments,
-  shouldSearchDriveDocuments,
 } from "./modules/workspace/searchDriveDocuments";
 import type {
   AutosaveDiffSummaryRequest,
@@ -52,6 +63,7 @@ import type {
 } from "../src/types/aiAssistant";
 import type { Locale } from "../src/i18n/types";
 import type { AgentStatus, AgentTurnRequest, AgentTurnResponse } from "../src/types/liveAgent";
+import type { TexExportPdfRequest, TexPreviewRequest, TexValidateRequest } from "../src/types/tex";
 
 console.log("[AI Server] Initializing modules...");
 const PORT = Number(process.env.PORT || process.env.AI_SERVER_PORT || 8080);
@@ -477,15 +489,8 @@ const handleProposeAction = async (request: ProposeEditorActionRequest): Promise
   return normalizeActionResponse(response, request);
 };
 
-const newDraftFallbackResponseSchema = {
-  properties: {
-    markdown: { type: schemaType.STRING },
-    rationale: { type: schemaType.STRING },
-    title: { type: schemaType.STRING },
-  },
-  required: ["title", "markdown", "rationale"],
-  type: schemaType.OBJECT,
-};
+const MIN_PLANNER_CONFIDENCE = 0.65;
+const SUCCESS_REPLY_ONLY_PATTERN = /\b(done|updated|applied|prepared|created|imported|reflected)\b|(?:\uBC18\uC601|\uC218\uC815|\uC801\uC6A9|\uC644\uB8CC|\uC0DD\uC131|\uC900\uBE44)/i;
 
 const findLatestUserMessage = (request: AgentTurnRequest) => {
   const latestUserMessage = [...request.messages]
@@ -501,19 +506,6 @@ const findLatestUserMessage = (request: AgentTurnRequest) => {
   return latestUserMessage;
 };
 
-const createStaticAgentResponse = (
-  assistantText: string,
-  effect: AgentTurnResponse["effect"],
-): AgentTurnResponse => ({
-  assistantMessage: {
-    createdAt: Date.now(),
-    id: `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    role: "assistant",
-    text: assistantText,
-  },
-  effect,
-});
-
 const buildAgentStatusMessage = ({
   kind,
   locale,
@@ -523,18 +515,18 @@ const buildAgentStatusMessage = ({
 }) => {
   if (kind === "gemini_rate_limited") {
     return locale === "ko"
-      ? "Gemini ?ъ슜 ?쒕룄???꾨떖?덉뒿?덈떎."
+      ? "Gemini 사용 한도에 도달했습니다."
       : "Gemini usage is currently rate-limited.";
   }
 
   if (kind === "gemini_misconfigured") {
     return locale === "ko"
-      ? "Gemini 紐⑤뜽 ?ㅼ젙???щ컮瑜댁? ?딆뒿?덈떎."
+      ? "Gemini 모델 설정이 올바르지 않습니다."
       : "The Gemini model configuration is invalid.";
   }
 
   return locale === "ko"
-    ? "Gemini媛 ?곌껐?섏뼱 ?덉? ?딆뒿?덈떎."
+    ? "Gemini가 연결되어 있지 않습니다."
     : "Gemini is not connected.";
 };
 
@@ -594,176 +586,142 @@ const buildAgentStatusResponse = ({
   },
 });
 
-const buildDraftNewDocumentResponse = ({
-  generatedDraft,
+const buildPlannerFollowupResponse = ({
   locale,
+  planner,
 }: {
-  generatedDraft: {
-    markdown: string;
-    rationale: string;
-    title: string;
-  };
   locale?: Locale;
+  planner: ReturnType<typeof normalizePlannerResponse>;
 }) => ({
-  assistantText: locale === "ko"
-    ? "\uC0C8 \uCD08\uC548\uC774 \uC900\uBE44\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uC544\uB798 \uBBF8\uB9AC\uBCF4\uAE30\uB97C \uD655\uC778\uD55C \uB4A4 \uC0C8 \uBB38\uC11C\uB85C \uCD94\uAC00\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
-    : "A new draft is ready. Review the preview below and create it as a new document when ready.",
+  assistantText: planner.missingInformation.length > 0
+    ? (locale === "ko"
+      ? `\uACC4\uC18D \uC9C4\uD589\uD558\uB824\uBA74 \uB2E4\uC74C \uC815\uBCF4\uAC00 \uB354 \uD544\uC694\uD569\uB2C8\uB2E4: ${planner.missingInformation.join(", ")}.`
+      : `I need a bit more detail before I can continue: ${planner.missingInformation.join(", ")}.`)
+    : planner.reason,
   effect: {
-    summary: generatedDraft.rationale,
-    title: generatedDraft.title,
-    type: "draft_new_document" as const,
-  },
-  newDocumentDraft: {
-    kind: "new_document" as const,
-    markdown: generatedDraft.markdown,
-    rationale: generatedDraft.rationale,
-    title: generatedDraft.title,
+    type: "ask_followup" as const,
   },
 });
 
-const generateDedicatedNewDraft = async ({
-  latestUserMessage,
-  request,
-}: {
-  latestUserMessage: string;
-  request: AgentTurnRequest;
-}) => {
-  const generatedDraft = await generateMultimodalStructuredJson<{
-    markdown: string;
-    rationale: string;
-    title: string;
-  }>({
-    images: getRequestImages(request),
-    prompt: buildNewDraftFallbackPrompt({
-      latestUserMessage,
-      recentUserMessages: request.messages
-        .filter((message) => message.role === "user")
-        .map((message) => message.text)
-        .slice(-6),
-      request,
-    }),
-    responseSchema: newDraftFallbackResponseSchema,
-  });
-
-  return buildDraftNewDocumentResponse({
-    generatedDraft,
-    locale: request.locale,
-  });
-};
+const shouldWarnOnReplyOnlySuccessText = (response: AgentTurnResponse) =>
+  response.effect.type === "reply_only"
+  && SUCCESS_REPLY_ONLY_PATTERN.test(response.assistantMessage.text);
 
 const handleAgentTurn = async (
   httpRequest: import("node:http").IncomingMessage,
   request: AgentTurnRequest,
 ): Promise<AgentTurnResponse> => {
   const latestUserMessage = findLatestUserMessage(request);
-  const explicitNewDraftRequest = isExplicitNewDraftRequest(latestUserMessage)
-    || hasExplicitNewDraftRequestInConversation(request.messages);
-  const wantsDriveSearch = shouldSearchDriveDocuments({
-    driveReferenceFileIds: request.driveReferenceFileIds,
+  const locale = request.locale ? resolveAiLocale(request.locale) : undefined;
+  const workspaceSession = await getWorkspaceSession(httpRequest);
+  const workspaceConnected = Boolean(workspaceSession);
+  const retrievalContext = buildActiveDocumentRetrievalContext({
     latestUserMessage,
+    request,
   });
-  let driveCandidates: AgentTurnResponse["driveCandidates"] = [];
-  let driveReferences: Array<{ fileId: string; fileName: string; excerpt: string }> = [];
+  let driveReferences: Array<{ excerpt: string; fileId: string; fileName: string }> = [];
 
-  if (wantsDriveSearch || request.driveReferenceFileIds.length > 0) {
+  if (workspaceConnected && request.driveReferenceFileIds.length > 0) {
     try {
-      const loadedReferences = await loadDriveReferenceDocuments(httpRequest, request.driveReferenceFileIds);
-
-      driveReferences = loadedReferences.map((reference) => ({
-        excerpt: reference.excerpt,
-        fileId: reference.fileId,
-        fileName: reference.fileName,
-      }));
-
-      if (wantsDriveSearch) {
-        driveCandidates = await searchDriveDocuments({
-          latestUserMessage,
-          request: httpRequest,
-        });
-      }
+      driveReferences = (await loadDriveReferenceDocuments(httpRequest, request.driveReferenceFileIds))
+        .map((reference) => ({
+          excerpt: reference.excerpt,
+          fileId: reference.fileId,
+          fileName: reference.fileName,
+        }));
     } catch (error) {
-      if (error instanceof HttpError && error.statusCode === 401) {
-        return createStaticAgentResponse(
-          "Google Workspace access is required before I can search or import Google Docs. Open the connection dialog first.",
-          { type: "open_google_connect" },
-        );
-      }
-
-      throw error;
+      console.warn("[LiveAgent] failed to load selected drive references before planning", error);
+      driveReferences = [];
     }
   }
 
-  if (wantsDriveSearch && (!driveCandidates || driveCandidates.length === 0)) {
-    return createStaticAgentResponse(
-      "I could not find a strong Google Docs match for that request. Try a more specific title, topic, or workflow phrase.",
-      { type: "reply_only" },
-    );
-  }
-
-  if (explicitNewDraftRequest && !wantsDriveSearch) {
-    try {
-      return normalizeAgentTurnResponse({
-        availableImportTargets: [],
-        driveCandidates: [],
-        response: await generateDedicatedNewDraft({
-          latestUserMessage,
-          request,
-        }),
-      });
-    } catch (error) {
-      return normalizeAgentTurnResponse({
-        availableImportTargets: [],
-        driveCandidates: [],
-        response: buildAgentStatusResponse({
-          locale: request.locale,
-          status: classifyGeminiStatus({
-            error,
-            locale: request.locale,
-          }),
-        }),
-      });
-    }
-  }
-
-  let response;
+  let planner;
 
   try {
-    response = await generateMultimodalStructuredJson({
+    const rawPlannerResponse = await generateMultimodalStructuredJson({
       images: getRequestImages(request),
-      prompt: buildTurnPrompt({
-        driveCandidates: driveCandidates || [],
+      prompt: buildPlannerPrompt({
         driveReferences,
-        latestUserMessage,
+        retrievalContext,
         request,
+        workspaceConnected,
       }),
-      responseSchema: agentTurnResponseSchema,
+      responseSchema: agentPlannerResponseSchema,
     });
+    planner = normalizePlannerResponse(rawPlannerResponse);
   } catch (error) {
-    response = buildAgentStatusResponse({
-      locale: request.locale,
-      status: classifyGeminiStatus({
-        error,
-        locale: request.locale,
+    return normalizeAgentTurnResponse({
+      availableImportTargets: [],
+      driveCandidates: [],
+      response: buildAgentStatusResponse({
+        locale,
+        status: classifyGeminiStatus({
+          error,
+          locale,
+        }),
       }),
     });
   }
 
-  const availableImportTargets = Array.from(new Map<string, { fileId: string; fileName: string }>([
-    ...(driveCandidates || []).map((candidate): [string, { fileId: string; fileName: string }] => [candidate.fileId, {
-      fileId: candidate.fileId,
-      fileName: candidate.fileName,
-    }]),
-    ...driveReferences.map((reference): [string, { fileId: string; fileName: string }] => [reference.fileId, {
-      fileId: reference.fileId,
-      fileName: reference.fileName,
-    }]),
-  ]).values());
+  console.info(
+    `[LiveAgent] planner action=${planner.action} confidence=${planner.confidence.toFixed(2)} graphSections=${retrievalContext?.topSectionTargets.map((target) => `${target.sectionId || target.headingNodeId}:${target.score}`).join("|") || "none"} graphFields=${retrievalContext?.topFieldTargets.map((target) => `${target.fieldKey}:${target.score}`).join("|") || "none"}`,
+  );
 
-  return normalizeAgentTurnResponse({
-    availableImportTargets,
-    driveCandidates: driveCandidates || [],
-    response,
-  });
+  if (plannerNeedsFollowup(planner, MIN_PLANNER_CONFIDENCE)) {
+    const followupResponse = normalizeAgentTurnResponse({
+      availableImportTargets: [],
+      driveCandidates: [],
+      response: buildPlannerFollowupResponse({
+        locale,
+        planner,
+      }),
+    });
+
+    if (shouldWarnOnReplyOnlySuccessText(followupResponse)) {
+      console.warn(`[LiveAgent] suspicious reply_only success text after planner followup: ${followupResponse.assistantMessage.text}`);
+    }
+
+    return followupResponse;
+  }
+
+  try {
+    const executionResult = await executePlannedAction({
+      driveReferences,
+      httpRequest,
+      latestUserMessage,
+      request,
+      retrievalContext,
+      workspaceConnected,
+    }, planner);
+
+    const normalizedResponse = normalizeAgentTurnResponse({
+      availableImportTargets: executionResult.availableImportTargets,
+      driveCandidates: executionResult.driveCandidates,
+      response: executionResult.rawResponse,
+    });
+
+    console.info(
+      `[LiveAgent] executor action=${executionResult.telemetry?.executorAction || planner.action} effect=${normalizedResponse.effect.type} deterministicFallback=${executionResult.telemetry?.deterministicFallbackUsed ? "yes" : "no"} driveAuthGate=${executionResult.telemetry?.driveAuthGateUsed ? "yes" : "no"} failureReason=${executionResult.telemetry?.failureReason || "none"}`,
+    );
+
+    if (shouldWarnOnReplyOnlySuccessText(normalizedResponse)) {
+      console.warn(`[LiveAgent] suspicious reply_only success text: ${normalizedResponse.assistantMessage.text}`);
+    }
+
+    return normalizedResponse;
+  } catch (error) {
+    return normalizeAgentTurnResponse({
+      availableImportTargets: [],
+      driveCandidates: [],
+      response: buildAgentStatusResponse({
+        locale,
+        status: classifyGeminiStatus({
+          error,
+          locale,
+        }),
+      }),
+    });
+  }
 };
 
 const server = createServer(async (request, response) => {
@@ -786,6 +744,7 @@ const server = createServer(async (request, response) => {
       writeHttpResponse(response, json({
         allowedOrigins: ALLOWED_ORIGINS,
         configured: isGeminiConfigured(),
+        fallbackModel: getGeminiFallbackModel(),
         model: getGeminiModel(),
         ok: true,
       }, 200, request.headers.origin));
@@ -847,6 +806,35 @@ const server = createServer(async (request, response) => {
       const payload = await parseRequestBody<ProposeEditorActionRequest>(request);
       const result = await handleProposeAction(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "GET" && request.url === "/api/tex/health") {
+      const result = await getTexServiceHealth();
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/tex/validate") {
+      const payload = await parseRequestBody<TexValidateRequest>(request);
+      const result = await validateTexWithService(payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/tex/preview") {
+      const payload = await parseRequestBody<TexPreviewRequest>(request);
+      const result = await previewTexWithService(payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/tex/export-pdf") {
+      const payload = await parseRequestBody<TexExportPdfRequest>(request);
+      const result = await exportTexPdf(payload);
+      writeHttpResponse(response, binary(result.body, result.contentType, 200, request.headers.origin, {
+        "Content-Disposition": result.contentDisposition || "attachment; filename=\"document.pdf\"",
+      }));
       return;
     }
 

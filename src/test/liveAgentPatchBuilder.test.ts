@@ -46,6 +46,25 @@ const baseDocument: DocumentAst = {
   type: "document",
 };
 
+const headinglessDocument: DocumentAst = {
+  blocks: [
+    {
+      children: [{ type: "text", text: "Handover owner: TBD" }],
+      kind: "block",
+      nodeId: "para-owner",
+      type: "paragraph",
+    },
+    {
+      children: [{ type: "text", text: "Recipient: TBD" }],
+      kind: "block",
+      nodeId: "para-recipient",
+      type: "paragraph",
+    },
+  ],
+  nodeId: "doc-2",
+  type: "document",
+};
+
 describe("buildLiveAgentPatchSet", () => {
   it("replaces an existing section body", () => {
     const patchSet = buildLiveAgentPatchSet({
@@ -128,6 +147,30 @@ describe("buildLiveAgentPatchSet", () => {
     expect(markdown.trimEnd()).toMatch(/## Release[\s\S]*Release-ready summary\./);
   });
 
+  it("replaces the full body for headingless documents", () => {
+    const patchSet = buildLiveAgentPatchSet({
+      documentAst: structuredClone(headinglessDocument),
+      documentId: "doc-2",
+      draft: {
+        edits: [{
+          kind: "replace_document_body",
+          markdownBody: "Handover owner: Hong Gil-dong\n\nRecipient: Sim Cheong-i",
+          rationale: "Apply the updated handover details.",
+        }],
+        kind: "current_document",
+      },
+      patchSetId: "patch-set-4",
+      title: "Replace handover details",
+    });
+
+    const nextDocument = applyAcceptedPatchSet(structuredClone(headinglessDocument), patchSet);
+    const markdown = renderAstToMarkdown(nextDocument);
+
+    expect(markdown).toContain("Handover owner: Hong Gil-dong");
+    expect(markdown).toContain("Recipient: Sim Cheong-i");
+    expect(markdown).not.toContain("TBD");
+  });
+
   it("fails when the target heading no longer exists", () => {
     expect(() => buildLiveAgentPatchSet({
       documentAst: structuredClone(baseDocument),
@@ -141,7 +184,7 @@ describe("buildLiveAgentPatchSet", () => {
         }],
         kind: "current_document",
       },
-      patchSetId: "patch-set-4",
+      patchSetId: "patch-set-5",
       title: "Invalid target",
     })).toThrow(/missing-heading/);
   });

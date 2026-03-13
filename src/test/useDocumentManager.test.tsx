@@ -135,4 +135,59 @@ describe("useDocumentManager", () => {
 
     expect(result.current.documents.find((document) => document.id === secondaryId)?.name).toBe("Updated Secondary");
   });
+
+  it("persists a newly created document immediately without waiting for autosave", () => {
+    const { result } = renderHook(() => useDocumentManager());
+
+    act(() => {
+      result.current.createDocument({
+        content: "# Draft",
+        id: "draft-doc",
+        mode: "markdown",
+        name: "Draft",
+        sourceSnapshots: { markdown: "# Draft" },
+      });
+    });
+
+    const saved = JSON.parse(localStorage.getItem("docsy-autosave-v2") || "{}") as {
+      activeDocId?: string;
+      documents?: Array<{ content: string; id: string; name: string }>;
+    };
+
+    expect(saved.activeDocId).toBe("draft-doc");
+    expect(saved.documents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        content: "# Draft",
+        id: "draft-doc",
+        name: "Draft",
+      }),
+    ]));
+  });
+
+  it("restores newly created content after unmount before the autosave interval", () => {
+    const hook = renderHook(() => useDocumentManager());
+
+    act(() => {
+      hook.result.current.createDocument({
+        content: "# Agent Draft\n\nBody content",
+        id: "agent-draft",
+        mode: "markdown",
+        name: "Agent Draft",
+        sourceSnapshots: { markdown: "# Agent Draft\n\nBody content" },
+      });
+    });
+
+    hook.unmount();
+
+    const restored = renderHook(() => useDocumentManager());
+
+    expect(restored.result.current.documents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        content: "# Agent Draft\n\nBody content",
+        id: "agent-draft",
+        name: "Agent Draft",
+      }),
+    ]));
+    expect(restored.result.current.activeDocId).toBe("agent-draft");
+  });
 });

@@ -24,6 +24,7 @@ export class WorkspaceApiError extends Error {
 
 export interface WorkspaceApiHealthStatus {
   configured: boolean;
+  fallbackModel?: string | null;
   model?: string;
   ok: boolean;
 }

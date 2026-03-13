@@ -53,6 +53,12 @@ export type AgentEffect =
 
 export type AgentSectionEdit =
   | {
+      kind: "replace_document_body";
+      markdownBody: string;
+      rationale: string;
+      sources?: AgentEvidence[];
+    }
+  | {
       kind: "replace_section";
       targetHeadingNodeId: string;
       targetHeadingTitle?: string;
@@ -110,6 +116,36 @@ export interface AgentStatus {
   message: string;
 }
 
+export interface AgentWorkspaceGraphHintDocument {
+  documentId: string;
+  name: string;
+  recommendationScore: number;
+  relationKinds: Array<"duplicate" | "referenced_by" | "references" | "similar">;
+}
+
+export interface AgentWorkspaceGraphHintIssue {
+  id: string;
+  kind: string;
+  message: string;
+  relatedDocumentIds: string[];
+  severity: "info" | "warning";
+}
+
+export interface AgentWorkspaceGraphHints {
+  impactSummary: {
+    impactedDocumentCount: number;
+    inboundReferenceCount: number;
+    issueCount: number;
+    outboundReferenceCount: number;
+  };
+  issues: AgentWorkspaceGraphHintIssue[];
+  relatedDocuments: AgentWorkspaceGraphHintDocument[];
+}
+
+export interface AgentGraphContext {
+  workspaceHints?: AgentWorkspaceGraphHints | null;
+}
+
 export interface AgentTurnRequest {
   threadId: string;
   messages: AgentChatMessage[];
@@ -117,6 +153,7 @@ export interface AgentTurnRequest {
   targetDefault: "active_document";
   localReferences: AgentLocalReference[];
   driveReferenceFileIds: string[];
+  graphContext?: AgentGraphContext;
   locale?: Locale;
   screenshot?: AiAssistantScreenshotPayload;
 }

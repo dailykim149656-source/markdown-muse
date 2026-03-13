@@ -1,9 +1,10 @@
 # GCP deployment
 
-Markdown Muse is deployed to GCP in two parts:
+Markdown Muse is deployed to GCP in three parts:
 
 - frontend: static web build on Firebase Hosting
 - AI API: Cloud Run service
+- TeX validation service: separate Cloud Run service for XeLaTeX validation and PDF compilation
 
 The desktop profile is not part of the GCP deployment path. GCP should serve the
 `web` profile only.
@@ -78,12 +79,15 @@ gcloud builds submit \
 - `GEMINI_MODEL`
 - `AI_ALLOWED_ORIGIN`
 - `AI_SERVER_PORT`
+- `TEX_SERVICE_BASE_URL`
+- `TEX_SERVICE_AUTH_TOKEN`
 
 Recommended values:
 
 - `GEMINI_MODEL=gemini-2.5-flash`
 - `AI_SERVER_PORT=8080`
 - `AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- `TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
 
 `AI_ALLOWED_ORIGIN` should be the exact frontend origin, not `*`.
 
@@ -94,7 +98,7 @@ gcloud run deploy markdown-muse-ai \
   --image REGION-docker.pkg.dev/PROJECT/REPO/markdown-muse-ai \
   --region REGION \
   --allow-unauthenticated \
-  --set-env-vars GEMINI_MODEL=gemini-2.5-flash,AI_SERVER_PORT=8080,AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN
+  --set-env-vars GEMINI_MODEL=gemini-2.5-flash,AI_SERVER_PORT=8080,AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN,TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL
 ```
 
 Set `GEMINI_API_KEY` through Secret Manager or Cloud Run secrets rather than
@@ -114,10 +118,13 @@ Required repository secrets:
 - `GCP_SA_KEY` (service account JSON, or replace with workload identity auth)
 - `GCP_PROJECT_ID`
 - `GCP_AI_ALLOWED_ORIGIN` (exact frontend origin)
+- `GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME` (optional, defaults to `tex-service-auth-token`)
 - `FIREBASE_SERVICE_ACCOUNT_URBAN_DDS`
 
 The workflow does:
 
+- Cloud Build deploy for TeX service (`cloudbuild.tex.yaml`)
+- health check `GET /health` on the TeX service
 - Cloud Build deploy for AI API (`cloudbuild.ai.yaml`)
 - health check `GET /api/ai/health`
 - web profile build (`npm run build:web`) with:
@@ -129,14 +136,66 @@ Recommended repository secret:
 
 - `GCP_WEB_VITE_AI_API_BASE_URL` (explicit Cloud Run base URL for frontend builds)
 
+## TeX validation service
+
+### 1. Build the image
+
+Use `Dockerfile.tex` locally or `cloudbuild.tex.yaml` in Cloud Build.
+
+```bash
+gcloud builds submit \
+  --config cloudbuild.tex.yaml \
+  --substitutions=_IMAGE_URI=REGION-docker.pkg.dev/PROJECT/REPO/markdown-muse-tex
+```
+
+### 2. Required runtime env vars
+
+- `TEX_SERVICE_PORT`
+- `TEX_COMPILE_TIMEOUT_MS`
+- `TEX_MAX_SOURCE_BYTES`
+- `TEX_MAX_CONCURRENCY`
+- `TEX_SERVICE_AUTH_TOKEN`
+
+Recommended values:
+
+- `TEX_SERVICE_PORT=8081`
+- `TEX_COMPILE_TIMEOUT_MS=15000`
+- `TEX_MAX_SOURCE_BYTES=300000`
+- `TEX_MAX_CONCURRENCY=2`
+
+The TeX service is called by the AI API, not directly by the browser. The
+frontend should continue to use only `VITE_AI_API_BASE_URL`.
+
+### 3. New Cloud Run resource creation
+
+1. Create or reuse an Artifact Registry repository for the TeX image.
+2. Create a Secret Manager secret for `tex-service-auth-token`.
+3. Deploy a new Cloud Run service such as `docsy-tex` using `Dockerfile.tex` with `--no-allow-unauthenticated`.
+4. Grant `roles/run.invoker` on the TeX service to the AI service account.
+5. Note the resulting service URL and pass it to the AI service as `TEX_SERVICE_BASE_URL`.
+6. Use the same `TEX_SERVICE_AUTH_TOKEN` secret in both the TeX service and the AI service.
+
+The AI service calls the TeX service with:
+
+- a Cloud Run identity token in `Authorization: Bearer ...`
+- an app-level shared secret in `X-Docsy-Tex-Token`
+
+### 4. Rollback and health checks
+
+- Health endpoint: `GET https://YOUR_TEX_CLOUD_RUN_URL/health`
+- direct health checks require the same Cloud Run identity token and `X-Docsy-Tex-Token` header as runtime traffic
+- Roll back by redeploying the previous TeX image revision and then the AI service revision that points to it.
+
 ## Recommended rollout shape
 
-1. Deploy the AI API first.
-2. Confirm `GET /api/ai/health` works from the public URL.
-3. Build the frontend with `VITE_AI_API_BASE_URL` pointing to that Cloud Run URL.
-4. Deploy the frontend to Firebase Hosting.
-5. Confirm SPA rewrites for routes such as `/editor`.
-6. Turn on appropriate caching for hashed assets.
+1. Deploy the TeX service first.
+2. Confirm `GET /health` works from the TeX Cloud Run URL.
+3. Deploy the AI API with `TEX_SERVICE_BASE_URL` pointing to that TeX URL.
+4. Confirm `GET /api/ai/health` and `GET /api/tex/health` work from the AI API URL.
+5. Build the frontend with `VITE_AI_API_BASE_URL` pointing to the AI API Cloud Run URL.
+6. Deploy the frontend to Firebase Hosting.
+7. Confirm SPA rewrites for routes such as `/editor`.
+8. Turn on appropriate caching for hashed assets.
 
 ## 도메인이 없을 때 가장 쉬운 배포(기본 제공 도메인)
 
@@ -177,7 +236,9 @@ Recommended repository secret:
 
 Verify all of the following:
 
+- `GET https://YOUR_TEX_CLOUD_RUN_URL/health` returns success
 - `GET https://YOUR_CLOUD_RUN_URL/api/ai/health` returns success
+- `GET https://YOUR_CLOUD_RUN_URL/api/tex/health` returns success
 - browser requests from the frontend origin pass CORS
 - direct navigation to `/editor` works
 - refresh on `/editor` works
@@ -193,6 +254,8 @@ Required:
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY`
 - `GEMINI_MODEL`
 - `AI_ALLOWED_ORIGIN`
+- `TEX_SERVICE_BASE_URL`
+- `TEX_SERVICE_AUTH_TOKEN`
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_OAUTH_REDIRECT_URI`
@@ -206,8 +269,10 @@ Recommended:
 Expected shape:
 
 - `AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- `TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
 - `WORKSPACE_FRONTEND_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
 - `GOOGLE_OAUTH_REDIRECT_URI=https://YOUR_CLOUD_RUN_URL/api/auth/google/callback`
+- the AI service account has `roles/run.invoker` on the TeX service
 
 ### GitHub repository secrets
 
@@ -216,6 +281,7 @@ Required:
 - `GCP_SA_KEY`
 - `GCP_PROJECT_ID`
 - `GCP_AI_ALLOWED_ORIGIN`
+- `GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME` (optional, defaults to `tex-service-auth-token`)
 - `FIREBASE_SERVICE_ACCOUNT_URBAN_DDS`
 
 Recommended:

@@ -6,6 +6,7 @@ import { buildDerivedDocumentIndex } from "@/lib/ast/documentIndex";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
 import { captureWorkspaceScreenshot } from "@/lib/ai/captureWorkspaceScreenshot";
 import { liveAgentTurn } from "@/lib/ai/client";
+import { buildLiveAgentGraphContext } from "@/lib/ai/liveAgentGraphContext";
 import { buildLiveAgentPatchSet } from "@/lib/ai/liveAgentPatchBuilder";
 import { useI18n } from "@/i18n/useI18n";
 import type { DocumentData } from "@/types/document";
@@ -188,6 +189,21 @@ export const useLiveAgent = ({
     nextMessages: AgentChatMessage[],
   ): Promise<AgentTurnRequest> => {
     const activeDocument = buildDocumentContext(activeDoc, currentRenderableMarkdown, activeEditor);
+    const graphDocuments = documents.map((document) => {
+      if (document.id !== activeDoc.id || !isRichTextDocument(document)) {
+        return document;
+      }
+
+      return {
+        ...document,
+        content: currentRenderableMarkdown || document.content,
+        sourceSnapshots: {
+          ...document.sourceSnapshots,
+          markdown: currentRenderableMarkdown || document.sourceSnapshots?.markdown || document.content,
+        },
+        updatedAt: Date.now(),
+      };
+    });
     const localReferenceDocuments = selectedLocalReferenceIds
       .map((documentId) => documents.find((document) => document.id === documentId) || null)
       .filter((document): document is DocumentData => Boolean(document))
@@ -225,6 +241,10 @@ export const useLiveAgent = ({
     return {
       activeDocument,
       driveReferenceFileIds: selectedDriveReferences.map((reference) => reference.fileId),
+      graphContext: buildLiveAgentGraphContext({
+        activeDocumentId: activeDoc.id,
+        documents: graphDocuments,
+      }),
       localReferences,
       locale,
       messages: nextMessages.slice(-MAX_MESSAGE_HISTORY),

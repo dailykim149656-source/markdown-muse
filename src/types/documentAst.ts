@@ -20,6 +20,20 @@ export interface DocumentMetadata {
   authors?: string[];
   labels?: Record<string, string>;
   sourceFiles?: SourceFileReference[];
+  latexRoundtrip?: LatexRoundtripMetadata;
+}
+
+export interface LatexRoundtripNodeSource {
+  kind: "opaque" | "resume";
+  macroName?: string;
+  originalLatex?: string;
+}
+
+export interface LatexRoundtripMetadata {
+  postamble?: string;
+  preamble?: string;
+  profile?: "generic" | "resume";
+  sources?: Record<string, LatexRoundtripNodeSource>;
 }
 
 export interface BaseDocumentEnvelope {
@@ -172,6 +186,69 @@ export interface AdmonitionNode extends BaseBlockNode {
   blocks: BlockNode[];
 }
 
+export interface OpaqueLatexBlockNode extends BaseBlockNode {
+  type: "opaque_latex_block";
+  label?: string;
+  rawLatex: string;
+}
+
+export interface ResumeHeaderNode extends BaseBlockNode {
+  type: "resume_header";
+  email?: string;
+  name: string;
+  phone?: string;
+  primaryLinkLabel?: string;
+  primaryLinkUrl?: string;
+  rightPrimary?: string;
+  secondaryLinkLabel?: string;
+  secondaryLinkUrl?: string;
+  tertiaryRight?: string;
+}
+
+export interface ResumeSummaryNode extends BaseBlockNode {
+  type: "resume_summary";
+  summary: string;
+}
+
+export type ResumeEntryMacroName =
+  | "resumeCommunity"
+  | "resumeEmployment"
+  | "resumeProject"
+  | "resumeResearch"
+  | "resumeSubheading"
+  | "resumeTalk";
+
+export interface ResumeEntryNode extends BaseBlockNode {
+  type: "resume_entry";
+  commandName: ResumeEntryMacroName;
+  description?: string;
+  details: string[];
+  subtitle?: string;
+  tertiaryText?: string;
+  title: string;
+  trailingText?: string;
+}
+
+export interface ResumeSkillRowNode extends BaseBlockNode {
+  type: "resume_skill_row";
+  commandName: "resumeSkills";
+  items: string[];
+  label?: string;
+  rawText: string;
+}
+
+export interface LatexTitleBlockNode extends BaseBlockNode {
+  type: "latex_title_block";
+  author?: string;
+  date?: string;
+  title: string;
+}
+
+export interface LatexAbstractNode extends BaseBlockNode {
+  type: "latex_abstract";
+  content: string;
+}
+
 export interface TableOfContentsNode extends BaseBlockNode {
   type: "table_of_contents";
   maxDepth?: HeadingLevel;
@@ -284,6 +361,13 @@ export type BlockNode =
   | MathBlockNode
   | MermaidBlockNode
   | AdmonitionNode
+  | OpaqueLatexBlockNode
+  | ResumeHeaderNode
+  | ResumeSummaryNode
+  | ResumeEntryNode
+  | ResumeSkillRowNode
+  | LatexTitleBlockNode
+  | LatexAbstractNode
   | TableOfContentsNode
   | FootnoteItemNode;
 

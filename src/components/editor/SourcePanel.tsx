@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type { ChangeEvent, FocusEvent, KeyboardEvent, ReactNode, RefObject } from "react";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { ArrowLeftRight, Code2, PanelRightClose, PanelRightOpen } from "lucide-react";
@@ -73,6 +74,8 @@ interface SourcePanelProps {
   label: string;
   value: string;
   rootRef?: RefObject<HTMLDivElement | null>;
+  focusLineNumber?: number | null;
+  onFocusLineHandled?: () => void;
   onChange: (e: ChangeEvent<HTMLTextAreaElement>) => void;
   onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
   onKeyDownCapture?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -100,8 +103,43 @@ const SourcePanel = ({
   placeholder,
   textareaRef,
   children,
+  focusLineNumber,
+  onFocusLineHandled,
 }: SourcePanelProps) => {
   const isMobile = useIsMobile();
+
+  useEffect(() => {
+    const textarea = textareaRef?.current;
+
+    if (!focusLineNumber || !textarea) {
+      return;
+    }
+
+    const lines = value.split("\n");
+    const clampedLine = Math.max(1, Math.min(focusLineNumber, lines.length || 1));
+    let selectionStart = 0;
+
+    for (let lineIndex = 0; lineIndex < clampedLine - 1; lineIndex += 1) {
+      selectionStart += (lines[lineIndex]?.length || 0) + 1;
+    }
+
+    const selectionEnd = selectionStart + (lines[clampedLine - 1]?.length || 0);
+
+    requestAnimationFrame(() => {
+      if (document.activeElement !== textarea) {
+        textarea.focus();
+      }
+
+      textarea.setSelectionRange(selectionStart, selectionEnd);
+
+      const computedLineHeight = Number.parseFloat(window.getComputedStyle(textarea).lineHeight);
+      const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : 20;
+      const targetScrollTop = Math.max(0, ((clampedLine - 1) * lineHeight) - (textarea.clientHeight / 2));
+      textarea.scrollTop = targetScrollTop;
+    });
+
+    onFocusLineHandled?.();
+  }, [focusLineNumber, onFocusLineHandled, textareaRef, value]);
 
   const handlePanelKeyDownCapture = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Tab") {

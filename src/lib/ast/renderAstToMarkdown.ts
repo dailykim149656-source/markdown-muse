@@ -150,6 +150,37 @@ const renderBlockNode = (node: BlockNode, depth = 0): string => {
         .join("\n");
       return `> [!${node.admonitionType.toUpperCase()}${title}]\n${body}`;
     }
+    case "opaque_latex_block":
+      return `\`\`\`latex\n${node.rawLatex}\n\`\`\``;
+    case "resume_header":
+      return [
+        `# ${node.name}`,
+        node.primaryLinkUrl ? `[${node.primaryLinkLabel || node.primaryLinkUrl}](${node.primaryLinkUrl})` : "",
+        node.rightPrimary || "",
+        node.secondaryLinkUrl ? `[${node.secondaryLinkLabel || node.secondaryLinkUrl}](${node.secondaryLinkUrl})` : "",
+        node.email ? `Email: ${node.email}` : "",
+        node.phone ? `Phone: ${node.phone}` : "",
+        node.tertiaryRight || "",
+      ].filter(Boolean).join("\n\n");
+    case "resume_summary":
+      return node.summary;
+    case "resume_entry":
+      return [
+        `### ${node.title}${node.trailingText ? ` | ${node.trailingText}` : ""}`,
+        node.subtitle || node.tertiaryText ? `${node.subtitle || ""}${node.tertiaryText ? ` | ${node.tertiaryText}` : ""}` : "",
+        node.description || "",
+        ...node.details.map((detail) => `- ${detail}`),
+      ].filter(Boolean).join("\n");
+    case "resume_skill_row":
+      return `- ${node.label ? `**${node.label}**: ` : ""}${node.items.join(", ") || node.rawText}`;
+    case "latex_title_block":
+      return [
+        `# ${node.title}`,
+        node.author ? `Author: ${node.author}` : "",
+        node.date ? `Date: ${node.date}` : "",
+      ].filter(Boolean).join("\n");
+    case "latex_abstract":
+      return `> **Abstract**\n> ${node.content.replace(/\n/g, "\n> ")}`;
     case "table_of_contents":
       return "[[toc]]";
     case "footnote_item":

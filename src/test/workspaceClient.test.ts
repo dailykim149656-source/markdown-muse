@@ -13,7 +13,8 @@ describe("workspace client", () => {
   it("returns structured health data from the health endpoint", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
       configured: true,
-      model: "gemini-2.5-flash",
+      fallbackModel: "gemini-2.5-flash",
+      model: "gemini-3.1-flash-lite-preview",
       ok: true,
     }), {
       headers: {
@@ -24,7 +25,8 @@ describe("workspace client", () => {
 
     await expect(checkWorkspaceApiHealth()).resolves.toEqual({
       configured: true,
-      model: "gemini-2.5-flash",
+      fallbackModel: "gemini-2.5-flash",
+      model: "gemini-3.1-flash-lite-preview",
       ok: true,
     });
   });

@@ -234,6 +234,25 @@ describe("LaTeX round-trip: HTML→LaTeX→HTML", () => {
     expect(restored).toContain("font-family: 'Fira Code'");
     expect(restored).toContain("font-size: 18px");
   });
+
+  it("round-trips theorem-like environments through admonition-backed html", () => {
+    const latex = "\\begin{theorem}[Pythagoras]\na^2+b^2=c^2\n\\end{theorem}";
+    const restoredHtml = latexToHtml(latex);
+    const roundTrippedLatex = htmlToLatex(restoredHtml, false);
+
+    expect(restoredHtml).toContain('data-admonition-type="theorem"');
+    expect(restoredHtml).toContain('title="Pythagoras"');
+    expect(roundTrippedLatex).toContain("\\begin{theorem}[Pythagoras]");
+    expect(roundTrippedLatex).toContain("\\end{theorem}");
+  });
+
+  it("preserves reference and citation pseudo-links when exporting back to latex", () => {
+    const html = '<p><a href="#ref:sec:intro">sec:intro</a> <a href="#citep:knuth1984">[knuth1984]</a></p>';
+    const latex = htmlToLatex(html, false);
+
+    expect(latex).toContain("\\ref{sec:intro}");
+    expect(latex).toContain("\\citep{knuth1984}");
+  });
 });
 
 // ═══════════════════════════════════════════

@@ -14,6 +14,8 @@ import type {
   HeadingLevel,
   HeadingNode,
   HorizontalRuleNode,
+  LatexAbstractNode,
+  LatexTitleBlockNode,
   ImageNode,
   InlineNode,
   LinkMark,
@@ -23,7 +25,12 @@ import type {
   MathInlineNode,
   MermaidBlockNode,
   OrderedListNode,
+  OpaqueLatexBlockNode,
   ParagraphNode,
+  ResumeEntryNode,
+  ResumeHeaderNode,
+  ResumeSkillRowNode,
+  ResumeSummaryNode,
   TableCellNode,
   TableNode,
   TableOfContentsNode,
@@ -429,6 +436,75 @@ const serializeBlockNode = (
         color: typeof node.attrs?.color === "string" ? node.attrs.color : undefined,
         blocks: serializeBlockNodes(node.content, path, throwOnUnsupported),
       } satisfies AdmonitionNode;
+    case "opaqueLatexBlock":
+      return {
+        type: "opaque_latex_block",
+        kind: "block",
+        nodeId: resolveNodeId(node, "blk", path),
+        label: typeof node.attrs?.label === "string" ? node.attrs.label : undefined,
+        rawLatex: String(node.attrs?.rawLatex || ""),
+      } satisfies OpaqueLatexBlockNode;
+    case "resumeHeader":
+      return {
+        type: "resume_header",
+        kind: "block",
+        nodeId: resolveNodeId(node, "blk", path),
+        email: typeof node.attrs?.email === "string" ? node.attrs.email : undefined,
+        name: String(node.attrs?.name || ""),
+        phone: typeof node.attrs?.phone === "string" ? node.attrs.phone : undefined,
+        primaryLinkLabel: typeof node.attrs?.primaryLinkLabel === "string" ? node.attrs.primaryLinkLabel : undefined,
+        primaryLinkUrl: typeof node.attrs?.primaryLinkUrl === "string" ? node.attrs.primaryLinkUrl : undefined,
+        rightPrimary: typeof node.attrs?.rightPrimary === "string" ? node.attrs.rightPrimary : undefined,
+        secondaryLinkLabel: typeof node.attrs?.secondaryLinkLabel === "string" ? node.attrs.secondaryLinkLabel : undefined,
+        secondaryLinkUrl: typeof node.attrs?.secondaryLinkUrl === "string" ? node.attrs.secondaryLinkUrl : undefined,
+        tertiaryRight: typeof node.attrs?.tertiaryRight === "string" ? node.attrs.tertiaryRight : undefined,
+      } satisfies ResumeHeaderNode;
+    case "resumeSummary":
+      return {
+        type: "resume_summary",
+        kind: "block",
+        nodeId: resolveNodeId(node, "blk", path),
+        summary: String(node.attrs?.summary || ""),
+      } satisfies ResumeSummaryNode;
+    case "resumeEntry":
+      return {
+        type: "resume_entry",
+        kind: "block",
+        nodeId: resolveNodeId(node, "blk", path),
+        commandName: (node.attrs?.commandName || "resumeEmployment") as ResumeEntryNode["commandName"],
+        description: typeof node.attrs?.description === "string" ? node.attrs.description : undefined,
+        details: Array.isArray(node.attrs?.details) ? node.attrs.details.map((entry: unknown) => String(entry)) : [],
+        subtitle: typeof node.attrs?.subtitle === "string" ? node.attrs.subtitle : undefined,
+        tertiaryText: typeof node.attrs?.tertiaryText === "string" ? node.attrs.tertiaryText : undefined,
+        title: String(node.attrs?.title || ""),
+        trailingText: typeof node.attrs?.trailingText === "string" ? node.attrs.trailingText : undefined,
+      } satisfies ResumeEntryNode;
+    case "resumeSkillRow":
+      return {
+        type: "resume_skill_row",
+        kind: "block",
+        nodeId: resolveNodeId(node, "blk", path),
+        commandName: "resumeSkills",
+        items: Array.isArray(node.attrs?.items) ? node.attrs.items.map((entry: unknown) => String(entry)) : [],
+        label: typeof node.attrs?.label === "string" ? node.attrs.label : undefined,
+        rawText: String(node.attrs?.rawText || ""),
+      } satisfies ResumeSkillRowNode;
+    case "latexTitleBlock":
+      return {
+        type: "latex_title_block",
+        kind: "block",
+        nodeId: resolveNodeId(node, "blk", path),
+        author: typeof node.attrs?.author === "string" ? node.attrs.author : undefined,
+        date: typeof node.attrs?.date === "string" ? node.attrs.date : undefined,
+        title: String(node.attrs?.title || ""),
+      } satisfies LatexTitleBlockNode;
+    case "latexAbstract":
+      return {
+        type: "latex_abstract",
+        kind: "block",
+        nodeId: resolveNodeId(node, "blk", path),
+        content: String(node.attrs?.content || ""),
+      } satisfies LatexAbstractNode;
     case "tableOfContents":
       return {
         type: "table_of_contents",

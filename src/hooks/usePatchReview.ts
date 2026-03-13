@@ -255,7 +255,14 @@ export const usePatchReview = ({
         updatedAt: nextUpdatedAt,
       };
 
-      updateActiveDoc({ content: nextContent });
+      updateActiveDoc({
+        ast: nextDocument.ast,
+        content: nextDocument.content,
+        sourceSnapshots: nextDocument.sourceSnapshots,
+        storageKind: nextDocument.storageKind,
+        tiptapJson: nextDocument.tiptapJson,
+        updatedAt: nextDocument.updatedAt,
+      });
       setLiveEditorHtml(nextHtml);
       bumpEditorKey();
       void onVersionSnapshot?.(nextDocument, {

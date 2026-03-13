@@ -12,15 +12,19 @@ import { useEditorExtensions } from "./editorConfig";
 import { rememberEditorSelection } from "./editorSelectionMemory";
 import { applyEditorSeed } from "./editorSeedSync";
 import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
-import { htmlToLatex, latexToHtml } from "./utils/htmlToLatex";
+import { latexToHtml } from "./utils/htmlToLatex";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import LatexHighlightEditor from "./LatexHighlightEditor";
+import { exportDocsyToLatex } from "@/lib/latex/exportDocsyToLatex";
+import { importLatexToDocsy } from "@/lib/latex/importLatexToDocsy";
+import { isUsableTiptapDocument } from "@/lib/ast/tiptapUsability";
 
 interface LatexEditorProps {
   advancedBlocksEnabled?: boolean;
   canEnableAdvancedBlocks?: boolean;
   canEnableDocumentFeatures?: boolean;
   documentFeaturesEnabled?: boolean;
+  initialHtmlOverride?: string;
   initialContent?: string;
   initialTiptapDoc?: JSONContent;
   onContentChange?: (content: string) => void;
@@ -28,7 +32,9 @@ interface LatexEditorProps {
   onEnableDocumentFeatures?: () => void;
   onHtmlChange?: (html: string) => void;
   onEditorReady?: (editor: Editor | null) => void;
+  onSourceLineTargetApplied?: () => void;
   onTiptapChange?: (document: JSONContent | null) => void;
+  sourceLineTarget?: number | null;
 }
 
 const LatexEditor = ({
@@ -36,6 +42,7 @@ const LatexEditor = ({
   canEnableAdvancedBlocks = false,
   canEnableDocumentFeatures = false,
   documentFeaturesEnabled = false,
+  initialHtmlOverride,
   initialContent,
   initialTiptapDoc,
   onContentChange,
@@ -43,7 +50,9 @@ const LatexEditor = ({
   onEnableDocumentFeatures,
   onHtmlChange,
   onEditorReady,
+  onSourceLineTargetApplied,
   onTiptapChange,
+  sourceLineTarget = null,
 }: LatexEditorProps) => {
   const [latexSource, setLatexSource] = useState(initialContent || "");
   const [showPanel, setShowPanel] = useState(true);
@@ -53,11 +62,18 @@ const LatexEditor = ({
   const syncingFromWysiwyg = useRef(false);
   const sourceSyncFrame = useRef<number | null>(null);
   const seedSignatureRef = useRef<string | null>(null);
-  const initialHtml = useMemo(() => initialContent ? latexToHtml(initialContent, { includeMetadata: false }) : "", [initialContent]);
+  const initialHtml = useMemo(() => {
+    if (typeof initialHtmlOverride === "string") {
+      return initialHtmlOverride;
+    }
+
+    return initialContent ? importLatexToDocsy(initialContent).html || latexToHtml(initialContent, { includeMetadata: false }) : "";
+  }, [initialContent, initialHtmlOverride]);
   const requiresDocumentFeatures = tiptapDocumentHasDocumentContent(initialTiptapDoc) || htmlHasDocumentContent(initialHtml);
   const requiresAdvancedBlocks = tiptapDocumentHasAdvancedContent(initialTiptapDoc) || htmlHasAdvancedContent(initialHtml);
   const sourcePanelRef = useRef<HTMLDivElement | null>(null);
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const usableInitialTiptapDoc = isUsableTiptapDocument(initialTiptapDoc) ? initialTiptapDoc : undefined;
   const { editorPropsDefault, coreExtensions, extensions, extensionsReady } = useEditorExtensions(
     "LaTeX WYSIWYG with synced source pane.",
     documentFeaturesEnabled,
@@ -101,19 +117,22 @@ const LatexEditor = ({
     (html: string, document: JSONContent) => {
       if (syncingFromSource.current) return;
       syncingFromWysiwyg.current = true;
-      const latex = htmlToLatex(html, true, { includeMetadata: false });
+      const latex = exportDocsyToLatex({
+        currentLatexSource: latexSource,
+        html,
+      });
       setLatexSource(latex);
       onContentChange?.(latex);
       onHtmlChange?.(html);
       onTiptapChange?.(document);
       queueMicrotask(() => { syncingFromWysiwyg.current = false; });
     },
-    [onContentChange, onHtmlChange, onTiptapChange]
+    [latexSource, onContentChange, onHtmlChange, onTiptapChange]
   );
 
   const editor = useEditor({
     extensions: shouldHoldEditor ? coreExtensions : extensions,
-    content: shouldHoldEditor ? "" : (initialTiptapDoc || initialHtml),
+    content: shouldHoldEditor ? "" : (usableInitialTiptapDoc || initialHtml),
     onCreate: ({ editor }) => {
       rememberEditorSelection(editor);
     },
@@ -137,18 +156,26 @@ const LatexEditor = ({
   }, [initialContent]);
 
   useEffect(() => {
+    if (!sourceLineTarget) {
+      return;
+    }
+
+    setShowPanel(true);
+  }, [sourceLineTarget]);
+
+  useEffect(() => {
     if (!editor || shouldHoldEditor) {
       return;
     }
 
     applyEditorSeed({
       editor,
-      nextContent: initialTiptapDoc || initialHtml,
+      nextContent: usableInitialTiptapDoc || initialHtml,
       onHtmlChange,
       onTiptapChange,
       seedSignatureRef,
     });
-  }, [editor, initialHtml, initialTiptapDoc, onHtmlChange, onTiptapChange, shouldHoldEditor]);
+  }, [editor, initialHtml, onHtmlChange, onTiptapChange, shouldHoldEditor, usableInitialTiptapDoc]);
 
   useEffect(() => {
     onEditorReady?.(editor);
@@ -166,7 +193,7 @@ const LatexEditor = ({
   const handleSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newLatex = e.target.value;
-      const html = latexToHtml(newLatex, { includeMetadata: false });
+      const html = importLatexToDocsy(newLatex).html || latexToHtml(newLatex, { includeMetadata: false });
       setLatexSource(newLatex);
       onContentChange?.(newLatex);
       onHtmlChange?.(html);
@@ -269,8 +296,10 @@ const LatexEditor = ({
         editorContent={<EditorContent editor={editor} />}
         sourcePanel={
           <SourcePanel
+            focusLineNumber={sourceLineTarget}
             rootRef={sourcePanelRef}
             label="LaTeX Source"
+            onFocusLineHandled={onSourceLineTargetApplied}
             textareaRef={sourceTextareaRef}
             value={latexSource}
             onChange={handleSourceChange}

@@ -150,6 +150,58 @@ export const buildLiveAgentPatchSet = ({
     const sources = toPatchSources(edit.sources);
     const replacementParagraphs = createParagraphNodes(edit.markdownBody, prefix);
 
+    if (edit.kind === "replace_document_body") {
+      const firstNodeId = documentAst.blocks.at(0)?.nodeId;
+
+      if (!firstNodeId) {
+        throw new Error("Cannot replace the body of an empty document.");
+      }
+
+      if (replacementParagraphs.length === 0) {
+        return;
+      }
+
+      patches.push({
+        author: "ai",
+        confidence: 0.76,
+        operation: "insert_before",
+        patchId: nextPatchId(),
+        payload: {
+          kind: "insert_nodes",
+          nodes: replacementParagraphs,
+        },
+        reason: edit.rationale,
+        sources,
+        status: "pending",
+        suggestedText: edit.markdownBody,
+        summary: "Replace the current document body with the updated draft.",
+        target: {
+          nodeId: firstNodeId,
+          targetType: "node",
+        },
+        title: "Replace document body",
+      });
+
+      for (const block of [...documentAst.blocks].reverse()) {
+        patches.push({
+          author: "ai",
+          confidence: 0.71,
+          operation: "delete_node",
+          patchId: nextPatchId(),
+          reason: edit.rationale,
+          sources,
+          status: "pending",
+          summary: "Remove outdated content from the current document body.",
+          target: {
+            nodeId: block.nodeId,
+            targetType: "node",
+          },
+          title: "Remove outdated document content",
+        });
+      }
+      return;
+    }
+
     if (edit.kind === "append_section") {
       if (replacementParagraphs.length === 0) {
         return;

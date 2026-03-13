@@ -78,7 +78,8 @@ describe("useWorkspaceAuth", () => {
   it("exposes structured API health when the health check succeeds", async () => {
     checkWorkspaceApiHealth.mockResolvedValueOnce({
       configured: true,
-      model: "gemini-2.5-flash",
+      fallbackModel: "gemini-2.5-flash",
+      model: "gemini-3.1-flash-lite-preview",
       ok: true,
     });
 
@@ -90,7 +91,8 @@ describe("useWorkspaceAuth", () => {
     await waitFor(() => {
       expect(result.current.apiHealth).toEqual({
         configured: true,
-        model: "gemini-2.5-flash",
+        fallbackModel: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite-preview",
         ok: true,
       });
     });

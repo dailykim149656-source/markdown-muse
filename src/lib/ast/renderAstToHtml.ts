@@ -245,6 +245,68 @@ const renderBlockNode = (node: BlockNode, footnoteMap: Map<string, string>): str
         ["title", node.title],
         ["data-node-id", node.nodeId],
       ])}>${renderBlockChildren(node.blocks, footnoteMap)}</div>`;
+    case "opaque_latex_block":
+      return `<div${renderAttributes([
+        ["data-type", "opaque-latex-block"],
+        ["data-label", node.label],
+        ["data-raw-latex", node.rawLatex],
+        ["data-node-id", node.nodeId],
+      ])}><pre><code>${escapeHtml(node.rawLatex)}</code></pre></div>`;
+    case "resume_header":
+      return `<div${renderAttributes([
+        ["data-type", "resume-header"],
+        ["data-name", node.name],
+        ["data-primary-link-label", node.primaryLinkLabel],
+        ["data-primary-link-url", node.primaryLinkUrl],
+        ["data-right-primary", node.rightPrimary],
+        ["data-secondary-link-label", node.secondaryLinkLabel],
+        ["data-secondary-link-url", node.secondaryLinkUrl],
+        ["data-email", node.email],
+        ["data-phone", node.phone],
+        ["data-tertiary-right", node.tertiaryRight],
+        ["data-node-id", node.nodeId],
+      ])}><strong>${escapeHtml(node.name)}</strong></div>`;
+    case "resume_summary":
+      return `<div${renderAttributes([
+        ["data-type", "resume-summary"],
+        ["data-summary", node.summary],
+        ["data-node-id", node.nodeId],
+      ])}><p>${escapeHtml(node.summary)}</p></div>`;
+    case "resume_entry":
+      return `<div${renderAttributes([
+        ["data-type", "resume-entry"],
+        ["data-command-name", node.commandName],
+        ["data-title", node.title],
+        ["data-trailing-text", node.trailingText],
+        ["data-subtitle", node.subtitle],
+        ["data-tertiary-text", node.tertiaryText],
+        ["data-description", node.description],
+        ["data-details", JSON.stringify(node.details)],
+        ["data-node-id", node.nodeId],
+      ])}><strong>${escapeHtml(node.title)}</strong></div>`;
+    case "resume_skill_row":
+      return `<div${renderAttributes([
+        ["data-type", "resume-skill-row"],
+        ["data-command-name", node.commandName],
+        ["data-label", node.label],
+        ["data-items", JSON.stringify(node.items)],
+        ["data-raw-text", node.rawText],
+        ["data-node-id", node.nodeId],
+      ])}><strong>${escapeHtml(node.label || "Skills")}</strong></div>`;
+    case "latex_title_block":
+      return `<div${renderAttributes([
+        ["data-type", "latex-title-block"],
+        ["data-title", node.title],
+        ["data-author", node.author],
+        ["data-date", node.date],
+        ["data-node-id", node.nodeId],
+      ])}><strong>${escapeHtml(node.title)}</strong></div>`;
+    case "latex_abstract":
+      return `<div${renderAttributes([
+        ["data-type", "latex-abstract"],
+        ["data-content", node.content],
+        ["data-node-id", node.nodeId],
+      ])}><p>${escapeHtml(node.content)}</p></div>`;
     case "table_of_contents":
       return `<div${renderAttributes([
         ["data-type", "toc"],

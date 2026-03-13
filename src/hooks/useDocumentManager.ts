@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AutoSaveData,
   AutoSaveIndicatorState,
@@ -50,6 +50,18 @@ export const useDocumentManager = () => {
     lastSavedAt: initialSavedData?.lastSaved ?? null,
     status: initialSavedData ? "saved" : "saving",
   }));
+  const documentsRef = useRef(initialDocuments);
+  const activeDocIdRef = useRef(initialActiveDocId);
+  const lastSavedAtRef = useRef<number | null>(initialSavedData?.lastSaved ?? null);
+  const lastSavedSnapshotKeyRef = useRef<string | null>(
+    initialSavedData?.documents?.length
+      ? JSON.stringify({
+        activeDocId: initialActiveDocId,
+        documents: initialDocuments,
+        version: 2,
+      })
+      : null,
+  );
 
   const activeDoc = useMemo(
     () => documents.find((doc) => doc.id === activeDocId) || documents[0],
@@ -97,12 +109,28 @@ export const useDocumentManager = () => {
     },
   });
 
-  const saveImmediate = useCallback(() => {
+  useEffect(() => {
+    documentsRef.current = documents;
+  }, [documents]);
+
+  useEffect(() => {
+    activeDocIdRef.current = activeDocId;
+  }, [activeDocId]);
+
+  useEffect(() => {
+    lastSavedAtRef.current = autoSaveState.lastSavedAt;
+  }, [autoSaveState.lastSavedAt]);
+
+  const persistSnapshot = useCallback((
+    nextDocuments: DocumentData[],
+    nextActiveDocId: string,
+    lastSavedOverride?: number,
+  ) => {
     const result = saveData({
       version: 2,
-      documents,
-      activeDocId,
-      lastSaved: autoSaveState.lastSavedAt ?? Date.now(),
+      documents: nextDocuments,
+      activeDocId: nextActiveDocId,
+      lastSaved: lastSavedOverride ?? autoSaveState.lastSavedAt ?? Date.now(),
     });
 
     if (result.ok) {
@@ -111,7 +139,12 @@ export const useDocumentManager = () => {
         lastSavedAt: result.savedAt,
         status: "saved",
       });
-      return;
+      lastSavedSnapshotKeyRef.current = JSON.stringify({
+        activeDocId: nextActiveDocId,
+        documents: nextDocuments,
+        version: 2,
+      });
+      return result;
     }
 
     setAutoSaveState((previousState) => ({
@@ -119,7 +152,12 @@ export const useDocumentManager = () => {
       lastSavedAt: previousState.lastSavedAt,
       status: "error",
     }));
-  }, [activeDocId, autoSaveState.lastSavedAt, documents]);
+    return result;
+  }, [autoSaveState.lastSavedAt]);
+
+  const saveImmediate = useCallback(() => {
+    persistSnapshot(documents, activeDocId);
+  }, [activeDocId, documents, persistSnapshot]);
 
   const bumpEditorKey = useCallback(() => {
     setEditorKey((key) => key + 1);
@@ -275,23 +313,55 @@ export const useDocumentManager = () => {
       workspaceBinding,
     };
 
-    setDocuments((previousDocuments) => {
-      if (replaceDocumentId && previousDocuments.some((document) => document.id === replaceDocumentId)) {
-        return previousDocuments.map((document) => document.id === replaceDocumentId ? newDoc : document);
-      }
+    const nextDocuments = replaceDocumentId && documents.some((document) => document.id === replaceDocumentId)
+      ? documents.map((document) => document.id === replaceDocumentId ? newDoc : document)
+      : [...documents, newDoc];
 
-      return [...previousDocuments, newDoc];
-    });
+    setDocuments(nextDocuments);
     setActiveDocId(newDoc.id);
     setEditorKey((key) => key + 1);
-    setAutoSaveState((previousState) => ({
-      error: null,
-      lastSavedAt: previousState.lastSavedAt,
-      status: "saving",
-    }));
+    persistSnapshot(nextDocuments, newDoc.id);
 
     return newDoc;
-  }, [resolveUniqueDocumentId]);
+  }, [documents, persistSnapshot, resolveUniqueDocumentId]);
+
+  useEffect(() => {
+    const flushSnapshot = () => {
+      const snapshot = {
+        activeDocId: activeDocIdRef.current,
+        documents: documentsRef.current,
+        version: 2 as const,
+      };
+      const snapshotKey = JSON.stringify(snapshot);
+
+      if (snapshotKey === lastSavedSnapshotKeyRef.current) {
+        return;
+      }
+
+      persistSnapshot(
+        documentsRef.current,
+        activeDocIdRef.current,
+        lastSavedAtRef.current ?? Date.now(),
+      );
+    };
+
+    const handlePageHide = () => {
+      flushSnapshot();
+    };
+
+    const handleBeforeUnload = () => {
+      flushSnapshot();
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      flushSnapshot();
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [persistSnapshot]);
 
   const selectDocument = useCallback((id: string) => {
     saveImmediate();

@@ -18,6 +18,7 @@ import { MAX_IMPORT_FILE_SIZE_BYTES, resolveImportedDocumentOptions, useDocument
 import { useEditorUiState } from "@/hooks/useEditorUiState";
 import { useFormatConversion } from "@/hooks/useFormatConversion";
 import { usePatchReview } from "@/hooks/usePatchReview";
+import { useTexValidation } from "@/hooks/useTexValidation";
 import { useWorkspaceFiles } from "@/hooks/useWorkspaceFiles";
 import { useWorkspaceAuth } from "@/hooks/useWorkspaceAuth";
 import { useWorkspaceChanges } from "@/hooks/useWorkspaceChanges";
@@ -287,6 +288,7 @@ const Index = () => {
   const [workspaceConnectionOpen, setWorkspaceConnectionOpen] = useState(false);
   const [workspaceExportOpen, setWorkspaceExportOpen] = useState(false);
   const [workspaceImportOpen, setWorkspaceImportOpen] = useState(false);
+  const [pendingLatexSourceLine, setPendingLatexSourceLine] = useState<number | null>(null);
   const {
     activeDoc,
     activeDocId,
@@ -426,6 +428,20 @@ const Index = () => {
     renderableLatexDocument: currentRenderableLatexDocument,
     renderableMarkdown: currentRenderableMarkdown,
   });
+  const texValidation = useTexValidation({
+    documentName: activeDoc.name,
+    latexSource: activeDoc.mode === "latex"
+      ? activeDoc.content
+      : currentRenderableLatexDocument,
+    mode: activeDoc.mode,
+    onPdfExported: () => {
+      void createVersionSnapshot(activeDoc, "export", { exportFormat: "XeLaTeX PDF" });
+    },
+  });
+
+  useEffect(() => {
+    setPendingLatexSourceLine(null);
+  }, [activeDoc.id, activeDoc.mode]);
   const {
     connected: workspaceConnected,
     connectivityDiagnostic,
@@ -1387,6 +1403,7 @@ const Index = () => {
             canEnableAdvancedBlocks={canEnableAdvancedBlocks}
             canEnableDocumentFeatures={canEnableDocumentFeatures}
             documentFeaturesEnabled={documentFeaturesEnabled}
+            initialHtmlOverride={activeDoc.sourceSnapshots?.html}
             key={`${activeDoc.id}:${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
             initialContent={activeDoc.content}
             initialTiptapDoc={activeDoc.tiptapJson || undefined}
@@ -1395,7 +1412,9 @@ const Index = () => {
             onEnableDocumentFeatures={enableDocumentFeatures}
             onEditorReady={setActiveEditor}
             onHtmlChange={setLiveEditorHtml}
+            onSourceLineTargetApplied={() => setPendingLatexSourceLine(null)}
             onTiptapChange={handleTiptapChange}
+            sourceLineTarget={pendingLatexSourceLine}
           />
         </Suspense>
       );
@@ -1654,6 +1673,26 @@ const Index = () => {
           fileName: activeDoc.name,
           onClose: closePreview,
           rawContent: activeDoc.content,
+          texValidationProps: {
+            compileMs: texValidation.compileMs,
+            diagnostics: texValidation.diagnostics,
+            health: texValidation.health,
+            isExportingPdf: texValidation.isExportingPdf,
+            lastValidatedAt: texValidation.lastValidatedAt,
+            latexSource: activeDoc.mode === "latex" ? activeDoc.content : currentRenderableLatexDocument,
+            logSummary: texValidation.logSummary,
+            onCompilePdf: texValidation.downloadCompiledPdf,
+            onJumpToLine: (line) => {
+              if (activeDoc.mode === "latex") {
+                setPendingLatexSourceLine(line);
+              }
+            },
+            onRunValidation: texValidation.runValidation,
+            previewUrl: texValidation.previewUrl,
+            sourceType: texValidation.sourceType,
+            status: texValidation.status,
+            validationEnabled: texValidation.validationEnabled,
+          },
         }}
         renderEditor={renderEditor}
         shortcutsModalProps={{ onOpenChange: setShortcutsOpen, open: shortcutsOpen }}

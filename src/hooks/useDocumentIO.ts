@@ -15,6 +15,7 @@ import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
 import { rstToHtml } from "@/components/editor/utils/rstToHtml";
 import { GOOGLE_FONTS_URL, PRETENDARD_STYLESHEET_URL } from "@/components/editor/fonts";
+import { importLatexToDocsy } from "@/lib/latex/importLatexToDocsy";
 import { DOC_SHARE_MAX_PAYLOAD_LENGTH } from "@/lib/share/shareConstants";
 import type { DocumentPatchSet } from "@/types/documentPatch";
 import type { SourceFileReference } from "@/types/documentAst";
@@ -612,6 +613,7 @@ export const useDocumentIO = ({
           let finalContent = content;
           let sourceFormat = "markdown";
           let sourceSnapshots: SourceSnapshots | undefined;
+          let importedLatexResult: ReturnType<typeof importLatexToDocsy> | null = null;
 
           if (lowerName.endsWith(".docsy")) {
             const { buildDocumentDataFromDocsyFile, parseDocsyFile } = await loadDocsyFileFormat();
@@ -630,6 +632,12 @@ export const useDocumentIO = ({
           if (lowerName.endsWith(".tex")) {
             mode = "latex";
             sourceFormat = "latex";
+            const importedLatex = importLatexToDocsy(content);
+            importedLatexResult = importedLatex;
+            sourceSnapshots = {
+              html: importedLatex.html,
+              latex: content,
+            };
           } else if (lowerName.endsWith(".html") || lowerName.endsWith(".htm")) {
             mode = "html";
             sourceFormat = "html";
@@ -681,6 +689,7 @@ export const useDocumentIO = ({
             importedDocument: {
             content: finalContent,
             metadata: {
+              ...(importedLatexResult ? { latexRoundtrip: importedLatexResult.metadata } : {}),
               sourceFiles: [buildSourceFileReference(file.name, sourceFormat, importedAt)],
               title: name,
             },

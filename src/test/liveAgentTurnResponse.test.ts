@@ -57,6 +57,32 @@ describe("normalizeAgentTurnResponse", () => {
     expect(response.currentDocumentDraft?.edits).toHaveLength(1);
   });
 
+  it("keeps full-body current-document drafts for headingless documents", () => {
+    const response = normalizeAgentTurnResponse({
+      availableImportTargets: [],
+      driveCandidates: [],
+      response: {
+        assistantText: "I prepared a reviewable full-body update.",
+        currentDocumentDraft: {
+          edits: [{
+            kind: "replace_document_body",
+            markdownBody: "Handover owner: Hong Gil-dong",
+            rationale: "Apply the new handover owner.",
+          }],
+          kind: "current_document",
+        },
+        effect: {
+          changeSetTitle: "Update current document",
+          summary: "Review the new handover values.",
+          type: "draft_current_document",
+        },
+      },
+    });
+
+    expect(response.effect.type).toBe("draft_current_document");
+    expect(response.currentDocumentDraft?.edits[0]?.kind).toBe("replace_document_body");
+  });
+
   it("adds a draft creation hint for new-document responses", () => {
     const response = normalizeAgentTurnResponse({
       availableImportTargets: [],

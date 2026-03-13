@@ -17,7 +17,7 @@ const MAX_DOCUMENTS_TO_READ = 6;
 const MAX_CANDIDATES = 5;
 const MAX_EXCERPTS_PER_DOCUMENT = 2;
 
-const DRIVE_INTENT_PATTERN = /\b(google|drive|docs|import|load|find|search|open)\b|(?:구글|드라이브|문서|불러|가져와|찾아|열어)/i;
+const DRIVE_INTENT_PATTERN = /\b(google|drive|google docs|docs|search drive|find in drive|import from google)\b|(?:구글|드라이브|구글\s*문서|구글독스|드라이브에서|드라이브\s*문서|구글에서.*(?:불러|가져와|찾아|열어)|드라이브에서.*(?:불러|가져와|찾아|열어))/i;
 
 interface LoadedDriveDocument {
   excerpt: string;

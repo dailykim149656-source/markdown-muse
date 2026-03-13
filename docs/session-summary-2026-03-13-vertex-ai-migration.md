@@ -55,7 +55,8 @@ Expected local settings now include:
 - `GOOGLE_GENAI_USE_VERTEXAI=true`
 - `GOOGLE_CLOUD_PROJECT=urban-dds`
 - `GOOGLE_CLOUD_LOCATION=asia-northeast3`
-- `GEMINI_MODEL=gemini-2.5-flash`
+- `GEMINI_MODEL=gemini-3.1-flash-lite-preview`
+- `GEMINI_FALLBACK_MODEL=gemini-2.5-flash`
 
 It also documents that local development requires:
 
@@ -79,6 +80,7 @@ Cloud Run now expects:
 - `GOOGLE_CLOUD_PROJECT`
 - `GOOGLE_CLOUD_LOCATION`
 - `GEMINI_MODEL`
+- `GEMINI_FALLBACK_MODEL`
 - existing Google Workspace and frontend origin env vars
 
 The deployment path no longer injects `GEMINI_API_KEY` into the AI service.
@@ -130,7 +132,8 @@ The following checks passed during this session:
 Local health verification after restart showed:
 
 - `configured: true`
-- `model: gemini-2.5-flash`
+- `model: gemini-3.1-flash-lite-preview`
+- `fallbackModel: gemini-2.5-flash`
 
 ## Follow-up items
 

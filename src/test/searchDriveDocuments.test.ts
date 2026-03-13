@@ -65,11 +65,16 @@ vi.mock("../../server/modules/workspace/googleDriveClient", () => ({
 }));
 
 describe("searchDriveDocuments", () => {
-  it("detects Drive-search intent", () => {
+  it("detects Drive-search intent only for explicit Google/Drive requests", () => {
     expect(shouldSearchDriveDocuments({
       driveReferenceFileIds: [],
-      latestUserMessage: "구글 드라이브에서 인증 runbook 찾아줘",
+      latestUserMessage: "\uAD6C\uAE00 \uB4DC\uB77C\uC774\uBE0C\uC5D0\uC11C \uC778\uC99D runbook \uCC3E\uC544\uC918",
     })).toBe(true);
+
+    expect(shouldSearchDriveDocuments({
+      driveReferenceFileIds: [],
+      latestUserMessage: "\uC778\uACC4\uC790\uB294 \uD64D\uAE38\uB3D9, \uC778\uC218\uC790\uB294 \uC2EC\uCCAD\uC774. \uC774 \uB0B4\uC6A9\uC744 \uBB38\uC11C\uC5D0 \uBC18\uC601\uD574",
+    })).toBe(false);
   });
 
   it("returns ranked Google Drive candidates from on-demand reads", async () => {

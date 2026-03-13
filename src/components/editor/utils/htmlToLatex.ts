@@ -179,6 +179,17 @@ const ADMONITION_COLOR_MAP: Record<string, string> = {
   gray: "gray",
 };
 
+const THEOREM_ENVIRONMENTS = new Set([
+  "corollary",
+  "definition",
+  "example",
+  "lemma",
+  "proof",
+  "proposition",
+  "remark",
+  "theorem",
+]);
+
 function cssColorToLatex(color: string): string {
   if (color.includes("rgb")) {
     const match = color.match(/\d+/g);
@@ -209,6 +220,21 @@ function normalizeFontSize(value: string): string {
 
 function formatPt(value: number): string {
   return `${Number(value.toFixed(2)).toString()}pt`;
+}
+
+function parseJsonStringArray(value: string | null): string[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.map((entry) => typeof entry === "string" ? entry : String(entry))
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function cssFontSizeToLatexPt(value: string): string {
@@ -371,6 +397,12 @@ function processNode(node: ChildNode, state: ConversionState): string {
     // ─── Links ───
     case "a": {
       const href = el.getAttribute("href") || "";
+      if (href.startsWith("#ref:")) return `\\ref{${href.slice(5)}}`;
+      if (href.startsWith("#eqref:")) return `\\eqref{${href.slice(7)}}`;
+      if (href.startsWith("#autoref:")) return `\\autoref{${href.slice(9)}}`;
+      if (href.startsWith("#cite:")) return `\\cite{${href.slice(6)}}`;
+      if (href.startsWith("#citep:")) return `\\citep{${href.slice(7)}}`;
+      if (href.startsWith("#citet:")) return `\\citet{${href.slice(7)}}`;
       return `\\href{${href}}{${children()}}`;
     }
 
@@ -434,13 +466,111 @@ function processNode(node: ChildNode, state: ConversionState): string {
         return `\\[\n${latex}\n\\]\n\n`;
       }
 
+      if (dataType === "opaque-latex-block") {
+        return `${el.getAttribute("data-raw-latex") || ""}\n\n`;
+      }
+
+      if (dataType === "resume-header") {
+        const name = escapeLatex(el.getAttribute("data-name") || "Resume");
+        const primaryLinkLabel = escapeLatex(el.getAttribute("data-primary-link-label") || el.getAttribute("data-primary-link-url") || "");
+        const primaryLinkUrl = el.getAttribute("data-primary-link-url") || "";
+        const secondaryLinkLabel = escapeLatex(el.getAttribute("data-secondary-link-label") || el.getAttribute("data-secondary-link-url") || "");
+        const secondaryLinkUrl = el.getAttribute("data-secondary-link-url") || "";
+        const rightPrimary = escapeLatex(el.getAttribute("data-right-primary") || "");
+        const email = el.getAttribute("data-email") || "";
+        const phone = escapeLatex(el.getAttribute("data-phone") || "");
+        const tertiaryRight = escapeLatex(el.getAttribute("data-tertiary-right") || (phone ? `Mobile : ${phone}` : ""));
+        const leftPrimary = primaryLinkUrl
+          ? `\\textbf{\\href{${primaryLinkUrl}}{\\Large ${name}}}`
+          : `\\textbf{\\Large ${name}}`;
+        const leftSecondary = secondaryLinkUrl
+          ? `\\href{${secondaryLinkUrl}}{${secondaryLinkLabel}}`
+          : "{}";
+        const rightSecondary = email ? `Email : \\href{mailto:${email}}{${escapeLatex(email)}}` : "";
+
+        return [
+          "\\begin{tabular*}{\\textwidth}{l@{\\extracolsep{\\fill}}r}",
+          `  ${leftPrimary} & ${rightPrimary} \\\\`,
+          `  ${leftSecondary} & ${rightSecondary} \\\\`,
+          `  {} & ${tertiaryRight}`,
+          "\\end{tabular*}",
+          "",
+        ].join("\n");
+      }
+
+      if (dataType === "resume-summary") {
+        const summary = escapeLatex((el.getAttribute("data-summary") || "").trim()).replace(/\n+/g, " \\\\\n");
+        return `\\resumeSummary{${summary}}\n\n`;
+      }
+
+      if (dataType === "latex-title-block") {
+        return "\\maketitle\n\n";
+      }
+
+      if (dataType === "latex-abstract") {
+        const abstractContent = escapeLatex((el.getAttribute("data-content") || "").trim());
+        return `\\begin{abstract}\n${abstractContent}\n\\end{abstract}\n\n`;
+      }
+
+      if (dataType === "resume-entry") {
+        const commandName = el.getAttribute("data-command-name") || "";
+        const title = escapeLatex(el.getAttribute("data-title") || "");
+        const trailingText = escapeLatex(el.getAttribute("data-trailing-text") || "");
+        const subtitle = escapeLatex(el.getAttribute("data-subtitle") || "");
+        const tertiaryText = escapeLatex(el.getAttribute("data-tertiary-text") || "");
+        const description = escapeLatex(el.getAttribute("data-description") || "");
+        const details = parseJsonStringArray(el.getAttribute("data-details"));
+        const detailBlock = details.length > 0
+          ? `\n\\resumeItemListStart\n${details.map((detail) => `  \\resumeItem{${escapeLatex(detail)}}`).join("\n")}\n\\resumeItemListEnd`
+          : "";
+
+        if (commandName === "resumeEmployment") {
+          return `\\resumeEmploymentListStart\n\\resumeEmployment{${title}}{${trailingText}}{${subtitle}}{${tertiaryText}}${detailBlock}\n\\resumeEmploymentListEnd\n\n`;
+        }
+
+        if (commandName === "resumeCommunity") {
+          return `\\resumeSubHeadingListStart\n\\resumeCommunity{${title}}{${trailingText}}{${subtitle}}${detailBlock}\n\\resumeSubHeadingListEnd\n\n`;
+        }
+
+        if (commandName === "resumeSubheading") {
+          return `\\resumeSubHeadingListStart\n\\resumeSubheading{${title}}{${trailingText}}{${subtitle}}{${tertiaryText}}${detailBlock}\n\\resumeSubHeadingListEnd\n\n`;
+        }
+
+        if (commandName === "resumeProject") {
+          return `\\resumeSubHeadingListStart\n\\resumeProject{${title}}{${description}}${detailBlock}\n\\resumeSubHeadingListEnd\n\n`;
+        }
+
+        if (commandName === "resumeResearch") {
+          return `\\resumeSubHeadingListStart\n\\resumeResearch{${title}}{${trailingText}}{${subtitle}}{${description}}{${tertiaryText}}${detailBlock}\n\\resumeSubHeadingListEnd\n\n`;
+        }
+
+        if (commandName === "resumeTalk") {
+          return `\\resumeSubHeadingListStart\n\\resumeTalk{${title}}{${trailingText}}${detailBlock}\n\\resumeSubHeadingListEnd\n\n`;
+        }
+      }
+
+      if (dataType === "resume-skill-row") {
+        const rawText = el.getAttribute("data-raw-text") || "";
+        const label = el.getAttribute("data-label") || "";
+        const items = parseJsonStringArray(el.getAttribute("data-items"));
+        const skillText = rawText.trim() || `${label ? `\\textbf{${escapeLatex(label)}} - ` : ""}${items.map((item) => escapeLatex(item)).join(", ")}`;
+        return `\\resumeSubHeadingListStart\n\\resumeSkills{${skillText}}\n\\resumeSubHeadingListEnd\n\n`;
+      }
+
       // Admonition
       if (dataType === "admonition") {
-        state.usedFeatures.add("admonition");
         const type = el.getAttribute("data-admonition-type") || "note";
         const colorKey = el.getAttribute("data-admonition-color") || "";
         const icon = el.getAttribute("data-admonition-icon") || "";
         const titleAttr = el.getAttribute("title") || "";
+        const content = children().trim();
+
+        if (THEOREM_ENVIRONMENTS.has(type)) {
+          const theoremTitle = titleAttr ? `[${escapeLatex(titleAttr)}]` : "";
+          return `\\begin{${type}}${theoremTitle}\n${content}\n\\end{${type}}\n\n`;
+        }
+
+        state.usedFeatures.add("admonition");
         const latexColor = ADMONITION_COLOR_MAP[colorKey] || ADMONITION_COLOR_MAP[
           ({ note: "blue", warning: "yellow", tip: "green", danger: "red" } as Record<string, string>)[type] || "blue"
         ] || "blue";
@@ -449,14 +579,13 @@ function processNode(node: ChildNode, state: ConversionState): string {
           note: "노트", warning: "경고", tip: "팁", danger: "위험"
         };
         const title = titleAttr || titleMap[type] || type;
-        const content = children();
 
         // Encode type, color, icon as comment for lossless round-trip
         let metaComment = `% admonition-meta: type=${type}`;
         if (colorKey) metaComment += ` color=${colorKey}`;
         if (icon) metaComment += ` icon=${icon}`;
 
-        return `${metaComment}\n\\begin{admonitionbox}[${escapeLatex(title)}]{${latexColor}}\n${content.trim()}\n\\end{admonitionbox}\n\n`;
+        return `${metaComment}\n\\begin{admonitionbox}[${escapeLatex(title)}]{${latexColor}}\n${content}\n\\end{admonitionbox}\n\n`;
       }
 
       // Footnote item — collect for later
@@ -761,6 +890,8 @@ export function latexToHtml(latex: string, options?: LatexToHtmlOptions): string
     '<div data-type="mathBlock" data-latex="$1">$$$$$1$$$$</div>');
   body = body.replace(/\\begin\{align\*?\}([\s\S]*?)\\end\{align\*?\}/g,
     '<div data-type="mathBlock" data-latex="\\begin{aligned}$1\\end{aligned}">$$\\begin{aligned}$1\\end{aligned}$$</div>');
+  body = body.replace(/\\begin\{gather\*?\}([\s\S]*?)\\end\{gather\*?\}/g,
+    '<div data-type="mathBlock" data-latex="\\begin{gathered}$1\\end{gathered}">$$\\begin{gathered}$1\\end{gathered}$$</div>');
 
   // Display math delimiters
   body = body.replace(/\\\[([\s\S]*?)\\\]/g, '<div data-type="mathBlock" data-latex="$1">$$$$$1$$$$</div>');
@@ -840,6 +971,22 @@ export function latexToHtml(latex: string, options?: LatexToHtmlOptions): string
 
   // Quotes
   body = body.replace(/\\begin\{quote\}([\s\S]*?)\\end\{quote\}/g, "<blockquote>$1</blockquote>");
+
+  // Common theorem-like environments
+  Array.from(THEOREM_ENVIRONMENTS).forEach((envName) => {
+    const regex = new RegExp(`\\\\begin\\{${envName}\\}(?:\\[([^\\]]*)\\])?([\\s\\S]*?)\\\\end\\{${envName}\\}`, "g");
+    body = body.replace(regex, (_match, title, content) => {
+      const attrs = [
+        'data-type="admonition"',
+        `data-admonition-type="${envName}"`,
+        'data-admonition-color="gray"',
+      ];
+      if (title) {
+        attrs.push(`title="${escapeHtmlAttribute(title)}"`);
+      }
+      return `<div ${attrs.join(" ")}>${content.trim()}</div>`;
+    });
+  });
 
   // Figures
   body = body.replace(/\\begin\{figure\}[\s\S]*?\\includegraphics(?:\[[^\]]*\])?\{([^}]*)\}[\s\S]*?(?:\\caption\{([^}]*)\})?[\s\S]*?\\end\{figure\}/g,
@@ -925,9 +1072,13 @@ export function latexToHtml(latex: string, options?: LatexToHtmlOptions): string
   body = body.replace(/\\tableofcontents/g, "<p><em>[목차]</em></p>");
 
   // Labels and refs
-  body = body.replace(/\\label\{[^}]*\}/g, "");
-  body = body.replace(/\\ref\{([^}]*)\}/g, "[ref:$1]");
-  body = body.replace(/\\cite\{([^}]*)\}/g, "[$1]");
+  body = body.replace(/\\label\{([^}]*)\}/g, '<a id="label-$1"></a>');
+  body = body.replace(/\\ref\{([^}]*)\}/g, '<a href="#ref:$1">$1</a>');
+  body = body.replace(/\\eqref\{([^}]*)\}/g, '<a href="#eqref:$1">($1)</a>');
+  body = body.replace(/\\autoref\{([^}]*)\}/g, '<a href="#autoref:$1">$1</a>');
+  body = body.replace(/\\cite\{([^}]*)\}/g, '<a href="#cite:$1">[$1]</a>');
+  body = body.replace(/\\citep\{([^}]*)\}/g, '<a href="#citep:$1">[$1]</a>');
+  body = body.replace(/\\citet\{([^}]*)\}/g, '<a href="#citet:$1">$1</a>');
 
   // Caption (standalone)
   body = body.replace(/\\caption\{([^}]*)\}/g, '<p><em>$1</em></p>');

@@ -11,6 +11,21 @@ import type {
   SummarizeDocumentResponse,
 } from "@/types/aiAssistant";
 import type { AgentTurnRequest, AgentTurnResponse } from "@/types/liveAgent";
+import type {
+  TexExportPdfRequest,
+  TexHealthResponse,
+  TexPreviewRequest,
+  TexPreviewResponse,
+  TexValidateRequest,
+  TexValidateResponse,
+} from "@/types/tex";
+
+interface RequestOptions {
+  signal?: AbortSignal;
+}
+
+const isAbortError = (error: unknown) =>
+  error instanceof Error && error.name === "AbortError";
 
 const getAiApiBaseUrl = () => {
   const configured = import.meta.env.VITE_AI_API_BASE_URL?.trim();
@@ -86,7 +101,7 @@ const normalizeAiPath = (baseUrl: string, path: string) => {
   return `${baseUrl}${normalizedPath}`;
 };
 
-const postJson = async <TResponse, TRequest>(path: string, body: TRequest): Promise<TResponse> => {
+const postJson = async <TResponse, TRequest>(path: string, body: TRequest, options?: RequestOptions): Promise<TResponse> => {
   const baseUrl = getAiApiBaseUrl();
   const requestUrl = normalizeAiPath(baseUrl, path);
   let response: Response;
@@ -98,8 +113,12 @@ const postJson = async <TResponse, TRequest>(path: string, body: TRequest): Prom
         "Content-Type": "application/json",
       },
       method: "POST",
+      signal: options?.signal,
     });
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     throw new Error(readNetworkErrorMessage(baseUrl, error));
   }
 
@@ -108,6 +127,58 @@ const postJson = async <TResponse, TRequest>(path: string, body: TRequest): Prom
   }
 
   return response.json() as Promise<TResponse>;
+};
+
+const getJson = async <TResponse>(path: string, options?: RequestOptions): Promise<TResponse> => {
+  const baseUrl = getAiApiBaseUrl();
+  const requestUrl = normalizeAiPath(baseUrl, path);
+  let response: Response;
+
+  try {
+    response = await fetch(requestUrl, {
+      method: "GET",
+      signal: options?.signal,
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    throw new Error(readNetworkErrorMessage(baseUrl, error));
+  }
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.json() as Promise<TResponse>;
+};
+
+const postBinary = async <TRequest>(path: string, body: TRequest, options?: RequestOptions): Promise<Blob> => {
+  const baseUrl = getAiApiBaseUrl();
+  const requestUrl = normalizeAiPath(baseUrl, path);
+  let response: Response;
+
+  try {
+    response = await fetch(requestUrl, {
+      body: JSON.stringify(body),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+      signal: options?.signal,
+    });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    throw new Error(readNetworkErrorMessage(baseUrl, error));
+  }
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response));
+  }
+
+  return response.blob();
 };
 
 export const summarizeDocument = (request: SummarizeDocumentRequest) =>
@@ -127,3 +198,15 @@ export const generateToc = (request: GenerateTocRequest) =>
 
 export const proposeEditorAction = (request: ProposeEditorActionRequest) =>
   postJson<ProposeEditorActionResponse, ProposeEditorActionRequest>("/api/ai/propose-action", request);
+
+export const getTexHealth = (options?: RequestOptions) =>
+  getJson<TexHealthResponse>("/api/tex/health", options);
+
+export const validateTex = (request: TexValidateRequest, options?: RequestOptions) =>
+  postJson<TexValidateResponse, TexValidateRequest>("/api/tex/validate", request, options);
+
+export const previewTex = (request: TexPreviewRequest, options?: RequestOptions) =>
+  postJson<TexPreviewResponse, TexPreviewRequest>("/api/tex/preview", request, options);
+
+export const exportTexPdf = (request: TexExportPdfRequest, options?: RequestOptions) =>
+  postBinary("/api/tex/export-pdf", request, options);

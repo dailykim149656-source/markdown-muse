@@ -1,12 +1,13 @@
 import type { JSONContent } from "@tiptap/core";
 import { renderAstToMarkdown } from "./renderAstToMarkdown";
 import { serializeTiptapToAst } from "./tiptapAst";
+import { isUsableTiptapDocument } from "./tiptapUsability";
 
 export const getRenderableMarkdown = (
   editorDocument: JSONContent | null | undefined,
   fallbackMarkdown: string,
 ) => {
-  if (!editorDocument) {
+  if (!isUsableTiptapDocument(editorDocument)) {
     return fallbackMarkdown;
   }
 

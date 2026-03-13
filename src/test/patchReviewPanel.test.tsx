@@ -123,4 +123,15 @@ describe("PatchReviewPanel", () => {
     expect(screen.getByRole("button", { name: "patchReview.saveEdit" })).toBeDisabled();
     expect(screen.getByText("patchReview.nonEditable")).toBeInTheDocument();
   });
+
+  it("uses internal scroll containers instead of a fixed patch list height", () => {
+    renderWithI18n(<PatchReviewPanel patchSet={patchSetFixture} />);
+
+    expect(screen.getByTestId("patch-review-panel")).toHaveClass("min-h-0");
+    expect(screen.getByTestId("patch-review-list-scroll")).not.toHaveClass("h-[520px]");
+    expect(screen.getByTestId("patch-review-detail-scroll")).toHaveClass("overflow-y-auto");
+    expect(screen.getByRole("button", { name: "patchReview.accept" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "patchReview.saveEdit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "patchReview.reject" })).toBeInTheDocument();
+  });
 });

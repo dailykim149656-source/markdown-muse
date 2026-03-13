@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { OutgoingHttpHeaders } from "node:http";
 
 export interface HttpResponse {
-  body?: string;
+  body?: Buffer | string | Uint8Array;
   headers?: OutgoingHttpHeaders;
   statusCode: number;
 }
@@ -80,6 +80,22 @@ export const redirect = (
   headers: {
     ...buildCorsHeaders(requestOrigin),
     Location: location,
+    ...(headers || {}),
+  },
+  statusCode,
+});
+
+export const binary = (
+  responseBody: Buffer | Uint8Array,
+  contentType: string,
+  statusCode = 200,
+  requestOrigin?: string,
+  headers?: OutgoingHttpHeaders,
+): HttpResponse => ({
+  body: responseBody,
+  headers: {
+    ...buildCorsHeaders(requestOrigin),
+    "Content-Type": contentType,
     ...(headers || {}),
   },
   statusCode,

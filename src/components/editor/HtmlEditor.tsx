@@ -13,6 +13,7 @@ import { rememberEditorSelection } from "./editorSelectionMemory";
 import { applyEditorSeed } from "./editorSeedSync";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
+import { isUsableTiptapDocument } from "@/lib/ast/tiptapUsability";
 
 interface HtmlEditorProps {
   advancedBlocksEnabled?: boolean;
@@ -56,6 +57,7 @@ const HtmlEditor = ({
   const seedSignatureRef = useRef<string | null>(null);
   const sourcePanelRef = useRef<HTMLDivElement | null>(null);
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const usableInitialTiptapDoc = isUsableTiptapDocument(initialTiptapDoc) ? initialTiptapDoc : undefined;
   const { editorPropsDefault, coreExtensions, extensions, extensionsReady } = useEditorExtensions(
     "HTML WYSIWYG editor with synced source.",
     documentFeaturesEnabled,
@@ -92,7 +94,7 @@ const HtmlEditor = ({
 
   const editor = useEditor({
     extensions: shouldHoldEditor ? coreExtensions : extensions,
-    content: shouldHoldEditor ? "" : (initialTiptapDoc || initialHtml),
+    content: shouldHoldEditor ? "" : (usableInitialTiptapDoc || initialHtml),
     onCreate: ({ editor }) => {
       rememberEditorSelection(editor);
     },
@@ -122,12 +124,12 @@ const HtmlEditor = ({
 
     applyEditorSeed({
       editor,
-      nextContent: initialTiptapDoc || initialHtml,
+      nextContent: usableInitialTiptapDoc || initialHtml,
       onHtmlChange,
       onTiptapChange,
       seedSignatureRef,
     });
-  }, [editor, initialHtml, initialTiptapDoc, onHtmlChange, onTiptapChange, shouldHoldEditor]);
+  }, [editor, initialHtml, onHtmlChange, onTiptapChange, shouldHoldEditor, usableInitialTiptapDoc]);
 
   const applySourceTabIndent = useCallback((ta: HTMLTextAreaElement, shiftKey: boolean) => {
     const start = ta.selectionStart ?? 0;

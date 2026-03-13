@@ -7,6 +7,8 @@ import { createMarkedInstance, createTurndownService } from "@/components/editor
 import { getRenderableHtml } from "@/lib/ast/getRenderableHtml";
 import { getRenderableLatex } from "@/lib/ast/getRenderableLatex";
 import { getRenderableMarkdown } from "@/lib/ast/getRenderableMarkdown";
+import { exportDocsyToLatex } from "@/lib/latex/exportDocsyToLatex";
+import { importLatexToDocsy } from "@/lib/latex/importLatexToDocsy";
 import {
   canSwitchModeWithinDocument,
 } from "@/lib/editor/modeFamilies";
@@ -73,7 +75,7 @@ export const useFormatConversion = ({
     }
 
     if (mode === "latex") {
-      return latexToHtml(content, { includeMetadata: false });
+      return importLatexToDocsy(content).html || latexToHtml(content, { includeMetadata: false });
     }
 
     if (mode === "html") {
@@ -105,18 +107,34 @@ export const useFormatConversion = ({
       activeDoc.sourceSnapshots?.markdown || turndownService.turndown(currentRenderableHtml),
     );
   }, [activeDoc.content, activeDoc.mode, activeDoc.sourceSnapshots, currentRenderableHtml, currentTiptapDocument, turndownService]);
-  const currentRenderableLatex = useMemo(() => getRenderableLatex(
-    currentTiptapDocument,
-    activeDoc.sourceSnapshots?.latex || htmlToLatex(currentRenderableHtml, false),
-    { includeMetadata: false, includeWrapper: false },
-  ), [activeDoc.sourceSnapshots, currentRenderableHtml, currentTiptapDocument]);
-  const currentRenderableLatexDocument = useMemo(() => getRenderableLatex(
-    currentTiptapDocument,
-    htmlToLatex(currentRenderableHtml, true, {
-      includeMetadata: false,
-    }),
-    { includeWrapper: true, title: activeDoc.name || "Untitled", includeMetadata: false },
-  ), [activeDoc.name, currentEditorHtml, currentRenderableHtml, currentTiptapDocument]);
+  const currentRenderableLatex = useMemo(() => {
+    if (activeDoc.mode === "latex") {
+      return activeDoc.content;
+    }
+
+    return getRenderableLatex(
+      currentTiptapDocument,
+      activeDoc.sourceSnapshots?.latex || htmlToLatex(currentRenderableHtml, false),
+      { includeMetadata: false, includeWrapper: false },
+    );
+  }, [activeDoc.content, activeDoc.mode, activeDoc.sourceSnapshots, currentRenderableHtml, currentTiptapDocument]);
+  const currentRenderableLatexDocument = useMemo(() => {
+    if (activeDoc.mode === "latex") {
+      return exportDocsyToLatex({
+        currentLatexSource: activeDoc.content,
+        html: currentRenderableHtml,
+        title: activeDoc.name || "Untitled",
+      });
+    }
+
+    return getRenderableLatex(
+      currentTiptapDocument,
+      htmlToLatex(currentRenderableHtml, true, {
+        includeMetadata: false,
+      }),
+      { includeWrapper: true, title: activeDoc.name || "Untitled", includeMetadata: false },
+    );
+  }, [activeDoc.content, activeDoc.mode, activeDoc.name, currentRenderableHtml, currentTiptapDocument]);
 
   useEffect(() => {
     setLiveEditorHtml(getDocumentHtml(activeDoc.mode, activeDoc.content));

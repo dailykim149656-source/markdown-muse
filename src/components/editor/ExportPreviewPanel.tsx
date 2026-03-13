@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
-import { ChevronDown, Copy, Download, Eye, WrapText, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Copy, Download, Eye, FileSearch, FileText, WrapText, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,10 +13,18 @@ import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
 import { htmlToRst } from "@/components/editor/utils/htmlToRst";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
+import TexValidationPanel from "@/components/editor/TexValidationPanel";
+import type { TexValidationPanelProps } from "@/components/editor/TexValidationPanel";
 import { useI18n } from "@/i18n/useI18n";
 import type { EditorMode } from "@/types/document";
 
 export type PreviewFormat = "asciidoc" | "html" | "latex" | "markdown" | "rst" | "typst";
+
+interface TexValidationInspectorProps extends TexValidationPanelProps {
+  isExportingPdf: boolean;
+  onCompilePdf: () => void;
+  onRunValidation: () => void;
+}
 
 interface ExportPreviewPanelProps {
   editorHtml: string;
@@ -26,7 +34,10 @@ interface ExportPreviewPanelProps {
   fileName: string;
   onClose: () => void;
   rawContent: string;
+  texValidationProps?: TexValidationInspectorProps;
 }
+
+type InspectorTab = "engine" | "preview" | "validation";
 
 const FORMAT_LABELS: Record<PreviewFormat, string> = {
   asciidoc: "AsciiDoc",
@@ -66,11 +77,33 @@ const ExportPreviewPanel = ({
   fileName,
   onClose,
   rawContent,
+  texValidationProps,
 }: ExportPreviewPanelProps) => {
   const { t } = useI18n();
   const [format, setFormat] = useState<PreviewFormat>(() => getDefaultFormat(editorMode));
   const [showLineNumbers, setShowLineNumbers] = useState(true);
   const [wrapLines, setWrapLines] = useState(false);
+  const [activeTab, setActiveTab] = useState<InspectorTab>("preview");
+  const [highlightedLine, setHighlightedLine] = useState<number | null>(null);
+  const validationAvailable = Boolean(texValidationProps?.validationEnabled);
+  const lineRefs = useRef<Record<number, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    if (!validationAvailable && (activeTab === "validation" || activeTab === "engine")) {
+      setActiveTab("preview");
+    }
+  }, [activeTab, validationAvailable]);
+
+  useEffect(() => {
+    if (!highlightedLine || activeTab !== "preview" || format !== "latex") {
+      return;
+    }
+
+    const lineNode = lineRefs.current[highlightedLine];
+    if (typeof lineNode?.scrollIntoView === "function") {
+      lineNode.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [activeTab, format, highlightedLine]);
 
   const content = useMemo(() => {
     switch (format) {
@@ -106,80 +139,178 @@ const ExportPreviewPanel = ({
     URL.revokeObjectURL(url);
   }, [content, fileName, format]);
 
+  const handleJumpToLine = useCallback((line: number) => {
+    setFormat("latex");
+    setShowLineNumbers(true);
+    setWrapLines(false);
+    setHighlightedLine(line);
+    setActiveTab("preview");
+    texValidationProps?.onJumpToLine(line);
+  }, [texValidationProps]);
+
   return (
     <div className="flex h-full flex-col border-l border-border bg-background">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
-          <Eye className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">{t("previewPanel.title")}</span>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="h-7 gap-1 px-2" size="sm" type="button" variant="ghost">
-                {FORMAT_LABELS[format]}
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {(Object.keys(FORMAT_LABELS) as PreviewFormat[]).map((option) => (
-                <DropdownMenuItem key={option} onClick={() => setFormat(option)}>
-                  {FORMAT_LABELS[option]}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            className="h-7 gap-1 px-2 text-[11px]"
+            onClick={() => setActiveTab("preview")}
+            size="sm"
+            type="button"
+            variant={activeTab === "preview" ? "secondary" : "ghost"}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            {t("previewPanel.title")}
+          </Button>
+          {validationAvailable && (
+            <Button
+              className="h-7 gap-1 px-2 text-[11px]"
+              onClick={() => setActiveTab("engine")}
+              size="sm"
+              type="button"
+              variant={activeTab === "engine" ? "secondary" : "ghost"}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {t("texValidation.previewTitle")}
+            </Button>
+          )}
+          {validationAvailable && (
+            <Button
+              className="h-7 gap-1 px-2 text-[11px]"
+              onClick={() => setActiveTab("validation")}
+              size="sm"
+              type="button"
+              variant={activeTab === "validation" ? "secondary" : "ghost"}
+            >
+              <FileSearch className="h-3.5 w-3.5" />
+              {t("texValidation.title")}
+            </Button>
+          )}
+          {activeTab === "preview" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="h-7 gap-1 px-2" size="sm" type="button" variant="ghost">
+                  {FORMAT_LABELS[format]}
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {(Object.keys(FORMAT_LABELS) as PreviewFormat[]).map((option) => (
+                  <DropdownMenuItem key={option} onClick={() => setFormat(option)}>
+                    {FORMAT_LABELS[option]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         <div className="flex items-center gap-1">
-          <Button
-            className="h-7 gap-1 px-2 text-[11px]"
-            onClick={() => setShowLineNumbers((value) => !value)}
-            size="sm"
-            type="button"
-            variant={showLineNumbers ? "secondary" : "ghost"}
-          >
-            # {t("previewPanel.lines")}
-          </Button>
-          <Button
-            className="h-7 gap-1 px-2 text-[11px]"
-            onClick={() => setWrapLines((value) => !value)}
-            size="sm"
-            type="button"
-            variant={wrapLines ? "secondary" : "ghost"}
-          >
-            <WrapText className="h-3.5 w-3.5" />
-            {t("previewPanel.wrap")}
-          </Button>
-          <Button className="h-7 px-2" onClick={() => void handleCopy()} size="sm" type="button" variant="ghost">
-            <Copy className="h-4 w-4" />
-          </Button>
-          <Button className="h-7 px-2" onClick={handleDownload} size="sm" type="button" variant="ghost">
-            <Download className="h-4 w-4" />
-          </Button>
+          {activeTab === "preview" ? (
+            <>
+              <Button
+                className="h-7 gap-1 px-2 text-[11px]"
+                onClick={() => setShowLineNumbers((value) => !value)}
+                size="sm"
+                type="button"
+                variant={showLineNumbers ? "secondary" : "ghost"}
+              >
+                # {t("previewPanel.lines")}
+              </Button>
+              <Button
+                className="h-7 gap-1 px-2 text-[11px]"
+                onClick={() => setWrapLines((value) => !value)}
+                size="sm"
+                type="button"
+                variant={wrapLines ? "secondary" : "ghost"}
+              >
+                <WrapText className="h-3.5 w-3.5" />
+                {t("previewPanel.wrap")}
+              </Button>
+              <Button className="h-7 px-2" onClick={() => void handleCopy()} size="sm" type="button" variant="ghost">
+                <Copy className="h-4 w-4" />
+              </Button>
+              <Button className="h-7 px-2" onClick={handleDownload} size="sm" type="button" variant="ghost">
+                <Download className="h-4 w-4" />
+              </Button>
+            </>
+          ) : texValidationProps ? (
+            <>
+              <Button
+                className="h-7 gap-1 px-2 text-[11px]"
+                disabled={!texValidationProps.validationEnabled || texValidationProps.status === "running"}
+                onClick={texValidationProps.onRunValidation}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                {t("texValidation.run")}
+              </Button>
+              <Button
+                className="h-7 gap-1 px-2 text-[11px]"
+                disabled={!texValidationProps.validationEnabled || texValidationProps.isExportingPdf}
+                onClick={texValidationProps.onCompilePdf}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {t("texValidation.compilePdf")}
+              </Button>
+            </>
+          ) : null}
           <Button className="h-7 px-2" onClick={onClose} size="sm" type="button" variant="ghost">
             <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      <ScrollArea className="h-full">
-        <div className="p-4 font-mono text-xs leading-6 text-foreground">
-          {content.split("\n").map((line, index) => (
-            <div
-              key={`preview-line-${index}`}
-              className={`grid gap-3 border-b border-transparent ${wrapLines ? "grid-cols-[auto_minmax(0,1fr)] items-start" : "grid-cols-[auto_1fr] items-center"}`}
-            >
-              {showLineNumbers && (
-                <span className="select-none py-0.5 text-right text-[10px] text-muted-foreground">
-                  {index + 1}
+      {activeTab === "preview" ? (
+        <ScrollArea className="h-full">
+          <div className="p-4 font-mono text-xs leading-6 text-foreground">
+            {content.split("\n").map((line, index) => (
+              <div
+                key={`preview-line-${index}`}
+                ref={(node) => {
+                  lineRefs.current[index + 1] = node;
+                }}
+                className={`grid gap-3 border-b border-transparent ${wrapLines ? "grid-cols-[auto_minmax(0,1fr)] items-start" : "grid-cols-[auto_1fr] items-center"}`}
+              >
+                {showLineNumbers && (
+                  <span className={`select-none py-0.5 text-right text-[10px] ${highlightedLine === index + 1 ? "text-primary" : "text-muted-foreground"}`}>
+                    {index + 1}
+                  </span>
+                )}
+                <span className={`${highlightedLine === index + 1 ? "rounded bg-primary/10 px-1" : ""} ${wrapLines ? "whitespace-pre-wrap break-words py-0.5" : "overflow-x-auto whitespace-pre py-0.5"}`}>
+                  {line || " "}
                 </span>
-              )}
-              <span className={`${wrapLines ? "whitespace-pre-wrap break-words py-0.5" : "overflow-x-auto whitespace-pre py-0.5"}`}>
-                {line || " "}
-              </span>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      ) : activeTab === "engine" && texValidationProps ? (
+        <div className="h-full p-4">
+          {texValidationProps.previewUrl ? (
+            <object
+              aria-label="XeLaTeX preview"
+              className="h-full w-full rounded-xl border border-border bg-secondary/20"
+              data={texValidationProps.previewUrl}
+              type="application/pdf"
+            >
+              <div className="rounded-xl border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
+                {t("texValidation.previewUnavailable")}
+              </div>
+            </object>
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
+              {t("texValidation.previewPending")}
             </div>
-          ))}
+          )}
         </div>
-      </ScrollArea>
+      ) : texValidationProps ? (
+        <TexValidationPanel {...texValidationProps} onJumpToLine={handleJumpToLine} />
+      ) : null}
     </div>
   );
 };

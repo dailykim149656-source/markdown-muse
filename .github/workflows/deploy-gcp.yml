@@ -16,9 +16,102 @@ permissions:
   contents: read
 
 jobs:
+  deploy-tex:
+    name: Deploy TeX service (Cloud Run)
+    runs-on: ubuntu-latest
+    outputs:
+      tex_service_url: ${{ steps.tex.outputs.url }}
+    env:
+      GCP_REGION: asia-northeast3
+      TEX_SERVICE_NAME: docsy-tex
+      ARTIFACT_REPOSITORY: docsy
+      TEX_COMPILE_TIMEOUT_MS: "15000"
+      TEX_MAX_SOURCE_BYTES: "300000"
+      TEX_MAX_CONCURRENCY: "2"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Deploy TeX service via Cloud Build
+        id: tex
+        run: |
+          set -euo pipefail
+
+          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
+            echo "GCP_PROJECT_ID is required."
+            exit 1
+          fi
+
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+          RUN_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+          TEX_SERVICE_AUTH_TOKEN_SECRET="${{ secrets.GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME }}"
+          if [ -z "${TEX_SERVICE_AUTH_TOKEN_SECRET}" ]; then
+            TEX_SERVICE_AUTH_TOKEN_SECRET="tex-service-auth-token"
+          fi
+
+          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${TEX_SERVICE_NAME}:latest"
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_TEX_COMPILE_TIMEOUT_MS=%s,_TEX_MAX_SOURCE_BYTES=%s,_TEX_MAX_CONCURRENCY=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s' \
+            "$IMAGE_URI" \
+            "$GCP_REGION" \
+            "$TEX_SERVICE_NAME" \
+            "$TEX_COMPILE_TIMEOUT_MS" \
+            "$TEX_MAX_SOURCE_BYTES" \
+            "$TEX_MAX_CONCURRENCY" \
+            "$TEX_SERVICE_AUTH_TOKEN_SECRET" \
+            "$RUN_SERVICE_ACCOUNT")
+          SUBSTITUTIONS="${SUBSTITUTIONS},_CALLER_SERVICE_ACCOUNT=${RUN_SERVICE_ACCOUNT}"
+
+          gcloud builds submit \
+            --config cloudbuild.tex.yaml \
+            --substitutions="${SUBSTITUTIONS}" \
+            .
+
+          TEX_URL="$(gcloud run services describe ${TEX_SERVICE_NAME} --region ${GCP_REGION} --format='value(status.url)')"
+
+          if [ -z "${TEX_URL}" ]; then
+            echo "Cloud Run TeX service URL could not be resolved."
+            exit 1
+          fi
+
+          echo "url=${TEX_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify TeX health
+        run: |
+          set -euo pipefail
+          TOKEN_SECRET_NAME="${{ secrets.GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME }}"
+          if [ -z "${TOKEN_SECRET_NAME}" ]; then
+            TOKEN_SECRET_NAME="tex-service-auth-token"
+          fi
+          ID_TOKEN="$(gcloud auth print-identity-token)"
+          APP_TOKEN="$(gcloud secrets versions access latest --secret="${TOKEN_SECRET_NAME}")"
+          echo "Verifying health at: ${{ steps.tex.outputs.url }}/health"
+          for i in {1..10}; do
+            if curl -fsS \
+              -H "Authorization: Bearer ${ID_TOKEN}" \
+              -H "X-Docsy-Tex-Token: ${APP_TOKEN}" \
+              "${{ steps.tex.outputs.url }}/health" >/dev/null; then
+              echo "TeX health check passed!"
+              exit 0
+            fi
+            echo "TeX health check failed (attempt $i), retrying in 5 seconds..."
+            sleep 5
+          done
+          echo "TeX health check failed after 10 attempts."
+          exit 1
+
   deploy-ai:
     name: Deploy AI service (Cloud Run)
     runs-on: ubuntu-latest
+    needs: deploy-tex
     outputs:
       ai_service_url: ${{ steps.ai.outputs.url }}
     env:
@@ -26,7 +119,8 @@ jobs:
       VERTEX_LOCATION: asia-northeast3
       AI_SERVICE_NAME: docsy
       ARTIFACT_REPOSITORY: docsy
-      GEMINI_MODEL: gemini-2.5-flash
+      GEMINI_MODEL: gemini-3.1-flash-lite-preview
+      GEMINI_FALLBACK_MODEL: gemini-2.5-flash
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -73,19 +167,33 @@ jobs:
             GOOGLE_CLIENT_SECRET_SECRET="google-client-secret"
           fi
 
+          TEX_SERVICE_AUTH_TOKEN_SECRET="${{ secrets.GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME }}"
+          if [ -z "${TEX_SERVICE_AUTH_TOKEN_SECRET}" ]; then
+            TEX_SERVICE_AUTH_TOKEN_SECRET="tex-service-auth-token"
+          fi
+
+          TEX_SERVICE_BASE_URL="${{ needs.deploy-tex.outputs.tex_service_url }}"
+          if [ -z "${TEX_SERVICE_BASE_URL}" ]; then
+            echo "TeX service URL could not be resolved."
+            exit 1
+          fi
+
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_VERTEX_LOCATION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_GOOGLE_CLIENT_SECRET_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_VERTEX_LOCATION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_GEMINI_FALLBACK_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_GOOGLE_CLIENT_SECRET_SECRET=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_TEX_SERVICE_BASE_URL=%s,_RUN_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$VERTEX_LOCATION" \
             "$AI_SERVICE_NAME" \
             "$GEMINI_MODEL" \
+            "$GEMINI_FALLBACK_MODEL" \
             "$ALLOWED_ORIGIN" \
             "${{ secrets.GCP_GOOGLE_CLIENT_ID }}" \
             "${GOOGLE_OAUTH_REDIRECT_URI}" \
             "${WORKSPACE_FRONTEND_ORIGIN}" \
             "${GOOGLE_WORKSPACE_SCOPES}" \
             "${GOOGLE_CLIENT_SECRET_SECRET}" \
+            "${TEX_SERVICE_AUTH_TOKEN_SECRET}" \
+            "${TEX_SERVICE_BASE_URL}" \
             "$RUN_SERVICE_ACCOUNT")
 
           gcloud builds submit \

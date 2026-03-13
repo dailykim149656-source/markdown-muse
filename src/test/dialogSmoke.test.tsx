@@ -77,6 +77,47 @@ describe("Dialog smoke paths", () => {
     expect(screen.getByText("patchReview.title")).toBeInTheDocument();
   });
 
+  it("keeps PatchReviewDialog constrained inside the viewport layout when a patch set is loaded", () => {
+    renderWithI18n(
+      <PatchReviewDialog
+        acceptedPatchCount={1}
+        onAccept={vi.fn()}
+        onApply={vi.fn()}
+        onClear={vi.fn()}
+        onEdit={vi.fn()}
+        onLoadPatchSet={vi.fn()}
+        onOpenChange={vi.fn()}
+        onReject={vi.fn()}
+        open
+        patchSet={{
+          author: "ai",
+          createdAt: Date.now(),
+          documentId: "doc-1",
+          patchSetId: "set-1",
+          patches: [{
+            author: "ai",
+            operation: "replace_text_range",
+            originalText: "Old intro",
+            patchId: "patch-1",
+            payload: { kind: "replace_text", text: "New intro" },
+            status: "accepted",
+            suggestedText: "New intro",
+            target: { endOffset: 5, nodeId: "blk_1", startOffset: 0, targetType: "text_range" },
+            title: "Update intro",
+          }],
+          status: "in_review",
+          title: "Review updates",
+        }}
+        workspaceSyncWarnings={[]}
+      />,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "patchReview.title" });
+    expect(dialog).toHaveClass("overflow-hidden");
+    expect(dialog).toHaveClass("grid");
+    expect(screen.getByRole("button", { name: "patchReview.applyAccepted" })).toBeInTheDocument();
+  });
+
   it("renders AiAssistantDialog when opened", () => {
     renderWithI18n(
       <AiAssistantDialog

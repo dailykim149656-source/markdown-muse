@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:watch": "vitest",
+    "tex:server": "node --env-file-if-exists=.env.local --import tsx server/texService.ts",
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit"
   },
   "dependencies": {

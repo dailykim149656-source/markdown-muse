@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Editor } from "@tiptap/react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -8,36 +8,41 @@ import {
   AlignRight,
   Bold,
   CheckSquare,
-  Code,
+  ChevronDown,
   Heading1,
   Heading2,
   Heading3,
-  Highlighter,
   Italic,
-  Link,
   List,
   ListOrdered,
   MoreHorizontal,
-  Quote,
   Redo,
   Strikethrough,
-  Subscript,
-  Superscript,
   Underline,
   Undo,
-  Unlink,
 } from "lucide-react";
 import MobileEditorFormatSheet from "./MobileEditorFormatSheet";
-import type {
-  EditorCommand,
-  EditorSelectionSnapshot,
-} from "./editorSelectionMemory";
+import type { EditorCommand, EditorSelectionSnapshot } from "./editorSelectionMemory";
 import {
   getRememberedEditorSelection,
   rememberEditorSelection,
   runEditorCommand,
 } from "./editorSelectionMemory";
+import {
+  AlignmentSection,
+  CaptionSection,
+  ColorSection,
+  DocumentUtilitySection,
+  FontFamilySection,
+  FontSizeSection,
+  LinkSection,
+  MathInsertSection,
+  MermaidInsertSection,
+  MoreFormattingSection,
+  StructureSection,
+} from "./EditorToolbarPanelSections";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Drawer,
   DrawerContent,
@@ -46,15 +51,10 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { Toggle } from "@/components/ui/toggle";
 import { useI18n } from "@/i18n/useI18n";
-
-const EditorToolbarDocumentTools = lazy(() => import("./EditorToolbarDocumentTools"));
-const EditorToolbarAdvancedTools = lazy(() => import("./EditorToolbarAdvancedTools"));
 
 interface EditorToolbarProps {
   advancedBlocksEnabled?: boolean;
@@ -73,120 +73,105 @@ type ToolbarItem = {
   title: string;
 };
 
-const LinkDialog = ({
-  captureSelection,
-  editor,
-  runCommand,
+type DesktopPanelId =
+  | "alignment"
+  | "caption"
+  | "color"
+  | "documentTools"
+  | "fontFamily"
+  | "fontSize"
+  | "link"
+  | "mathInsert"
+  | "mermaidInsert"
+  | "moreFormatting"
+  | "structure";
+
+type ToolbarInteractionProps = {
+  onMouseDown: (event: React.MouseEvent<HTMLElement>) => void;
+  onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
+  onTouchStart: () => void;
+};
+
+const DesktopToolbarPanel = ({
+  children,
+  id,
+  label,
+  onCaptureSelection,
+  scrollable = false,
   toolbarInteractionProps,
+  widthClassName = "w-[23rem]",
 }: {
-  captureSelection: () => void;
-  editor: Editor;
-  runCommand: (command: EditorCommand) => boolean;
-  toolbarInteractionProps: {
-    onMouseDown: (event: React.MouseEvent<HTMLElement>) => void;
-    onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
-    onTouchStart: () => void;
-  };
+  children: React.ReactNode;
+  id: DesktopPanelId;
+  label: string;
+  onCaptureSelection: () => void;
+  scrollable?: boolean;
+  toolbarInteractionProps: ToolbarInteractionProps;
+  widthClassName?: string;
 }) => {
-  const { t } = useI18n();
-  const [url, setUrl] = useState("");
   const [open, setOpen] = useState(false);
-
-  const setLink = () => {
-    if (!url) {
-      return;
-    }
-
-    runCommand((currentEditor) =>
-      currentEditor.chain().focus().extendMarkRange("link").setLink({ href: url }).run());
-    setUrl("");
-    setOpen(false);
-  };
 
   return (
     <Popover
+      modal={false}
       onOpenChange={(nextOpen) => {
         setOpen(nextOpen);
         if (nextOpen) {
-          captureSelection();
-          setUrl(editor.getAttributes("link").href || "");
+          onCaptureSelection();
         }
       }}
       open={open}
     >
       <PopoverTrigger asChild>
-        <Toggle
-          aria-label={t("toolbar.link.title")}
-          className="h-8 w-8 rounded-sm p-0 data-[state=on]:bg-toolbar-active hover:bg-toolbar-active/50"
-          pressed={editor.isActive("link")}
+        <Button
+          className="h-8 gap-1 whitespace-nowrap px-3 text-xs font-medium"
+          data-testid={`toolbar-desktop-panel-${id}`}
           size="sm"
-          title={t("toolbar.link.title")}
+          title={label}
+          type="button"
+          variant={open ? "secondary" : "ghost"}
           {...toolbarInteractionProps}
         >
-          <Link className="h-4 w-4" />
-        </Toggle>
-      </PopoverTrigger>
-      <PopoverContent className="w-72 space-y-3">
-        <p className="text-sm font-medium">{t("toolbar.link.title")}</p>
-        <div className="space-y-2">
-          <Label className="text-xs">URL</Label>
-          <Input
-            className="h-8 text-sm"
-            onChange={(event) => setUrl(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && setLink()}
-            placeholder="https://..."
-            value={url}
-          />
-        </div>
-        <Button className="h-8 w-full text-sm" onClick={setLink} size="sm">
-          {t("toolbar.link.apply")}
+          {label}
+          <ChevronDown className="h-3.5 w-3.5" />
         </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className={cn("p-0", widthClassName)}
+        data-testid={`toolbar-desktop-panel-content-${id}`}
+        onCloseAutoFocus={(event) => event.preventDefault()}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        sideOffset={8}
+      >
+        <div className={cn("space-y-4 p-4", scrollable && "max-h-[min(70vh,42rem)] overflow-y-auto pr-3")}>
+          {children}
+        </div>
       </PopoverContent>
     </Popover>
   );
 };
 
-const CoreInsertTools = ({
-  captureSelection,
-  editor,
-  runCommand,
-  toolbarInteractionProps,
+const DesktopFeatureEnablePanel = ({
+  actionLabel,
+  onClick,
 }: {
-  captureSelection: () => void;
-  editor: Editor;
-  runCommand: (command: EditorCommand) => boolean;
-  toolbarInteractionProps: {
-    onMouseDown: (event: React.MouseEvent<HTMLElement>) => void;
-    onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;
-    onTouchStart: () => void;
-  };
-}) => {
-  const { t } = useI18n();
-
-  return (
-    <div className="flex items-center gap-0.5">
-      <LinkDialog
-        captureSelection={captureSelection}
-        editor={editor}
-        runCommand={runCommand}
-        toolbarInteractionProps={toolbarInteractionProps}
-      />
-      {editor.isActive("link") && (
-        <Toggle
-          aria-label={t("toolbar.actions.unlink")}
-          className="h-8 w-8 rounded-sm p-0 hover:bg-toolbar-active/50"
-          onPressedChange={() => runCommand((currentEditor) => currentEditor.chain().focus().unsetLink().run())}
-          pressed={false}
-          size="sm"
-          title={t("toolbar.actions.unlink")}
-          {...toolbarInteractionProps}
-        >
-          <Unlink className="h-4 w-4" />
-        </Toggle>
-      )}
-    </div>
-  );
-};
+  actionLabel: string;
+  onClick?: () => void;
+}) => (
+  <div className="rounded-lg border border-border/70 bg-background/80 p-3">
+    <Button
+      className="w-full justify-start"
+      disabled={!onClick}
+      onClick={onClick}
+      size="sm"
+      type="button"
+      variant="outline"
+    >
+      {actionLabel}
+    </Button>
+  </div>
+);
 
 const EditorToolbar = ({
   advancedBlocksEnabled = false,
@@ -199,9 +184,21 @@ const EditorToolbar = ({
 }: EditorToolbarProps) => {
   const { t } = useI18n();
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
-  const [mobileSheetSelection, setMobileSheetSelection] =
-    useState<EditorSelectionSnapshot | null>(null);
+  const [mobileSheetSelection, setMobileSheetSelection] = useState<EditorSelectionSnapshot | null>(null);
   const pendingMobileSheetSelectionRef = useRef<EditorSelectionSnapshot | null>(null);
+  const desktopPanelSelectionsRef = useRef<Record<DesktopPanelId, EditorSelectionSnapshot | null>>({
+    alignment: null,
+    caption: null,
+    color: null,
+    documentTools: null,
+    fontFamily: null,
+    fontSize: null,
+    link: null,
+    mathInsert: null,
+    mermaidInsert: null,
+    moreFormatting: null,
+    structure: null,
+  });
 
   const captureSelection = useCallback(() => {
     rememberEditorSelection(editor);
@@ -226,6 +223,35 @@ const EditorToolbar = ({
       return result;
     },
     [editor, mobileSheetSelection],
+  );
+
+  const captureDesktopPanelSelection = useCallback(
+    (panelId: DesktopPanelId) => {
+      desktopPanelSelectionsRef.current[panelId] = captureSelection();
+    },
+    [captureSelection],
+  );
+
+  const runDesktopPanelCommand = useCallback(
+    (panelId: DesktopPanelId, command: EditorCommand) => {
+      const selection = desktopPanelSelectionsRef.current[panelId] ?? captureSelection();
+      desktopPanelSelectionsRef.current[panelId] = selection;
+      const result = runEditorCommand(editor, command, {
+        preferExpandedSelection: true,
+        selection,
+      });
+      rememberEditorSelection(editor);
+      desktopPanelSelectionsRef.current[panelId] = getRememberedEditorSelection(editor, {
+        preferExpanded: true,
+      });
+      return result;
+    },
+    [captureSelection, editor],
+  );
+
+  const createDesktopPanelRunner = useCallback(
+    (panelId: DesktopPanelId) => (command: EditorCommand) => runDesktopPanelCommand(panelId, command),
+    [runDesktopPanelCommand],
   );
 
   const handleToolbarMouseDown = useCallback(
@@ -256,7 +282,7 @@ const EditorToolbar = ({
     return null;
   }
 
-  const toolbarInteractionProps = {
+  const toolbarInteractionProps: ToolbarInteractionProps = {
     onMouseDown: handleToolbarMouseDown,
     onPointerDown: handleToolbarPointerDown,
     onTouchStart: handleToolbarTouchStart,
@@ -295,39 +321,6 @@ const EditorToolbar = ({
       command: (currentEditor) => currentEditor.chain().focus().toggleUnderline().run(),
       icon: Underline,
       title: t("toolbar.actions.underline"),
-    },
-    {
-      active: editor.isActive("strike"),
-      command: (currentEditor) => currentEditor.chain().focus().toggleStrike().run(),
-      icon: Strikethrough,
-      title: t("toolbar.actions.strike"),
-    },
-  ];
-
-  const extendedTextStyleGroup: ToolbarItem[] = [
-    {
-      active: editor.isActive("code"),
-      command: (currentEditor) => currentEditor.chain().focus().toggleCode().run(),
-      icon: Code,
-      title: t("toolbar.actions.inlineCode"),
-    },
-    {
-      active: editor.isActive("highlight"),
-      command: (currentEditor) => currentEditor.chain().focus().toggleHighlight().run(),
-      icon: Highlighter,
-      title: t("toolbar.actions.highlight"),
-    },
-    {
-      active: editor.isActive("superscript"),
-      command: (currentEditor) => currentEditor.chain().focus().toggleSuperscript().run(),
-      icon: Superscript,
-      title: t("toolbar.actions.superscript"),
-    },
-    {
-      active: editor.isActive("subscript"),
-      command: (currentEditor) => currentEditor.chain().focus().toggleSubscript().run(),
-      icon: Subscript,
-      title: t("toolbar.actions.subscript"),
     },
   ];
 
@@ -373,15 +366,6 @@ const EditorToolbar = ({
     },
   ];
 
-  const blockquoteGroup: ToolbarItem[] = [
-    {
-      active: editor.isActive("blockquote"),
-      command: (currentEditor) => currentEditor.chain().focus().toggleBlockquote().run(),
-      icon: Quote,
-      title: t("toolbar.actions.blockquote"),
-    },
-  ];
-
   const alignmentGroup: ToolbarItem[] = [
     {
       active: editor.isActive({ textAlign: "left" }),
@@ -409,50 +393,38 @@ const EditorToolbar = ({
     },
   ];
 
-  const desktopToolbarGroups: ToolbarItem[][] = [
-    historyGroup,
-    quickTextStyleGroup,
-    extendedTextStyleGroup,
-    structureGroup,
-    listGroup,
-    blockquoteGroup,
-    alignmentGroup,
-  ];
-
   const mobileToolbarGroups: ToolbarItem[][] = [
     historyGroup,
-    quickTextStyleGroup,
+    [
+      ...quickTextStyleGroup,
+      {
+        active: editor.isActive("strike"),
+        command: (currentEditor) => currentEditor.chain().focus().toggleStrike().run(),
+        icon: Strikethrough,
+        title: t("toolbar.actions.strike"),
+      },
+    ],
     structureGroup,
     listGroup,
     alignmentGroup,
   ];
 
-  const renderToolbarGroups = (
-    keyPrefix: string,
-    groups: ToolbarItem[][],
-    mobile: boolean,
-  ) =>
-    groups.map((group, groupIndex) => (
-      <div
-        className={mobile ? "flex shrink-0 snap-start items-center gap-0.5" : "flex flex-wrap items-center gap-0.5"}
-        key={`${keyPrefix}-group-${groupIndex}`}
+  const desktopQuickActions = [...historyGroup, ...quickTextStyleGroup];
+
+  const renderToolbarButtons = (items: ToolbarItem[], keyPrefix: string) =>
+    items.map((item) => (
+      <Toggle
+        aria-label={item.title}
+        className="h-8 w-8 rounded-sm p-0 data-[state=on]:bg-toolbar-active hover:bg-toolbar-active/50"
+        key={`${keyPrefix}-${item.title}`}
+        onPressedChange={() => runToolbarCommand(item.command)}
+        pressed={item.active}
+        size="sm"
+        title={item.title}
+        {...toolbarInteractionProps}
       >
-        {groupIndex > 0 && <Separator className="mx-1.5 h-5" orientation="vertical" />}
-        {group.map((item) => (
-          <Toggle
-            aria-label={item.title}
-            className="h-8 w-8 rounded-sm p-0 data-[state=on]:bg-toolbar-active hover:bg-toolbar-active/50"
-            key={`${keyPrefix}-${item.title}`}
-            onPressedChange={() => runToolbarCommand(item.command)}
-            pressed={item.active}
-            size="sm"
-            title={item.title}
-            {...toolbarInteractionProps}
-          >
-            <item.icon className="h-4 w-4" />
-          </Toggle>
-        ))}
-      </div>
+        <item.icon className="h-4 w-4" />
+      </Toggle>
     ));
 
   return (
@@ -465,7 +437,12 @@ const EditorToolbar = ({
             className="scrollbar-thin flex w-full min-w-0 items-center gap-0.5 overflow-x-auto overscroll-x-contain [scroll-snap-type:x_proximity] [scrollbar-width:thin] [touch-action:pan-x] [-webkit-overflow-scrolling:touch]"
             data-testid="toolbar-mobile-scroll"
           >
-            {renderToolbarGroups("mobile", mobileToolbarGroups, true)}
+            {mobileToolbarGroups.map((group, groupIndex) => (
+              <div className="flex shrink-0 snap-start items-center gap-0.5" key={`mobile-group-${groupIndex}`}>
+                {groupIndex > 0 ? <Separator className="mx-1.5 h-5" orientation="vertical" /> : null}
+                {renderToolbarButtons(group, `mobile-${groupIndex}`)}
+              </div>
+            ))}
           </div>
         </div>
         <div className="shrink-0" data-testid="toolbar-mobile-more">
@@ -485,6 +462,7 @@ const EditorToolbar = ({
                 className="h-8 shrink-0 gap-1 whitespace-nowrap px-2 text-xs font-normal hover:bg-toolbar-active/50"
                 size="sm"
                 title={t("toolbar.actions.more")}
+                type="button"
                 variant="ghost"
                 {...toolbarInteractionProps}
               >
@@ -512,61 +490,209 @@ const EditorToolbar = ({
         </div>
       </div>
 
-      <div className="hidden w-full flex-wrap items-start gap-x-0.5 gap-y-1 overflow-visible px-3 py-1.5 sm:flex">
-        {renderToolbarGroups("desktop", desktopToolbarGroups, false)}
-        <div className="flex flex-wrap items-center gap-0.5">
-          <Separator className="mx-1.5 h-5" orientation="vertical" />
-          <CoreInsertTools
-            captureSelection={captureSelection}
-            editor={editor}
-            runCommand={runToolbarCommand}
-            toolbarInteractionProps={toolbarInteractionProps}
-          />
+      <div className="hidden flex-wrap items-start gap-3 px-3 py-1.5 sm:flex" data-testid="toolbar-desktop">
+        <div className="flex items-center gap-0.5" data-testid="toolbar-desktop-quick-actions">
+          {renderToolbarButtons(desktopQuickActions, "desktop-quick")}
         </div>
-        {documentFeaturesEnabled && (
-          <div className="flex flex-wrap items-center gap-0.5">
-            <Separator className="mx-1.5 h-5" orientation="vertical" />
-            <Suspense fallback={null}>
-              <EditorToolbarDocumentTools editor={editor} />
-            </Suspense>
-          </div>
-        )}
-        {!documentFeaturesEnabled && canEnableDocumentFeatures && onEnableDocumentFeatures && (
-          <div className="flex flex-wrap items-center gap-0.5">
-            <Separator className="mx-1.5 h-5" orientation="vertical" />
-            <Button
-              className="h-8 gap-1 px-2 text-xs font-normal hover:bg-toolbar-active/50"
-              onClick={onEnableDocumentFeatures}
-              size="sm"
-              variant="ghost"
-              {...toolbarInteractionProps}
-            >
-              {t("toolbar.actions.enableDocumentTools")}
-            </Button>
-          </div>
-        )}
-        {advancedBlocksEnabled && (
-          <div className="flex flex-wrap items-center gap-0.5">
-            <Separator className="mx-1.5 h-5" orientation="vertical" />
-            <Suspense fallback={null}>
-              <EditorToolbarAdvancedTools editor={editor} />
-            </Suspense>
-          </div>
-        )}
-        {!advancedBlocksEnabled && canEnableAdvancedBlocks && onEnableAdvancedBlocks && (
-          <div className="flex flex-wrap items-center gap-0.5">
-            <Separator className="mx-1.5 h-5" orientation="vertical" />
-            <Button
-              className="h-8 gap-1 px-2 text-xs font-normal hover:bg-toolbar-active/50"
-              onClick={onEnableAdvancedBlocks}
-              size="sm"
-              variant="ghost"
-              {...toolbarInteractionProps}
-            >
-              {t("toolbar.actions.enableAdvancedBlocks")}
-            </Button>
-          </div>
-        )}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5" data-testid="toolbar-desktop-panels">
+          <DesktopToolbarPanel
+            id="moreFormatting"
+            label={t("toolbar.desktopTriggers.moreFormatting")}
+            onCaptureSelection={() => captureDesktopPanelSelection("moreFormatting")}
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[20rem]"
+          >
+            <MoreFormattingSection
+              editor={editor}
+              layout="desktop"
+              runCommand={createDesktopPanelRunner("moreFormatting")}
+              showTitle={false}
+            />
+          </DesktopToolbarPanel>
+          <DesktopToolbarPanel
+            id="structure"
+            label={t("toolbar.desktopTriggers.structure")}
+            onCaptureSelection={() => captureDesktopPanelSelection("structure")}
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[21rem]"
+          >
+            <StructureSection
+              editor={editor}
+              layout="desktop"
+              runCommand={createDesktopPanelRunner("structure")}
+              showTitle={false}
+            />
+          </DesktopToolbarPanel>
+          <DesktopToolbarPanel
+            id="alignment"
+            label={t("toolbar.desktopTriggers.alignment")}
+            onCaptureSelection={() => captureDesktopPanelSelection("alignment")}
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[20rem]"
+          >
+            <AlignmentSection
+              editor={editor}
+              layout="desktop"
+              runCommand={createDesktopPanelRunner("alignment")}
+              showTitle={false}
+            />
+          </DesktopToolbarPanel>
+          <DesktopToolbarPanel
+            id="link"
+            label={t("toolbar.desktopTriggers.link")}
+            onCaptureSelection={() => captureDesktopPanelSelection("link")}
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[22rem]"
+          >
+            <LinkSection
+              editor={editor}
+              layout="desktop"
+              runCommand={createDesktopPanelRunner("link")}
+              showTitle={false}
+            />
+          </DesktopToolbarPanel>
+          <DesktopToolbarPanel
+            id="color"
+            label={t("toolbar.desktopTriggers.color")}
+            onCaptureSelection={() => captureDesktopPanelSelection("color")}
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[22rem]"
+          >
+            <ColorSection
+              editor={editor}
+              layout="desktop"
+              runCommand={createDesktopPanelRunner("color")}
+              showTitle={false}
+            />
+          </DesktopToolbarPanel>
+          <DesktopToolbarPanel
+            id="documentTools"
+            label={t("toolbar.desktopTriggers.documentTools")}
+            onCaptureSelection={() => captureDesktopPanelSelection("documentTools")}
+            scrollable
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[24rem]"
+          >
+            {documentFeaturesEnabled ? (
+              <DocumentUtilitySection
+                editor={editor}
+                layout="desktop"
+                runCommand={createDesktopPanelRunner("documentTools")}
+                showTitle={false}
+              />
+            ) : (
+              <DesktopFeatureEnablePanel
+                actionLabel={t("toolbar.actions.enableDocumentTools")}
+                onClick={canEnableDocumentFeatures ? onEnableDocumentFeatures : undefined}
+              />
+            )}
+          </DesktopToolbarPanel>
+          <DesktopToolbarPanel
+            id="fontFamily"
+            label={t("toolbar.desktopTriggers.fontFamily")}
+            onCaptureSelection={() => captureDesktopPanelSelection("fontFamily")}
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[24rem]"
+          >
+            {documentFeaturesEnabled ? (
+              <FontFamilySection
+                editor={editor}
+                layout="desktop"
+                runCommand={createDesktopPanelRunner("fontFamily")}
+                showTitle={false}
+              />
+            ) : (
+              <DesktopFeatureEnablePanel
+                actionLabel={t("toolbar.actions.enableDocumentTools")}
+                onClick={canEnableDocumentFeatures ? onEnableDocumentFeatures : undefined}
+              />
+            )}
+          </DesktopToolbarPanel>
+          <DesktopToolbarPanel
+            id="fontSize"
+            label={t("toolbar.desktopTriggers.fontSize")}
+            onCaptureSelection={() => captureDesktopPanelSelection("fontSize")}
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[22rem]"
+          >
+            {documentFeaturesEnabled ? (
+              <FontSizeSection
+                editor={editor}
+                layout="desktop"
+                runCommand={createDesktopPanelRunner("fontSize")}
+                showTitle={false}
+              />
+            ) : (
+              <DesktopFeatureEnablePanel
+                actionLabel={t("toolbar.actions.enableDocumentTools")}
+                onClick={canEnableDocumentFeatures ? onEnableDocumentFeatures : undefined}
+              />
+            )}
+          </DesktopToolbarPanel>
+          <DesktopToolbarPanel
+            id="caption"
+            label={t("toolbar.desktopTriggers.caption")}
+            onCaptureSelection={() => captureDesktopPanelSelection("caption")}
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[22rem]"
+          >
+            {documentFeaturesEnabled ? (
+              <CaptionSection
+                editor={editor}
+                layout="desktop"
+                runCommand={createDesktopPanelRunner("caption")}
+                showTitle={false}
+              />
+            ) : (
+              <DesktopFeatureEnablePanel
+                actionLabel={t("toolbar.actions.enableDocumentTools")}
+                onClick={canEnableDocumentFeatures ? onEnableDocumentFeatures : undefined}
+              />
+            )}
+          </DesktopToolbarPanel>
+          <DesktopToolbarPanel
+            id="mathInsert"
+            label={t("toolbar.desktopTriggers.mathInsert")}
+            onCaptureSelection={() => captureDesktopPanelSelection("mathInsert")}
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[22rem]"
+          >
+            {advancedBlocksEnabled ? (
+              <MathInsertSection
+                editor={editor}
+                layout="desktop"
+                runCommand={createDesktopPanelRunner("mathInsert")}
+                showTitle={false}
+              />
+            ) : (
+              <DesktopFeatureEnablePanel
+                actionLabel={t("toolbar.actions.enableAdvancedBlocks")}
+                onClick={canEnableAdvancedBlocks ? onEnableAdvancedBlocks : undefined}
+              />
+            )}
+          </DesktopToolbarPanel>
+          <DesktopToolbarPanel
+            id="mermaidInsert"
+            label={t("toolbar.desktopTriggers.mermaidInsert")}
+            onCaptureSelection={() => captureDesktopPanelSelection("mermaidInsert")}
+            toolbarInteractionProps={toolbarInteractionProps}
+            widthClassName="w-[22rem]"
+          >
+            {advancedBlocksEnabled ? (
+              <MermaidInsertSection
+                editor={editor}
+                layout="desktop"
+                runCommand={createDesktopPanelRunner("mermaidInsert")}
+                showTitle={false}
+              />
+            ) : (
+              <DesktopFeatureEnablePanel
+                actionLabel={t("toolbar.actions.enableAdvancedBlocks")}
+                onClick={canEnableAdvancedBlocks ? onEnableAdvancedBlocks : undefined}
+              />
+            )}
+          </DesktopToolbarPanel>
+        </div>
       </div>
     </div>
   );

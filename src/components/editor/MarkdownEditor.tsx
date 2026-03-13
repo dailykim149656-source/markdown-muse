@@ -14,6 +14,7 @@ import { applyEditorSeed } from "./editorSeedSync";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import { createMarkedInstance, createTurndownService } from "./utils/markdownRoundtrip";
 import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
+import { isUsableTiptapDocument } from "@/lib/ast/tiptapUsability";
 
 interface MarkdownEditorProps {
   advancedBlocksEnabled?: boolean;
@@ -64,6 +65,10 @@ const MarkdownEditor = ({
     () => initialMd ? markedInstance.parse(initialMd, { async: false }) as string : "",
     [initialMd, markedInstance]
   );
+  const usableInitialTiptapDoc = useMemo(
+    () => isUsableTiptapDocument(initialTiptapDoc) ? initialTiptapDoc : undefined,
+    [initialTiptapDoc],
+  );
   const requiresDocumentFeatures = useMemo(
     () => tiptapDocumentHasDocumentContent(initialTiptapDoc) || htmlHasDocumentContent(initialHtml),
     [initialHtml, initialTiptapDoc],
@@ -109,7 +114,7 @@ const MarkdownEditor = ({
 
   const editor = useEditor({
     extensions: shouldHoldEditor ? coreExtensions : extensions,
-    content: shouldHoldEditor ? "" : (initialTiptapDoc || initialHtml),
+    content: shouldHoldEditor ? "" : (usableInitialTiptapDoc || initialHtml),
     onCreate: ({ editor }) => {
       rememberEditorSelection(editor);
     },
@@ -139,12 +144,12 @@ const MarkdownEditor = ({
 
     applyEditorSeed({
       editor,
-      nextContent: initialTiptapDoc || initialHtml,
+      nextContent: usableInitialTiptapDoc || initialHtml,
       onHtmlChange,
       onTiptapChange,
       seedSignatureRef,
     });
-  }, [editor, initialHtml, initialTiptapDoc, onHtmlChange, onTiptapChange, shouldHoldEditor]);
+  }, [editor, initialHtml, onHtmlChange, onTiptapChange, shouldHoldEditor, usableInitialTiptapDoc]);
 
   useEffect(() => {
     onEditorReady?.(editor);

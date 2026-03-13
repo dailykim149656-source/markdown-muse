@@ -1,5 +1,6 @@
 import type { DocumentData, EditorMode } from "@/types/document";
 import type { WorkspaceBinding } from "@/types/workspace";
+import { isUsableTiptapDocument } from "@/lib/ast/tiptapUsability";
 
 const normalizeMetadata = (metadata: DocumentData["metadata"]) => ({
   ...(metadata || {}),
@@ -23,6 +24,15 @@ export const migrateStoredDocumentData = (document: DocumentData): DocumentData 
   metadata: normalizeMetadata(document.metadata),
   sourceSnapshots: normalizeSourceSnapshots(document.sourceSnapshots, document.mode, document.content),
   storageKind: document.storageKind ?? "legacy",
-  tiptapJson: document.tiptapJson ?? null,
+  tiptapJson: (() => {
+    const normalizedSnapshots = normalizeSourceSnapshots(document.sourceSnapshots, document.mode, document.content);
+    const primarySource = normalizedSnapshots?.[document.mode] || document.content || "";
+
+    if (!isUsableTiptapDocument(document.tiptapJson) && primarySource.trim().length > 0) {
+      return null;
+    }
+
+    return document.tiptapJson ?? null;
+  })(),
   workspaceBinding: normalizeWorkspaceBinding(document.workspaceBinding),
 });

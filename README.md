@@ -113,6 +113,7 @@ Set at least:
 - `GOOGLE_CLOUD_PROJECT`
 - `GOOGLE_CLOUD_LOCATION`
 - `GEMINI_MODEL`
+- `GEMINI_FALLBACK_MODEL`
 - `AI_SERVER_PORT`
 - `AI_ALLOWED_ORIGIN`
 - `VITE_AI_API_BASE_URL`
@@ -139,7 +140,8 @@ Runtime contract:
 - `GOOGLE_GENAI_USE_VERTEXAI=true`
 - `GOOGLE_CLOUD_PROJECT` selects the Vertex AI project
 - `GOOGLE_CLOUD_LOCATION` selects the Vertex AI region
-- `GEMINI_MODEL` selects the model
+- `GEMINI_MODEL` selects the primary model
+- `GEMINI_FALLBACK_MODEL` selects the fallback model used for model/quota failures
 - `AI_ALLOWED_ORIGIN` controls allowed frontend origins
 
 Build and deploy pipeline:
@@ -160,6 +162,7 @@ Frontend deployment:
 Health check:
 
 - `GET /api/ai/health`
+- returns primary `model` and optional `fallbackModel`
 
 ## Main scripts
 

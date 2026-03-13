@@ -72,13 +72,13 @@ const PatchReviewDialog = ({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="grid h-[min(100svh-1rem,56rem)] w-[min(100vw-1rem,80rem)] max-w-5xl grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{t("patchReview.title")}</DialogTitle>
           <DialogDescription>{t("patchReview.description")}</DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap gap-2">
             <Button onClick={onLoadPatchSet} type="button" variant="outline">
               {t("patchReview.load")}
@@ -93,15 +93,15 @@ const PatchReviewDialog = ({
         </div>
 
         {patchSet && (
-          <div className="grid gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 md:grid-cols-4">
-            <div className="rounded-md border border-border/60 bg-background px-3 py-2">
+          <div className="grid shrink-0 gap-2 rounded-lg border border-border/60 bg-muted/20 p-3 md:grid-cols-4">
+            <div className="min-w-0 rounded-md border border-border/60 bg-background px-3 py-2">
               <div className="flex items-center gap-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 <Sparkles className="h-3 w-3" />
                 {t("patchReview.metricPatches")}
               </div>
               <div className="mt-1 text-sm font-semibold text-foreground">{patchCount}</div>
             </div>
-            <div className="rounded-md border border-border/60 bg-background px-3 py-2">
+            <div className="min-w-0 rounded-md border border-border/60 bg-background px-3 py-2">
               <div className="flex items-center gap-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 <Gauge className="h-3 w-3" />
                 {t("patchReview.metricConfidence")}
@@ -111,14 +111,14 @@ const PatchReviewDialog = ({
                 <Badge variant="outline">{t("patchReview.metricAccepted", { count: acceptedPatchCount })}</Badge>
               </div>
             </div>
-            <div className="rounded-md border border-border/60 bg-background px-3 py-2">
+            <div className="min-w-0 rounded-md border border-border/60 bg-background px-3 py-2">
               <div className="flex items-center gap-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 <Link2 className="h-3 w-3" />
                 {t("patchReview.metricProvenance")}
               </div>
               <div className="mt-1 text-sm font-semibold text-foreground">{provenanceCoverage}%</div>
             </div>
-            <div className="rounded-md border border-border/60 bg-background px-3 py-2">
+            <div className="min-w-0 rounded-md border border-border/60 bg-background px-3 py-2">
               <div className="flex items-center gap-1 text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 <ShieldCheck className="h-3 w-3" />
                 {t("patchReview.metricSources")}
@@ -150,9 +150,11 @@ const PatchReviewDialog = ({
         )}
 
         {patchSet ? (
-          <PatchReviewPanel onAccept={onAccept} onEdit={onEdit} onReject={onReject} patchSet={patchSet} />
+          <div className="min-h-0 overflow-hidden">
+            <PatchReviewPanel onAccept={onAccept} onEdit={onEdit} onReject={onReject} patchSet={patchSet} />
+          </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-border bg-muted/30 p-6 text-sm text-muted-foreground">
+          <div className="min-h-0 overflow-auto rounded-lg border border-dashed border-border bg-muted/30 p-6 text-sm text-muted-foreground">
             {t("patchReview.empty")}
           </div>
         )}

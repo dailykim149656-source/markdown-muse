@@ -9,7 +9,7 @@ import type {
   AgentTurnResponse,
 } from "../../../src/types/liveAgent";
 
-interface RawAgentTurnResponse {
+export interface RawAgentTurnResponse {
   agentStatus?: AgentStatus;
   assistantText?: string;
   currentDocumentDraft?: AgentCurrentDocumentDraft;
@@ -167,7 +167,8 @@ const normalizeCurrentDocumentDraft = (
   const edits = draft.edits
     .map((edit) => {
       if (
-        edit.kind !== "replace_section"
+        edit.kind !== "replace_document_body"
+        && edit.kind !== "replace_section"
         && edit.kind !== "insert_after_section"
         && edit.kind !== "append_section"
       ) {
@@ -176,6 +177,14 @@ const normalizeCurrentDocumentDraft = (
 
       if (!edit.markdownBody?.trim() || !edit.rationale?.trim()) {
         return null;
+      }
+
+      if (edit.kind === "replace_document_body") {
+        return {
+          ...edit,
+          markdownBody: edit.markdownBody.trim(),
+          rationale: edit.rationale.trim(),
+        };
       }
 
       if (
