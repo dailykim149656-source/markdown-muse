@@ -29,10 +29,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Authenticate to GCP
+      - name: Authenticate to Firebase Hosting
         uses: google-github-actions/auth@v3
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_URBAN_DDS }}
 
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v3
@@ -68,14 +68,6 @@ jobs:
           npm ci
           npm run build:web
 
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_URBAN_DDS }}'
-          projectId: urban-dds
-          channelId: live
-
       - name: Verify frontend file
         run: |
           set -euo pipefail
@@ -83,4 +75,15 @@ jobs:
             echo "dist/index.html not found after build."
             exit 1
           fi
-          echo "Frontend build artifact verified and Firebase Hosting deploy step completed."
+          echo "Frontend build artifact verified."
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools@15.10.0
+
+      - name: Deploy to Firebase Hosting
+        run: |
+          set -euo pipefail
+          firebase deploy \
+            --only hosting \
+            --project urban-dds \
+            --non-interactive

@@ -1,0 +1,1030 @@
+{
+  "assets": [
+    {
+      "fileName": "assets/mermaid.core-CIwLXt8O.js",
+      "gzipSize": 126203,
+      "size": 455191,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/treemap-GDKQZRPO-Bv-fS7_x.js",
+      "gzipSize": 107332,
+      "size": 452893,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/cytoscape.esm-CyJtwmzi.js",
+      "gzipSize": 141897,
+      "size": 442413,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/tiptap-vendor-DuYcXPts.js",
+      "gzipSize": 136142,
+      "size": 432126,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/Index-C0OFba63.js",
+      "gzipSize": 78053,
+      "size": 263662,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/math-vendor-Ccej5gyL.js",
+      "gzipSize": 76886,
+      "size": 258528,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/ui-vendor-B1d79Chu.js",
+      "gzipSize": 68951,
+      "size": 242793,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/marketing-graph-surface-BTnUlNgG.png",
+      "gzipSize": 218463,
+      "size": 223420,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/react-vendor-JH5LYz-w.js",
+      "gzipSize": 64806,
+      "size": 203386,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/docsly-logo-ClIz5t4y.png",
+      "gzipSize": 195845,
+      "size": 196515,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/knowledge-lcfMvOOI.js",
+      "gzipSize": 37619,
+      "size": 162488,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/ai-agent-BUOtYKqA.js",
+      "gzipSize": 47259,
+      "size": 153875,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/architectureDiagram-VXUJARFQ-BnIc7GOp.js",
+      "gzipSize": 42417,
+      "size": 149231,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/JsonYamlEditor-oUEOPIox.js",
+      "gzipSize": 42547,
+      "size": 135831,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/motion-vendor-BLwGREBk.js",
+      "gzipSize": 43303,
+      "size": 130228,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/index-fNzWUFFk.css",
+      "gzipSize": 18474,
+      "size": 108354,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/sequenceDiagram-WL72ISMW-BgCjcDhJ.js",
+      "gzipSize": 27237,
+      "size": 98672,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/marketing-patch-review-surface-DUrDq9NK.png",
+      "gzipSize": 81929,
+      "size": 86016,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/cose-bilkent-S5V4N54A-DydILAXP.js",
+      "gzipSize": 22685,
+      "size": 82023,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/blockDiagram-VD42YOAC-Cpx7IoZM.js",
+      "gzipSize": 21065,
+      "size": 73632,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/marketing-google-workspace-surface-D51CB9lP.png",
+      "gzipSize": 67408,
+      "size": 73477,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/c4Diagram-YG6GDRKO-D3qTlwBI.js",
+      "gzipSize": 19925,
+      "size": 70621,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/ganttDiagram-JELNMOA3-DrQiSq2b.js",
+      "gzipSize": 23266,
+      "size": 68531,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/editor-aux-zeYUvi2o.js",
+      "gzipSize": 19281,
+      "size": 64359,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_AMS-Regular-DRggAlZN.ttf",
+      "gzipSize": 34713,
+      "size": 63632,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/flowDiagram-NV44I4VS-BNamnUar.js",
+      "gzipSize": 19828,
+      "size": 61587,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/syntax-vendor-Dp6PY6Kf.js",
+      "gzipSize": 19400,
+      "size": 59940,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/marketing-editor-surface-Bu-_acCE.png",
+      "gzipSize": 51802,
+      "size": 56743,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-Regular-ypZvNtVU.ttf",
+      "gzipSize": 31728,
+      "size": 53580,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-Bold-waoOVXN0.ttf",
+      "gzipSize": 30811,
+      "size": 51336,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/guideContent-7liUP4Zr.js",
+      "gzipSize": 14862,
+      "size": 50620,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/chunk-B4BG7PRW-DafpBGKQ.js",
+      "gzipSize": 14729,
+      "size": 45405,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/editorSeedSync-DOWtW_D6.js",
+      "gzipSize": 11081,
+      "size": 44935,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/xychartDiagram-PRI3JC2R-DfqtsiTW.js",
+      "gzipSize": 11686,
+      "size": 40685,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/structured-io-DXJJtybr.js",
+      "gzipSize": 13500,
+      "size": 39826,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/ai-assistant-D9eERrSE.js",
+      "gzipSize": 11894,
+      "size": 38976,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/chunk-DI55MBZ5-DNkkiM9W.js",
+      "gzipSize": 11976,
+      "size": 36799,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/quadrantDiagram-AYHSOK5B-Ccu5_5Of.js",
+      "gzipSize": 10347,
+      "size": 34798,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-Italic-3WenGoN9.ttf",
+      "gzipSize": 19927,
+      "size": 33580,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_AMS-Regular-DMm9YOAa.woff",
+      "gzipSize": 33536,
+      "size": 33516,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-BoldItalic-DzxPMmG6.ttf",
+      "gzipSize": 19667,
+      "size": 32968,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/history-ByKlrGCO.js",
+      "gzipSize": 10603,
+      "size": 32648,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Math-Italic-flOr_0UB.ttf",
+      "gzipSize": 19080,
+      "size": 31308,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Math-BoldItalic-B3XSjfu4.ttf",
+      "gzipSize": 19007,
+      "size": 31196,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-Regular-Dr94JaBh.woff",
+      "gzipSize": 30795,
+      "size": 30772,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/requirementDiagram-UZGBJVZJ-Cw_S6bI7.js",
+      "gzipSize": 9749,
+      "size": 30740,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-Bold-Jm3AIy58.woff",
+      "gzipSize": 29940,
+      "size": 29912,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/marketing-queue-surface-Tjat92MU.png",
+      "gzipSize": 28968,
+      "size": 29874,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/math-vendor-BZjwA14O.css",
+      "gzipSize": 8050,
+      "size": 29233,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/latexToTypst-Bbnzv1UI.js",
+      "gzipSize": 7334,
+      "size": 28401,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_AMS-Regular-BQhdFMY1.woff2",
+      "gzipSize": 28104,
+      "size": 28076,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/AiAssistantDialog-BmnoUkbG.js",
+      "gzipSize": 5600,
+      "size": 27656,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Typewriter-Regular-D3Ib7_Hf.ttf",
+      "gzipSize": 16479,
+      "size": 27556,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/layout-C-eWyuph.js",
+      "gzipSize": 9729,
+      "size": 27386,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/editorConfigDocument-DoFl3s7f.js",
+      "gzipSize": 8767,
+      "size": 27038,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/share-BGSVt0Rf.js",
+      "gzipSize": 10348,
+      "size": 26374,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-Regular-B22Nviop.woff2",
+      "gzipSize": 26300,
+      "size": 26272,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/erDiagram-Q2GNP2WA-Pt54CzKP.js",
+      "gzipSize": 9103,
+      "size": 25815,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-Bold-Cx986IdX.woff2",
+      "gzipSize": 25352,
+      "size": 25324,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/gitGraphDiagram-V2S2FVAM-CuwjRfkP.js",
+      "gzipSize": 7845,
+      "size": 25206,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_SansSerif-Bold-CFMepnvq.ttf",
+      "gzipSize": 14778,
+      "size": 24504,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/timeline-definition-IT6M3QCI-BmnkrL1t.js",
+      "gzipSize": 8531,
+      "size": 24204,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/journeyDiagram-XKPGCS4Q-D3Foi96k.js",
+      "gzipSize": 8568,
+      "size": 24032,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/sankeyDiagram-TZEHDZUN-DbZSK7-Y.js",
+      "gzipSize": 8385,
+      "size": 22711,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_SansSerif-Italic-YYjJ1zSn.ttf",
+      "gzipSize": 14432,
+      "size": 22364,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/mindmap-definition-VGOIOE7T-tX866PST.js",
+      "gzipSize": 7595,
+      "size": 21521,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/kanban-definition-3W4ZIXB7-DPjbHoz4.js",
+      "gzipSize": 7499,
+      "size": 21080,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/Guide-pMPRjogS.js",
+      "gzipSize": 3951,
+      "size": 20306,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-Italic-BMLOBm91.woff",
+      "gzipSize": 19665,
+      "size": 19676,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Fraktur-Bold-BdnERNNW.ttf",
+      "gzipSize": 13494,
+      "size": 19584,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Fraktur-Regular-CB_wures.ttf",
+      "gzipSize": 13431,
+      "size": 19572,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_SansSerif-Regular-BNo7hRIc.ttf",
+      "gzipSize": 12547,
+      "size": 19436,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-BoldItalic-SpSLRI95.woff",
+      "gzipSize": 19405,
+      "size": 19412,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/Landing-DEtUOZgp.js",
+      "gzipSize": 4141,
+      "size": 19074,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Math-Italic-DA0__PXp.woff",
+      "gzipSize": 18738,
+      "size": 18748,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Math-BoldItalic-iY-2wyZ7.woff",
+      "gzipSize": 18647,
+      "size": 18668,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-Italic-NWA7e6Wa.woff2",
+      "gzipSize": 17016,
+      "size": 16988,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Main-BoldItalic-DxDJ3AOS.woff2",
+      "gzipSize": 16808,
+      "size": 16780,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Script-Regular-C5JkGWo-.ttf",
+      "gzipSize": 10813,
+      "size": 16648,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/diagram-PSM6KHXK-DQft-H5I.js",
+      "gzipSize": 5949,
+      "size": 16467,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Math-Italic-t53AETM-.woff2",
+      "gzipSize": 16468,
+      "size": 16440,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Math-BoldItalic-CZnvNsCZ.woff2",
+      "gzipSize": 16423,
+      "size": 16400,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/DocumentIORuntime-Btk5L6Lt.js",
+      "gzipSize": 5450,
+      "size": 16054,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Typewriter-Regular-C0xS9mPB.woff",
+      "gzipSize": 16010,
+      "size": 16028,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/useDocumentManager-B5FuZjEu.js",
+      "gzipSize": 5148,
+      "size": 16020,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_SansSerif-Bold-DbIhKOiC.woff",
+      "gzipSize": 14398,
+      "size": 14408,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_SansSerif-Italic-DN2j7dab.woff",
+      "gzipSize": 14087,
+      "size": 14112,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Typewriter-Regular-CO6r4hn1.woff2",
+      "gzipSize": 13591,
+      "size": 13568,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Fraktur-Bold-BsDP51OF.woff",
+      "gzipSize": 13279,
+      "size": 13296,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Fraktur-Regular-Dxdc4cR9.woff",
+      "gzipSize": 13192,
+      "size": 13208,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Caligraphic-Bold-ATXxdsX0.ttf",
+      "gzipSize": 7856,
+      "size": 12368,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Caligraphic-Regular-wX97UBjC.ttf",
+      "gzipSize": 7796,
+      "size": 12344,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_SansSerif-Regular-CS6fqUqJ.woff",
+      "gzipSize": 12298,
+      "size": 12316,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Size1-Regular-Dbsnue_I.ttf",
+      "gzipSize": 6540,
+      "size": 12228,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_SansSerif-Bold-D1sUS0GD.woff2",
+      "gzipSize": 12239,
+      "size": 12216,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_SansSerif-Italic-C3H0VqGB.woff2",
+      "gzipSize": 12051,
+      "size": 12028,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/_baseUniq-sYGyIrO2.js",
+      "gzipSize": 4667,
+      "size": 11920,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/DocumentSupportRuntime-C3HYg4yF.js",
+      "gzipSize": 3597,
+      "size": 11916,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/dagre-6UL2VRFP-CMzFPNDh.js",
+      "gzipSize": 4442,
+      "size": 11746,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/docsly-logo-small-DX1jY3Eg.png",
+      "gzipSize": 11545,
+      "size": 11522,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Size2-Regular-B7gKUWhC.ttf",
+      "gzipSize": 6241,
+      "size": 11508,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Fraktur-Bold-CL6g_b3V.woff2",
+      "gzipSize": 11371,
+      "size": 11348,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Fraktur-Regular-CTYiF6lA.woff2",
+      "gzipSize": 11339,
+      "size": 11316,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/stateDiagram-FKZM4ZOC-uhg3iV8G.js",
+      "gzipSize": 3874,
+      "size": 10866,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/WorkspaceRuntime-CMmS5TPi.js",
+      "gzipSize": 3849,
+      "size": 10686,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Script-Regular-D5yQViql.woff",
+      "gzipSize": 10550,
+      "size": 10588,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Size4-Regular-DWFBv043.ttf",
+      "gzipSize": 6061,
+      "size": 10364,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_SansSerif-Regular-DDBCnlJ7.woff2",
+      "gzipSize": 10367,
+      "size": 10344,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/ExportPreviewPanel-C2DRX7sw.js",
+      "gzipSize": 3209,
+      "size": 10009,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Script-Regular-D3wIWfF6.woff2",
+      "gzipSize": 9667,
+      "size": 9644,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/editorConfigAdvanced-BZa9SEgz.js",
+      "gzipSize": 3059,
+      "size": 9205,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/index-BF6ssUL2.js",
+      "gzipSize": 3619,
+      "size": 9033,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/LatexEditor-CTwueW6Z.js",
+      "gzipSize": 2976,
+      "size": 7776,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Caligraphic-Bold-BEiXGLvX.woff",
+      "gzipSize": 7677,
+      "size": 7716,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Caligraphic-Regular-CTRA-rTL.woff",
+      "gzipSize": 7621,
+      "size": 7656,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Size3-Regular-DgpXs0kz.ttf",
+      "gzipSize": 4389,
+      "size": 7588,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/PreviewRuntime-D7SxET2e.js",
+      "gzipSize": 2715,
+      "size": 6988,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Caligraphic-Bold-Dq_IR9rO.woff2",
+      "gzipSize": 6935,
+      "size": 6912,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Caligraphic-Regular-Di6jR-x-.woff2",
+      "gzipSize": 6931,
+      "size": 6908,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/markdownTabIndent-jsDSqjME.js",
+      "gzipSize": 2787,
+      "size": 6838,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/diagram-QEK2KX5R-C5kzqfiS.js",
+      "gzipSize": 2785,
+      "size": 6536,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Size1-Regular-C195tn64.woff",
+      "gzipSize": 6465,
+      "size": 6496,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Size2-Regular-oD1tc_U0.woff",
+      "gzipSize": 6161,
+      "size": 6188,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Size4-Regular-BF-4gkZK.woff",
+      "gzipSize": 5944,
+      "size": 5980,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/graph-m22VuC5h.js",
+      "gzipSize": 1868,
+      "size": 5920,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/pieDiagram-ADFJNKIX-BPXB77So.js",
+      "gzipSize": 2570,
+      "size": 5751,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/linear-DzV9BmQm.js",
+      "gzipSize": 2312,
+      "size": 5661,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Size1-Regular-mCD8mA8B.woff2",
+      "gzipSize": 5491,
+      "size": 5468,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/MarkdownEditor-BzadHk_I.js",
+      "gzipSize": 2097,
+      "size": 5223,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Size2-Regular-Dy4dx90m.woff2",
+      "gzipSize": 5231,
+      "size": 5208,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/KaTeX_Size4-Regular-Dl5lxZxV.woff2",
+      "gzipSize": 4951,
+      "size": 4928,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/diagram-S2PKOQOG-D3MX3uUo.js",
+      "gzipSize": 2139,
+      "size": 4817,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/applyStructuredPatchSet-BJxm4D6a.js",
+      "gzipSize": 1798,
+      "size": 4757,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/Privacy-uY35mmG4.js",
+      "gzipSize": 1619,
+      "size": 4717,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/defaultLocale-C4B-KCzX.js",
+      "gzipSize": 2128,
+      "size": 4547,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/HtmlEditor-CW64KrYt.js",
+      "gzipSize": 1864,
+      "size": 4458,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/Terms-R_51LXFq.js",
+      "gzipSize": 1605,
+      "size": 4442,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/KaTeX_Size3-Regular-CTq5MqoE.woff",
+      "gzipSize": 4380,
+      "size": 4420,
+      "type": "asset"
+    },
+    {
+      "fileName": "assets/fileFormat-Byc3j5xh.js",
+      "gzipSize": 1526,
+      "size": 3709,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/arc-Cp-cSCXu.js",
+      "gzipSize": 1472,
+      "size": 3427,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/select-BxubsW2L.js",
+      "gzipSize": 1103,
+      "size": 3012,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/WorkspaceImportDialog-WaKLy5av.js",
+      "gzipSize": 1165,
+      "size": 2739,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/_basePickBy-D01FKjhM.js",
+      "gzipSize": 1287,
+      "size": 2585,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/WorkspaceGraph-B_ka2n2u.js",
+      "gzipSize": 1032,
+      "size": 2196,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/docShare-BGdspwXe.js",
+      "gzipSize": 1055,
+      "size": 2078,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/WorkspaceConnectionDialog-kXkNZgDZ.js",
+      "gzipSize": 909,
+      "size": 2066,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/ai-shared-IQO4N0bJ.js",
+      "gzipSize": 840,
+      "size": 1961,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/fonts-7h_dr-F4.js",
+      "gzipSize": 594,
+      "size": 1740,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/applyDocumentTextPatchSet-Dj9-ne6L.js",
+      "gzipSize": 766,
+      "size": 1688,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/WorkspaceExportDialog-BdM9QR3z.js",
+      "gzipSize": 832,
+      "size": 1673,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/MathRender-DitBwjJM.js",
+      "gzipSize": 785,
+      "size": 1483,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/chunk-TZMSLE5B-CmNvQ1xg.js",
+      "gzipSize": 626,
+      "size": 1413,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/ordinal-Cboi1Yqb.js",
+      "gzipSize": 573,
+      "size": 1189,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/infoDiagram-HS3SLOUP--_nl1pAX.js",
+      "gzipSize": 681,
+      "size": 1168,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/isDocumentPatchSet-BJRORKVV.js",
+      "gzipSize": 335,
+      "size": 937,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/NotFound-DBz56xOA.js",
+      "gzipSize": 518,
+      "size": 923,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/classDiagram-2ON5EDUG-Cg8tYtmy.js",
+      "gzipSize": 520,
+      "size": 907,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/classDiagram-v2-WZHVMYZB-Cg8tYtmy.js",
+      "gzipSize": 520,
+      "size": 907,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/stateDiagram-v2-4FDKWEC3-DOmPdL1m.js",
+      "gzipSize": 505,
+      "size": 868,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/chunk-QN33PNHL-Bbcz2KVd.js",
+      "gzipSize": 377,
+      "size": 532,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/label-DUI5CJ_G.js",
+      "gzipSize": 272,
+      "size": 375,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/chunk-FMBD7UC4-BwO3iwQO.js",
+      "gzipSize": 272,
+      "size": 366,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/chunk-4BX2VUAB-DYD3qwwU.js",
+      "gzipSize": 206,
+      "size": 297,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/chunk-55IACEB6-CYZNsB9P.js",
+      "gzipSize": 208,
+      "size": 230,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/chunk-QZHKN3VN-BUuXPbUT.js",
+      "gzipSize": 161,
+      "size": 193,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/init-Gi6I4Gst.js",
+      "gzipSize": 129,
+      "size": 147,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/ai-history-HZbFZ4HW.js",
+      "gzipSize": 134,
+      "size": 128,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/channel-BTvvwnXx.js",
+      "gzipSize": 126,
+      "size": 113,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/texAutoFixClient-B2th0ESN.js",
+      "gzipSize": 127,
+      "size": 112,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/clone-BHF10WEm.js",
+      "gzipSize": 111,
+      "size": 96,
+      "type": "chunk"
+    },
+    {
+      "fileName": "assets/docsly-logo-small-CrHJEW1E.js",
+      "gzipSize": 85,
+      "size": 65,
+      "type": "chunk"
+    }
+  ]
+}

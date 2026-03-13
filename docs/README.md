@@ -12,7 +12,9 @@ If you are reviewing this repository for the Docsy hackathon submission, start h
 4. [Demo Runbook](demo-runbook-2026-03-11.md)
 5. [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 6. [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
-7. [Submission Checklist](submission-checklist-2026-03-11.md)
+7. [Devpost Submission Copy](devpost-submission-copy-2026-03-14.md)
+8. [Devpost Submission Copy (Korean)](devpost-submission-copy-ko-2026-03-14.md)
+9. [Submission Checklist](submission-checklist-2026-03-11.md)
 
 ## Read by audience
 
@@ -24,6 +26,8 @@ Read these first if you want to understand what the product currently does:
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 - [Implemented Features Summary](implemented-features-summary-2026-03-11.md)
 - [Implemented Features Summary (Korean)](implemented-features-summary-ko-2026-03-11.md)
+- [Devpost Submission Copy](devpost-submission-copy-2026-03-14.md)
+- [Devpost Submission Copy (Korean)](devpost-submission-copy-ko-2026-03-14.md)
 - [Google Docs Export Session Summary (Korean)](session-summary-2026-03-12-google-docs-export-and-google-dropdown-ko.md)
 - [PRD Status Check (2026-03-11)](prd-status-check-2026-03-11.md)
 - [Landing Guide Implementation Plan](landing-guide-implementation-plan-2026-03-11.md)
@@ -35,6 +39,8 @@ Read these if you are changing code or need implementation context:
 - [Hackathon Architecture](architecture-hackathon-2026-03-11.md)
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
+- [Devpost Submission Copy](devpost-submission-copy-2026-03-14.md)
+- [Devpost Submission Copy (Korean)](devpost-submission-copy-ko-2026-03-14.md)
 - [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
 - [Release Closeout Checklist](release-closeout-checklist-2026-03-11.md)
 - [Google Docs Export and Dropdown Summary](session-summary-2026-03-12-google-docs-export-and-google-dropdown.md)
@@ -70,6 +76,8 @@ Read these if you are validating release readiness or operational review state:
 - [Demo Runbook](demo-runbook-2026-03-11.md)
 - [Hackathon Submission Brief](hackathon-submission-brief-2026-03-11.md)
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
+- [Devpost Submission Copy](devpost-submission-copy-2026-03-14.md)
+- [Devpost Submission Copy (Korean)](devpost-submission-copy-ko-2026-03-14.md)
 - [Submission Checklist](submission-checklist-2026-03-11.md)
 - [Release Gate and DoD for v1.0](release-gate-and-dod-v1-2026-03-10.md)
 - [Release Closeout Checklist](release-closeout-checklist-2026-03-11.md)
@@ -82,9 +90,10 @@ Read these if you are validating release readiness or operational review state:
 
 1. [Hackathon Submission Brief](hackathon-submission-brief-2026-03-11.md)
 2. [Implemented Features Summary](implemented-features-summary-2026-03-11.md)
-3. [Hackathon Architecture](architecture-hackathon-2026-03-11.md)
-4. [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
-5. [Demo Script](demo-script-2026-03-11.md)
+3. [Devpost Submission Copy](devpost-submission-copy-2026-03-14.md)
+4. [Hackathon Architecture](architecture-hackathon-2026-03-11.md)
+5. [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
+6. [Demo Script](demo-script-2026-03-11.md)
 
 ### If you are working on roadmap execution
 
@@ -101,10 +110,11 @@ Read these if you are validating release readiness or operational review state:
 2. [Release Closeout Checklist](release-closeout-checklist-2026-03-11.md)
 3. [Google Workspace Live Validation Runbook](google-workspace-live-validation-runbook-2026-03-12.md)
 4. [Release Closeout Results Template](release-closeout-results-template-2026-03-12.md)
-5. [Demo Runbook](demo-runbook-2026-03-11.md)
-6. [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
-7. [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
-8. [Submission Checklist](submission-checklist-2026-03-11.md)
+5. [Devpost Submission Copy](devpost-submission-copy-2026-03-14.md)
+6. [Demo Runbook](demo-runbook-2026-03-11.md)
+7. [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
+8. [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
+9. [Submission Checklist](submission-checklist-2026-03-11.md)
 
 ## Full document catalog
 
@@ -114,6 +124,8 @@ Read these if you are validating release readiness or operational review state:
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 - [Implemented Features Summary](implemented-features-summary-2026-03-11.md)
 - [Implemented Features Summary (Korean)](implemented-features-summary-ko-2026-03-11.md)
+- [Devpost Submission Copy](devpost-submission-copy-2026-03-14.md)
+- [Devpost Submission Copy (Korean)](devpost-submission-copy-ko-2026-03-14.md)
 - [PRD Status Check (2026-03-11)](prd-status-check-2026-03-11.md)
 - [Landing Guide Implementation Plan](landing-guide-implementation-plan-2026-03-11.md)
 - [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
@@ -131,6 +143,8 @@ Read these if you are validating release readiness or operational review state:
 - [Demo Runbook](demo-runbook-2026-03-11.md)
 - [Submission Checklist](submission-checklist-2026-03-11.md)
 - [Final Submission Package](final-submission-package-2026-03-11.md)
+- [Devpost Submission Copy](devpost-submission-copy-2026-03-14.md)
+- [Devpost Submission Copy (Korean)](devpost-submission-copy-ko-2026-03-14.md)
 - [Architecture Overview](architecture-overview-2026-03-10.md)
 - [Tech Stack Overview (Korean)](tech-stack-overview-ko-2026-03-11.md)
 - [Web Performance Optimization Summary](session-summary-2026-03-10-web-performance-optimization.md)
