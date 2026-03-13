@@ -75,8 +75,8 @@ export interface ComparisonPatchBuildResult {
   warnings: string[];
 }
 
-const normalizeText = (value: string) =>
-  value
+const normalizeText = (value: unknown) =>
+  (typeof value === "string" ? value : "")
     .toLowerCase()
     .replace(/[^a-z0-9가-힣\s]+/g, " ")
     .replace(/\s+/g, " ")

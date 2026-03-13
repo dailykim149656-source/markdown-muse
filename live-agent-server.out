@@ -1,0 +1,17 @@
+
+> vite_react_shadcn_ts@0.0.0 ai:server
+> node --env-file-if-exists=.env.local --import tsx server/aiServer.ts
+
+[AI Server] Initializing modules...
+[AI Server] Configuration: PORT=8787, MAX_CHUNKS=8
+[AI Server] Starting listener...
+[AI Server] Listening on http://0.0.0.0:8787
+[AI Server] [f2c4522a-247b-4060-91ae-6d1c7b235d24] GET /api/auth/session
+[AI Server] [f2c4522a-247b-4060-91ae-6d1c7b235d24] Handling auth route...
+[AI Server] [3f9982aa-8287-4116-b23b-36257a4ac2a8] GET /api/ai/health
+[AI Server] [3f9982aa-8287-4116-b23b-36257a4ac2a8] Health check passed
+[AI Server] [f2c4522a-247b-4060-91ae-6d1c7b235d24] Auth route matched
+[AI Server] [9e74b428-2fcb-425c-a2c7-d33ac53cedd0] GET /api/workspace/changes
+[AI Server] [9e74b428-2fcb-425c-a2c7-d33ac53cedd0] Handling auth route...
+[AI Server] [9e74b428-2fcb-425c-a2c7-d33ac53cedd0] Handling workspace route...
+[AI Server] [9e74b428-2fcb-425c-a2c7-d33ac53cedd0] Workspace route matched

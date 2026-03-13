@@ -45,6 +45,7 @@ import {
 import { DOC_SHARE_HASH_PREFIX } from "@/lib/share/shareConstants";
 import type { EditorMode } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
+import type { AgentNewDocumentDraft } from "@/types/liveAgent";
 import { toast } from "sonner";
 
 const MarkdownEditor = lazy(() => import("@/components/editor/MarkdownEditor"));
@@ -340,6 +341,7 @@ const Index = () => {
     editorKey,
     updateActiveDoc,
   });
+  const workspaceAuth = useWorkspaceAuth();
   const {
     captureAutoSaveSnapshot,
     createVersionSnapshot,
@@ -351,6 +353,7 @@ const Index = () => {
     versionHistorySyncing,
   } = useVersionHistory({
     activeDoc,
+    aiSummaryAvailable: workspaceAuth.aiSummaryAvailable,
     bumpEditorKey,
     enabled: historyEnabled,
     updateActiveDoc,
@@ -434,7 +437,7 @@ const Index = () => {
     openGoogleConnect,
     refetch: refetchWorkspaceAuth,
     session: workspaceSession,
-  } = useWorkspaceAuth();
+  } = workspaceAuth;
   const {
     error: workspaceFilesError,
     files: workspaceFiles,
@@ -846,24 +849,27 @@ const Index = () => {
         toast.error(message);
       });
   }, [disconnectWorkspace, t]);
-  const handleImportWorkspaceFile = useCallback((fileId: string) => {
-    void importWorkspaceFile({ fileId })
-      .then((result) => {
-        createDocument(resolveImportedDocumentOptions({
-          activeDocId,
-          documents,
-          importedDocument: result.document,
-        }));
-        setWorkspaceImportOpen(false);
-        toast.success(t("hooks.workspace.importSuccess", {
-          name: result.document.name || "Google document",
-        }));
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : t("hooks.workspace.importFailed");
-        toast.error(message);
-      });
+  const importWorkspaceDocumentById = useCallback(async (fileId: string) => {
+    const result = await importWorkspaceFile({ fileId });
+
+    createDocument(resolveImportedDocumentOptions({
+      activeDocId,
+      documents,
+      importedDocument: result.document,
+    }));
+    setWorkspaceImportOpen(false);
+    toast.success(t("hooks.workspace.importSuccess", {
+      name: result.document.name || "Google document",
+    }));
+
+    return result;
   }, [activeDocId, createDocument, documents, importWorkspaceFile, t]);
+  const handleImportWorkspaceFile = useCallback((fileId: string) => {
+    void importWorkspaceDocumentById(fileId).catch((error) => {
+      const message = error instanceof Error ? error.message : t("hooks.workspace.importFailed");
+      toast.error(message);
+    });
+  }, [importWorkspaceDocumentById, t]);
   const handleExportWorkspaceDocument = useCallback((title: string) => {
     void exportWorkspaceDocument(activeDoc, {
       markdown: resolveActiveWorkspaceMarkdown(),
@@ -1156,6 +1162,22 @@ const Index = () => {
 
     createDocument({ mode });
   }, [createDocument, enableStructuredModes]);
+  const handleCreateLiveAgentDocumentDraft = useCallback((draft: AgentNewDocumentDraft) => {
+    const resolvedTitle = draft.title.trim() || t("common.untitled");
+    const markdown = draft.markdown.trim();
+
+    createDocument({
+      content: markdown,
+      mode: "markdown",
+      name: resolvedTitle,
+      sourceSnapshots: {
+        markdown,
+      },
+      storageKind: "docsy",
+      tiptapJson: null,
+    });
+    toast.success(`Created draft "${resolvedTitle}".`);
+  }, [createDocument, t]);
 
   const handleDeleteDoc = useCallback((id: string) => {
     deleteDocument(id);
@@ -1414,12 +1436,22 @@ const Index = () => {
       </Suspense>
     );
   }, [activeDoc.content, activeDoc.id, activeDoc.mode, activeDoc.tiptapJson, advancedBlocksEnabled, canEnableAdvancedBlocks, canEnableDocumentFeatures, documentFeaturesEnabled, editorKey, enableAdvancedBlocks, enableDocumentFeatures, handleContentChange, handleModeChange, handleTiptapChange, setLiveEditorHtml]);
+  const aiUnavailableMessage = useMemo(() => {
+    if (workspaceAuth.apiHealth && !workspaceAuth.apiHealth.configured) {
+      return "Gemini가 연결되어 있지 않습니다.";
+    }
+
+    return aiRuntimeState?.liveAgent.latestStatus?.message || null;
+  }, [aiRuntimeState?.liveAgent.latestStatus?.message, workspaceAuth.apiHealth]);
 
   const aiAssistantDialogProps = aiRuntimeState
     ? {
+      activeDocumentName: activeDoc.name,
+      aiUnavailableMessage,
       busyAction: aiRuntimeState.busyAction,
       compareCandidates: aiRuntimeState.compareCandidates,
       comparePreview: aiRuntimeState.comparePreview,
+      liveAgent: aiRuntimeState.liveAgent,
       onCompare: aiRuntimeState.compareWithDocument,
       onExtractProcedure: aiRuntimeState.extractProcedureFromActiveDocument,
       onGenerateSection: aiRuntimeState.generateSectionPatch,
@@ -1446,9 +1478,34 @@ const Index = () => {
       updateSuggestionPreview: aiRuntimeState.updateSuggestionPreview,
     }
     : {
+      activeDocumentName: activeDoc.name,
+      aiUnavailableMessage,
       busyAction: null,
       compareCandidates: [],
       comparePreview: null,
+      liveAgent: {
+        addDriveReference: () => undefined,
+        availableLocalReferences: [],
+        composerText: "",
+        confirmPendingAction: async () => undefined,
+        discardPendingAction: () => undefined,
+        isSubmitting: false,
+        latestDraftPreview: null,
+        latestDriveCandidates: [],
+        latestError: null,
+        latestStatus: null,
+        messages: [],
+        pendingConfirmation: null,
+        queueDriveImport: () => undefined,
+        removeDriveReference: () => undefined,
+        resetThread: () => undefined,
+        selectedDriveReferences: [],
+        selectedLocalReferenceIds: [],
+        sendMessage: async () => undefined,
+        setComposerText: () => undefined,
+        threadId: "agent-disabled",
+        toggleLocalReference: () => undefined,
+      },
       onCompare: async () => undefined,
       onExtractProcedure: async () => undefined,
       onGenerateSection: async () => undefined,
@@ -1478,9 +1535,13 @@ const Index = () => {
           <AiAssistantRuntime
             activeDoc={activeDoc}
             activeEditor={activeEditor}
+            createDocumentDraft={handleCreateLiveAgentDocumentDraft}
             currentRenderableMarkdown={currentRenderableMarkdown}
             documents={documents}
+            importWorkspaceDocument={importWorkspaceDocumentById}
             loadPatchSet={loadPatchSet}
+            openPatchReview={openPatchReview}
+            openWorkspaceConnection={handleOpenWorkspaceConnection}
             onStateChange={setAiRuntimeState}
           />
         </Suspense>

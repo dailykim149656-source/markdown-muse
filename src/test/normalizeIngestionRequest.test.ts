@@ -282,4 +282,59 @@ describe("normalizeIngestionRequest", () => {
       }),
     ]);
   });
+
+  it("falls back to a Node-safe HTML parser when DOMParser is unavailable", () => {
+    const originalDomParser = globalThis.DOMParser;
+    // @ts-expect-error: test intentionally removes the browser DOM parser.
+    delete globalThis.DOMParser;
+
+    try {
+      const result = normalizeIngestionRequest({
+        fileName: "fallback.html",
+        importedAt: 800,
+        ingestionId: "ing-html-fallback",
+        rawContent: [
+          "<html>",
+          "<head>",
+          "<title>Resume Template</title>",
+          '<meta name="author" content="Alice" />',
+          "</head>",
+          "<body>",
+          '<h1 id="resume">Resume</h1>',
+          "<p>Use this template.</p>",
+          "<figure>",
+          '<img src="/assets/resume.png" alt="Resume preview" />',
+          "<figcaption>Template preview</figcaption>",
+          "</figure>",
+          "<h2>Skills</h2>",
+          "<p>List technical skills here.</p>",
+          "</body>",
+          "</html>",
+        ].join(""),
+        sourceFormat: "html",
+      });
+
+      expect(result.metadata).toEqual({
+        authors: ["Alice"],
+        labels: { resume: "resume" },
+        tags: undefined,
+        title: "Resume Template",
+      });
+      expect(result.sections).toEqual([
+        expect.objectContaining({ level: 1, path: ["Resume"], title: "Resume" }),
+        expect.objectContaining({ level: 2, path: ["Resume", "Skills"], title: "Skills" }),
+      ]);
+      expect(result.images).toEqual([
+        expect.objectContaining({
+          alt: "Resume preview",
+          caption: "Template preview",
+          src: "/assets/resume.png",
+        }),
+      ]);
+    } finally {
+      if (originalDomParser) {
+        globalThis.DOMParser = originalDomParser;
+      }
+    }
+  });
 });

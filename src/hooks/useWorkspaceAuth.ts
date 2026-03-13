@@ -6,6 +6,7 @@ import {
   disconnectGoogleWorkspace,
   getWorkspaceSession,
   getWorkspaceApiBaseUrl,
+  type WorkspaceApiHealthStatus,
 } from "@/lib/workspace/client";
 
 const WORKSPACE_AUTH_QUERY_KEY = ["workspace-auth-session"];
@@ -16,6 +17,7 @@ interface WorkspaceConnectivityDiagnostic {
 }
 
 export const useWorkspaceAuth = () => {
+  const [apiHealth, setApiHealth] = useState<WorkspaceApiHealthStatus | null>(null);
   const [connectivityError, setConnectivityError] = useState<Error | null>(null);
   const [connectivityDiagnostic, setConnectivityDiagnostic] = useState<WorkspaceConnectivityDiagnostic | null>(null);
   const queryClient = useQueryClient();
@@ -40,9 +42,11 @@ export const useWorkspaceAuth = () => {
 
   const verifyWorkspaceApi = useCallback(async () => {
     try {
-      await checkWorkspaceApiHealth();
+      const health = await checkWorkspaceApiHealth();
+      setApiHealth(health);
       setConnectivityError(null);
       setConnectivityDiagnostic(null);
+      return health;
     } catch (error) {
       const baseUrl = getWorkspaceApiBaseUrl();
       const message = error instanceof Error ? error.message : "Workspace API health check failed.";
@@ -51,6 +55,7 @@ export const useWorkspaceAuth = () => {
         target: baseUrl,
         details: message,
       };
+      setApiHealth(null);
       setConnectivityDiagnostic(diagnostic);
       setConnectivityError(wrapped);
       throw wrapped;
@@ -84,6 +89,8 @@ export const useWorkspaceAuth = () => {
     || null;
 
   return {
+    aiSummaryAvailable: Boolean(apiHealth?.ok && apiHealth.configured),
+    apiHealth,
     connected: session.connected,
     connectivityDiagnostic,
     disconnect,

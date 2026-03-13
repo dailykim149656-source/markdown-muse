@@ -1,4 +1,6 @@
 import type {
+  AutosaveDiffSummaryRequest,
+  AutosaveDiffSummaryResponse,
   GenerateTocRequest,
   GenerateTocResponse,
   GenerateSectionRequest,
@@ -8,9 +10,32 @@ import type {
   SummarizeDocumentRequest,
   SummarizeDocumentResponse,
 } from "@/types/aiAssistant";
+import type { AgentTurnRequest, AgentTurnResponse } from "@/types/liveAgent";
 
 const getAiApiBaseUrl = () => {
   const configured = import.meta.env.VITE_AI_API_BASE_URL?.trim();
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+
+    if (isLocalhost) {
+      if (!configured) {
+        return "/api";
+      }
+
+      try {
+        const configuredUrl = new URL(configured);
+        const isLoopbackTarget = configuredUrl.hostname === "localhost" || configuredUrl.hostname === "127.0.0.1";
+
+        if (isLoopbackTarget) {
+          return "/api";
+        }
+      } catch {
+        // Keep the configured base URL when it is not a valid absolute URL.
+      }
+    }
+  }
 
   if (configured) {
     return configured.replace(/\/$/, "");
@@ -47,12 +72,27 @@ const readNetworkErrorMessage = (baseUrl: string, error: unknown) => {
   return `Unable to reach the AI server at ${baseUrl}. Start \`npm run ai:server\` for local development, or set \`VITE_AI_API_BASE_URL\` to your Cloud Run service URL.${detail}`;
 };
 
+const normalizeAiPath = (baseUrl: string, path: string) => {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+
+  if (baseUrl.startsWith("/")) {
+    const relativePath = normalizedPath.startsWith("/api")
+      ? normalizedPath.slice(4) || "/"
+      : normalizedPath;
+
+    return `${baseUrl.replace(/\/$/, "")}${relativePath}`;
+  }
+
+  return `${baseUrl}${normalizedPath}`;
+};
+
 const postJson = async <TResponse, TRequest>(path: string, body: TRequest): Promise<TResponse> => {
   const baseUrl = getAiApiBaseUrl();
+  const requestUrl = normalizeAiPath(baseUrl, path);
   let response: Response;
 
   try {
-    response = await fetch(`${baseUrl}${path}`, {
+    response = await fetch(requestUrl, {
       body: JSON.stringify(body),
       headers: {
         "Content-Type": "application/json",
@@ -72,6 +112,12 @@ const postJson = async <TResponse, TRequest>(path: string, body: TRequest): Prom
 
 export const summarizeDocument = (request: SummarizeDocumentRequest) =>
   postJson<SummarizeDocumentResponse, SummarizeDocumentRequest>("/api/ai/summarize", request);
+
+export const summarizeAutosaveDiff = (request: AutosaveDiffSummaryRequest) =>
+  postJson<AutosaveDiffSummaryResponse, AutosaveDiffSummaryRequest>("/api/ai/autosave-diff-summary", request);
+
+export const liveAgentTurn = (request: AgentTurnRequest) =>
+  postJson<AgentTurnResponse, AgentTurnRequest>("/api/ai/agent/turn", request);
 
 export const generateSection = (request: GenerateSectionRequest) =>
   postJson<GenerateSectionResponse, GenerateSectionRequest>("/api/ai/generate-section", request);

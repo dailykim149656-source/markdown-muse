@@ -3,6 +3,7 @@ import {
   BrainCircuit,
   Braces,
   Check,
+  ChevronDown,
   Clock,
   FileCode,
   FileJson,
@@ -26,6 +27,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -169,6 +171,40 @@ const FileSidebar = ({
   };
 
   const sortedDocuments = [...documents].sort((leftDocument, rightDocument) => rightDocument.updatedAt - leftDocument.updatedAt);
+  const createDocumentOptions: Array<{
+    icon: typeof FilePlus;
+    key: string;
+    mode: EditorMode;
+    onSelect?: () => void;
+  }> = [
+    {
+      icon: FilePlus,
+      key: "sidebar.newMarkdown",
+      mode: "markdown",
+    },
+    {
+      icon: FileCode,
+      key: "sidebar.newLatex",
+      mode: "latex",
+    },
+    {
+      icon: FileType,
+      key: "sidebar.newHtml",
+      mode: "html",
+    },
+    {
+      icon: FileJson,
+      key: "sidebar.newJson",
+      mode: "json",
+      onSelect: showStructuredCreateAction ? onOpenStructuredModes : undefined,
+    },
+    {
+      icon: Braces,
+      key: "sidebar.newYaml",
+      mode: "yaml",
+      onSelect: showStructuredCreateAction ? onOpenStructuredModes : undefined,
+    },
+  ];
 
   const activateTab = (tab: SidebarTab) => {
     setActiveTab(tab);
@@ -419,49 +455,48 @@ const FileSidebar = ({
               <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.templates")}</span>
             </Button>
           )}
-          <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("markdown")} size="sm" title={t("sidebar.newMarkdown")} variant="ghost">
-            <FilePlus className="h-3.5 w-3.5" />
-            <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newMarkdown")}</span>
-          </Button>
-          <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("latex")} size="sm" title={t("sidebar.newLatex")} variant="ghost">
-            <FileCode className="h-3.5 w-3.5" />
-            <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newLatex")}</span>
-          </Button>
-          <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("html")} size="sm" title={t("sidebar.newHtml")} variant="ghost">
-            <FileType className="h-3.5 w-3.5" />
-            <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newHtml")}</span>
-          </Button>
-          {showStructuredCreateAction ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" size="sm" title={t("sidebar.structuredCreate")} variant="ghost">
-                  <Braces className="h-3.5 w-3.5" />
-                  <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.structuredCreate")}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-36">
-                <DropdownMenuItem onClick={() => { onOpenStructuredModes?.(); onNewDoc("json"); }} className="text-xs">
-                  <FileJson className="mr-2 h-3.5 w-3.5" />
-                  {t("sidebar.newJson")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { onOpenStructuredModes?.(); onNewDoc("yaml"); }} className="text-xs">
-                  <Braces className="mr-2 h-3.5 w-3.5" />
-                  {t("sidebar.newYaml")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <>
-              <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("json")} size="sm" title={t("sidebar.newJson")} variant="ghost">
-                <FileJson className="h-3.5 w-3.5" />
-                <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newJson")}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                className="h-7 justify-between gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
+                size="sm"
+                title={t("newDocument")}
+                variant="ghost"
+              >
+                <span className="flex items-center gap-1.5">
+                  <FilePlus className="h-3.5 w-3.5" />
+                  <span className="group-data-[collapsible=icon]:hidden">{t("newDocument")}</span>
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden" />
               </Button>
-              <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("yaml")} size="sm" title={t("sidebar.newYaml")} variant="ghost">
-                <Braces className="h-3.5 w-3.5" />
-                <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newYaml")}</span>
-              </Button>
-            </>
-          )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+              {createDocumentOptions.map((option, index) => {
+                const Icon = option.icon;
+                const isStructured = option.mode === "json" || option.mode === "yaml";
+                const showSeparator = index === 3;
+
+                return (
+                  <div key={option.mode}>
+                    {showSeparator ? <DropdownMenuSeparator /> : null}
+                    <DropdownMenuItem
+                      className="text-xs"
+                      onClick={() => {
+                        option.onSelect?.();
+                        onNewDoc(option.mode);
+                      }}
+                    >
+                      <Icon className="mr-2 h-3.5 w-3.5" />
+                      {t(option.key)}
+                      {isStructured && showStructuredCreateAction ? (
+                        <span className="ml-auto text-[10px] text-muted-foreground">JSON/YAML</span>
+                      ) : null}
+                    </DropdownMenuItem>
+                  </div>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </SidebarFooter>
     </Sidebar>

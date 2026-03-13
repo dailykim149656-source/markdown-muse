@@ -22,6 +22,12 @@ export class WorkspaceApiError extends Error {
   }
 }
 
+export interface WorkspaceApiHealthStatus {
+  configured: boolean;
+  model?: string;
+  ok: boolean;
+}
+
 const isLikelyHtml = (text: string) => {
   const normalized = text.trimStart().toLowerCase();
   return normalized.startsWith("<!doctype") || normalized.startsWith("<html");
@@ -29,6 +35,28 @@ const isLikelyHtml = (text: string) => {
 
 export const getWorkspaceApiBaseUrl = () => {
   const configured = import.meta.env.VITE_AI_API_BASE_URL?.trim();
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+
+    if (isLocalhost) {
+      if (!configured) {
+        return "/api";
+      }
+
+      try {
+        const configuredUrl = new URL(configured);
+        const isLoopbackTarget = configuredUrl.hostname === "localhost" || configuredUrl.hostname === "127.0.0.1";
+
+        if (isLoopbackTarget) {
+          return "/api";
+        }
+      } catch {
+        // Keep the configured base URL when it is not a valid absolute URL.
+      }
+    }
+  }
 
   if (configured) {
     return configured.replace(/\/$/, "");
@@ -39,7 +67,7 @@ export const getWorkspaceApiBaseUrl = () => {
     const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
 
     if (isLocalhost) {
-      return "http://localhost:8787";
+      return "/api";
     }
   }
 
@@ -149,11 +177,7 @@ const requestJson = async <TResponse>(
 };
 
 export const checkWorkspaceApiHealth = async () => {
-  await requestJson<{
-    ok: boolean;
-    model?: string;
-    configured?: boolean;
-  }>("/api/ai/health", {
+  return requestJson<WorkspaceApiHealthStatus>("/api/ai/health", {
     method: "GET",
   });
 };

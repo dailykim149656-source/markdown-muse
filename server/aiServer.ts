@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+﻿import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { normalizeIngestionRequest } from "../src/lib/ingestion/normalizeIngestionRequest";
 import { keywordRetrieve } from "../src/lib/retrieval/keywordRetrieval";
@@ -9,8 +9,16 @@ import {
   type SummaryResponse,
 } from "../src/lib/ai/summaryContracts";
 import { buildActionPrompt } from "./modules/agent/buildActionPrompt";
-import { actionResponseSchema, normalizeActionResponse } from "./modules/agent/actionResponse";
 import {
+  buildNewDraftFallbackPrompt,
+  buildTurnPrompt,
+  hasExplicitNewDraftRequestInConversation,
+  isExplicitNewDraftRequest,
+} from "./modules/agent/buildTurnPrompt";
+import { actionResponseSchema, normalizeActionResponse } from "./modules/agent/actionResponse";
+import { agentTurnResponseSchema, normalizeAgentTurnResponse } from "./modules/agent/turnResponse";
+import {
+  generateStructuredJson,
   generateMultimodalStructuredJson,
   getGeminiModel,
   schemaType,
@@ -24,7 +32,14 @@ import {
   writeHttpResponse,
 } from "./modules/http/http";
 import { handleWorkspaceRoute } from "./modules/workspace/routes";
+import {
+  loadDriveReferenceDocuments,
+  searchDriveDocuments,
+  shouldSearchDriveDocuments,
+} from "./modules/workspace/searchDriveDocuments";
 import type {
+  AutosaveDiffSummaryRequest,
+  AutosaveDiffSummaryResponse,
   GenerateTocRequest,
   GenerateTocResponse,
   GenerateSectionRequest,
@@ -35,6 +50,7 @@ import type {
   SummarizeDocumentResponse,
 } from "../src/types/aiAssistant";
 import type { Locale } from "../src/i18n/types";
+import type { AgentStatus, AgentTurnRequest, AgentTurnResponse } from "../src/types/liveAgent";
 
 console.log("[AI Server] Initializing modules...");
 const PORT = Number(process.env.PORT || process.env.AI_SERVER_PORT || 8080);
@@ -54,7 +70,12 @@ const assertMarkdownDocument = (
 };
 
 const getRequestImages = (
-  request: SummarizeDocumentRequest | GenerateSectionRequest | GenerateTocRequest | ProposeEditorActionRequest,
+  request:
+    | AgentTurnRequest
+    | SummarizeDocumentRequest
+    | GenerateSectionRequest
+    | GenerateTocRequest
+    | ProposeEditorActionRequest,
 ) => {
   if (!request.screenshot?.dataBase64?.trim() || !request.screenshot.mimeType?.trim()) {
     return [];
@@ -143,6 +164,14 @@ const summarizeResponseSchema = {
     summary: { type: schemaType.STRING },
   },
   required: ["summary", "bulletPoints", "attributions"],
+  type: schemaType.OBJECT,
+};
+
+const autosaveDiffSummaryResponseSchema = {
+  properties: {
+    summary: { type: schemaType.STRING },
+  },
+  required: ["summary"],
   type: schemaType.OBJECT,
 };
 
@@ -261,6 +290,45 @@ const handleSummarize = async (request: SummarizeDocumentRequest): Promise<Summa
   }
 
   return hydratedResponse;
+};
+
+const buildAutosaveDiffSummaryPrompt = (request: AutosaveDiffSummaryRequest, locale: Locale) => `
+You are writing a concise autosave history summary for a documentation editor.
+Use only the supplied diff payload.
+Return strict JSON matching the provided schema.
+${localePromptSuffix(locale)}
+
+Rules:
+- Write exactly one sentence.
+- Be concrete about what changed.
+- Prioritize the highest-signal differences from the supplied deltas.
+- Do not mention scores, chunk ids, or internal IDs unless they are already present in the diff text.
+- Do not speculate beyond the provided payload.
+
+Document:
+${JSON.stringify(request.document, null, 2)}
+
+Comparison:
+${JSON.stringify(request.comparison, null, 2)}
+`.trim();
+
+const handleAutosaveDiffSummary = async (
+  request: AutosaveDiffSummaryRequest,
+): Promise<AutosaveDiffSummaryResponse> => {
+  if (!request.comparison?.deltas?.length) {
+    throw new HttpError(400, "Autosave diff summary requires at least one diff delta.");
+  }
+
+  const requestId = randomUUID();
+  const response = await generateStructuredJson<{ summary: string }>({
+    prompt: buildAutosaveDiffSummaryPrompt(request, resolveAiLocale(request.locale)),
+    responseSchema: autosaveDiffSummaryResponseSchema,
+  });
+
+  return {
+    requestId,
+    summary: response.summary.trim(),
+  };
 };
 
 const buildSectionPrompt = (
@@ -408,6 +476,295 @@ const handleProposeAction = async (request: ProposeEditorActionRequest): Promise
   return normalizeActionResponse(response, request);
 };
 
+const newDraftFallbackResponseSchema = {
+  properties: {
+    markdown: { type: schemaType.STRING },
+    rationale: { type: schemaType.STRING },
+    title: { type: schemaType.STRING },
+  },
+  required: ["title", "markdown", "rationale"],
+  type: schemaType.OBJECT,
+};
+
+const findLatestUserMessage = (request: AgentTurnRequest) => {
+  const latestUserMessage = [...request.messages]
+    .reverse()
+    .find((message) => message.role === "user" && message.text.trim().length > 0)
+    ?.text
+    .trim();
+
+  if (!latestUserMessage) {
+    throw new HttpError(400, "Live agent turn requires at least one user message.");
+  }
+
+  return latestUserMessage;
+};
+
+const createStaticAgentResponse = (
+  assistantText: string,
+  effect: AgentTurnResponse["effect"],
+): AgentTurnResponse => ({
+  assistantMessage: {
+    createdAt: Date.now(),
+    id: `agent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role: "assistant",
+    text: assistantText,
+  },
+  effect,
+});
+
+const buildAgentStatusMessage = ({
+  kind,
+  locale,
+}: {
+  kind: AgentStatus["kind"];
+  locale?: Locale;
+}) => {
+  if (kind === "gemini_rate_limited") {
+    return locale === "ko"
+      ? "Gemini ?ъ슜 ?쒕룄???꾨떖?덉뒿?덈떎."
+      : "Gemini usage is currently rate-limited.";
+  }
+
+  if (kind === "gemini_misconfigured") {
+    return locale === "ko"
+      ? "Gemini 紐⑤뜽 ?ㅼ젙???щ컮瑜댁? ?딆뒿?덈떎."
+      : "The Gemini model configuration is invalid.";
+  }
+
+  return locale === "ko"
+    ? "Gemini媛 ?곌껐?섏뼱 ?덉? ?딆뒿?덈떎."
+    : "Gemini is not connected.";
+};
+
+const classifyGeminiStatus = ({
+  error,
+  locale,
+}: {
+  error: unknown;
+  locale?: Locale;
+}): AgentStatus => {
+  const statusCode = typeof error === "object" && error !== null && "status" in error
+    ? Number((error as { status?: unknown }).status)
+    : undefined;
+  const message = error instanceof Error ? error.message : String(error);
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    statusCode === 429
+    || normalizedMessage.includes("resource_exhausted")
+    || normalizedMessage.includes("quota")
+    || normalizedMessage.includes("rate limit")
+  ) {
+    return {
+      kind: "gemini_rate_limited",
+      message: buildAgentStatusMessage({ kind: "gemini_rate_limited", locale }),
+    };
+  }
+
+  if (
+    statusCode === 400
+    || normalizedMessage.includes("unexpected model name format")
+    || (normalizedMessage.includes("invalid_argument") && normalizedMessage.includes("model"))
+  ) {
+    return {
+      kind: "gemini_misconfigured",
+      message: buildAgentStatusMessage({ kind: "gemini_misconfigured", locale }),
+    };
+  }
+
+  return {
+    kind: "gemini_unavailable",
+    message: buildAgentStatusMessage({ kind: "gemini_unavailable", locale }),
+  };
+};
+
+const buildAgentStatusResponse = ({
+  locale,
+  status,
+}: {
+  locale?: Locale;
+  status: AgentStatus;
+}) => ({
+  agentStatus: status,
+  assistantText: status.message,
+  effect: {
+    type: "reply_only" as const,
+  },
+});
+
+const buildDraftNewDocumentResponse = ({
+  generatedDraft,
+  locale,
+}: {
+  generatedDraft: {
+    markdown: string;
+    rationale: string;
+    title: string;
+  };
+  locale?: Locale;
+}) => ({
+  assistantText: locale === "ko"
+    ? "\uC0C8 \uCD08\uC548\uC774 \uC900\uBE44\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uC544\uB798 \uBBF8\uB9AC\uBCF4\uAE30\uB97C \uD655\uC778\uD55C \uB4A4 \uC0C8 \uBB38\uC11C\uB85C \uCD94\uAC00\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+    : "A new draft is ready. Review the preview below and create it as a new document when ready.",
+  effect: {
+    summary: generatedDraft.rationale,
+    title: generatedDraft.title,
+    type: "draft_new_document" as const,
+  },
+  newDocumentDraft: {
+    kind: "new_document" as const,
+    markdown: generatedDraft.markdown,
+    rationale: generatedDraft.rationale,
+    title: generatedDraft.title,
+  },
+});
+
+const generateDedicatedNewDraft = async ({
+  latestUserMessage,
+  request,
+}: {
+  latestUserMessage: string;
+  request: AgentTurnRequest;
+}) => {
+  const generatedDraft = await generateMultimodalStructuredJson<{
+    markdown: string;
+    rationale: string;
+    title: string;
+  }>({
+    images: getRequestImages(request),
+    prompt: buildNewDraftFallbackPrompt({
+      latestUserMessage,
+      recentUserMessages: request.messages
+        .filter((message) => message.role === "user")
+        .map((message) => message.text)
+        .slice(-6),
+      request,
+    }),
+    responseSchema: newDraftFallbackResponseSchema,
+  });
+
+  return buildDraftNewDocumentResponse({
+    generatedDraft,
+    locale: request.locale,
+  });
+};
+
+const handleAgentTurn = async (
+  httpRequest: import("node:http").IncomingMessage,
+  request: AgentTurnRequest,
+): Promise<AgentTurnResponse> => {
+  const latestUserMessage = findLatestUserMessage(request);
+  const explicitNewDraftRequest = isExplicitNewDraftRequest(latestUserMessage)
+    || hasExplicitNewDraftRequestInConversation(request.messages);
+  const wantsDriveSearch = shouldSearchDriveDocuments({
+    driveReferenceFileIds: request.driveReferenceFileIds,
+    latestUserMessage,
+  });
+  let driveCandidates: AgentTurnResponse["driveCandidates"] = [];
+  let driveReferences: Array<{ fileId: string; fileName: string; excerpt: string }> = [];
+
+  if (wantsDriveSearch || request.driveReferenceFileIds.length > 0) {
+    try {
+      const loadedReferences = await loadDriveReferenceDocuments(httpRequest, request.driveReferenceFileIds);
+
+      driveReferences = loadedReferences.map((reference) => ({
+        excerpt: reference.excerpt,
+        fileId: reference.fileId,
+        fileName: reference.fileName,
+      }));
+
+      if (wantsDriveSearch) {
+        driveCandidates = await searchDriveDocuments({
+          latestUserMessage,
+          request: httpRequest,
+        });
+      }
+    } catch (error) {
+      if (error instanceof HttpError && error.statusCode === 401) {
+        return createStaticAgentResponse(
+          "Google Workspace access is required before I can search or import Google Docs. Open the connection dialog first.",
+          { type: "open_google_connect" },
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  if (wantsDriveSearch && (!driveCandidates || driveCandidates.length === 0)) {
+    return createStaticAgentResponse(
+      "I could not find a strong Google Docs match for that request. Try a more specific title, topic, or workflow phrase.",
+      { type: "reply_only" },
+    );
+  }
+
+  if (explicitNewDraftRequest && !wantsDriveSearch) {
+    try {
+      return normalizeAgentTurnResponse({
+        availableImportTargets: [],
+        driveCandidates: [],
+        response: await generateDedicatedNewDraft({
+          latestUserMessage,
+          request,
+        }),
+      });
+    } catch (error) {
+      return normalizeAgentTurnResponse({
+        availableImportTargets: [],
+        driveCandidates: [],
+        response: buildAgentStatusResponse({
+          locale: request.locale,
+          status: classifyGeminiStatus({
+            error,
+            locale: request.locale,
+          }),
+        }),
+      });
+    }
+  }
+
+  let response;
+
+  try {
+    response = await generateMultimodalStructuredJson({
+      images: getRequestImages(request),
+      prompt: buildTurnPrompt({
+        driveCandidates: driveCandidates || [],
+        driveReferences,
+        latestUserMessage,
+        request,
+      }),
+      responseSchema: agentTurnResponseSchema,
+    });
+  } catch (error) {
+    response = buildAgentStatusResponse({
+      locale: request.locale,
+      status: classifyGeminiStatus({
+        error,
+        locale: request.locale,
+      }),
+    });
+  }
+
+  const availableImportTargets = Array.from(new Map<string, { fileId: string; fileName: string }>([
+    ...(driveCandidates || []).map((candidate): [string, { fileId: string; fileName: string }] => [candidate.fileId, {
+      fileId: candidate.fileId,
+      fileName: candidate.fileName,
+    }]),
+    ...driveReferences.map((reference): [string, { fileId: string; fileName: string }] => [reference.fileId, {
+      fileId: reference.fileId,
+      fileName: reference.fileName,
+    }]),
+  ]).values());
+
+  return normalizeAgentTurnResponse({
+    availableImportTargets,
+    driveCandidates: driveCandidates || [],
+    response,
+  });
+};
+
 const server = createServer(async (request, response) => {
   const requestId = randomUUID();
   console.log(`[AI Server] [${requestId}] ${request.method} ${request.url}`);
@@ -457,6 +814,20 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "POST" && request.url === "/api/ai/autosave-diff-summary") {
+      const payload = await parseRequestBody<AutosaveDiffSummaryRequest>(request);
+      const result = await handleAutosaveDiffSummary(payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/ai/agent/turn") {
+      const payload = await parseRequestBody<AgentTurnRequest>(request);
+      const result = await handleAgentTurn(request, payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
     if (request.method === "POST" && request.url === "/api/ai/generate-section") {
       const payload = await parseRequestBody<GenerateSectionRequest>(request);
       const result = await handleGenerateSection(payload);
@@ -492,3 +863,5 @@ console.log("[AI Server] Starting listener...");
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`[AI Server] Listening on http://0.0.0.0:${PORT}`);
 });
+
+

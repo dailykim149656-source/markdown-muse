@@ -3,10 +3,13 @@ import type { Editor as TiptapEditor } from "@tiptap/react";
 import type { KnowledgeSuggestionContext } from "@/components/editor/sidebarFeatureTypes";
 import { useAiAssistant } from "@/hooks/useAiAssistant";
 import type { AiBusyAction, PatchPreviewResult, TocPreviewResult } from "@/hooks/useAiAssistant";
+import { useLiveAgent } from "@/hooks/useLiveAgent";
+import type { LiveAgentRuntimeState } from "@/hooks/useLiveAgent";
 import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
 import type { SummarizeDocumentResponse } from "@/types/aiAssistant";
 import type { DocumentData } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
+import type { AgentNewDocumentDraft } from "@/types/liveAgent";
 
 export interface AiAssistantRuntimeState {
   assistantOpen: boolean;
@@ -29,23 +32,32 @@ export interface AiAssistantRuntimeState {
   summaryResult: SummarizeDocumentResponse | null;
   tocPreview: TocPreviewResult | null;
   updateSuggestionPreview: PatchPreviewResult | null;
+  liveAgent: LiveAgentRuntimeState;
 }
 
 interface AiAssistantRuntimeProps {
   activeDoc: DocumentData;
   activeEditor: TiptapEditor | null;
+  createDocumentDraft: (draft: AgentNewDocumentDraft) => void;
   currentRenderableMarkdown: string;
   documents: DocumentData[];
+  importWorkspaceDocument: (fileId: string) => Promise<void>;
   loadPatchSet: (patchSet: DocumentPatchSet) => void;
+  openPatchReview: () => void;
+  openWorkspaceConnection: () => void;
   onStateChange: (state: AiAssistantRuntimeState | null) => void;
 }
 
 const AiAssistantRuntime = ({
   activeDoc,
   activeEditor,
+  createDocumentDraft,
   currentRenderableMarkdown,
   documents,
+  importWorkspaceDocument,
   loadPatchSet,
+  openPatchReview,
+  openWorkspaceConnection,
   onStateChange,
 }: AiAssistantRuntimeProps) => {
   const state = useAiAssistant({
@@ -54,6 +66,19 @@ const AiAssistantRuntime = ({
     currentRenderableMarkdown,
     documents,
     loadPatchSet,
+  });
+  const liveAgent = useLiveAgent({
+    activeDoc,
+    activeEditor,
+    currentRenderableMarkdown,
+    documents,
+    onCreateDocumentDraft: createDocumentDraft,
+    onImportDriveDocument: importWorkspaceDocument,
+    onOpenPatchReview: (patchSet) => {
+      loadPatchSet(patchSet);
+      openPatchReview();
+    },
+    onOpenWorkspaceConnection: openWorkspaceConnection,
   });
 
   useEffect(() => {
@@ -75,8 +100,10 @@ const AiAssistantRuntime = ({
       summaryResult: state.summaryResult,
       tocPreview: state.tocPreview,
       updateSuggestionPreview: state.updateSuggestionPreview,
+      liveAgent,
     });
   }, [
+    liveAgent,
     onStateChange,
     state.assistantOpen,
     state.busyAction,

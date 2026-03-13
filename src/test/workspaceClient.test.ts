@@ -10,6 +10,25 @@ describe("workspace client", () => {
     vi.restoreAllMocks();
   });
 
+  it("returns structured health data from the health endpoint", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      configured: true,
+      model: "gemini-2.5-flash",
+      ok: true,
+    }), {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      status: 200,
+    }));
+
+    await expect(checkWorkspaceApiHealth()).resolves.toEqual({
+      configured: true,
+      model: "gemini-2.5-flash",
+      ok: true,
+    });
+  });
+
   it("throws a descriptive error when a workspace endpoint returns HTML", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response("<!doctype html><html></html>", {
       headers: {
@@ -19,7 +38,7 @@ describe("workspace client", () => {
     }));
 
     await expect(getWorkspaceSession()).rejects.toMatchObject({
-      message: expect.stringContaining("Unexpected HTML response from http://localhost:8787/api/auth/session."),
+      message: expect.stringContaining("Unexpected HTML response from /api/auth/session."),
       name: "WorkspaceApiError",
       statusCode: 200,
     } satisfies Partial<WorkspaceApiError>);

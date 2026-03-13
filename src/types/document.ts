@@ -43,6 +43,8 @@ export interface DocumentVersionSnapshotMetadata {
   exportFormat?: string;
   patchCount?: number;
   patchSetTitle?: string;
+  summary?: string;
+  summaryGeneratedAt?: number;
 }
 
 export interface DocumentVersionSnapshot {

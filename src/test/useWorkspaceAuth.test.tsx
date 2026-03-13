@@ -74,4 +74,27 @@ describe("useWorkspaceAuth", () => {
       target: "/api",
     });
   });
+
+  it("exposes structured API health when the health check succeeds", async () => {
+    checkWorkspaceApiHealth.mockResolvedValueOnce({
+      configured: true,
+      model: "gemini-2.5-flash",
+      ok: true,
+    });
+
+    const { result } = renderHook(
+      () => useWorkspaceAuth(),
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => {
+      expect(result.current.apiHealth).toEqual({
+        configured: true,
+        model: "gemini-2.5-flash",
+        ok: true,
+      });
+    });
+
+    expect(result.current.aiSummaryAvailable).toBe(true);
+  });
 });
