@@ -15,6 +15,9 @@ const isPatchTarget = (value: unknown) => {
       return typeof value.nodeId === "string"
         && typeof value.startOffset === "number"
         && typeof value.endOffset === "number";
+    case "document_text":
+      return typeof value.startOffset === "number"
+        && typeof value.endOffset === "number";
     case "attribute":
       return typeof value.nodeId === "string" && typeof value.attributePath === "string";
     case "structured_path":

@@ -574,10 +574,10 @@ const applyTextRangePatch = (patch: DocumentPatch, location: NodeLocation, repla
 export const applyDocumentPatch = (document: DocumentAst, patch: DocumentPatch): DocumentAst => {
   const nextDocument = cloneDocumentAst(document);
 
-  if (patch.target.targetType === "structured_path") {
+  if (patch.target.targetType === "structured_path" || patch.target.targetType === "document_text") {
     throw new PatchApplicationError(
       patch.patchId,
-      `Patch "${patch.patchId}" targets structured data, which is not supported by the rich-text AST engine.`,
+      `Patch "${patch.patchId}" targets ${patch.target.targetType}, which is not supported by the rich-text AST engine.`,
     );
   }
 

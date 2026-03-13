@@ -22,6 +22,7 @@ export type PreviewFormat = "asciidoc" | "html" | "latex" | "markdown" | "rst" |
 
 interface TexValidationInspectorProps extends TexValidationPanelProps {
   isExportingPdf: boolean;
+  onAiFix?: () => void;
   onCompilePdf: () => void;
   onRunValidation: () => void;
 }
@@ -206,6 +207,19 @@ const ExportPreviewPanel = ({
         </div>
 
         <div className="flex items-center gap-1">
+          {texValidationProps?.canAiFix && texValidationProps.onAiFix && (
+            <Button
+              className="h-7 gap-1 px-2 text-[11px]"
+              disabled={texValidationProps.isAiFixing}
+              onClick={texValidationProps.onAiFix}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <FileSearch className="h-3.5 w-3.5" />
+              {texValidationProps.isAiFixing ? t("texValidation.aiFixing") : t("texValidation.aiFix")}
+            </Button>
+          )}
           {activeTab === "preview" ? (
             <>
               <Button

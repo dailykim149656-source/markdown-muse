@@ -307,6 +307,11 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
                   ? t("patchReview.targetNode", { nodeId: selectedPatch.target.nodeId })
                   : selectedPatch.target.targetType === "attribute"
                     ? t("patchReview.targetAttribute", { nodeId: selectedPatch.target.nodeId, path: selectedPatch.target.attributePath })
+                    : selectedPatch.target.targetType === "document_text"
+                      ? t("patchReview.targetDocumentText", {
+                        end: selectedPatch.target.endOffset,
+                        start: selectedPatch.target.startOffset,
+                      })
                     : selectedPatch.target.targetType === "text_range"
                       ? t("patchReview.targetTextRange", {
                         nodeId: selectedPatch.target.nodeId,

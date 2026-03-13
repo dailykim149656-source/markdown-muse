@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import GraphFilterMenus from "@/components/editor/GraphFilterMenus";
 import GraphCanvas from "@/components/editor/GraphCanvas";
 import {
   Dialog,
@@ -46,14 +47,11 @@ import {
   applyGraphMode,
   applyIssueFilter,
   edgeBadgeVariant,
-  edgeFilterKey,
   edgeGroupOrder,
   edgeKindLabelKey,
-  graphModeKey,
-  issueFilterKey,
   issueKindLabelKey,
-  nodeFilterKey,
   nodeKindOrder,
+  nodeFilterKey,
   toGraphNavigationTarget,
 } from "@/components/editor/workspaceGraphUtils";
 import { deriveSemanticOverlay } from "@/components/editor/workspaceSemanticOverlay";
@@ -573,8 +571,8 @@ const GraphExplorerDialog = ({
       </div>
 
       <div className="border-b px-6 py-4">
-          <div className="flex flex-col gap-3">
-            <div className="relative">
+        <div className="flex flex-col gap-3">
+          <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
@@ -582,101 +580,52 @@ const GraphExplorerDialog = ({
               placeholder={t("knowledge.graphSearchPlaceholder")}
               value={query}
             />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(["full", "document", "issues"] as GraphMode[]).map((value) => (
-                <Button
-                  className="h-7 px-2 text-[11px]"
-                  key={`dialog-graph-mode-${value}`}
-                  onClick={() => setGraphMode(value)}
-                  size="sm"
-                  type="button"
-                  variant={graphMode === value ? "secondary" : "ghost"}
-                >
-                  {t(graphModeKey(value))}
-                </Button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(["all", "unresolved_reference", "duplicate_document", "missing_section", "conflicting_procedure", "outdated_source", "stale_index", "image_missing_description"] as IssueFilter[]).map((value) => (
-                <Button
-                  className="h-7 px-2 text-[11px]"
-                  key={`dialog-issue-filter-${value}`}
-                  onClick={() => setIssueFilter(value)}
-                  size="sm"
-                  type="button"
-                  variant={issueFilter === value ? "secondary" : "ghost"}
-                >
-                  {t(issueFilterKey(value))}
-                </Button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(["all", "document", "section", "image"] as NodeFilter[]).map((value) => (
-              <Button
-                className="h-7 px-2 text-[11px]"
-                key={`dialog-node-filter-${value}`}
-                onClick={() => setNodeFilter(value)}
-                size="sm"
-                type="button"
-                variant={nodeFilter === value ? "secondary" : "ghost"}
-              >
-                {t(nodeFilterKey(value))}
-              </Button>
-            ))}
-            <Button
-              className="h-7 px-2 text-[11px]"
-              onClick={() => setIssuesOnly((current) => !current)}
-              size="sm"
-              type="button"
-              variant={issuesOnly ? "secondary" : "ghost"}
-            >
-              {t("knowledge.graphIssuesOnly")}
-            </Button>
-            <Button
-              className="h-7 gap-1 px-2 text-[11px]"
-              disabled={!selectedNode}
-              onClick={() => setFocusMode((current) => !current)}
-              size="sm"
-              type="button"
-              variant={focusMode ? "secondary" : "ghost"}
-            >
-              <LocateFixed className="h-3.5 w-3.5" />
-              {t(focusMode ? "knowledge.graphFocusActive" : "knowledge.graphFocusSelection")}
-            </Button>
-            <Button
-              className="h-7 px-2 text-[11px]"
-              onClick={() => setSemanticOverlayEnabled((current) => !current)}
-              size="sm"
-              type="button"
-              variant={semanticOverlayEnabled ? "secondary" : "ghost"}
-            >
-              {t("knowledge.graphSemanticToggle")}
-            </Button>
-            <Button
-              className="h-7 gap-1 px-2 text-[11px]"
-              onClick={resetView}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              {t("knowledge.graphResetView")}
-            </Button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {(["all", "containment", "reference", "similarity", "issue"] as EdgeFilter[]).map((value) => (
+          <div className="flex flex-col gap-2">
+            <GraphFilterMenus
+              edgeFilter={edgeFilter}
+              graphMode={graphMode}
+              issueFilter={issueFilter}
+              issuesOnly={issuesOnly}
+              nodeFilter={nodeFilter}
+              onEdgeFilterChange={setEdgeFilter}
+              onGraphModeChange={setGraphMode}
+              onIssueFilterChange={setIssueFilter}
+              onIssuesOnlyChange={setIssuesOnly}
+              onNodeFilterChange={setNodeFilter}
+            />
+            <div className="flex flex-wrap gap-2">
               <Button
-                className="h-7 px-2 text-[11px]"
-                key={`dialog-edge-filter-${value}`}
-                onClick={() => setEdgeFilter(value)}
+                className="h-7 gap-1 px-2 text-[11px]"
+                disabled={!selectedNode}
+                onClick={() => setFocusMode((current) => !current)}
                 size="sm"
                 type="button"
-                variant={edgeFilter === value ? "secondary" : "ghost"}
+                variant={focusMode ? "secondary" : "ghost"}
               >
-                {t(edgeFilterKey(value))}
+                <LocateFixed className="h-3.5 w-3.5" />
+                {t(focusMode ? "knowledge.graphFocusActive" : "knowledge.graphFocusSelection")}
               </Button>
-            ))}
+              <Button
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setSemanticOverlayEnabled((current) => !current)}
+                size="sm"
+                type="button"
+                variant={semanticOverlayEnabled ? "secondary" : "ghost"}
+              >
+                {t("knowledge.graphSemanticToggle")}
+              </Button>
+              <Button
+                className="h-7 gap-1 px-2 text-[11px]"
+                onClick={resetView}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {t("knowledge.graphResetView")}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@ import type {
   TableCellNode,
   TableNode,
 } from "@/types/documentAst";
+import { buildResumeSupportBlock, hasResumeLatexCommands } from "@/lib/latex/resumeSupport";
 
 export interface AstLatexRenderOptions {
   author?: string;
@@ -437,8 +438,12 @@ const renderBlockNode = (node: BlockNode, context: RenderContext, depth = 0): st
       ].join("\n");
     }
     case "opaque_latex_block":
+      if (hasResumeLatexCommands(node.rawLatex)) {
+        context.usedFeatures.add("resume");
+      }
       return node.rawLatex;
     case "resume_header": {
+      context.usedFeatures.add("resume");
       const leftPrimary = node.primaryLinkUrl
         ? `\\textbf{\\href{${escapeLatexUrl(node.primaryLinkUrl)}}{\\Large ${escapeLatex(node.name)}}}`
         : `\\textbf{\\Large ${escapeLatex(node.name)}}`;
@@ -459,8 +464,10 @@ const renderBlockNode = (node: BlockNode, context: RenderContext, depth = 0): st
       ].join("\n");
     }
     case "resume_summary":
+      context.usedFeatures.add("resume");
       return `\\resumeSummary{${escapeLatex(node.summary).replace(/\n+/g, " \\\\\n")}}`;
     case "resume_entry": {
+      context.usedFeatures.add("resume");
       const details = node.details.length
         ? `\n\\resumeItemListStart\n${node.details.map((detail) => `  \\resumeItem{${escapeLatex(detail)}}`).join("\n")}\n\\resumeItemListEnd`
         : "";
@@ -482,6 +489,7 @@ const renderBlockNode = (node: BlockNode, context: RenderContext, depth = 0): st
       }
     }
     case "resume_skill_row":
+      context.usedFeatures.add("resume");
       return `\\resumeSubHeadingListStart\n\\resumeSkills{${escapeLatex(node.rawText)}}\n\\resumeSubHeadingListEnd`;
     case "latex_title_block":
       return "\\maketitle";
@@ -546,6 +554,10 @@ const buildPreamble = (context: RenderContext) => {
     packages.push("\\usepackage{enumitem}");
   }
 
+  if (context.usedFeatures.has("resume")) {
+    packages.push("\\usepackage{enumitem}");
+  }
+
   if (context.usedFeatures.has("admonition")) {
     packages.push("\\usepackage[most]{tcolorbox}");
   }
@@ -600,6 +612,9 @@ const buildPreamble = (context: RenderContext) => {
     ].join("\n")
     : "";
   const fontEnginePreamble = buildFontEnginePreamble(context.usedFeatures);
+  const resumeSupport = context.usedFeatures.has("resume")
+    ? buildResumeSupportBlock()
+    : "";
 
   return [
     fontEnginePreamble,
@@ -609,6 +624,7 @@ const buildPreamble = (context: RenderContext) => {
     admonitionConfig,
     docsyFontSizeConfig,
     docsyFontFamilyConfig,
+    resumeSupport,
     ...(
       context.options.includeMetadata === true
         ? [

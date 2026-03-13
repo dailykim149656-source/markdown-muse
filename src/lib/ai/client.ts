@@ -12,6 +12,8 @@ import type {
 } from "@/types/aiAssistant";
 import type { AgentTurnRequest, AgentTurnResponse } from "@/types/liveAgent";
 import type {
+  TexAutoFixRequest,
+  TexAutoFixResponse,
   TexExportPdfRequest,
   TexHealthResponse,
   TexPreviewRequest,
@@ -210,3 +212,6 @@ export const previewTex = (request: TexPreviewRequest, options?: RequestOptions)
 
 export const exportTexPdf = (request: TexExportPdfRequest, options?: RequestOptions) =>
   postBinary("/api/tex/export-pdf", request, options);
+
+export const fixTexCompileError = (request: TexAutoFixRequest, options?: RequestOptions) =>
+  postJson<TexAutoFixResponse, TexAutoFixRequest>("/api/ai/tex/fix", request, options);

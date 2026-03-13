@@ -17,6 +17,29 @@ const renderWithI18n = (ui: React.ReactNode) =>
     </I18nContext.Provider>,
   );
 
+const renderWithInterpolatedI18n = (ui: React.ReactNode) =>
+  render(
+    <I18nContext.Provider
+      value={{
+        locale: "en",
+        setLocale: vi.fn(),
+        t: (key, vars) => {
+          if (key === "patchReview.targetDocumentText") {
+            return `Document text ${vars?.start}-${vars?.end}`;
+          }
+
+          if (key === "patchReview.target") {
+            return `Target: ${vars?.target}`;
+          }
+
+          return key;
+        },
+      }}
+    >
+      {ui}
+    </I18nContext.Provider>,
+  );
+
 const patchSetFixture: DocumentPatchSet = {
   patchSetId: "set-1",
   documentId: "doc-1",
@@ -78,6 +101,25 @@ const nonEditablePatchSetFixture: DocumentPatchSet = {
   ],
 };
 
+const documentTextPatchSetFixture: DocumentPatchSet = {
+  ...patchSetFixture,
+  patchSetId: "set-3",
+  patches: [
+    {
+      patchId: "patch-doc-text",
+      title: "Fix LaTeX source",
+      operation: "replace_text_range",
+      target: { targetType: "document_text", startOffset: 0, endOffset: 14 },
+      originalText: "\\badcommand{}",
+      suggestedText: "\\textbf{ok}",
+      payload: { kind: "replace_text", text: "\\textbf{ok}" },
+      author: "ai",
+      status: "pending",
+      sources: [{ sourceId: "tex-diagnostic-1" }],
+    },
+  ],
+};
+
 describe("PatchReviewPanel", () => {
   it("renders patches and switches selection", () => {
     renderWithI18n(<PatchReviewPanel patchSet={patchSetFixture} />);
@@ -122,6 +164,12 @@ describe("PatchReviewPanel", () => {
     expect(screen.getByRole("textbox")).toBeDisabled();
     expect(screen.getByRole("button", { name: "patchReview.saveEdit" })).toBeDisabled();
     expect(screen.getByText("patchReview.nonEditable")).toBeInTheDocument();
+  });
+
+  it("renders document_text targets in the detail header", () => {
+    renderWithInterpolatedI18n(<PatchReviewPanel patchSet={documentTextPatchSetFixture} />);
+
+    expect(screen.getByText("Target: Document text 0-14")).toBeInTheDocument();
   });
 
   it("uses internal scroll containers instead of a fixed patch list height", () => {

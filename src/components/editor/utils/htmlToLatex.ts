@@ -3,6 +3,7 @@
  * Supports: admonitions, footnotes, TOC, figure captions, cross-references,
  * code blocks with language, task lists, colored text, highlights, tables, math.
  */
+import { buildResumeSupportBlock, hasResumeLatexCommands } from "@/lib/latex/resumeSupport";
 
 // ─── Preamble builder ───
 interface LatexExportOptions {
@@ -79,6 +80,7 @@ function buildPreamble(opts: LatexExportOptions, usedFeatures: Set<string>): str
   if (usedFeatures.has("code")) packages.push("{listings}", "{xcolor}");
   if (usedFeatures.has("admonition")) packages.push("[most]{tcolorbox}");
   if (usedFeatures.has("enumitem")) packages.push("{enumitem}");
+  if (usedFeatures.has("resume")) packages.push("{enumitem}");
   if (usedFeatures.has("float")) packages.push("{float}");
   if (usedFeatures.has("caption")) packages.push("{caption}");
   if (opts.extraPackages) {
@@ -132,6 +134,10 @@ function buildPreamble(opts: LatexExportOptions, usedFeatures: Set<string>): str
   \\ifdefstrequal{#1}{Nanum Gothic Coding}{\\def\\docsyresolvedfont{NanumGothicCoding}}{}
   \\IfFontExistsTF{\\docsyresolvedfont}{\\fontspec{\\docsyresolvedfont}}{}#2
 }}\n`;
+  }
+
+  if (usedFeatures.has("resume")) {
+    preamble += `\n${buildResumeSupportBlock()}\n`;
   }
 
   if (opts.includeMetadata === true) {
@@ -467,10 +473,15 @@ function processNode(node: ChildNode, state: ConversionState): string {
       }
 
       if (dataType === "opaque-latex-block") {
-        return `${el.getAttribute("data-raw-latex") || ""}\n\n`;
+        const rawLatex = el.getAttribute("data-raw-latex") || "";
+        if (hasResumeLatexCommands(rawLatex)) {
+          state.usedFeatures.add("resume");
+        }
+        return `${rawLatex}\n\n`;
       }
 
       if (dataType === "resume-header") {
+        state.usedFeatures.add("resume");
         const name = escapeLatex(el.getAttribute("data-name") || "Resume");
         const primaryLinkLabel = escapeLatex(el.getAttribute("data-primary-link-label") || el.getAttribute("data-primary-link-url") || "");
         const primaryLinkUrl = el.getAttribute("data-primary-link-url") || "";
@@ -499,6 +510,7 @@ function processNode(node: ChildNode, state: ConversionState): string {
       }
 
       if (dataType === "resume-summary") {
+        state.usedFeatures.add("resume");
         const summary = escapeLatex((el.getAttribute("data-summary") || "").trim()).replace(/\n+/g, " \\\\\n");
         return `\\resumeSummary{${summary}}\n\n`;
       }
@@ -513,6 +525,7 @@ function processNode(node: ChildNode, state: ConversionState): string {
       }
 
       if (dataType === "resume-entry") {
+        state.usedFeatures.add("resume");
         const commandName = el.getAttribute("data-command-name") || "";
         const title = escapeLatex(el.getAttribute("data-title") || "");
         const trailingText = escapeLatex(el.getAttribute("data-trailing-text") || "");
@@ -550,6 +563,7 @@ function processNode(node: ChildNode, state: ConversionState): string {
       }
 
       if (dataType === "resume-skill-row") {
+        state.usedFeatures.add("resume");
         const rawText = el.getAttribute("data-raw-text") || "";
         const label = el.getAttribute("data-label") || "";
         const items = parseJsonStringArray(el.getAttribute("data-items"));

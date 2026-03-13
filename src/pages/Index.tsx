@@ -19,6 +19,7 @@ import { MAX_IMPORT_FILE_SIZE_BYTES, resolveImportedDocumentOptions, useDocument
 import { useEditorUiState } from "@/hooks/useEditorUiState";
 import { useFormatConversion } from "@/hooks/useFormatConversion";
 import { usePatchReview } from "@/hooks/usePatchReview";
+import { useTexAutoFix } from "@/hooks/useTexAutoFix";
 import { useTexValidation } from "@/hooks/useTexValidation";
 import { useWorkspaceFiles } from "@/hooks/useWorkspaceFiles";
 import { useWorkspaceAuth } from "@/hooks/useWorkspaceAuth";
@@ -445,6 +446,26 @@ const Index = () => {
       void createVersionSnapshot(activeDoc, "export", { exportFormat: "XeLaTeX PDF" });
     },
   });
+  const {
+    generatePatchSet: generateTexAutoFixPatchSet,
+    isFixing: isFixingTexAutoFix,
+  } = useTexAutoFix({
+    diagnostics: texValidation.diagnostics,
+    documentId: activeDoc.id,
+    documentName: activeDoc.name,
+    latexSource: activeDoc.content,
+    logSummary: texValidation.logSummary,
+    sourceType: texValidation.sourceType,
+  });
+  const handleOpenTexAutoFixReview = useCallback(async () => {
+    const nextPatchSet = await generateTexAutoFixPatchSet();
+    loadPatchSet(nextPatchSet);
+    openPatchReview();
+  }, [generateTexAutoFixPatchSet, loadPatchSet, openPatchReview]);
+  const canAiFixTex = texValidation.validationEnabled
+    && texValidation.status === "error"
+    && texValidation.sourceType === "raw-latex"
+    && texValidation.diagnostics.length > 0;
 
   useEffect(() => {
     setPendingLatexSourceLine(null);
@@ -1721,13 +1742,18 @@ const Index = () => {
           onClose: closePreview,
           rawContent: activeDoc.content,
           texValidationProps: {
+            canAiFix: canAiFixTex,
             compileMs: texValidation.compileMs,
             diagnostics: texValidation.diagnostics,
             health: texValidation.health,
+            isAiFixing: isFixingTexAutoFix,
             isExportingPdf: texValidation.isExportingPdf,
             lastValidatedAt: texValidation.lastValidatedAt,
             latexSource: activeDoc.mode === "latex" ? activeDoc.content : currentRenderableLatexDocument,
             logSummary: texValidation.logSummary,
+            onAiFix: () => {
+              void handleOpenTexAutoFixReview();
+            },
             onCompilePdf: texValidation.downloadCompiledPdf,
             onJumpToLine: (line) => {
               if (activeDoc.mode === "latex") {

@@ -2,6 +2,7 @@ import { Suspense, lazy, useMemo, useState } from "react";
 import { Boxes, GitBranch, ImageIcon, Maximize2, Network, Search, SquareStack } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import GraphFilterMenus from "@/components/editor/GraphFilterMenus";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
@@ -24,14 +25,11 @@ import {
   applyGraphMode,
   applyIssueFilter,
   edgeBadgeVariant,
-  edgeFilterKey,
   edgeGroupOrder,
   edgeKindLabelKey,
-  graphModeKey,
-  issueFilterKey,
   issueKindLabelKey,
-  nodeFilterKey,
   nodeKindOrder,
+  nodeFilterKey,
   toGraphNavigationTarget,
 } from "@/components/editor/workspaceGraphUtils";
 
@@ -282,20 +280,6 @@ const WorkspaceGraphPanel = ({
       </div>
 
       <div className="space-y-2">
-        <div className="flex flex-wrap gap-1">
-          {(["full", "document", "issues"] as GraphMode[]).map((value) => (
-            <Button
-              className="h-6 px-2 text-[10px]"
-              key={`graph-mode-${value}`}
-              onClick={() => setGraphMode(value)}
-              size="sm"
-              type="button"
-              variant={graphMode === value ? "secondary" : "ghost"}
-            >
-              {t(graphModeKey(value))}
-            </Button>
-          ))}
-        </div>
         {workspaceScale !== "small" && (
           <div className="rounded-md border border-border/60 bg-muted/20 px-2 py-2 text-[11px] text-muted-foreground">
             <div className="font-medium text-foreground">
@@ -335,48 +319,19 @@ const WorkspaceGraphPanel = ({
             </Button>
           </div>
         )}
-        <div className="flex flex-wrap gap-1">
-          {(["all", "document", "section", "image"] as NodeFilter[]).map((value) => (
-            <Button
-              className="h-6 px-2 text-[10px]"
-              key={`node-filter-${value}`}
-              onClick={() => setNodeFilter(value)}
-              size="sm"
-              type="button"
-              variant={nodeFilter === value ? "secondary" : "ghost"}
-            >
-              {t(nodeFilterKey(value))}
-            </Button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {(["all", "containment", "reference", "similarity", "issue"] as EdgeFilter[]).map((value) => (
-            <Button
-              className="h-6 px-2 text-[10px]"
-              key={`edge-filter-${value}`}
-              onClick={() => setEdgeFilter(value)}
-              size="sm"
-              type="button"
-              variant={edgeFilter === value ? "secondary" : "ghost"}
-            >
-              {t(edgeFilterKey(value))}
-            </Button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {(["all", "unresolved_reference", "duplicate_document", "missing_section", "conflicting_procedure", "outdated_source", "stale_index", "image_missing_description"] as IssueFilter[]).map((value) => (
-            <Button
-              className="h-6 px-2 text-[10px]"
-              key={`issue-filter-${value}`}
-              onClick={() => setIssueFilter(value)}
-              size="sm"
-              type="button"
-              variant={issueFilter === value ? "secondary" : "ghost"}
-            >
-              {t(issueFilterKey(value))}
-            </Button>
-          ))}
-        </div>
+        <GraphFilterMenus
+          edgeFilter={edgeFilter}
+          graphMode={graphMode}
+          issueFilter={issueFilter}
+          issuesOnly={issuesOnly}
+          layout="stacked"
+          nodeFilter={nodeFilter}
+          onEdgeFilterChange={setEdgeFilter}
+          onGraphModeChange={setGraphMode}
+          onIssueFilterChange={setIssueFilter}
+          onIssuesOnlyChange={setIssuesOnly}
+          onNodeFilterChange={setNodeFilter}
+        />
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

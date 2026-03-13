@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { HttpError } from "../http/http";
+import { buildResumeSupportBlock, hasResumeLatexCommands } from "@/lib/latex/resumeSupport";
 import { parseTexDiagnostics, summarizeTexLog } from "./diagnostics";
 import type { TexDiagnostic, TexExportPdfRequest, TexPreviewRequest, TexValidateRequest } from "@/types/tex";
 
@@ -43,16 +44,19 @@ const ensureLatexLength = (latex: string) => {
 
 const buildWrappedLatexDocument = (latex: string, documentName?: string) => {
   const title = (documentName || "Untitled").replace(/[{}\\]/g, "").trim() || "Untitled";
+  const usesResumeMacros = hasResumeLatexCommands(latex);
   return [
     "\\documentclass[11pt]{article}",
     "\\usepackage{amsmath}",
     "\\usepackage{amssymb}",
+    ...(usesResumeMacros ? ["\\usepackage{enumitem}"] : []),
     "\\usepackage{graphicx}",
     "\\usepackage[hidelinks]{hyperref}",
     "\\usepackage{fontspec}",
     "\\usepackage{xeCJK}",
     "\\setmainfont{Noto Sans KR}",
     "\\setCJKmainfont{Noto Sans KR}",
+    ...(usesResumeMacros ? [buildResumeSupportBlock()] : []),
     `\\title{${title}}`,
     "\\date{}",
     "\\begin{document}",

@@ -40,6 +40,7 @@ import {
   writeHttpResponse,
 } from "./modules/http/http";
 import { handleListenError } from "./modules/http/handleListenError";
+import { handleTexAutoFix } from "./modules/tex/autoFix";
 import {
   exportTexPdf,
   getTexHealth as getTexServiceHealth,
@@ -64,7 +65,13 @@ import type {
 } from "../src/types/aiAssistant";
 import type { Locale } from "../src/i18n/types";
 import type { AgentStatus, AgentTurnRequest, AgentTurnResponse } from "../src/types/liveAgent";
-import type { TexExportPdfRequest, TexPreviewRequest, TexValidateRequest } from "../src/types/tex";
+import type {
+  TexAutoFixRequest,
+  TexAutoFixResponse,
+  TexExportPdfRequest,
+  TexPreviewRequest,
+  TexValidateRequest,
+} from "../src/types/tex";
 
 console.log("[AI Server] Initializing modules...");
 const PORT = Number(process.env.PORT || process.env.AI_SERVER_PORT || 8080);
@@ -806,6 +813,13 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/ai/propose-action") {
       const payload = await parseRequestBody<ProposeEditorActionRequest>(request);
       const result = await handleProposeAction(payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/ai/tex/fix") {
+      const payload = await parseRequestBody<TexAutoFixRequest>(request);
+      const result = await handleTexAutoFix(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }

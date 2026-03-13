@@ -43,6 +43,21 @@ export interface TexExportPdfRequest {
   sourceType: TexSourceType;
 }
 
+export interface TexAutoFixRequest {
+  diagnostics: TexDiagnostic[];
+  documentName?: string;
+  latex: string;
+  logSummary: string;
+  sourceType: TexSourceType;
+  locale?: string;
+}
+
+export interface TexAutoFixResponse {
+  fixedLatex: string;
+  rationale: string;
+  validation: TexValidateResponse;
+}
+
 export interface TexHealthResponse {
   configured: boolean;
   engine: TexEngine;

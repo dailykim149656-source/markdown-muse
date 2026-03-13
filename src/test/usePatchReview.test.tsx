@@ -220,4 +220,68 @@ describe("usePatchReview", () => {
     expect(appliedPatch.content).toContain("Recipient: Sim Cheong-i");
     expect(appliedPatch.tiptapJson).toBeNull();
   });
+
+  it("applies document_text patch sets to raw latex documents without an active editor", async () => {
+    const updateActiveDoc = vi.fn();
+    const setLiveEditorHtml = vi.fn();
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      documentId: "doc-1",
+      patchSetId: "patch-set-3",
+      patches: [{
+        author: "ai",
+        operation: "replace_text_range",
+        patchId: "patch-1",
+        payload: {
+          kind: "replace_text",
+          text: "\\section{Overview}\nFixed body.",
+        },
+        precondition: {
+          expectedText: "\\section{Overview}\nBroken body.",
+        },
+        status: "accepted",
+        target: {
+          endOffset: "\\section{Overview}\nBroken body.".length,
+          startOffset: 0,
+          targetType: "document_text",
+        },
+        title: "Fix LaTeX source",
+      }],
+      status: "in_review",
+      title: "AI LaTeX compile fix",
+    };
+
+    const { result } = renderHook(() => usePatchReview({
+      activeDoc: createActiveDoc({
+        content: "\\section{Overview}\nBroken body.",
+        mode: "latex",
+        sourceSnapshots: {
+          html: "<h1>Overview</h1><p>Broken body.</p>",
+          latex: "\\section{Overview}\nBroken body.",
+        },
+        tiptapJson: null,
+      }),
+      activeEditor: null,
+      bumpEditorKey: vi.fn(),
+      onVersionSnapshot: vi.fn(),
+      onWorkspaceSync: vi.fn(),
+      setLiveEditorHtml,
+      updateActiveDoc,
+    }), { wrapper });
+
+    act(() => {
+      result.current.loadPatchSet(patchSet);
+    });
+
+    await act(async () => {
+      await result.current.applyReviewedPatches();
+    });
+
+    expect(updateActiveDoc).toHaveBeenCalledWith(expect.objectContaining({
+      content: "\\section{Overview}\nFixed body.",
+      tiptapJson: null,
+    }));
+    expect(setLiveEditorHtml).toHaveBeenCalledWith(expect.stringContaining("Fixed body."));
+  });
 });

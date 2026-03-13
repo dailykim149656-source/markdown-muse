@@ -444,6 +444,12 @@ export interface TextRangePatchTarget {
   endOffset: number;
 }
 
+export interface DocumentTextPatchTarget {
+  targetType: "document_text";
+  startOffset: number;
+  endOffset: number;
+}
+
 export interface AttributePatchTarget {
   targetType: "attribute";
   nodeId: NodeId;
@@ -458,6 +464,7 @@ export interface StructuredPathPatchTarget {
 export type PatchTarget =
   | NodePatchTarget
   | TextRangePatchTarget
+  | DocumentTextPatchTarget
   | AttributePatchTarget
   | StructuredPathPatchTarget;
 

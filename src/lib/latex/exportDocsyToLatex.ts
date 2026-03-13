@@ -1,4 +1,5 @@
 import { htmlToLatex } from "@/components/editor/utils/htmlToLatex";
+import { ensureResumePreambleSupport, hasResumeLatexCommands } from "./resumeSupport";
 import { splitLatexDocument } from "./scanner";
 
 interface ExportDocsyToLatexOptions {
@@ -80,6 +81,10 @@ export const exportDocsyToLatex = ({
     if (titleBlock.date) {
       nextPreamble = replacePreambleCommand(nextPreamble, "date", titleBlock.date);
     }
+  }
+
+  if (hasResumeLatexCommands(bodyLatex) || hasResumeLatexCommands(currentLatexSource)) {
+    nextPreamble = ensureResumePreambleSupport(nextPreamble);
   }
 
   return `${nextPreamble}\n\n${bodyLatex}\n\n${parts.postamble}`.trim();

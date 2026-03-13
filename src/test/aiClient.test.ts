@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { summarizeAutosaveDiff } from "@/lib/ai/client";
+import { fixTexCompileError, summarizeAutosaveDiff } from "@/lib/ai/client";
 
 describe("ai client", () => {
   afterEach(() => {
@@ -41,6 +41,41 @@ describe("ai client", () => {
     });
 
     expect(fetchSpy).toHaveBeenCalledWith("/api/ai/autosave-diff-summary", expect.objectContaining({
+      method: "POST",
+    }));
+  });
+
+  it("posts AI LaTeX fixes to the dedicated endpoint", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(JSON.stringify({
+      fixedLatex: "\\section{Overview}\nFixed body.",
+      rationale: "Closed a missing brace.",
+      validation: {
+        compileMs: 21,
+        diagnostics: [],
+        engine: "xelatex",
+        logSummary: "ok",
+        ok: true,
+      },
+    }), {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      status: 200,
+    }));
+
+    await fixTexCompileError({
+      diagnostics: [{
+        message: "Missing } inserted.",
+        severity: "error",
+        stage: "compile",
+      }],
+      documentName: "Draft",
+      latex: "\\section{Overview\nBroken body.",
+      logSummary: "Missing } inserted.",
+      sourceType: "raw-latex",
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith("/api/ai/tex/fix", expect.objectContaining({
       method: "POST",
     }));
   });

@@ -4,12 +4,15 @@ import { useI18n } from "@/i18n/useI18n";
 import type { TexDiagnostic, TexHealthResponse, TexSourceType } from "@/types/tex";
 
 export interface TexValidationPanelProps {
+  canAiFix?: boolean;
   compileMs: number | null;
   diagnostics: TexDiagnostic[];
   health: TexHealthResponse | null;
+  isAiFixing?: boolean;
   lastValidatedAt: number | null;
   latexSource: string;
   logSummary: string;
+  onAiFix?: () => void;
   onJumpToLine: (line: number) => void;
   previewUrl?: string | null;
   sourceType: TexSourceType;
@@ -63,12 +66,15 @@ const getStatusTone = (status: TexValidationPanelProps["status"]) => {
 };
 
 const TexValidationPanel = ({
+  canAiFix = false,
   compileMs,
   diagnostics,
   health,
+  isAiFixing = false,
   lastValidatedAt,
   latexSource,
   logSummary,
+  onAiFix,
   onJumpToLine,
   sourceType,
   status,
@@ -93,6 +99,18 @@ const TexValidationPanel = ({
             {lastValidatedLabel && <div>{t("texValidation.lastValidated", { value: lastValidatedLabel })}</div>}
             {unavailable && <div>{t("texValidation.unavailable")}</div>}
           </div>
+          {canAiFix && onAiFix && (
+            <div className="mt-3">
+              <button
+                className="inline-flex h-8 items-center rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isAiFixing}
+                onClick={onAiFix}
+                type="button"
+              >
+                {isAiFixing ? t("texValidation.aiFixing") : t("texValidation.aiFix")}
+              </button>
+            </div>
+          )}
         </div>
 
         <section className="space-y-2">
