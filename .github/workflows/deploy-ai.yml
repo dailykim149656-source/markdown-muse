@@ -1,0 +1,152 @@
+name: Deploy AI Service
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Dockerfile.ai"
+      - "cloudbuild.ai.yaml"
+      - "server/**"
+      - "src/lib/ai/client.ts"
+      - "src/types/tex.ts"
+      - "!server/texService.ts"
+      - "!server/modules/tex/compiler.ts"
+      - "!server/modules/tex/diagnostics.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-ai:
+    name: Deploy AI service (Cloud Run)
+    runs-on: ubuntu-latest
+    env:
+      GCP_REGION: asia-northeast3
+      VERTEX_LOCATION: asia-northeast3
+      AI_SERVICE_NAME: docsy
+      ARTIFACT_REPOSITORY: docsy
+      GEMINI_MODEL: gemini-3.1-flash-lite-preview
+      GEMINI_FALLBACK_MODEL: gemini-2.5-flash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Deploy AI service via Cloud Build
+        id: ai
+        run: |
+          set -euo pipefail
+
+          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
+            echo "GCP_PROJECT_ID is required."
+            exit 1
+          fi
+
+          TEX_SERVICE_BASE_URL="${{ secrets.GCP_TEX_SERVICE_BASE_URL }}"
+          if [ -z "${TEX_SERVICE_BASE_URL}" ]; then
+            echo "GCP_TEX_SERVICE_BASE_URL is required."
+            exit 1
+          fi
+
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+          RUN_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+          ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          if [ -z "${ALLOWED_ORIGIN}" ]; then
+            ALLOWED_ORIGIN="*"
+          fi
+
+          WORKSPACE_FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
+          if [ -z "${WORKSPACE_FRONTEND_ORIGIN}" ]; then
+            WORKSPACE_FRONTEND_ORIGIN="${ALLOWED_ORIGIN}"
+          fi
+
+          GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
+          if [ -z "${GOOGLE_WORKSPACE_SCOPES}" ]; then
+            GOOGLE_WORKSPACE_SCOPES="openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents"
+          fi
+
+          GOOGLE_CLIENT_SECRET_SECRET="${{ secrets.GCP_GOOGLE_CLIENT_SECRET_SECRET_NAME }}"
+          if [ -z "${GOOGLE_CLIENT_SECRET_SECRET}" ]; then
+            GOOGLE_CLIENT_SECRET_SECRET="google-client-secret"
+          fi
+
+          TEX_SERVICE_AUTH_TOKEN_SECRET="${{ secrets.GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME }}"
+          if [ -z "${TEX_SERVICE_AUTH_TOKEN_SECRET}" ]; then
+            TEX_SERVICE_AUTH_TOKEN_SECRET="tex-service-auth-token"
+          fi
+
+          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_VERTEX_LOCATION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_GEMINI_FALLBACK_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_GOOGLE_CLIENT_SECRET_SECRET=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_TEX_SERVICE_BASE_URL=%s,_RUN_SERVICE_ACCOUNT=%s' \
+            "$IMAGE_URI" \
+            "$GCP_REGION" \
+            "$VERTEX_LOCATION" \
+            "$AI_SERVICE_NAME" \
+            "$GEMINI_MODEL" \
+            "$GEMINI_FALLBACK_MODEL" \
+            "$ALLOWED_ORIGIN" \
+            "${{ secrets.GCP_GOOGLE_CLIENT_ID }}" \
+            "${GOOGLE_OAUTH_REDIRECT_URI}" \
+            "${WORKSPACE_FRONTEND_ORIGIN}" \
+            "${GOOGLE_WORKSPACE_SCOPES}" \
+            "${GOOGLE_CLIENT_SECRET_SECRET}" \
+            "${TEX_SERVICE_AUTH_TOKEN_SECRET}" \
+            "${TEX_SERVICE_BASE_URL}" \
+            "$RUN_SERVICE_ACCOUNT")
+
+          gcloud builds submit \
+            --config cloudbuild.ai.yaml \
+            --substitutions="${SUBSTITUTIONS}" \
+            .
+
+          AI_URL="$(gcloud run services describe ${AI_SERVICE_NAME} --region ${GCP_REGION} --format='value(status.url)')"
+
+          if [ -z "${AI_URL}" ]; then
+            echo "Cloud Run service URL could not be resolved."
+            exit 1
+          fi
+
+          echo "url=${AI_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify AI health
+        run: |
+          set -euo pipefail
+          echo "Verifying AI health at: ${{ steps.ai.outputs.url }}/api/ai/health"
+          for i in {1..10}; do
+            if curl -fsS "${{ steps.ai.outputs.url }}/api/ai/health" >/dev/null; then
+              echo "AI health check passed!"
+              break
+            fi
+            echo "AI health check failed (attempt $i), retrying in 5 seconds..."
+            sleep 5
+            if [ "$i" -eq 10 ]; then
+              exit 1
+            fi
+          done
+
+      - name: Verify AI to TeX proxy health
+        run: |
+          set -euo pipefail
+          echo "Verifying AI TeX proxy health at: ${{ steps.ai.outputs.url }}/api/tex/health"
+          for i in {1..10}; do
+            if curl -fsS "${{ steps.ai.outputs.url }}/api/tex/health" >/dev/null; then
+              echo "AI TeX proxy health check passed!"
+              exit 0
+            fi
+            echo "AI TeX proxy health check failed (attempt $i), retrying in 5 seconds..."
+            sleep 5
+          done
+
+          echo "AI TeX proxy health check failed after 10 attempts."
+          exit 1

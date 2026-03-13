@@ -6,7 +6,6 @@ import docslyLogoSmall from "@/assets/docsly-logo-small.png";
 import marketingEditorSurface from "@/assets/marketing-editor-surface.png";
 import marketingGoogleWorkspaceSurface from "@/assets/marketing-google-workspace-surface.png";
 import marketingGraphSurface from "@/assets/marketing-graph-surface.png";
-import marketingOperationsSurface from "@/assets/marketing-operations-surface.png";
 import marketingPatchReviewSurface from "@/assets/marketing-patch-review-surface.png";
 import marketingQueueSurface from "@/assets/marketing-queue-surface.png";
 import { Button } from "@/components/ui/button";
@@ -96,11 +95,6 @@ const Guide = () => {
       title: t("guide.currentBuildQueueTitle"),
     },
     {
-      description: t("guide.currentBuildOperationsDescription"),
-      image: marketingOperationsSurface,
-      title: t("guide.currentBuildOperationsTitle"),
-    },
-    {
       description: t("guide.currentBuildWorkspaceDescription"),
       image: marketingGoogleWorkspaceSurface,
       title: t("guide.currentBuildWorkspaceTitle"),
@@ -143,14 +137,14 @@ const Guide = () => {
       title: t("guide.currentBuildWorkspaceTitle"),
     },
     "operations-and-release": {
-      description: t("guide.currentBuildOperationsDescription"),
-      image: marketingOperationsSurface,
-      title: t("guide.currentBuildOperationsTitle"),
+      description: t("guide.currentBuildReviewDescription"),
+      image: marketingPatchReviewSurface,
+      title: t("guide.currentBuildReviewTitle"),
     },
   }), [guideContent.guidePage.visualTourDescription, guideContent.guidePage.visualTourTitle, t]);
   const workflowSurfaceHighlights = useMemo(() => ([
     sectionSurfaceMap["google-workspace-sync"],
-    sectionSurfaceMap["operations-and-release"],
+    sectionSurfaceMap["patch-review"],
   ].filter(Boolean)), [sectionSurfaceMap]);
 
   useEffect(() => {
@@ -315,11 +309,6 @@ const Guide = () => {
                 description: t("guide.currentBuildQueueDescription"),
                 icon: RefreshCw,
                 title: t("guide.currentBuildQueueTitle"),
-              },
-              {
-                description: t("guide.currentBuildOperationsDescription"),
-                icon: ShieldCheck,
-                title: t("guide.currentBuildOperationsTitle"),
               },
               {
                 description: t("guide.currentBuildWorkspaceDescription"),

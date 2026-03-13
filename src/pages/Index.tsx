@@ -10,6 +10,7 @@ import {
   markdownHasDocumentContent,
 } from "@/components/editor/editorAdvancedContent";
 import EditorWorkspace from "@/components/editor/EditorWorkspace";
+import ResetDocumentsDialog from "@/components/editor/ResetDocumentsDialog";
 import type { DocumentTemplate } from "@/components/editor/TemplateDialog";
 import type { PlainTextFindReplaceAdapter } from "@/components/editor/findReplaceTypes";
 import type { KnowledgeSuggestionContext, KnowledgeSuggestionQueueItem } from "@/components/editor/sidebarFeatureTypes";
@@ -43,6 +44,8 @@ import {
   getCrossFamilyModes,
   getSameFamilyModes,
 } from "@/lib/editor/modeFamilies";
+import { resetLocalDocumentState } from "@/lib/documents/resetLocalDocumentState";
+import { RESTORED_SESSION_TOAST_ID, showRestoredSessionToast } from "@/lib/documents/restoredSessionToast";
 import { DOC_SHARE_HASH_PREFIX } from "@/lib/share/shareConstants";
 import type { EditorMode } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
@@ -284,6 +287,9 @@ const Index = () => {
   const [historyEnabled, setHistoryEnabled] = useState(() => featureFlags.historyOnInitialMount);
   const [knowledgeEnabled, setKnowledgeEnabled] = useState(() => featureFlags.knowledgeOnInitialMount);
   const [structuredModesVisible, setStructuredModesVisible] = useState(() => featureFlags.structuredModesVisibleOnInitialMount);
+  const [documentResetVersion, setDocumentResetVersion] = useState(0);
+  const [resetDocumentsDialogOpen, setResetDocumentsDialogOpen] = useState(false);
+  const [isResettingDocuments, setIsResettingDocuments] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [workspaceConnectionOpen, setWorkspaceConnectionOpen] = useState(false);
   const [workspaceExportOpen, setWorkspaceExportOpen] = useState(false);
@@ -302,6 +308,7 @@ const Index = () => {
     handleContentChange,
     hasRestoredDocuments,
     renameDocument,
+    resetDocuments,
     selectDocument,
     updateDocument,
     updateActiveDoc,
@@ -513,6 +520,13 @@ const Index = () => {
     writeDocumentToolsPreference(true);
   }, []);
   const richTextAvailable = activeDoc.mode === "markdown" || activeDoc.mode === "latex" || activeDoc.mode === "html";
+  const resetDocumentsDisabled = isResettingDocuments
+    || importState.status === "reading"
+    || workspaceImporting
+    || workspaceExporting
+    || workspaceSyncing
+    || Boolean(aiRuntimeState?.busyAction)
+    || Boolean(aiRuntimeState?.liveAgent.isSubmitting);
   const getDocumentNameById = useCallback((documentId: string) =>
     documents.find((document) => document.id === documentId)?.name || t("common.untitled"), [documents, t]);
   const updateSuggestionQueueEntry = useCallback((
@@ -740,38 +754,6 @@ const Index = () => {
       targetDocumentId: entry.targetDocumentId,
     });
   }, [queueKnowledgeSuggestion, suggestionQueue]);
-  const handleRetryFailedSuggestionQueueItems = useCallback(() => {
-    suggestionQueue
-      .filter((entry) => entry.status === "failed")
-      .forEach((entry) => {
-        queueKnowledgeSuggestion({
-          context: {
-            issueId: entry.issueId,
-            issueKind: entry.issueKind,
-            issuePriority: entry.issuePriority,
-            issueReason: entry.issueReason,
-            queueContext: entry.context,
-            sourceDocumentId: entry.sourceDocumentId,
-            sourceDocumentName: entry.sourceDocumentName,
-            targetDocumentName: entry.targetDocumentName,
-          },
-          forceQueue: true,
-          queueEntryId: entry.id,
-          sourceDocumentId: entry.sourceDocumentId,
-          targetDocumentId: entry.targetDocumentId,
-        });
-      });
-  }, [queueKnowledgeSuggestion, suggestionQueue]);
-  const handleOpenNextSuggestionQueueItem = useCallback(() => {
-    const nextReadyEntry = suggestionQueue.find((entry) =>
-      entry.status === "ready" && entry.hasPatchSet && entry.patchSet);
-
-    if (!nextReadyEntry) {
-      return;
-    }
-
-    handleOpenSuggestionQueueItem(nextReadyEntry.id);
-  }, [handleOpenSuggestionQueueItem, suggestionQueue]);
   const clearWorkspaceAuthParams = useCallback(() => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
@@ -973,6 +955,7 @@ const Index = () => {
     const e2eWindow = window as Window & {
       __docsyE2E?: {
         hasFontSizeCommand: () => boolean;
+        openPatchReview: (nextPatchSet: DocumentPatchSet) => boolean;
         selectText: (value: string) => boolean;
       };
     };
@@ -985,6 +968,15 @@ const Index = () => {
     e2eWindow.__docsyE2E = {
       hasFontSizeCommand: () =>
         Boolean(activeEditor && typeof activeEditor.commands.setFontSize === "function"),
+      openPatchReview: (nextPatchSet) => {
+        if (!nextPatchSet) {
+          return false;
+        }
+
+        loadPatchSet(nextPatchSet);
+        openPatchReview();
+        return true;
+      },
       selectText: (value: string) => {
         if (!activeEditor || !value) {
           return false;
@@ -1027,7 +1019,7 @@ const Index = () => {
     return () => {
       delete e2eWindow.__docsyE2E;
     };
-  }, [activeEditor, isE2E]);
+  }, [activeEditor, isE2E, loadPatchSet, openPatchReview]);
 
   useEffect(() => {
     if (!aiRuntimeState || !pendingAiIntent) {
@@ -1200,6 +1192,46 @@ const Index = () => {
     void removeDocumentVersionSnapshots(id);
   }, [deleteDocument, removeDocumentVersionSnapshots]);
 
+  const handleRequestResetDocuments = useCallback(() => {
+    if (resetDocumentsDisabled) {
+      toast.info(t("resetDocuments.busy"));
+      return;
+    }
+
+    setResetDocumentsDialogOpen(true);
+  }, [resetDocumentsDisabled, t]);
+
+  const handleResetDocuments = useCallback(async () => {
+    if (resetDocumentsDisabled) {
+      toast.info(t("resetDocuments.busy"));
+      return;
+    }
+
+    setIsResettingDocuments(true);
+
+    try {
+      await resetLocalDocumentState();
+      resetDocuments();
+      closeFindReplace();
+      closePreview();
+      setPendingAiIntent(null);
+      setPendingImpactSuggestions([]);
+      setSuggestionQueue([]);
+      setPendingLatexSourceLine(null);
+      setShareDialogOpen(false);
+      setWorkspaceExportOpen(false);
+      setWorkspaceImportOpen(false);
+      setDocumentResetVersion((version) => version + 1);
+      setResetDocumentsDialogOpen(false);
+      toast.dismiss(RESTORED_SESSION_TOAST_ID);
+      toast.success(t("resetDocuments.done"));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("resetDocuments.failed"));
+    } finally {
+      setIsResettingDocuments(false);
+    }
+  }, [closeFindReplace, closePreview, resetDocuments, resetDocumentsDisabled, t]);
+
   const handleTemplateSelect = useCallback((template: DocumentTemplate) => {
     const fallbackContent = getStableTemplateFallbackContent(template.mode, locale);
     const selectedContent = template.content.trim().length > 0 || template.id === "blank-markdown"
@@ -1228,10 +1260,23 @@ const Index = () => {
   }, [createDocument, enableAdvancedBlocks, enableDocumentFeatures, locale, t]);
 
   useEffect(() => {
-    if (hasRestoredDocuments) {
-      toast.info(t("toasts.restoredSession"), { duration: 2000 });
+    if (!hasRestoredDocuments) {
+      toast.dismiss(RESTORED_SESSION_TOAST_ID);
+      return;
     }
-  }, [hasRestoredDocuments, t]);
+
+    showRestoredSessionToast({
+      disabled: resetDocumentsDisabled,
+      onStartFresh: () => {
+        setResetDocumentsDialogOpen(true);
+      },
+      t,
+    });
+
+    return () => {
+      toast.dismiss(RESTORED_SESSION_TOAST_ID);
+    };
+  }, [hasRestoredDocuments, resetDocumentsDisabled, t]);
 
   useEffect(() => {
     const openSharedDocumentFromHash = async () => {
@@ -1590,6 +1635,7 @@ const Index = () => {
           mode: activeDoc.mode,
           onCreateDocument: handleNewDoc,
           onOpenAiAssistant: () => requestAiIntent({ type: "open" }),
+          onRequestResetDocuments: handleRequestResetDocuments,
           onOpenStructuredModes: enableStructuredModes,
           onOpenWorkspaceConnection: handleOpenWorkspaceConnection,
           onOpenWorkspaceExport: handleOpenWorkspaceExport,
@@ -1625,6 +1671,7 @@ const Index = () => {
           onTogglePreview: togglePreview,
           onToggleTheme: toggleTheme,
           previewOpen,
+          resetDocumentsDisabled,
           showStructuredModeAction: false,
           textStats,
           workspaceBinding: activeDoc.workspaceBinding,
@@ -1716,18 +1763,15 @@ const Index = () => {
               versionHistorySyncing,
             },
             knowledgeEnabled,
+            knowledgePanelResetKey: documentResetVersion,
             knowledgeProps: {
-              acceptedPatchCount,
               onDismissSuggestionQueueItem: handleDismissSuggestionQueueItem,
               onGenerateTocSuggestion: () => {
                 requestAiIntent({ type: "generate-toc" });
               },
-              onOpenNextSuggestionQueueItem: handleOpenNextSuggestionQueueItem,
-              onOpenPatchReview: openPatchReview,
               onRefreshWorkspaceDocument: handleRefreshWorkspaceDocument,
               onRescanWorkspaceSources: handleRescanWorkspaceChanges,
               onOpenSuggestionQueueItem: handleOpenSuggestionQueueItem,
-              onRetryFailedSuggestionQueueItems: handleRetryFailedSuggestionQueueItems,
               onRetrySuggestionQueueItem: handleRetrySuggestionQueueItem,
               onSuggestKnowledgeImpactUpdate: (
                 sourceDocumentId: string,
@@ -1743,7 +1787,6 @@ const Index = () => {
                   targetDocumentId: documentId,
                 });
               },
-              patchCount,
               suggestionQueue: suggestionQueueItems,
               workspaceChangedSources: remoteChangedSources,
               workspaceLastRescannedAt,
@@ -1817,6 +1860,14 @@ const Index = () => {
           />
         </Suspense>
       )}
+      <ResetDocumentsDialog
+        isSubmitting={isResettingDocuments}
+        onConfirm={() => {
+          void handleResetDocuments();
+        }}
+        onOpenChange={setResetDocumentsDialogOpen}
+        open={resetDocumentsDialogOpen}
+      />
     </>
   );
 };

@@ -23,7 +23,6 @@ import docslyLogoSmall from "@/assets/docsly-logo-small.png";
 import marketingEditorSurface from "@/assets/marketing-editor-surface.png";
 import marketingGoogleWorkspaceSurface from "@/assets/marketing-google-workspace-surface.png";
 import marketingGraphSurface from "@/assets/marketing-graph-surface.png";
-import marketingOperationsSurface from "@/assets/marketing-operations-surface.png";
 import marketingPatchReviewSurface from "@/assets/marketing-patch-review-surface.png";
 import marketingQueueSurface from "@/assets/marketing-queue-surface.png";
 import { Button } from "@/components/ui/button";
@@ -120,11 +119,6 @@ const Landing = () => {
       description: t("landing.features.templateDesc"),
       image: marketingGoogleWorkspaceSurface,
       title: t("landing.features.templateTitle"),
-    },
-    {
-      description: t("landing.features.exportDesc"),
-      image: marketingOperationsSurface,
-      title: t("landing.features.exportTitle"),
     },
   ]), [t]);
 

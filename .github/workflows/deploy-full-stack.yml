@@ -1,9 +1,6 @@
-name: Deploy to GCP
+name: Deploy Full Stack
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       force_frontend:
@@ -59,7 +56,7 @@ jobs:
           fi
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${TEX_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_TEX_COMPILE_TIMEOUT_MS=%s,_TEX_MAX_SOURCE_BYTES=%s,_TEX_MAX_CONCURRENCY=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_TEX_COMPILE_TIMEOUT_MS=%s,_TEX_MAX_SOURCE_BYTES=%s,_TEX_MAX_CONCURRENCY=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s,_CALLER_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$TEX_SERVICE_NAME" \
@@ -67,8 +64,8 @@ jobs:
             "$TEX_MAX_SOURCE_BYTES" \
             "$TEX_MAX_CONCURRENCY" \
             "$TEX_SERVICE_AUTH_TOKEN_SECRET" \
+            "$RUN_SERVICE_ACCOUNT" \
             "$RUN_SERVICE_ACCOUNT")
-          SUBSTITUTIONS="${SUBSTITUTIONS},_CALLER_SERVICE_ACCOUNT=${RUN_SERVICE_ACCOUNT}"
 
           gcloud builds submit \
             --config cloudbuild.tex.yaml \
@@ -105,6 +102,7 @@ jobs:
             echo "TeX health check failed (attempt $i), retrying in 5 seconds..."
             sleep 5
           done
+
           echo "TeX health check failed after 10 attempts."
           exit 1
 
@@ -142,12 +140,13 @@ jobs:
             echo "GCP_PROJECT_ID is required."
             exit 1
           fi
+
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
           RUN_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 
           ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
-          if [ -z "$ALLOWED_ORIGIN" ]; then
+          if [ -z "${ALLOWED_ORIGIN}" ]; then
             ALLOWED_ORIGIN="*"
           fi
 
@@ -216,13 +215,30 @@ jobs:
           echo "Verifying health at: ${{ steps.ai.outputs.url }}/api/ai/health"
           for i in {1..10}; do
             if curl -fsS "${{ steps.ai.outputs.url }}/api/ai/health" >/dev/null; then
-              echo "Health check passed!"
+              echo "AI health check passed!"
+              break
+            fi
+            echo "AI health check failed (attempt $i), retrying in 5 seconds..."
+            sleep 5
+            if [ "$i" -eq 10 ]; then
+              exit 1
+            fi
+          done
+
+      - name: Verify AI to TeX proxy health
+        run: |
+          set -euo pipefail
+          echo "Verifying health at: ${{ steps.ai.outputs.url }}/api/tex/health"
+          for i in {1..10}; do
+            if curl -fsS "${{ steps.ai.outputs.url }}/api/tex/health" >/dev/null; then
+              echo "AI TeX proxy health check passed!"
               exit 0
             fi
-            echo "Health check failed (attempt $i), retrying in 5 seconds..."
+            echo "AI TeX proxy health check failed (attempt $i), retrying in 5 seconds..."
             sleep 5
           done
-          echo "Health check failed after 10 attempts."
+
+          echo "AI TeX proxy health check failed after 10 attempts."
           exit 1
 
   deploy-web:
@@ -276,13 +292,7 @@ jobs:
           esac
 
           echo "Building frontend with VITE_AI_API_BASE_URL=${AI_API_BASE_URL}"
-
           printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\n" "${AI_API_BASE_URL}" > .env.web.local
-
-          if ! grep -F "VITE_AI_API_BASE_URL=${AI_API_BASE_URL}" .env.web.local >/dev/null 2>&1; then
-            echo "Failed to write VITE_AI_API_BASE_URL to .env.web.local"
-            exit 1
-          fi
 
           npm ci
           npm run build:web

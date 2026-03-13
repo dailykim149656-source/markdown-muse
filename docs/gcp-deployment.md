@@ -111,7 +111,10 @@ You do not need to manually `git clone` in GCP.
 
 Use:
 
-- [deploy-gcp.yml](/.github/workflows/deploy-gcp.yml)
+- [deploy-tex.yml](/F:/Docsy-document_editor/markdown-muse/.github/workflows/deploy-tex.yml)
+- [deploy-ai.yml](/F:/Docsy-document_editor/markdown-muse/.github/workflows/deploy-ai.yml)
+- [deploy-web.yml](/F:/Docsy-document_editor/markdown-muse/.github/workflows/deploy-web.yml)
+- [deploy-full-stack.yml](/F:/Docsy-document_editor/markdown-muse/.github/workflows/deploy-full-stack.yml)
 
 Required repository secrets:
 
@@ -119,22 +122,30 @@ Required repository secrets:
 - `GCP_PROJECT_ID`
 - `GCP_AI_ALLOWED_ORIGIN` (exact frontend origin)
 - `GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME` (optional, defaults to `tex-service-auth-token`)
+- `GCP_TEX_SERVICE_BASE_URL`
+- `GCP_WEB_VITE_AI_API_BASE_URL`
 - `FIREBASE_SERVICE_ACCOUNT_URBAN_DDS`
 
-The workflow does:
+The split workflows do:
 
-- Cloud Build deploy for TeX service (`cloudbuild.tex.yaml`)
-- health check `GET /health` on the TeX service
-- Cloud Build deploy for AI API (`cloudbuild.ai.yaml`)
-- health check `GET /api/ai/health`
-- web profile build (`npm run build:web`) with:
-  - `VITE_APP_PROFILE=web`
-  - `VITE_AI_API_BASE_URL` from deployed Cloud Run URL
-- deploy `dist/` to Firebase Hosting with SPA fallback to `index.html`
+- `deploy-tex.yml`
+  - deploy only the TeX service
+  - health check `GET /health`
+- `deploy-ai.yml`
+  - deploy only the AI API
+  - health checks `GET /api/ai/health` and `GET /api/tex/health`
+  - reads `GCP_TEX_SERVICE_BASE_URL` from secrets
+- `deploy-web.yml`
+  - build and deploy only the frontend
+  - reads `GCP_WEB_VITE_AI_API_BASE_URL` from secrets
+- `deploy-full-stack.yml`
+  - manual coordinated release workflow
+  - runs TeX -> AI -> web in sequence
 
-Recommended repository secret:
+Recommended usage:
 
-- `GCP_WEB_VITE_AI_API_BASE_URL` (explicit Cloud Run base URL for frontend builds)
+- day-to-day deploys: use the split workflows
+- coordinated releases or contract changes: use `deploy-full-stack.yml`
 
 ## TeX validation service
 
@@ -165,6 +176,18 @@ Recommended values:
 
 The TeX service is called by the AI API, not directly by the browser. The
 frontend should continue to use only `VITE_AI_API_BASE_URL`.
+
+The current TeX image is a coverage-first profile, not a minimal fast-build
+profile. It intentionally includes a broader curated TeX Live package set for
+common resumes, papers, reports, citations, and layout packages. Deploy time
+and image size are therefore higher than a minimal XeLaTeX image.
+
+When TeX package coverage changes, routine redeploy normally requires only:
+
+- `deploy-tex.yml`
+
+If coverage is still insufficient after the curated package set, the next
+escalation path is evaluating `texlive-full`.
 
 ### 3. New Cloud Run resource creation
 
@@ -282,6 +305,7 @@ Required:
 - `GCP_PROJECT_ID`
 - `GCP_AI_ALLOWED_ORIGIN`
 - `GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME` (optional, defaults to `tex-service-auth-token`)
+- `GCP_TEX_SERVICE_BASE_URL`
 - `FIREBASE_SERVICE_ACCOUNT_URBAN_DDS`
 
 Recommended:
@@ -291,6 +315,7 @@ Recommended:
 Expected shape:
 
 - `GCP_AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- `GCP_TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
 - `GCP_WEB_VITE_AI_API_BASE_URL=https://YOUR_CLOUD_RUN_URL`
 
 ### Frontend build env

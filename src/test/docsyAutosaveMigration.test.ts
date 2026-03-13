@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { migrateLegacyAutoSaveData, saveData } from "@/components/editor/useAutoSave";
+import { isAutoSaveWriteFailure, migrateLegacyAutoSaveData, saveData } from "@/components/editor/useAutoSave";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -144,7 +144,7 @@ describe("autosave migration", () => {
 
     expect(result.ok).toBe(false);
 
-    if (result.ok) {
+    if (!isAutoSaveWriteFailure(result)) {
       throw new Error("Expected autosave to fail.");
     }
 

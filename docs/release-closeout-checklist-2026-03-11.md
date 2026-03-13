@@ -24,7 +24,7 @@ execution surface for Phase 1 of the remaining work plan.
 
 - validate the critical flows on representative workspaces
 - document measured operating limits for graph and search
-- confirm release-gate checks are observable in product
+- confirm handoff-critical review and sync signals are observable in product
 - clean docs so the latest documents are the default reference
 
 ## Workspace validation matrix
@@ -133,7 +133,7 @@ After measurement, update product and docs with explicit operating guidance:
 Validated in code or automated tests:
 
 - `npm run build`
-- `npx vitest run src/test/knowledgeOperationsPanel.test.tsx src/test/i18nCoverage.test.ts`
+- `npx vitest run src/test/guidePage.test.tsx src/test/i18nCoverage.test.ts`
 - `npx vitest run src/test/workspaceGraphPanel.test.tsx src/test/graphExplorerDialog.test.tsx src/test/i18nCoverage.test.ts`
 - `npx vitest run src/test/graphExplorerContext.test.tsx src/test/suggestionQueuePanel.test.tsx src/test/dialogSmoke.test.tsx`
 - `npx vitest run src/test/useWorkspaceSync.test.tsx src/test/useWorkspaceChanges.test.tsx`
@@ -153,7 +153,7 @@ Measurement artifact:
 
 Automated flow coverage now includes:
 
-- operations gate validated-range messaging and release summary copy
+- queue and patch-review handoff messaging
 - graph scale guidance and graph explorer guardrails
 - graph context handoff into queue creation
 - queue-to-graph re-entry from the suggestion queue

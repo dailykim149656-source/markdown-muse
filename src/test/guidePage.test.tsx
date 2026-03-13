@@ -40,7 +40,6 @@ describe("Guide page", () => {
     expect(screen.getAllByAltText("guide.currentBuildGraphTitle").length).toBeGreaterThan(0);
     expect(screen.getAllByAltText("guide.currentBuildReviewTitle").length).toBeGreaterThan(0);
     expect(screen.getAllByAltText("guide.currentBuildQueueTitle").length).toBeGreaterThan(0);
-    expect(screen.getAllByAltText("guide.currentBuildOperationsTitle").length).toBeGreaterThan(0);
     expect(screen.getAllByAltText("guide.currentBuildWorkspaceTitle").length).toBeGreaterThan(0);
     expect(screen.getByText("Recommended path for first-time users")).toBeInTheDocument();
     expect(screen.getByText("Frequently asked questions")).toBeInTheDocument();

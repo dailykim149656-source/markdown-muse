@@ -1,17 +1,10 @@
-import { useEffect, useState } from "react";
 import ChangeMonitoringPanel from "@/components/editor/ChangeMonitoringPanel";
 import ConsistencyIssuesPanel from "@/components/editor/ConsistencyIssuesPanel";
 import DocumentHealthPanel from "@/components/editor/DocumentHealthPanel";
 import DocumentImpactPanel from "@/components/editor/DocumentImpactPanel";
 import KnowledgeIndexPanel from "@/components/editor/KnowledgeIndexPanel";
 import KnowledgeInsightsPanel from "@/components/editor/KnowledgeInsightsPanel";
-import KnowledgeOperationsPanel from "@/components/editor/KnowledgeOperationsPanel";
 import KnowledgeSearchPanel from "@/components/editor/KnowledgeSearchPanel";
-import ReleaseChecklistPanel, {
-  CHECKLIST_ITEM_IDS,
-  RELEASE_CHECKLIST_STORAGE_KEY,
-  type ChecklistItemId,
-} from "@/components/editor/ReleaseChecklistPanel";
 import SuggestionQueuePanel from "@/components/editor/SuggestionQueuePanel";
 import WorkspaceGraphPanel from "@/components/editor/WorkspaceGraphPanel";
 import type { KnowledgeSidebarPanelsProps } from "@/components/editor/sidebarFeatureTypes";
@@ -22,31 +15,6 @@ import { useNavigate } from "react-router-dom";
 
 const isRichTextDocument = (mode: KnowledgeSidebarPanelsProps["activeDoc"]["mode"]) =>
   mode === "markdown" || mode === "latex" || mode === "html";
-
-const readStoredChecklist = (): ChecklistItemId[] => {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  try {
-    const raw = window.localStorage.getItem(RELEASE_CHECKLIST_STORAGE_KEY);
-
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.filter((value): value is ChecklistItemId =>
-      typeof value === "string" && CHECKLIST_ITEM_IDS.includes(value as ChecklistItemId));
-  } catch {
-    return [];
-  }
-};
 
 type KnowledgeGraphNavigationRequest = {
   context: "change" | "consistency" | "impact";
@@ -62,29 +30,23 @@ type KnowledgeGraphNavigationRequest = {
 const FileSidebarKnowledgePanels = ({
   activeDoc,
   activeDocId,
-  acceptedPatchCount,
   createDocument,
   documents,
   onDismissSuggestionQueueItem,
   onGenerateTocSuggestion,
-  onOpenNextSuggestionQueueItem,
-  onOpenPatchReview,
   onRefreshWorkspaceDocument,
   onRescanWorkspaceSources,
   onOpenSuggestionQueueItem,
-  onRetryFailedSuggestionQueueItems,
   onRetrySuggestionQueueItem,
   onSelectDoc,
   onSuggestKnowledgeImpactUpdate,
   onSuggestKnowledgeUpdates,
-  patchCount,
   suggestionQueue,
   workspaceChangedSources = [],
   workspaceLastRescannedAt = null,
   workspaceRescanning = false,
 }: KnowledgeSidebarPanelsProps) => {
   const navigate = useNavigate();
-  const [releaseChecklistCheckedIds, setReleaseChecklistCheckedIds] = useState<ChecklistItemId[]>(() => readStoredChecklist());
   const {
     knowledgeActiveImpact,
     knowledgeChangedSources,
@@ -169,14 +131,6 @@ const FileSidebarKnowledgePanels = ({
     navigate(`/editor/graph?${searchParams.toString()}`);
   };
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(RELEASE_CHECKLIST_STORAGE_KEY, JSON.stringify(releaseChecklistCheckedIds));
-  }, [releaseChecklistCheckedIds]);
-
   return (
     <div className="space-y-4">
       <KnowledgeIndexPanel
@@ -250,35 +204,6 @@ const FileSidebarKnowledgePanels = ({
             queueContext: "change",
             sourceDocumentId,
           });
-        }}
-      />
-      <KnowledgeOperationsPanel
-        acceptedPatchCount={acceptedPatchCount}
-        checklistCompletedCount={releaseChecklistCheckedIds.length}
-        checklistTotalCount={CHECKLIST_ITEM_IDS.length}
-        documentCount={knowledgeDocumentCount}
-        edgeCount={knowledgeInsights.summary.edgeCount}
-        issueCount={knowledgeHealthIssues.length}
-        nodeCount={
-          knowledgeInsights.summary.documentNodeCount
-          + knowledgeInsights.summary.sectionNodeCount
-          + knowledgeInsights.summary.imageNodeCount
-        }
-        onOpenNextReady={onOpenNextSuggestionQueueItem}
-        onOpenPatchReview={onOpenPatchReview}
-        onRetryFailed={onRetryFailedSuggestionQueueItems}
-        patchCount={patchCount}
-        queue={suggestionQueue}
-      />
-      <ReleaseChecklistPanel
-        checkedItemIds={releaseChecklistCheckedIds}
-        onReset={() => setReleaseChecklistCheckedIds([])}
-        onToggleItem={(itemId) => {
-          setReleaseChecklistCheckedIds((current) => (
-            current.includes(itemId)
-              ? current.filter((value) => value !== itemId)
-              : [...current, itemId]
-          ));
         }}
       />
       <SuggestionQueuePanel

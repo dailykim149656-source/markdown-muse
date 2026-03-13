@@ -33,10 +33,9 @@ Current repository position:
 | Workspace Graph | Implemented | `src/pages/WorkspaceGraph.tsx`, `src/components/editor/GraphExplorerDialog.tsx`, `src/components/editor/WorkspaceGraphPanel.tsx` | Graph route, search, filters, issues-only, source-target chain, graph handoff |
 | Diagnostics | Implemented | `src/components/editor/DocumentImpactPanel.tsx`, `src/components/editor/DocumentHealthPanel.tsx`, `src/components/editor/ConsistencyIssuesPanel.tsx`, `src/components/editor/ChangeMonitoringPanel.tsx` | Impact, health, consistency, change monitoring, priority/reason, causal explanation |
 | Suggestion Queue | Implemented | `src/components/editor/SuggestionQueuePanel.tsx`, `src/pages/Index.tsx` | Multi-document queue, retry/rerun, dedupe, graph re-entry, patch review reopen |
-| Operations and release gate | Implemented | `src/components/editor/KnowledgeOperationsPanel.tsx`, `src/components/editor/ReleaseChecklistPanel.tsx` | Queue health, provenance coverage, review progress, release checklist, summary copy |
-| Mobile and responsive behavior | Implemented | `src/components/editor/EditorToolbar.tsx`, `src/components/editor/FileSidebar.tsx`, `src/components/editor/KnowledgeOperationsPanel.tsx` | Mobile toolbar overflow handling, More access, wrap-friendly actions, mobile sidebar close flow |
+| Mobile and responsive behavior | Implemented | `src/components/editor/EditorToolbar.tsx`, `src/components/editor/FileSidebar.tsx` | Mobile toolbar overflow handling, More access, wrap-friendly actions, mobile sidebar close flow |
 | Landing and guide | Implemented | `src/pages/Landing.tsx`, `src/pages/Guide.tsx`, `src/content/guideContent.ts` | Quick start, workflow cards, feature guidance, visual tour, search, FAQ, audience filters, scenarios |
-| Validation baseline | Implemented | `src/test/guidePage.test.tsx`, `src/test/dialogSmoke.test.tsx`, `src/test/knowledgeOperationsPanel.test.tsx`, `src/test/patchReviewMetrics.test.tsx`, `src/test/suggestionQueuePanel.test.tsx`, `src/test/i18nCoverage.test.ts` | Focused regression coverage exists and production build passes |
+| Validation baseline | Implemented | `src/test/guidePage.test.tsx`, `src/test/dialogSmoke.test.tsx`, `src/test/patchReviewMetrics.test.tsx`, `src/test/suggestionQueuePanel.test.tsx`, `src/test/i18nCoverage.test.ts` | Focused regression coverage exists and production build passes |
 
 ## Format and workflow support
 
@@ -80,4 +79,4 @@ Markdown Muse should now be treated as:
 
 - a feature-rich release candidate
 - a review-first editor with cross-document maintenance flows
-- a product that already needs onboarding and operator documentation
+- a product that already needs onboarding and handoff documentation

@@ -106,8 +106,6 @@ Implemented:
 
 - patch review confidence/provenance metrics
 - provenance gap highlighting and filtering
-- operations gate panel
-- release checklist panel and checklist integration into operations gate
 - semantic rerank with term expansion
 - workspace-scale hints and performance-budget UI
 - targeted regression coverage around queue, graph, diagnostics, and rerank
@@ -139,11 +137,11 @@ Status: complete
 
 - graph chain context, diagnostics cause text, and rerank hints are visible
 
-### Operator visibility
+### Handoff visibility
 
 Status: complete
 
-- operations gate, checklist progress, summary copy, and queue metrics are available
+- queue state, patch review metrics, diagnostics panels, and delivery surfaces are available
 
 ### Validation baseline
 

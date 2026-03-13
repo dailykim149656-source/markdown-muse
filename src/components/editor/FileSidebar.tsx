@@ -75,6 +75,7 @@ interface FileSidebarProps {
   onOpenStructuredModes?: () => void;
   onRenameDoc: (id: string, name: string) => void;
   onSelectDoc: (id: string) => void;
+  knowledgePanelResetKey?: number;
   showStructuredCreateAction?: boolean;
 }
 
@@ -125,6 +126,7 @@ const FileSidebar = ({
   onOpenStructuredModes,
   onRenameDoc,
   onSelectDoc,
+  knowledgePanelResetKey = 0,
   showStructuredCreateAction = false,
 }: FileSidebarProps) => {
   const { t } = useI18n();
@@ -397,22 +399,18 @@ const FileSidebar = ({
             <SidebarGroupContent>
               <Suspense fallback={<SidebarPanelFallback />}>
                 <FileSidebarKnowledgePanels
+                  key={`knowledge-panels-${knowledgePanelResetKey}`}
                   activeDoc={activeDoc}
                   activeDocId={activeDocId}
-                  acceptedPatchCount={knowledgeProps.acceptedPatchCount}
                   createDocument={createDocument}
                   documents={documents}
                   onDismissSuggestionQueueItem={knowledgeProps.onDismissSuggestionQueueItem}
                   onGenerateTocSuggestion={knowledgeProps.onGenerateTocSuggestion}
-                  onOpenNextSuggestionQueueItem={knowledgeProps.onOpenNextSuggestionQueueItem}
-                  onOpenPatchReview={knowledgeProps.onOpenPatchReview}
                   onOpenSuggestionQueueItem={knowledgeProps.onOpenSuggestionQueueItem}
-                  onRetryFailedSuggestionQueueItems={knowledgeProps.onRetryFailedSuggestionQueueItems}
                   onRetrySuggestionQueueItem={knowledgeProps.onRetrySuggestionQueueItem}
                   onSelectDoc={onSelectDoc}
                   onSuggestKnowledgeImpactUpdate={knowledgeProps.onSuggestKnowledgeImpactUpdate}
                   onSuggestKnowledgeUpdates={knowledgeProps.onSuggestKnowledgeUpdates}
-                  patchCount={knowledgeProps.patchCount}
                   suggestionQueue={knowledgeProps.suggestionQueue}
                 />
               </Suspense>

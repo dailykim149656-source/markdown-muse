@@ -6,7 +6,10 @@ import type {
   DocumentData,
 } from "@/types/document";
 import {
+  clearSavedData,
   createNewDocument,
+  hasMeaningfulSavedDocuments,
+  isAutoSaveWriteFailure,
   loadSavedData,
   saveData,
   useAutoSave,
@@ -133,31 +136,77 @@ export const useDocumentManager = () => {
       lastSaved: lastSavedOverride ?? autoSaveState.lastSavedAt ?? Date.now(),
     });
 
-    if (result.ok) {
-      setAutoSaveState({
-        error: null,
-        lastSavedAt: result.savedAt,
-        status: "saved",
-      });
-      lastSavedSnapshotKeyRef.current = JSON.stringify({
-        activeDocId: nextActiveDocId,
-        documents: nextDocuments,
-        version: 2,
-      });
+    if (isAutoSaveWriteFailure(result)) {
+      const { error } = result;
+
+      setAutoSaveState((previousState) => ({
+        error,
+        lastSavedAt: previousState.lastSavedAt,
+        status: "error",
+      }));
       return result;
     }
 
-    setAutoSaveState((previousState) => ({
-      error: result.error,
-      lastSavedAt: previousState.lastSavedAt,
-      status: "error",
-    }));
+    setAutoSaveState({
+      error: null,
+      lastSavedAt: result.savedAt,
+      status: "saved",
+    });
+    lastSavedSnapshotKeyRef.current = JSON.stringify({
+      activeDocId: nextActiveDocId,
+      documents: nextDocuments,
+      version: 2,
+    });
     return result;
   }, [autoSaveState.lastSavedAt]);
 
   const saveImmediate = useCallback(() => {
     persistSnapshot(documents, activeDocId);
   }, [activeDocId, documents, persistSnapshot]);
+
+  const resetDocuments = useCallback(() => {
+    const replacementDocument = createNewDocument();
+    const nextDocuments = [replacementDocument];
+    const snapshotKey = JSON.stringify({
+      activeDocId: replacementDocument.id,
+      documents: nextDocuments,
+      version: 2 as const,
+    });
+
+    clearSavedData();
+    documentsRef.current = nextDocuments;
+    activeDocIdRef.current = replacementDocument.id;
+    setDocuments(nextDocuments);
+    setActiveDocId(replacementDocument.id);
+    setEditorKey((key) => key + 1);
+
+    const result = saveData({
+      activeDocId: replacementDocument.id,
+      documents: nextDocuments,
+      lastSaved: Date.now(),
+      version: 2,
+    });
+
+    if (isAutoSaveWriteFailure(result)) {
+      const { error } = result;
+
+      lastSavedSnapshotKeyRef.current = null;
+      setAutoSaveState((previousState) => ({
+        error,
+        lastSavedAt: previousState.lastSavedAt,
+        status: "error",
+      }));
+      return;
+    }
+
+    lastSavedAtRef.current = result.savedAt;
+    lastSavedSnapshotKeyRef.current = snapshotKey;
+    setAutoSaveState({
+      error: null,
+      lastSavedAt: result.savedAt,
+      status: "saved",
+    });
+  }, []);
 
   const bumpEditorKey = useCallback(() => {
     setEditorKey((key) => key + 1);
@@ -447,8 +496,9 @@ export const useDocumentManager = () => {
     documents,
     editorKey,
     handleContentChange,
-    hasRestoredDocuments: Boolean(initialSavedData?.documents?.length),
+    hasRestoredDocuments: hasMeaningfulSavedDocuments(initialSavedData),
     renameDocument,
+    resetDocuments,
     selectDocument,
     updateDocument,
     updateActiveDoc,

@@ -480,7 +480,7 @@ const enGuideContent: GuideContent = {
       "Learn toolbar editing and version history first.",
       "Use Patch Review whenever AI suggestions appear.",
       "Open Knowledge, Graph, and Suggestion Queue only when the workspace grows.",
-      "Use Google Workspace connect/import and the release checklist only when documents are shared beyond the local editor.",
+      "Use Google Workspace connect/import and Patch Review warning state only when documents are shared beyond the local editor.",
     ],
     recommendedPathTitle: "Recommended path for first-time users",
     scenarioDescription: "Most users understand Docsy faster through realistic scenarios than through a flat feature list.",
@@ -722,18 +722,18 @@ const enGuideContent: GuideContent = {
       {
         audience: ["advanced"],
         bullets: [
-          "Operations Gate summarizes queue health, review progress, provenance coverage, and validated range.",
-          "Release checklist is for the final operator pass before treating the workspace as handoff-ready.",
-          "The summary copy is designed to support release and handoff communication, not just local editing.",
+          "Patch Review, Suggestion Queue, and sharing/export should be read together before handoff.",
+          "Google Workspace warnings and conflicts should be resolved before treating the current workspace as deliverable.",
+          "As work scales, use focused graph and queue review to close the actual backlog before sharing results.",
         ],
         id: "operations-and-release",
         steps: [
-          "Open Operations Gate after queue and review work begins to see whether blockers remain.",
-          "Use Release checklist to confirm graph, queue, review, and build checks are complete.",
-          "Copy the release summary only after the workspace is in a healthy review state.",
+          "Finish queued reviews and resolve sync warnings or conflicts.",
+          "Confirm the target docs are updated or intentionally deferred.",
+          "Share or export only after the review state is understood.",
         ],
-        summary: "Once the product is used as a maintenance workflow, release readiness is a visible product surface. Operations Gate and Release checklist turn that state into something operators can inspect and communicate.",
-        title: "Operations and release readiness",
+        summary: "Handoff quality is still visible in the product, but it now comes from existing review, queue, sync, and export surfaces rather than a dedicated release gate panel.",
+        title: "Handoff and delivery readiness",
       },
       {
         audience: ["beginner"],
@@ -793,9 +793,9 @@ const enGuideContent: GuideContent = {
         useWhen: "The document source of truth lives in Google Docs or is shared outside the local editor.",
       },
       {
-        description: "An operator-facing release surface for queue health, provenance coverage, and final checklist state.",
-        title: "Operations Gate",
-        useWhen: "You are validating release-readiness or handing off a workspace after cross-document maintenance.",
+        description: "The final delivery surface for share links, QR, print, and file export after review.",
+        title: "Share and export",
+        useWhen: "Reviewed changes are ready to be handed off or distributed.",
       },
     ],
     featureDescription: "The important question is not which feature exists. It is which product surface matches the current stage of the maintenance workflow.",
@@ -848,12 +848,12 @@ const enGuideContent: GuideContent = {
         title: "Sync with Google Workspace",
       },
       {
-        description: "Use Operations Gate and Release checklist to decide whether the workspace is ready for handoff, export, or release.",
-        emphasis: "Operator visibility",
-        title: "Validate release readiness",
+        description: "Clear queue and review backlog, check Google Workspace warnings, then share or export the result.",
+        emphasis: "Handoff readiness",
+        title: "Prepare handoff",
       },
     ],
-    workflowDescription: "Docsy starts as an editor, but its real value appears when review, traceability, workspace sync, and release visibility become part of the workflow.",
+    workflowDescription: "Docsy starts as an editor, but its real value appears when review, traceability, workspace sync, and safe handoff become part of the workflow.",
     workflowEyebrow: "Core workflows",
     workflowTitle: "Think in workflows, not in isolated features",
   },
@@ -885,7 +885,7 @@ const koGuideContentNormalized: GuideContent = {
       },
     ],
     faqTitle: "자주 묻는 질문",
-    heroDescription: "이 가이드는 Docsy를 기능 목록이 아니라 실제 작업 순서로 설명합니다. 문서 생성, 편집, 버전 복구, 그래프 추적, Patch Review, Google Workspace sync, release readiness까지 사용자가 실제로 만나는 흐름으로 정리했습니다.",
+    heroDescription: "이 가이드는 Docsy를 기능 목록이 아니라 실제 작업 순서로 설명합니다. 문서 생성, 편집, 버전 복구, 그래프 추적, Patch Review, Google Workspace sync, 전달 준비까지 사용자가 실제로 만나는 흐름으로 정리했습니다.",
     heroEyebrow: "사용 가이드",
     heroTitle: "기능 이름이 아니라 작업 흐름으로 Docsy 이해하기",
     recommendedPathDescription: "처음 사용할 때 가장 덜 복잡한 순서입니다.",
@@ -894,7 +894,7 @@ const koGuideContentNormalized: GuideContent = {
       "toolbar 편집과 version history를 먼저 익힌다.",
       "AI 제안이 생기면 Patch Review에서 검토한다.",
       "문서가 연결되기 시작하면 Knowledge, Graph, Suggestion Queue를 연다.",
-      "Google Docs와 공유되는 문서라면 마지막에 Google Workspace import/sync와 release checklist를 확인한다.",
+      "Google Docs와 공유되는 문서라면 마지막에 Google Workspace import/sync와 Patch Review warning 상태를 함께 확인한다.",
     ],
     recommendedPathTitle: "처음 사용자에게 추천하는 경로",
     scenarioDescription: "기능 설명보다 실제 상황을 기준으로 보면 Docsy를 훨씬 빨리 이해할 수 있습니다.",
@@ -1136,18 +1136,18 @@ const koGuideContentNormalized: GuideContent = {
       {
         audience: ["advanced"],
         bullets: [
-          "Operations Gate는 queue health, review progress, provenance coverage, validated range를 요약합니다.",
-          "Release checklist는 최종 운영자 확인을 위한 수동 surface입니다.",
-          "summary copy는 handoff와 release communication을 위한 결과물입니다.",
+          "Patch Review, Suggestion Queue, 공유/내보내기는 handoff 전에 함께 확인해야 합니다.",
+          "Google Workspace warning과 conflict 상태는 전달 가능 상태로 보기 전에 정리해야 합니다.",
+          "workspace가 커질수록 넓게 훑기보다 queue backlog와 graph 진입 지점을 중심으로 닫는 편이 안전합니다.",
         ],
         id: "operations-and-release",
         steps: [
-          "queue와 review가 시작되면 먼저 Operations Gate를 열어 blocker를 확인합니다.",
-          "Release checklist로 graph, queue, review, build 상태를 점검합니다.",
-          "workspace가 healthy review state에 들어간 뒤 summary를 복사합니다.",
+          "queue와 review backlog를 정리하고 sync warning이나 conflict를 해소합니다.",
+          "대상 문서가 실제로 업데이트되었는지, 아니면 의도적으로 보류했는지 확인합니다.",
+          "검토 상태를 이해한 뒤 share 또는 export로 전달합니다.",
         ],
-        summary: "Docsy가 유지보수 워크플로우로 쓰이는 순간 release readiness도 제품 표면이 됩니다. Operations Gate와 Release checklist는 그 상태를 운영자가 확인하고 전달할 수 있게 만듭니다.",
-        title: "Operations and release readiness",
+        summary: "handoff 품질은 여전히 제품에서 확인할 수 있지만, 이제는 전용 release gate 패널이 아니라 review, queue, sync, export surface를 함께 읽어 판단합니다.",
+        title: "전달 준비와 handoff 점검",
       },
       {
         audience: ["beginner"],
@@ -1207,9 +1207,9 @@ const koGuideContentNormalized: GuideContent = {
         useWhen: "source of truth가 Google Docs에 있거나 외부와 공유된 문서를 유지보수할 때",
       },
       {
-        description: "queue health와 release checklist 상태를 operator 관점에서 요약해 주는 surface입니다.",
-        title: "Operations Gate",
-        useWhen: "release readiness를 확인하거나 cross-document maintenance 결과를 handoff할 때",
+        description: "review 이후 share link, QR, print, file export로 결과를 전달하는 마지막 단계입니다.",
+        title: "공유와 내보내기",
+        useWhen: "검토한 변경 결과를 handoff하거나 배포해야 할 때",
       },
     ],
     featureDescription: "중요한 것은 기능 이름이 아니라 지금 작업 단계에 어떤 surface가 맞는지를 아는 것입니다.",
@@ -1262,12 +1262,12 @@ const koGuideContentNormalized: GuideContent = {
         title: "Google Workspace와 동기화하기",
       },
       {
-        description: "Operations Gate와 Release checklist로 workspace가 handoff-ready인지 판단합니다.",
-        emphasis: "Operator visibility",
-        title: "릴리스 준비 상태 확인하기",
+        description: "queue와 review backlog를 정리하고 Google Workspace warning을 확인한 뒤 share 또는 export로 전달합니다.",
+        emphasis: "전달 준비",
+        title: "전달 준비하기",
       },
     ],
-    workflowDescription: "Docsy는 편집기에서 시작하지만, review, traceability, workspace sync, release visibility가 workflow 안에 들어올 때 가장 가치가 커집니다.",
+    workflowDescription: "Docsy는 편집기에서 시작하지만, review, traceability, workspace sync, 안전한 handoff가 workflow 안에 들어올 때 가장 가치가 커집니다.",
     workflowEyebrow: "핵심 워크플로우",
     workflowTitle: "기능이 아니라 흐름으로 생각하세요",
   },
@@ -1344,18 +1344,18 @@ const enGuideSectionsLatest = [
   {
     audience: ["advanced"] as GuideAudience[],
     bullets: [
-      "Operations Gate summarizes queue health, review progress, provenance coverage, validated range, and the recommended next step.",
-      "Release checklist is the final operator pass before treating the workspace as handoff-ready.",
-      "Validated range matters: once the workspace grows, release decisions should move from broad browsing to focused graph paths and queue-first review.",
+      "Patch Review, Suggestion Queue, and sharing/export should be read together before handoff.",
+      "Google Workspace warnings or conflicts should be resolved before calling the current state deliverable.",
+      "As work scales, close the actual queue and review backlog before sharing results.",
     ],
     id: "operations-and-release",
     steps: [
-      "Open Operations Gate after queue and review work begins to see whether blockers remain.",
-      "Use Release checklist together with the validated range hints to decide whether to stay in broad exploration or switch to targeted review.",
-      "Copy the release summary only after blockers, warnings, and the review backlog are understood.",
+      "Finish queued reviews and resolve sync warnings or conflicts.",
+      "Confirm the target docs are updated or intentionally deferred.",
+      "Share or export only after the review state is understood.",
     ],
-    summary: "Release readiness is now an explicit surface in the product. Operations Gate and Release checklist turn workspace state, scale pressure, and review risk into something operators can inspect and communicate.",
-    title: "Operations and release readiness",
+    summary: "Handoff quality remains visible in the product, but it now comes from review, queue, sync, and export surfaces rather than a dedicated release gate panel.",
+    title: "Handoff and delivery readiness",
   },
 ] satisfies GuideSection[];
 
@@ -1427,18 +1427,18 @@ const koGuideSectionsLatest = [
   {
     audience: ["advanced"] as GuideAudience[],
     bullets: [
-      "Operations Gate는 queue health, review progress, provenance coverage, validated range, recommended next step을 함께 보여줍니다.",
-      "Release checklist는 workspace를 handoff-ready로 보기 전 마지막 운영자 점검 단계입니다.",
-      "validated range를 넘기기 시작하면 broad browsing보다 focused graph path와 queue-first review가 중요해집니다.",
+      "Patch Review, Suggestion Queue, 공유/내보내기는 handoff 전에 함께 읽어야 합니다.",
+      "Google Workspace warning이나 conflict는 현재 상태를 deliverable로 보기 전에 해소해야 합니다.",
+      "작업 규모가 커질수록 결과를 공유하기 전에 실제 queue와 review backlog를 닫는 편이 안전합니다.",
     ],
     id: "operations-and-release",
     steps: [
-      "queue와 review가 시작되면 먼저 Operations Gate를 열어 blocker가 남아 있는지 확인합니다.",
-      "Release checklist와 validated range 힌트를 같이 보면서 넓은 탐색을 계속할지, 목표 지점 검토로 전환할지 결정합니다.",
-      "blocker, warning, review backlog를 이해한 뒤에만 release summary를 복사합니다.",
+      "queue와 review backlog를 정리하고 sync warning이나 conflict를 해소합니다.",
+      "대상 문서가 실제로 업데이트되었는지, 아니면 의도적으로 보류했는지 확인합니다.",
+      "검토 상태를 이해한 뒤 share 또는 export로 전달합니다.",
     ],
-    summary: "릴리스 준비 상태는 이제 제품 안에서 직접 보이는 표면입니다. Operations Gate와 Release checklist는 workspace 상태, 규모 압박, review 위험을 운영자가 판단하고 전달할 수 있는 형태로 바꿉니다.",
-    title: "운영과 릴리스 준비 상태",
+    summary: "handoff 품질은 여전히 제품에서 보이지만, 이제는 review, queue, sync, export surface를 함께 읽어 판단합니다.",
+    title: "전달 준비와 handoff 점검",
   },
 ] satisfies GuideSection[];
 
@@ -1479,11 +1479,11 @@ const enGuideContentLatest: GuideContent = {
         };
       }
 
-      if (card.title === "Operations Gate") {
+      if (card.title === "Share and export") {
         return {
           ...card,
-          description: "An operator-facing release surface for queue health, provenance coverage, validated range, and final checklist state.",
-          useWhen: "You are validating release-readiness or deciding whether a growing workspace should stay in broad exploration or move into targeted review.",
+          description: "A delivery surface for share links, QR, print, and file export after review or sync checks are complete.",
+          useWhen: "You are handing off reviewed documents or publishing an exported result.",
         };
       }
 
@@ -1512,10 +1512,10 @@ const enGuideContentLatest: GuideContent = {
         };
       }
 
-      if (card.title === "Validate release readiness") {
+      if (card.title === "Prepare handoff") {
         return {
           ...card,
-          description: "Use Operations Gate, validated range hints, and Release checklist to decide whether the workspace is ready for handoff, export, or release.",
+          description: "Use queue, Patch Review, and sync warnings to decide when the result is ready to share or export.",
         };
       }
 
@@ -1561,11 +1561,11 @@ const koGuideContentLatest: GuideContent = {
         };
       }
 
-      if (card.title === "Operations Gate") {
+      if (card.title === "공유와 내보내기") {
         return {
           ...card,
-          description: "queue health, provenance coverage, validated range, checklist 상태를 함께 보여주는 운영자용 release surface입니다.",
-          useWhen: "릴리스 준비 상태를 판단하거나, 커진 workspace를 넓게 볼지 목표 지점 검토로 전환할지 결정해야 할 때 사용합니다.",
+          description: "review와 sync 확인이 끝난 뒤 share link, QR, print, file export로 결과를 전달하는 단계입니다.",
+          useWhen: "검토가 끝난 문서를 handoff하거나 export 결과를 배포해야 할 때 사용합니다.",
         };
       }
 
@@ -1594,10 +1594,10 @@ const koGuideContentLatest: GuideContent = {
         };
       }
 
-      if (card.title === "Validate release readiness") {
+      if (card.title === "전달 준비하기") {
         return {
           ...card,
-          description: "Operations Gate, validated range 힌트, Release checklist를 함께 보면서 handoff, export, release 가능 상태인지 판단합니다.",
+          description: "queue, Patch Review, sync warning 상태를 함께 보면서 share 또는 export 시점을 판단합니다.",
         };
       }
 

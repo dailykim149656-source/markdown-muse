@@ -19,6 +19,7 @@ import {
   Plus,
   Printer,
   QrCode,
+  RotateCcw,
   Sparkles,
   Sun,
   Upload,
@@ -83,6 +84,7 @@ interface EditorHeaderProps {
   onToggleFullscreen: () => void;
   onOpenPatchReview?: () => void;
   onOpenAiAssistant?: () => void;
+  onRequestResetDocuments?: () => void;
   onOpenShortcuts: () => void;
   patchCount?: number;
   previewOpen?: boolean;
@@ -99,6 +101,7 @@ interface EditorHeaderProps {
   workspaceImportPending?: boolean;
   workspaceSyncPending?: boolean;
   workspaceBinding?: WorkspaceBinding;
+  resetDocumentsDisabled?: boolean;
 }
 
 const LOCALES: Locale[] = ["ko", "en"];
@@ -142,6 +145,7 @@ const EditorHeader = ({
   onToggleFullscreen,
   onOpenPatchReview,
   onOpenAiAssistant,
+  onRequestResetDocuments,
   onOpenShortcuts,
   patchCount = 0,
   previewOpen,
@@ -158,6 +162,7 @@ const EditorHeader = ({
   workspaceImportPending = false,
   workspaceSyncPending = false,
   workspaceBinding,
+  resetDocumentsDisabled = false,
 }: EditorHeaderProps) => {
   const { locale, setLocale, t } = useI18n();
   const { toggleSidebar } = useSidebar();
@@ -619,7 +624,13 @@ const EditorHeader = ({
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 sm:hidden" title={t("common.language.menu")}>
+              <Button
+                aria-label={t("header.moreActions")}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                title={t("header.moreActions")}
+              >
                 <Ellipsis className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -645,6 +656,19 @@ const EditorHeader = ({
                   {t(`common.language.${nextLocale}`)}
                 </DropdownMenuItem>
               ))}
+              {onRequestResetDocuments && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className={!resetDocumentsDisabled ? "text-destructive focus:text-destructive" : undefined}
+                    disabled={resetDocumentsDisabled}
+                    onClick={() => onRequestResetDocuments()}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    {t("resetDocuments.action")}
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

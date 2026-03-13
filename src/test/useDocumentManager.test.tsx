@@ -1,5 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createNewDocument, saveData } from "@/components/editor/useAutoSave";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
 
 describe("useDocumentManager", () => {
@@ -189,5 +190,69 @@ describe("useDocumentManager", () => {
       }),
     ]));
     expect(restored.result.current.activeDocId).toBe("agent-draft");
+  });
+
+  it("resets documents to a fresh blank draft and persists it immediately", () => {
+    const { result } = renderHook(() => useDocumentManager());
+    const previousDocumentId = result.current.activeDocId;
+
+    act(() => {
+      result.current.createDocument({
+        content: "# Existing",
+        id: "existing-doc",
+        mode: "markdown",
+        name: "Existing",
+        replaceDocumentId: previousDocumentId,
+        sourceSnapshots: { markdown: "# Existing" },
+      });
+    });
+
+    act(() => {
+      result.current.resetDocuments();
+    });
+
+    expect(result.current.documents).toHaveLength(1);
+    expect(result.current.activeDocId).toBe(result.current.documents[0].id);
+    expect(result.current.documents[0]).toEqual(expect.objectContaining({
+      content: "",
+      mode: "markdown",
+      name: "Untitled",
+    }));
+    expect(result.current.documents[0].id).not.toBe("existing-doc");
+    expect(localStorage.getItem("docsy-autosave")).toBeNull();
+
+    const saved = JSON.parse(localStorage.getItem("docsy-autosave-v2") || "{}") as {
+      activeDocId?: string;
+      documents?: Array<{ content: string; mode: string; name: string }>;
+    };
+
+    expect(saved.activeDocId).toBe(result.current.documents[0].id);
+    expect(saved.documents).toEqual([
+      expect.objectContaining({
+        content: "",
+        mode: "markdown",
+        name: "Untitled",
+      }),
+    ]);
+  });
+
+  it("does not report a restored session for a persisted pristine blank draft", () => {
+    const blankDocument = createNewDocument();
+    saveData({
+      activeDocId: blankDocument.id,
+      documents: [blankDocument],
+      lastSaved: Date.now(),
+      version: 2,
+    });
+
+    const { result } = renderHook(() => useDocumentManager());
+
+    expect(result.current.documents).toHaveLength(1);
+    expect(result.current.documents[0]).toEqual(expect.objectContaining({
+      content: "",
+      mode: "markdown",
+      name: "Untitled",
+    }));
+    expect(result.current.hasRestoredDocuments).toBe(false);
   });
 });

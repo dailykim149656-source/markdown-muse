@@ -39,6 +39,7 @@ import {
   parseRequestBody,
   writeHttpResponse,
 } from "./modules/http/http";
+import { handleListenError } from "./modules/http/handleListenError";
 import {
   exportTexPdf,
   getTexHealth as getTexServiceHealth,
@@ -846,6 +847,19 @@ const server = createServer(async (request, response) => {
     console.error(`[AI Server] [${requestId}] Error [${statusCode}]: ${message}`, error);
     writeHttpResponse(response, json({ error: message }, statusCode, request.headers.origin));
   }
+});
+
+server.once("error", (error) => {
+  void handleListenError({
+    error: error as NodeJS.ErrnoException,
+    port: PORT,
+    serviceName: "AI Server",
+  }).then((exitCode) => {
+    process.exit(exitCode);
+  }).catch((listenError) => {
+    console.error("[AI Server] Failed to handle startup error.", listenError);
+    process.exit(1);
+  });
 });
 
 console.log("[AI Server] Starting listener...");

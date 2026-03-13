@@ -26,7 +26,6 @@ Implemented now:
 - Consistency, impact, and change flows connected into graph exploration
 - Review-first suggestion flow using `Patch Review`
 - Multi-document suggestion queue with retry, graph re-entry, and review reopen
-- Operations gate panel with queue, provenance, and patch review metrics
 - Patch review metrics for confidence and provenance coverage
 - Knowledge search semantic rerank with term expansion and title/section bias
 
@@ -56,13 +55,13 @@ Not yet fixed as a final release artifact:
 - Graph route shows source/target chain context and issue metadata.
 - Search results expose rerank hints instead of opaque ordering only.
 
-4. Operator visibility
-- Sidebar exposes an operations gate summary.
-- Operators can see queue counts, loaded patches, accepted patches, and provenance coverage.
-- Operators can copy a release-gate summary for handoff or tracking.
+4. Handoff visibility
+- Operators can inspect queue state before handoff.
+- Patch review exposes patch counts, confidence tiers, and provenance coverage.
+- Share/export remains downstream of review and sync checks.
 
 5. Validation baseline
-- Focused regression tests exist for graph handoff, queue UI, operations gate,
+- Focused regression tests exist for graph handoff, queue UI,
   patch review metrics, diagnostics panels, and knowledge search rerank.
 - Production build completes successfully.
 
@@ -84,7 +83,6 @@ Hold condition:
 
 Current product surface:
 
-- `Operations Gate` panel
 - `Suggestion Queue` panel
 
 ### Gate B: provenance coverage
@@ -99,8 +97,8 @@ Hold condition:
 
 Current product surface:
 
-- `Operations Gate` panel
 - `Patch Review` metrics header
+- `Suggestion Queue` panel
 
 ### Gate C: review readiness
 
@@ -153,7 +151,7 @@ For the operational execution version of this checklist, use:
 4. Confirm a queue item is created.
 5. Reopen the queue item in `Patch Review`.
 6. Confirm confidence and provenance metrics are visible.
-7. Confirm operations gate reflects queue and review state.
+7. Confirm queue status and patch-review metrics reflect the current review state.
 8. Retry a queue item and confirm attempt count increments.
 9. Use `Queue all` from change monitoring and confirm FIFO processing.
 10. Run build and focused regression tests.
@@ -164,7 +162,6 @@ Primary UI surfaces:
 
 - `src/components/editor/GraphExplorerDialog.tsx`
 - `src/components/editor/SuggestionQueuePanel.tsx`
-- `src/components/editor/KnowledgeOperationsPanel.tsx`
 - `src/components/editor/PatchReviewDialog.tsx`
 - `src/components/editor/DocumentHealthPanel.tsx`
 - `src/components/editor/ChangeMonitoringPanel.tsx`
@@ -180,7 +177,6 @@ Primary orchestration/state:
 
 Primary regression coverage:
 
-- `src/test/knowledgeOperationsPanel.test.tsx`
 - `src/test/patchReviewMetrics.test.tsx`
 - `src/test/suggestionQueuePanel.test.tsx`
 - `src/test/healthDiagnosticsPanel.test.tsx`

@@ -95,4 +95,52 @@ describe("PatchReviewDialog metrics", () => {
     expect(screen.getByText("patchReview.provenanceGapTitle")).toBeInTheDocument();
     expect(screen.getByText("Patch Two")).toBeInTheDocument();
   }, 15000);
+
+  it("uses auto rows for metrics and body when a patch set is loaded", () => {
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      description: "Patch set",
+      documentId: "doc-1",
+      patchSetId: "patch-set-layout",
+      patches: [
+        {
+          author: "ai",
+          operation: "replace_text_range",
+          patchId: "patch-layout-1",
+          status: "accepted",
+          suggestedText: "Suggested patch body",
+          target: {
+            endOffset: 8,
+            nodeId: "node-layout-1",
+            startOffset: 0,
+            targetType: "text_range",
+          },
+          title: "Patch Layout",
+        },
+      ],
+      status: "in_review",
+      title: "Layout review",
+    };
+
+    renderWithI18n(
+      <PatchReviewDialog
+        acceptedPatchCount={1}
+        onAccept={vi.fn()}
+        onApply={vi.fn()}
+        onClear={vi.fn()}
+        onEdit={vi.fn()}
+        onLoadPatchSet={vi.fn()}
+        onOpenChange={vi.fn()}
+        onReject={vi.fn()}
+        open
+        patchSet={patchSet}
+        workspaceSyncWarnings={[]}
+      />,
+    );
+
+    expect(screen.getByTestId("patch-review-dialog")).toHaveClass("grid-rows-[auto_auto_auto_minmax(0,1fr)]");
+    expect(screen.getByTestId("patch-review-metrics")).toHaveClass("shrink-0");
+    expect(screen.getByTestId("patch-review-body")).toHaveClass("min-h-0");
+  });
 });

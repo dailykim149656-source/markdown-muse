@@ -149,19 +149,14 @@ describe("workspace warning surfaces", () => {
         }}
         knowledgeEnabled={false}
         knowledgeProps={{
-          acceptedPatchCount: 0,
           onDismissSuggestionQueueItem: vi.fn(),
           onGenerateTocSuggestion: vi.fn(),
-          onOpenNextSuggestionQueueItem: vi.fn(),
-          onOpenPatchReview: vi.fn(),
           onOpenSuggestionQueueItem: vi.fn(),
           onRefreshWorkspaceDocument: vi.fn(),
           onRescanWorkspaceSources: vi.fn(),
-          onRetryFailedSuggestionQueueItems: vi.fn(),
           onRetrySuggestionQueueItem: vi.fn(),
           onSuggestKnowledgeImpactUpdate: vi.fn(),
           onSuggestKnowledgeUpdates: vi.fn(),
-          patchCount: 0,
           suggestionQueue: [],
           workspaceChangedSources: [],
           workspaceLastRescannedAt: null,
