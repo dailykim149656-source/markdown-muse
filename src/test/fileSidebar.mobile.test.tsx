@@ -60,6 +60,11 @@ describe("FileSidebar mobile behavior", () => {
           updatedAt: 1,
         }}
         activeDocId="doc-1"
+        capabilities={{
+          canAccessHistory: true,
+          canAccessKnowledge: true,
+          canAccessStructuredModes: true,
+        }}
         createDocument={vi.fn()}
         documents={[
           {

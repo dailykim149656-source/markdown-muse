@@ -29,6 +29,7 @@ interface MarkdownEditorProps {
   initialContent?: string;
   initialTiptapDoc?: JSONContent;
   onTiptapChange?: (document: JSONContent | null) => void;
+  seedRevision?: string;
 }
 
 const MarkdownEditor = ({
@@ -44,6 +45,7 @@ const MarkdownEditor = ({
   initialContent,
   initialTiptapDoc,
   onTiptapChange,
+  seedRevision = "default",
 }: MarkdownEditorProps) => {
   const initialMd = initialContent || "";
   const [mdSource, setMdSource] = useState(initialMd);
@@ -69,6 +71,13 @@ const MarkdownEditor = ({
     () => isUsableTiptapDocument(initialTiptapDoc) ? initialTiptapDoc : undefined,
     [initialTiptapDoc],
   );
+  const latestEditorSeedRef = useRef<JSONContent | string>(usableInitialTiptapDoc || initialHtml);
+  const seedPayloadRef = useRef({
+    initialHtml,
+    initialMd,
+    initialTiptapDoc: usableInitialTiptapDoc,
+    revision: seedRevision,
+  });
   const requiresDocumentFeatures = useMemo(
     () => tiptapDocumentHasDocumentContent(initialTiptapDoc) || htmlHasDocumentContent(initialHtml),
     [initialHtml, initialTiptapDoc],
@@ -85,6 +94,22 @@ const MarkdownEditor = ({
   const shouldHoldEditor = (requiresDocumentFeatures && !documentFeaturesEnabled)
     || (requiresAdvancedBlocks && !advancedBlocksEnabled)
     || ((documentFeaturesEnabled || advancedBlocksEnabled) && !extensionsReady);
+
+  if (seedPayloadRef.current.revision !== seedRevision) {
+    seedPayloadRef.current = {
+      initialHtml,
+      initialMd,
+      initialTiptapDoc: usableInitialTiptapDoc,
+      revision: seedRevision,
+    };
+  }
+
+  useEffect(() => {
+    latestEditorSeedRef.current = seedPayloadRef.current.initialTiptapDoc || seedPayloadRef.current.initialHtml;
+    pendingSourceSyncHtmlRef.current = null;
+    seedSignatureRef.current = null;
+    setMdSource(seedPayloadRef.current.initialMd);
+  }, [seedRevision]);
 
   useEffect(() => {
     if (requiresDocumentFeatures && !documentFeaturesEnabled) {
@@ -103,6 +128,7 @@ const MarkdownEditor = ({
       if (shouldHoldEditor || syncingFromSource.current) return;
       syncingFromWysiwyg.current = true;
       const md = turndownService.turndown(html);
+      latestEditorSeedRef.current = document;
       setMdSource(md);
       onContentChange?.(md);
       onHtmlChange?.(html);
@@ -114,7 +140,7 @@ const MarkdownEditor = ({
 
   const editor = useEditor({
     extensions: shouldHoldEditor ? coreExtensions : extensions,
-    content: shouldHoldEditor ? "" : (usableInitialTiptapDoc || initialHtml),
+    content: shouldHoldEditor ? "" : latestEditorSeedRef.current,
     onCreate: ({ editor }) => {
       rememberEditorSelection(editor);
     },
@@ -132,24 +158,18 @@ const MarkdownEditor = ({
   }, [advancedBlocksEnabled, documentFeaturesEnabled, extensionsReady, shouldHoldEditor]);
 
   useEffect(() => {
-    const nextMarkdown = initialContent || "";
-
-    setMdSource((current) => current === nextMarkdown ? current : nextMarkdown);
-  }, [initialContent]);
-
-  useEffect(() => {
     if (!editor || shouldHoldEditor) {
       return;
     }
 
     applyEditorSeed({
       editor,
-      nextContent: usableInitialTiptapDoc || initialHtml,
+      nextContent: latestEditorSeedRef.current,
       onHtmlChange,
       onTiptapChange,
       seedSignatureRef,
     });
-  }, [editor, initialHtml, onHtmlChange, onTiptapChange, shouldHoldEditor, usableInitialTiptapDoc]);
+  }, [editor, onHtmlChange, onTiptapChange, seedRevision, shouldHoldEditor]);
 
   useEffect(() => {
     onEditorReady?.(editor);
@@ -179,6 +199,7 @@ const MarkdownEditor = ({
     const html = markedInstance.parse(nextMarkdown, { async: false }) as string;
 
     setMdSource(nextMarkdown);
+    latestEditorSeedRef.current = html;
     onContentChange?.(nextMarkdown);
     onHtmlChange?.(html);
 
@@ -258,6 +279,7 @@ const MarkdownEditor = ({
       syncingFromSource.current = true;
       pendingSourceSyncHtmlRef.current = null;
       editor.commands.setContent(nextHtml, { emitUpdate: false });
+      latestEditorSeedRef.current = editor.getJSON();
       onTiptapChange?.(editor.getJSON());
       queueMicrotask(() => {
         syncingFromSource.current = false;

@@ -73,11 +73,13 @@ describe("workspace warning surfaces", () => {
         ]}
         onCloseDoc={vi.fn()}
         onNewDoc={vi.fn()}
+        onResetDocuments={vi.fn()}
         onSelectDoc={vi.fn()}
       />,
     );
 
     expect(screen.getByText("Synced with warnings")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "resetDocuments.action" })).toBeInTheDocument();
   });
 
   it("shows synced-with-warnings in the editor header workspace badge", () => {
@@ -105,6 +107,7 @@ describe("workspace warning surfaces", () => {
         onOpenShare={vi.fn()}
         onOpenShortcuts={vi.fn()}
         onPrint={vi.fn()}
+        onUserProfileChange={vi.fn()}
         onSaveAdoc={vi.fn()}
         onSaveDocsy={vi.fn()}
         onSaveHtml={vi.fn()}
@@ -123,6 +126,7 @@ describe("workspace warning surfaces", () => {
         previewOpen={false}
         showStructuredModeAction={false}
         textStats={{ charCount: 10, lines: 1, paragraphs: 1, readingTimeMin: 1, wordCount: 2 }}
+        userProfile="advanced"
         workspaceBinding={workspaceBoundDocument().workspaceBinding}
       />,
     );
@@ -135,6 +139,11 @@ describe("workspace warning surfaces", () => {
       <FileSidebar
         activeDoc={workspaceBoundDocument()}
         activeDocId="doc-1"
+        capabilities={{
+          canAccessHistory: true,
+          canAccessKnowledge: true,
+          canAccessStructuredModes: true,
+        }}
         createDocument={vi.fn()}
         documents={[workspaceBoundDocument()]}
         historyEnabled={false}

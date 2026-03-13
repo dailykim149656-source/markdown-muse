@@ -1,10 +1,11 @@
+import { createEmptyIngestionDocument, type NormalizedIngestionDocument } from "@/lib/ingestion/contracts";
 import { normalizeIngestionRequest } from "@/lib/ingestion/normalizeIngestionRequest";
 import { asciidocToHtml } from "@/components/editor/utils/asciidocToHtml";
 import { rstToHtml } from "@/components/editor/utils/rstToHtml";
 import { keywordRetrieve, type KeywordRetrievalMatch } from "@/lib/retrieval/keywordRetrieval";
 import type { CreateDocumentOptions, DocumentData, EditorMode } from "@/types/document";
 import type { SourceFileReference } from "@/types/documentAst";
-import type { IngestionImage, IngestionSourceFormat, NormalizedIngestionDocument } from "@/lib/ingestion/contracts";
+import type { IngestionChunk, IngestionImage, IngestionSection, IngestionSourceFormat } from "@/lib/ingestion/contracts";
 
 export const KNOWLEDGE_RECORD_SCHEMA_VERSION = 2;
 
@@ -103,6 +104,220 @@ const toEditorMode = (sourceFormat: IngestionSourceFormat): EditorMode => {
   }
 
   return sourceFormat;
+};
+
+const stripInlineHtml = (value: string) =>
+  value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+
+const cleanInlineText = (value: string | null | undefined) => {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = stripInlineHtml(value).replace(/\s+/g, " ").trim();
+  return normalized || undefined;
+};
+
+const stripSummaryText = (sourceFormat: IngestionSourceFormat, rawContent: string) => {
+  switch (sourceFormat) {
+    case "html":
+      return stripInlineHtml(rawContent);
+    case "latex":
+      return rawContent
+        .replace(/%.*$/gm, "")
+        .replace(/\\(begin|end)\{[^}]+\}/g, " ")
+        .replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?\{([^}]*)\}/g, "$1")
+        .replace(/\\[a-zA-Z]+\*?(?:\[[^\]]*\])?/g, " ")
+        .replace(/[{}]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    case "markdown":
+      return rawContent
+        .replace(/^#{1,6}\s+/gm, "")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+        .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
+        .replace(/[`*_>#-]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    default:
+      return rawContent.replace(/\s+/g, " ").trim();
+  }
+};
+
+const stripHeadingMarkup = (value: string) =>
+  stripInlineHtml(value)
+    .replace(/[`*_#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const extractSummarySections = (sourceFormat: IngestionSourceFormat, rawContent: string): IngestionSection[] => {
+  const sections: IngestionSection[] = [];
+
+  if (sourceFormat === "markdown") {
+    const matches = rawContent.matchAll(/^(#{1,3})\s+(.+?)\s*$/gm);
+    let order = 0;
+
+    for (const match of matches) {
+      const title = stripHeadingMarkup(match[2] || "");
+
+      if (!title) {
+        continue;
+      }
+
+      order += 1;
+      sections.push({
+        level: match[1]?.length || 1,
+        path: [title],
+        sectionId: `summary-md-${order}`,
+        text: title,
+        title,
+      });
+    }
+  } else if (sourceFormat === "latex") {
+    const levelByCommand: Record<string, number> = {
+      section: 1,
+      subsection: 2,
+      subsubsection: 3,
+    };
+    const matches = rawContent.matchAll(/\\(section|subsection|subsubsection)\{([^}]*)\}/g);
+    let order = 0;
+
+    for (const match of matches) {
+      const title = stripHeadingMarkup(match[2] || "");
+
+      if (!title) {
+        continue;
+      }
+
+      order += 1;
+      sections.push({
+        level: levelByCommand[match[1] || "section"] || 1,
+        path: [title],
+        sectionId: `summary-tex-${order}`,
+        text: title,
+        title,
+      });
+    }
+  } else if (sourceFormat === "html") {
+    const matches = rawContent.matchAll(/<h([1-3])[^>]*>([\s\S]*?)<\/h\1>/gi);
+    let order = 0;
+
+    for (const match of matches) {
+      const title = stripHeadingMarkup(match[2] || "");
+
+      if (!title) {
+        continue;
+      }
+
+      order += 1;
+      sections.push({
+        level: Number(match[1] || "1"),
+        path: [title],
+        sectionId: `summary-html-${order}`,
+        text: title,
+        title,
+      });
+    }
+  }
+
+  return sections.slice(0, 48);
+};
+
+const extractSummaryImages = (sourceFormat: IngestionSourceFormat, rawContent: string): IngestionImage[] => {
+  if (sourceFormat === "markdown") {
+    return Array.from(rawContent.matchAll(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]+)")?\)/g))
+      .slice(0, 24)
+      .map((match, index) => ({
+        alt: cleanInlineText(match[1]),
+        imageId: `summary-image-md-${index + 1}`,
+        order: index,
+        src: match[2] || "",
+        title: cleanInlineText(match[3]),
+      }));
+  }
+
+  if (sourceFormat === "latex") {
+    return Array.from(rawContent.matchAll(/\\includegraphics(?:\[[^\]]*\])?\{([^}]+)\}/g))
+      .slice(0, 24)
+      .map((match, index) => ({
+        imageId: `summary-image-tex-${index + 1}`,
+        order: index,
+        src: match[1] || "",
+      }));
+  }
+
+  if (sourceFormat === "html") {
+    return Array.from(rawContent.matchAll(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi))
+      .slice(0, 24)
+      .map((match, index) => ({
+        imageId: `summary-image-html-${index + 1}`,
+        order: index,
+        src: match[1] || "",
+      }));
+  }
+
+  return [];
+};
+
+const buildSummaryChunks = (
+  fileName: string,
+  plainText: string,
+  sections: IngestionSection[],
+): IngestionChunk[] => {
+  const chunkSources = sections.length > 0
+    ? sections.map((section) => ({
+      sectionId: section.sectionId,
+      text: section.title,
+    }))
+    : [{ sectionId: undefined, text: plainText.slice(0, 1600) }];
+
+  return chunkSources
+    .filter((chunk) => chunk.text.trim().length > 0)
+    .slice(0, 24)
+    .map((chunk, index) => ({
+      chunkId: `${fileName}:summary:${index + 1}`,
+      metadata: chunk.sectionId
+        ? { sectionTitle: sections.find((section) => section.sectionId === chunk.sectionId)?.title || "" }
+        : undefined,
+      order: index,
+      sectionId: chunk.sectionId,
+      text: chunk.text,
+      tokenEstimate: Math.ceil(chunk.text.length / 4),
+    }));
+};
+
+const buildSummaryNormalizedDocument = (
+  document: DocumentData,
+  fileName: string,
+  sourceFormat: IngestionSourceFormat,
+  rawContent: string,
+  importedAt: number,
+): NormalizedIngestionDocument => {
+  const base = createEmptyIngestionDocument({
+    fileName,
+    importedAt,
+    ingestionId: document.id,
+    rawContent,
+    sourceFormat,
+  });
+  const sections = extractSummarySections(sourceFormat, rawContent);
+  const plainText = stripSummaryText(sourceFormat, rawContent).slice(0, 20_000);
+  const metadataTitle = document.metadata?.title || sections[0]?.title || stripFileExtension(fileName);
+
+  return {
+    ...base,
+    chunks: buildSummaryChunks(fileName, plainText, sections),
+    images: extractSummaryImages(sourceFormat, rawContent),
+    metadata: {
+      ...base.metadata,
+      authors: document.metadata?.authors,
+      labels: document.metadata?.labels,
+      tags: document.metadata?.tags,
+      title: metadataTitle,
+    },
+    plainText,
+    sections,
+  };
 };
 
 const buildSnippet = (text: string, matchedTerms: string[], maxLength = 180) => {
@@ -245,12 +460,14 @@ const ensureNormalizedDocument = (
     ) {
       return {
         ...normalizedDocument,
+        chunks: normalizedDocument.chunks,
         fileName: normalizedDocument.fileName,
         images: Array.isArray(normalizedDocument.images) ? normalizedDocument.images : [],
         importedAt: typeof normalizedDocument.importedAt === "number" ? normalizedDocument.importedAt : importedAt,
         ingestionId: typeof normalizedDocument.ingestionId === "string" ? normalizedDocument.ingestionId : documentId,
         metadata: normalizedDocument.metadata ?? {},
         plainText: typeof normalizedDocument.plainText === "string" ? normalizedDocument.plainText : "",
+        sections: normalizedDocument.sections,
         sourceFormat: isIngestionSourceFormat(normalizedDocument.sourceFormat) ? normalizedDocument.sourceFormat : sourceFormat,
       } satisfies NormalizedIngestionDocument;
     }
@@ -322,7 +539,7 @@ export const coerceKnowledgeRecord = (candidate: unknown): KnowledgeDocumentReco
 
 export const buildKnowledgeRecordFromDocument = (
   document: DocumentData,
-  options?: { indexedAt?: number },
+  options?: { indexedAt?: number; stage?: "summary" | "full" },
 ): KnowledgeDocumentRecord | null => {
   const fileName = resolveFileName(document);
   const sourceFile = resolveSourceFile(document, fileName);
@@ -336,6 +553,15 @@ export const buildKnowledgeRecordFromDocument = (
   const indexedAt = options?.indexedAt ?? Date.now();
   const sourceUpdatedAt = document.updatedAt;
   const contentHash = createKnowledgeContentHash(buildRecordSignature(fileName, sourceFormat, rawContent));
+  const normalizedDocument = options?.stage === "summary"
+    ? buildSummaryNormalizedDocument(document, fileName, sourceFormat, rawContent, sourceFile.importedAt || document.updatedAt)
+    : normalizeIngestionRequest({
+      fileName,
+      importedAt: sourceFile.importedAt || document.updatedAt,
+      ingestionId: document.id,
+      rawContent,
+      sourceFormat,
+    });
 
   return {
     contentHash,
@@ -343,13 +569,7 @@ export const buildKnowledgeRecordFromDocument = (
     fileName,
     indexStatus: "fresh",
     indexedAt,
-    normalizedDocument: normalizeIngestionRequest({
-      fileName,
-      importedAt: sourceFile.importedAt || document.updatedAt,
-      ingestionId: document.id,
-      rawContent,
-      sourceFormat,
-    }),
+    normalizedDocument,
     rawContent,
     schemaVersion: KNOWLEDGE_RECORD_SCHEMA_VERSION,
     sourceFile,
@@ -357,6 +577,15 @@ export const buildKnowledgeRecordFromDocument = (
     sourceUpdatedAt,
     updatedAt: sourceUpdatedAt,
   };
+};
+
+export const buildKnowledgeDocumentFingerprint = (document: DocumentData) => {
+  const fileName = resolveFileName(document);
+  const sourceFile = resolveSourceFile(document, fileName);
+  const sourceFormat = resolveSourceFormat(document, sourceFile);
+  const rawContent = resolveRawContent(document, sourceFormat);
+
+  return `${document.id}:${document.updatedAt}:${document.mode}:${fileName}:${rawContent.length}`;
 };
 
 export const reconcileKnowledgeRecord = (

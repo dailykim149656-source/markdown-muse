@@ -33,6 +33,8 @@ interface UseDocumentIOOptions {
   activeDoc: DocumentData;
   createDocument: (options?: CreateDocumentOptions) => void;
   documents: DocumentData[];
+  getRenderableLatexDocument: () => Promise<string>;
+  getRenderableMarkdown: () => Promise<string>;
   onPatchSetLoad?: (patchSet: DocumentPatchSet) => void;
   onVersionSnapshot?: (metadata?: DocumentVersionSnapshotMetadata) => Promise<unknown> | unknown;
   renderableEditorHtml: string;
@@ -286,6 +288,8 @@ export const useDocumentIO = ({
   activeDoc,
   createDocument,
   documents,
+  getRenderableLatexDocument,
+  getRenderableMarkdown,
   onPatchSetLoad,
   onVersionSnapshot,
   renderableEditorHtml,
@@ -333,18 +337,21 @@ export const useDocumentIO = ({
 
   const copyExportFormat = useCallback(async (format: ClipboardExportFormat, formatLabel: string) => {
     try {
+      const nextRenderableMarkdown = format === "markdown"
+        ? await getRenderableMarkdown()
+        : renderableMarkdown;
       const content = await buildClipboardExportContent({
         activeDoc,
         format,
         renderableEditorHtml,
-        renderableMarkdown,
+        renderableMarkdown: nextRenderableMarkdown,
       });
       await copyToClipboard(content, formatLabel);
       void onVersionSnapshot?.({ exportFormat: formatLabel });
     } catch {
       toast.error(t("hooks.io.copyFailed", { format: formatLabel }));
     }
-  }, [activeDoc, copyToClipboard, onVersionSnapshot, renderableEditorHtml, renderableMarkdown, t]);
+  }, [activeDoc, copyToClipboard, getRenderableMarkdown, onVersionSnapshot, renderableEditorHtml, renderableMarkdown, t]);
 
   const prepareShareLink = useCallback(async () => {
     const locationHref = typeof window !== "undefined" ? window.location.href : "http://localhost/editor";
@@ -370,11 +377,13 @@ export const useDocumentIO = ({
     }
   }, [onVersionSnapshot, prepareShareLink, t]);
 
-  const handleSaveMd = useCallback(() => {
-    const markdownContent = activeDoc.mode === "markdown" ? activeDoc.content : renderableMarkdown;
+  const handleSaveMd = useCallback(async () => {
+    const markdownContent = activeDoc.mode === "markdown"
+      ? activeDoc.content
+      : await getRenderableMarkdown();
     downloadFile(markdownContent, ".md", "text/markdown");
     void onVersionSnapshot?.({ exportFormat: "Markdown" });
-  }, [activeDoc.content, activeDoc.mode, downloadFile, onVersionSnapshot, renderableMarkdown]);
+  }, [activeDoc.content, activeDoc.mode, downloadFile, getRenderableMarkdown, onVersionSnapshot]);
 
   const handleCopyMd = useCallback(() => {
     void copyExportFormat("markdown", "Markdown");
@@ -387,11 +396,12 @@ export const useDocumentIO = ({
     toast.success(t("toasts.savedDocsy"));
   }, [activeDoc, downloadFile, onVersionSnapshot, t]);
 
-  const handleSaveTex = useCallback(() => {
-    downloadFile(renderableLatexDocument, ".tex", "application/x-tex");
+  const handleSaveTex = useCallback(async () => {
+    const latexDocument = await getRenderableLatexDocument();
+    downloadFile(latexDocument, ".tex", "application/x-tex");
     void onVersionSnapshot?.({ exportFormat: "LaTeX" });
     toast.success(t("hooks.io.latexSaved"));
-  }, [downloadFile, onVersionSnapshot, renderableLatexDocument, t]);
+  }, [downloadFile, getRenderableLatexDocument, onVersionSnapshot, t]);
 
   const handleSaveJson = useCallback(() => {
     downloadFile(activeDoc.content, ".json", "application/json");
@@ -494,7 +504,8 @@ export const useDocumentIO = ({
     const validation = validateImportFileCandidate(file);
 
     if (!validation.ok) {
-      const message = validation.code === "unsupported_extension"
+      const validationCode = "code" in validation ? validation.code : "file_too_large";
+      const message = validationCode === "unsupported_extension"
         ? t("hooks.io.importUnsupportedType")
         : t("hooks.io.importFileTooLarge", {
           size: `${Math.round(MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024))}MB`,

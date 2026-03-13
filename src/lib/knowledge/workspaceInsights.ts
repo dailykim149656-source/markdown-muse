@@ -600,13 +600,17 @@ export const buildKnowledgeDocumentImpact = (
             viaDocumentName: getRecordName(viaRecord),
           } satisfies KnowledgeImpactPath;
         })
-        .filter((path): path is KnowledgeImpactPath => Boolean(path));
+        .filter((path): path is NonNullable<typeof path> => Boolean(path));
     }),
-  ].sort((left, right) =>
-    left.depth - right.depth
-    || scoreRelationKinds(right.relationKinds) - scoreRelationKinds(left.relationKinds)
-    || left.targetDocumentName.localeCompare(right.targetDocumentName)
-    || (left.viaDocumentName || "").localeCompare(right.viaDocumentName || ""));
+  ].sort((left, right) => {
+    const leftViaName = "viaDocumentName" in left ? left.viaDocumentName : "";
+    const rightViaName = "viaDocumentName" in right ? right.viaDocumentName : "";
+
+    return left.depth - right.depth
+      || scoreRelationKinds(right.relationKinds) - scoreRelationKinds(left.relationKinds)
+      || left.targetDocumentName.localeCompare(right.targetDocumentName)
+      || leftViaName.localeCompare(rightViaName);
+  });
 
   return {
     documentId: activeRecord.documentId,

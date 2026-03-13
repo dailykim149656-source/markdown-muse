@@ -74,6 +74,19 @@ const en: MessageTree = {
       structured: "Structured data",
     },
     newMode: "New {mode}",
+    userProfile: {
+      title: "User settings",
+      current: "Current: {profile}",
+      beginner: "Beginner",
+      advanced: "Advanced",
+    },
+  },
+  editorGuard: {
+    title: "Advanced profile required",
+    descriptionStructured: "This document uses JSON or YAML structured editing. Switch to the advanced profile to continue.",
+    descriptionDocumentTools: "This document uses document tools such as tables, images, captions, or cross-references. Switch to the advanced profile to continue.",
+    descriptionAdvancedBlocks: "This document uses advanced blocks such as math or Mermaid. Switch to the advanced profile to continue.",
+    action: "Switch to advanced",
   },
   previewPanel: {
     title: "Preview",

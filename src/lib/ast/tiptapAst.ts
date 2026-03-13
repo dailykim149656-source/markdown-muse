@@ -14,6 +14,7 @@ import type {
   HeadingLevel,
   HeadingNode,
   HorizontalRuleNode,
+  ImageAlign,
   LatexAbstractNode,
   LatexTitleBlockNode,
   ImageNode,
@@ -84,6 +85,21 @@ const getTextAlign = (node: JSONContent): TextAlign | undefined => {
 
   return undefined;
 };
+
+const getCrossReferenceKind = (value: unknown): CrossReferenceNode["referenceKind"] =>
+  value === "figure" || value === "table" || value === "section" || value === "unknown"
+    ? value
+    : undefined;
+
+const getTableCellAlign = (value: unknown): TableCellNode["align"] =>
+  value === "left" || value === "center" || value === "right"
+    ? value
+    : undefined;
+
+const getImageAlign = (value: unknown): ImageAlign | undefined =>
+  value === "left" || value === "center" || value === "right"
+    ? value
+    : undefined;
 
 const toPlainText = (nodes: InlineNode[]) =>
   nodes
@@ -237,7 +253,7 @@ const serializeInlineNode = (
         nodeId: resolveNodeId(node, "inl", path),
         targetLabel: String(node.attrs?.targetLabel || ""),
         targetNodeId: typeof node.attrs?.targetNodeId === "string" ? node.attrs.targetNodeId : undefined,
-        referenceKind: typeof node.attrs?.referenceKind === "string" ? node.attrs.referenceKind : undefined,
+        referenceKind: getCrossReferenceKind(node.attrs?.referenceKind),
       } satisfies CrossReferenceNode;
     case "footnoteRef":
       return {
@@ -289,7 +305,7 @@ const serializeTableRows = (
           type: "table_cell",
           nodeId: resolveNodeId(cell, "cell", [...parentPath, rowIndex, cellIndex]),
           role: cell.type === "tableHeader" ? "header" : "body",
-          align: typeof cell.attrs?.textAlign === "string" ? cell.attrs.textAlign : undefined,
+          align: getTableCellAlign(cell.attrs?.textAlign),
           blocks: serializeBlockNodes(cell.content, [...parentPath, rowIndex, cellIndex], throwOnUnsupported),
         } satisfies TableCellNode)),
     } satisfies TableRowNode));
@@ -386,7 +402,7 @@ const serializeBlockNode = (
         title: typeof node.attrs?.title === "string" ? node.attrs.title : undefined,
         width: typeof node.attrs?.width === "number" ? node.attrs.width : undefined,
         height: typeof node.attrs?.height === "number" ? node.attrs.height : undefined,
-        align: typeof node.attrs?.align === "string" ? node.attrs.align : undefined,
+        align: getImageAlign(node.attrs?.align),
       } satisfies ImageNode;
     case "figureCaption":
       return {

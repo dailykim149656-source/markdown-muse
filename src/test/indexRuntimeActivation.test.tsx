@@ -4,6 +4,11 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Index from "@/pages/Index";
 
+const { mockReadUserProfilePreference, mockWriteUserProfilePreference } = vi.hoisted(() => ({
+  mockReadUserProfilePreference: vi.fn(() => "advanced" as const),
+  mockWriteUserProfilePreference: vi.fn(),
+}));
+
 const mockActiveDoc = {
   ast: null,
   content: "# Draft",
@@ -20,6 +25,22 @@ const mockActiveDoc = {
   updatedAt: 100,
   workspaceBinding: undefined,
 };
+
+vi.mock("@/components/editor/MarkdownEditor", () => ({
+  default: () => <div data-testid="markdown-editor" />,
+}));
+
+vi.mock("@/components/editor/LatexEditor", () => ({
+  default: () => <div data-testid="latex-editor" />,
+}));
+
+vi.mock("@/components/editor/HtmlEditor", () => ({
+  default: () => <div data-testid="html-editor" />,
+}));
+
+vi.mock("@/components/editor/JsonYamlEditor", () => ({
+  default: () => <div data-testid="json-yaml-editor" />,
+}));
 
 vi.mock("@/i18n/useI18n", () => ({
   useI18n: () => ({
@@ -88,7 +109,21 @@ vi.mock("@/hooks/useFormatConversion", () => ({
     currentRenderableLatex: "\\section{Draft}",
     currentRenderableLatexDocument: "\\section{Draft}",
     currentRenderableMarkdown: "# Draft",
+    documentPerformanceProfile: {
+      blockCount: 1,
+      charCount: 7,
+      imageCount: 0,
+      kind: "normal" as const,
+    },
+    flushSecondaryRenderables: async () => ({
+      latex: "\\section{Draft}",
+      latexDocument: "\\section{Draft}",
+      markdown: "# Draft",
+    }),
+    getFreshRenderableLatexDocument: async () => "\\section{Draft}",
+    getFreshRenderableMarkdown: async () => "# Draft",
     handleModeChange: vi.fn(),
+    secondaryConversionsPending: false,
     setLiveEditorHtml: vi.fn(),
     textStats: {
       charCount: 5,
@@ -190,8 +225,10 @@ vi.mock("@/hooks/useWorkspaceExport", () => ({
 vi.mock("@/lib/editor/webEditorPreferences", () => ({
   readAdvancedBlocksPreference: () => false,
   readDocumentToolsPreference: () => false,
+  readUserProfilePreference: mockReadUserProfilePreference,
   writeAdvancedBlocksPreference: vi.fn(),
   writeDocumentToolsPreference: vi.fn(),
+  writeUserProfilePreference: mockWriteUserProfilePreference,
 }));
 
 vi.mock("@/lib/history/versionHistoryActions", () => ({
@@ -218,29 +255,35 @@ vi.mock("@/components/editor/EditorWorkspace", () => ({
       onOpenShare?: () => void;
       onOpenWorkspaceConnection?: () => void;
     };
+    renderEditor: () => ReactNode;
     sidebarProps: {
       onActivateHistory: () => void;
     };
   }) => (
     <div>
-      <button onClick={() => props.headerProps.onOpenAiAssistant?.()} type="button">
-        open-ai-runtime
-      </button>
+      {props.headerProps.onOpenAiAssistant ? (
+        <button onClick={() => props.headerProps.onOpenAiAssistant?.()} type="button">
+          open-ai-runtime
+        </button>
+      ) : null}
       <button onClick={() => props.sidebarProps.onActivateHistory()} type="button">
         activate-history-runtime
       </button>
       <button onClick={() => props.headerProps.onTogglePreview?.()} type="button">
         toggle-preview-runtime
       </button>
-      <button onClick={() => props.headerProps.onOpenPatchReview?.()} type="button">
-        open-patch-review-runtime
-      </button>
+      {props.headerProps.onOpenPatchReview ? (
+        <button onClick={() => props.headerProps.onOpenPatchReview?.()} type="button">
+          open-patch-review-runtime
+        </button>
+      ) : null}
       <button onClick={() => props.headerProps.onOpenShare?.()} type="button">
         open-io-runtime
       </button>
       <button onClick={() => props.headerProps.onOpenWorkspaceConnection?.()} type="button">
         open-workspace-runtime
       </button>
+      <div data-testid="workspace-editor-surface">{props.renderEditor()}</div>
     </div>
   ),
 }));
@@ -281,7 +324,15 @@ const renderIndex = (initialEntry = "/editor") =>
 describe("Index runtime activation", () => {
   beforeEach(() => {
     delete (window as Window & { __docsyE2E?: unknown }).__docsyE2E;
+    mockActiveDoc.content = "# Draft";
+    mockActiveDoc.mode = "markdown";
+    mockActiveDoc.sourceSnapshots = {
+      markdown: "# Draft",
+    };
+    mockActiveDoc.tiptapJson = null;
     mockActiveDoc.workspaceBinding = undefined;
+    mockReadUserProfilePreference.mockReturnValue("advanced");
+    mockWriteUserProfilePreference.mockReset();
   });
 
   afterEach(() => {
@@ -355,6 +406,40 @@ describe("Index runtime activation", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("io-runtime")).toBeInTheDocument();
+    });
+  });
+
+  it("defaults to beginner profile when no preference is stored", async () => {
+    mockReadUserProfilePreference.mockReturnValue("beginner");
+
+    renderIndex();
+
+    expect(screen.queryByRole("button", { name: "open-ai-runtime" })).toBeNull();
+
+    await act(async () => {
+      screen.getByRole("button", { name: "activate-history-runtime" }).click();
+    });
+
+    expect(screen.queryByTestId("ai-runtime")).toBeNull();
+    expect(screen.queryByTestId("document-support-runtime")).toBeNull();
+  });
+
+  it("shows a beginner guard for structured documents and recovers after switching to advanced", async () => {
+    mockReadUserProfilePreference.mockReturnValue("beginner");
+    mockActiveDoc.mode = "json";
+    mockActiveDoc.content = '{\n  "draft": true\n}';
+    mockActiveDoc.sourceSnapshots = undefined;
+
+    renderIndex();
+
+    expect(screen.getByTestId("editor-profile-guard")).toBeInTheDocument();
+
+    await act(async () => {
+      screen.getByRole("button", { name: "editorGuard.action" }).click();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("json-yaml-editor")).toBeInTheDocument();
     });
   });
 

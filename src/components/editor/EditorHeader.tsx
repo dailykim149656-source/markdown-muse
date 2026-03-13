@@ -39,6 +39,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DocumentImportState } from "@/hooks/useDocumentIO";
 import { useI18n } from "@/i18n/useI18n";
+import type { EditorUserProfile } from "@/lib/editor/userProfiles";
 import type { Locale } from "@/i18n/types";
 import { getEditorModeFamily, type EditorModeFamily } from "@/lib/editor/modeFamilies";
 import { getWorkspaceProviderLabel, getWorkspaceSyncBadgeClassName, getWorkspaceSyncLabel } from "@/lib/workspace/workspaceLabels";
@@ -84,6 +85,7 @@ interface EditorHeaderProps {
   onToggleFullscreen: () => void;
   onOpenPatchReview?: () => void;
   onOpenAiAssistant?: () => void;
+  onUserProfileChange: (profile: EditorUserProfile) => void;
   onRequestResetDocuments?: () => void;
   onOpenShortcuts: () => void;
   patchCount?: number;
@@ -102,6 +104,7 @@ interface EditorHeaderProps {
   workspaceSyncPending?: boolean;
   workspaceBinding?: WorkspaceBinding;
   resetDocumentsDisabled?: boolean;
+  userProfile: EditorUserProfile;
 }
 
 const LOCALES: Locale[] = ["ko", "en"];
@@ -145,6 +148,7 @@ const EditorHeader = ({
   onToggleFullscreen,
   onOpenPatchReview,
   onOpenAiAssistant,
+  onUserProfileChange,
   onRequestResetDocuments,
   onOpenShortcuts,
   patchCount = 0,
@@ -163,6 +167,7 @@ const EditorHeader = ({
   workspaceSyncPending = false,
   workspaceBinding,
   resetDocumentsDisabled = false,
+  userProfile,
 }: EditorHeaderProps) => {
   const { locale, setLocale, t } = useI18n();
   const { toggleSidebar } = useSidebar();
@@ -221,6 +226,8 @@ const EditorHeader = ({
   const showWorkspaceSyncAction = Boolean(onSaveWorkspaceDocument) && Boolean(workspaceBinding);
   const shouldShowCrossFamilyCreateActions = crossFamilyModes.length > 0 && Boolean(onCreateDocument);
   const shouldShowStructuredSwitchActions = showStructuredModeAction && !shouldShowCrossFamilyCreateActions;
+  const isAdvancedProfile = userProfile === "advanced";
+  const userProfileLabel = t(`header.userProfile.${userProfile}`);
 
   return (
     <header className="border-b border-border bg-background">
@@ -559,7 +566,7 @@ const EditorHeader = ({
             </Button>
           )}
 
-          {mode !== "json" && mode !== "yaml" && onOpenAiAssistant && (
+          {isAdvancedProfile && mode !== "json" && mode !== "yaml" && onOpenAiAssistant && (
             <Button variant="ghost" size="sm" onClick={onOpenAiAssistant} title={t("header.aiAssistant")} className="h-8 w-8 p-0">
               <Sparkles className="h-4 w-4" />
             </Button>
@@ -615,7 +622,7 @@ const EditorHeader = ({
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
 
-          {onOpenPatchReview && (
+          {isAdvancedProfile && onOpenPatchReview && (
             <Button className="hidden h-8 px-2 text-xs sm:inline-flex" onClick={onOpenPatchReview} size="sm" type="button" variant="ghost">
               {t("header.patchReview")}
               {patchCount > 0 ? ` (${patchCount})` : ""}
@@ -635,7 +642,26 @@ const EditorHeader = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              {onOpenPatchReview && (
+              <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {t("header.userProfile.title")}
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                className={userProfile === "beginner" ? "bg-accent" : ""}
+                onClick={() => onUserProfileChange("beginner")}
+              >
+                {t("header.userProfile.beginner")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className={userProfile === "advanced" ? "bg-accent" : ""}
+                onClick={() => onUserProfileChange("advanced")}
+              >
+                {t("header.userProfile.advanced")}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-[10px] text-muted-foreground">
+                {t("header.userProfile.current", { profile: userProfileLabel })}
+              </DropdownMenuLabel>
+              {isAdvancedProfile && onOpenPatchReview && (
                 <DropdownMenuItem onClick={onOpenPatchReview}>
                   {t("header.patchReview")}
                   {patchCount > 0 ? ` (${patchCount})` : ""}

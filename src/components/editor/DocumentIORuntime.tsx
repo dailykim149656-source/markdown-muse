@@ -32,6 +32,8 @@ interface DocumentIORuntimeProps {
   activeDoc: DocumentData;
   createDocument: (options?: CreateDocumentOptions) => void;
   documents: DocumentData[];
+  getRenderableLatexDocument: () => Promise<string>;
+  getRenderableMarkdown: () => Promise<string>;
   onPatchSetLoad: (patchSet: DocumentPatchSet) => void;
   onStateChange: (state: DocumentIORuntimeState | null) => void;
   onVersionSnapshot: (metadata?: DocumentVersionSnapshotMetadata) => Promise<unknown> | unknown;
@@ -44,6 +46,8 @@ const DocumentIORuntime = ({
   activeDoc,
   createDocument,
   documents,
+  getRenderableLatexDocument,
+  getRenderableMarkdown,
   onPatchSetLoad,
   onStateChange,
   onVersionSnapshot,
@@ -55,6 +59,8 @@ const DocumentIORuntime = ({
     activeDoc,
     createDocument,
     documents,
+    getRenderableLatexDocument,
+    getRenderableMarkdown,
     onPatchSetLoad,
     onVersionSnapshot,
     renderableEditorHtml,

@@ -93,6 +93,19 @@ const ko: MessageTree = {
       structured: "구조화 데이터",
     },
     newMode: "새 {mode}",
+    userProfile: {
+      title: "사용자 설정",
+      current: "현재 설정: {profile}",
+      beginner: "초급",
+      advanced: "고급",
+    },
+  },
+  editorGuard: {
+    title: "고급 사용자 설정이 필요합니다",
+    descriptionStructured: "이 문서는 JSON/YAML 구조화 편집을 사용합니다. 계속하려면 고급 사용자 설정으로 전환하세요.",
+    descriptionDocumentTools: "이 문서는 표, 이미지, 캡션, 상호 참조 같은 문서 도구를 사용합니다. 계속하려면 고급 사용자 설정으로 전환하세요.",
+    descriptionAdvancedBlocks: "이 문서는 수식 또는 Mermaid 같은 고급 블록을 사용합니다. 계속하려면 고급 사용자 설정으로 전환하세요.",
+    action: "고급으로 전환",
   },
   previewPanel: {
     ...tree(en.previewPanel),

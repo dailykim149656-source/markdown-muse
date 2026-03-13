@@ -354,7 +354,7 @@ const MermaidBlock = Node.create({
             attrs: { code: attrs?.code || "" },
           });
         },
-    } satisfies Record<string, unknown>;
+    } as any;
   },
 });
 

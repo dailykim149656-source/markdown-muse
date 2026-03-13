@@ -8,8 +8,12 @@ import type {
 import type {
   DocumentPatch,
   DocumentPatchSet,
+  InsertNodesPatchPayload,
   PatchAstNode,
   PatchPayload,
+  ReplaceNodePatchPayload,
+  ReplaceTextPatchPayload,
+  UpdateAttributePatchPayload,
 } from "@/types/documentPatch";
 import { validateDocumentAst } from "@/lib/ast/validateDocumentAst";
 
@@ -74,10 +78,17 @@ const getNodeArrayKind = (node: AstNode) => {
   return "table_cell";
 };
 
-const assertPayloadKind = <TPayload extends PatchPayload>(
+interface PatchPayloadByKind {
+  insert_nodes: InsertNodesPatchPayload;
+  replace_node: ReplaceNodePatchPayload;
+  replace_text: ReplaceTextPatchPayload;
+  update_attribute: UpdateAttributePatchPayload;
+}
+
+const assertPayloadKind = <TPayloadKind extends PatchPayload["kind"]>(
   patch: DocumentPatch,
-  expectedKind: TPayload["kind"],
-): TPayload => {
+  expectedKind: TPayloadKind,
+): PatchPayloadByKind[TPayloadKind] => {
   if (!patch.payload || patch.payload.kind !== expectedKind) {
     throw new PatchApplicationError(
       patch.patchId,
@@ -85,7 +96,7 @@ const assertPayloadKind = <TPayload extends PatchPayload>(
     );
   }
 
-  return patch.payload as TPayload;
+  return patch.payload as PatchPayloadByKind[TPayloadKind];
 };
 
 const stableStringify = (value: unknown): string => {
@@ -184,7 +195,7 @@ const findInlineLocation = (
   for (let index = 0; index < nodes.length; index += 1) {
     const node = nodes[index];
 
-    if (node.nodeId === nodeId) {
+    if ("nodeId" in node && node.nodeId === nodeId) {
       return {
         index,
         node,
@@ -642,7 +653,7 @@ export const applyDocumentPatch = (document: DocumentAst, patch: DocumentPatch):
       }
 
       const payload = assertPayloadKind(patch, "update_attribute");
-      setValueAtPath(location.node as Record<string, unknown>, patch.target.attributePath, payload.value, patch.patchId);
+      setValueAtPath(location.node as unknown as Record<string, unknown>, patch.target.attributePath, payload.value, patch.patchId);
       return nextDocument;
     }
     default:

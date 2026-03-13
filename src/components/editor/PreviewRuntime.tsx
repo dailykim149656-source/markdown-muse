@@ -94,7 +94,7 @@ const PreviewRuntime = ({
       }
     },
     onRunValidation: () => {
-      void texValidation.runValidation("manual");
+      void texValidation.runValidation();
     },
     previewUrl: texValidation.previewUrl,
     sourceType: texValidation.sourceType,

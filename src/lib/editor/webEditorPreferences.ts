@@ -1,3 +1,6 @@
+import type { EditorUserProfile } from "@/lib/editor/userProfiles";
+
+const USER_PROFILE_STORAGE_KEY = "docsy:web:user-profile";
 const ADVANCED_BLOCKS_STORAGE_KEY = "docsy:web:advanced-blocks-enabled";
 const DOCUMENT_TOOLS_STORAGE_KEY = "docsy:web:document-tools-enabled";
 
@@ -27,6 +30,20 @@ export const readDocumentToolsPreference = () => {
   }
 };
 
+export const readUserProfilePreference = (): EditorUserProfile => {
+  if (!canUseStorage()) {
+    return "beginner";
+  }
+
+  try {
+    return window.localStorage.getItem(USER_PROFILE_STORAGE_KEY) === "advanced"
+      ? "advanced"
+      : "beginner";
+  } catch {
+    return "beginner";
+  }
+};
+
 export const writeAdvancedBlocksPreference = (enabled: boolean) => {
   if (!canUseStorage()) {
     return;
@@ -34,6 +51,18 @@ export const writeAdvancedBlocksPreference = (enabled: boolean) => {
 
   try {
     window.localStorage.setItem(ADVANCED_BLOCKS_STORAGE_KEY, enabled ? "true" : "false");
+  } catch {
+    // noop
+  }
+};
+
+export const writeUserProfilePreference = (profile: EditorUserProfile) => {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(USER_PROFILE_STORAGE_KEY, profile);
   } catch {
     // noop
   }
@@ -51,4 +80,8 @@ export const writeDocumentToolsPreference = (enabled: boolean) => {
   }
 };
 
-export { ADVANCED_BLOCKS_STORAGE_KEY, DOCUMENT_TOOLS_STORAGE_KEY };
+export {
+  ADVANCED_BLOCKS_STORAGE_KEY,
+  DOCUMENT_TOOLS_STORAGE_KEY,
+  USER_PROFILE_STORAGE_KEY,
+};

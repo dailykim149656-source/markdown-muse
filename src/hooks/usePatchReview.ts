@@ -202,8 +202,12 @@ export const usePatchReview = ({
         try {
           const syncResult = await onWorkspaceSync?.(nextDocument);
 
-          if (syncResult?.warnings?.length) {
-            toast.warning(syncResult.warnings[0]);
+          const syncWarnings = syncResult && typeof syncResult === "object" && "warnings" in syncResult
+            ? syncResult.warnings
+            : undefined;
+
+          if (syncWarnings?.length) {
+            toast.warning(syncWarnings[0]);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";
@@ -275,8 +279,12 @@ export const usePatchReview = ({
         try {
           const syncResult = await onWorkspaceSync?.(nextDocument);
 
-          if (syncResult?.warnings?.length) {
-            toast.warning(syncResult.warnings[0]);
+          const syncWarnings = syncResult && typeof syncResult === "object" && "warnings" in syncResult
+            ? syncResult.warnings
+            : undefined;
+
+          if (syncWarnings?.length) {
+            toast.warning(syncWarnings[0]);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";
@@ -380,8 +388,12 @@ export const usePatchReview = ({
       try {
         const syncResult = await onWorkspaceSync?.(nextDocument);
 
-        if (syncResult?.warnings?.length) {
-          toast.warning(syncResult.warnings[0]);
+        const syncWarnings = syncResult && typeof syncResult === "object" && "warnings" in syncResult
+          ? syncResult.warnings
+          : undefined;
+
+        if (syncWarnings?.length) {
+          toast.warning(syncWarnings[0]);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";

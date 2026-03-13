@@ -16,19 +16,19 @@ export interface AiAssistantRuntimeState {
   busyAction: AiBusyAction;
   compareCandidates: DocumentData[];
   comparePreview: PatchPreviewResult | null;
-  compareWithDocument: (targetDocumentId: string) => Promise<unknown> | unknown;
+  compareWithDocument: (targetDocumentId: string) => Promise<PatchPreviewResult>;
   extractProcedureFromActiveDocument: () => Promise<ProcedureExtractionResult | unknown> | unknown;
-  generateSectionPatch: (prompt: string) => Promise<unknown> | unknown;
-  generateTocSuggestion: () => Promise<unknown> | unknown;
-  loadTocPatch: (maxDepthOverride?: 1 | 2 | 3) => Promise<unknown> | unknown;
+  generateSectionPatch: (prompt: string) => Promise<void>;
+  generateTocSuggestion: () => Promise<TocPreviewResult>;
+  loadTocPatch: (maxDepthOverride?: 1 | 2 | 3) => Promise<DocumentPatchSet | null>;
   procedureResult: ProcedureExtractionResult | null;
   richTextAvailable: boolean;
   setAssistantOpen: (open: boolean) => void;
   suggestUpdatesFromDocument: (
     targetDocumentId: string,
     context?: KnowledgeSuggestionContext,
-  ) => Promise<unknown> | unknown;
-  summarizeActiveDocument: (objective: string) => Promise<SummarizeDocumentResponse | unknown> | unknown;
+  ) => Promise<PatchPreviewResult>;
+  summarizeActiveDocument: (objective: string) => Promise<SummarizeDocumentResponse>;
   summaryResult: SummarizeDocumentResponse | null;
   tocPreview: TocPreviewResult | null;
   updateSuggestionPreview: PatchPreviewResult | null;
@@ -41,6 +41,7 @@ interface AiAssistantRuntimeProps {
   createDocumentDraft: (draft: AgentNewDocumentDraft) => void;
   currentRenderableMarkdown: string;
   documents: DocumentData[];
+  getFreshRenderableMarkdown: () => Promise<string>;
   importWorkspaceDocument: (fileId: string) => Promise<void>;
   loadPatchSet: (patchSet: DocumentPatchSet) => void;
   openWorkspaceConnection: () => void;
@@ -53,6 +54,7 @@ const AiAssistantRuntime = ({
   createDocumentDraft,
   currentRenderableMarkdown,
   documents,
+  getFreshRenderableMarkdown,
   importWorkspaceDocument,
   loadPatchSet,
   openWorkspaceConnection,
@@ -63,6 +65,7 @@ const AiAssistantRuntime = ({
     activeEditor,
     currentRenderableMarkdown,
     documents,
+    getFreshRenderableMarkdown,
     loadPatchSet,
   });
   const liveAgent = useLiveAgent({
@@ -70,6 +73,7 @@ const AiAssistantRuntime = ({
     activeEditor,
     currentRenderableMarkdown,
     documents,
+    getFreshRenderableMarkdown,
     onCreateDocumentDraft: createDocumentDraft,
     onImportDriveDocument: importWorkspaceDocument,
     onOpenPatchReview: (patchSet) => {

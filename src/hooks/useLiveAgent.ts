@@ -107,6 +107,7 @@ interface UseLiveAgentOptions {
   activeEditor: TiptapEditor | null;
   currentRenderableMarkdown: string;
   documents: DocumentData[];
+  getFreshRenderableMarkdown: () => Promise<string>;
   onCreateDocumentDraft: (draft: AgentNewDocumentDraft) => void;
   onImportDriveDocument: (fileId: string) => Promise<void>;
   onOpenPatchReview: (patchSet: DocumentPatchSet) => void;
@@ -145,6 +146,7 @@ export const useLiveAgent = ({
   activeEditor,
   currentRenderableMarkdown,
   documents,
+  getFreshRenderableMarkdown,
   onCreateDocumentDraft,
   onImportDriveDocument,
   onOpenPatchReview,
@@ -188,7 +190,10 @@ export const useLiveAgent = ({
   const buildAgentRequest = useCallback(async (
     nextMessages: AgentChatMessage[],
   ): Promise<AgentTurnRequest> => {
-    const activeDocument = buildDocumentContext(activeDoc, currentRenderableMarkdown, activeEditor);
+    const activeMarkdown = currentRenderableMarkdown.trim()
+      ? await getFreshRenderableMarkdown()
+      : currentRenderableMarkdown;
+    const activeDocument = buildDocumentContext(activeDoc, activeMarkdown, activeEditor);
     const graphDocuments = documents.map((document) => {
       if (document.id !== activeDoc.id || !isRichTextDocument(document)) {
         return document;
@@ -196,10 +201,10 @@ export const useLiveAgent = ({
 
       return {
         ...document,
-        content: currentRenderableMarkdown || document.content,
+        content: activeMarkdown || document.content,
         sourceSnapshots: {
           ...document.sourceSnapshots,
-          markdown: currentRenderableMarkdown || document.sourceSnapshots?.markdown || document.content,
+          markdown: activeMarkdown || document.sourceSnapshots?.markdown || document.content,
         },
         updatedAt: Date.now(),
       };
@@ -230,7 +235,7 @@ export const useLiveAgent = ({
       try {
         screenshot = await captureWorkspaceScreenshot({
           documentName: activeDoc.name,
-          markdown: currentRenderableMarkdown,
+          markdown: activeMarkdown,
           mode: activeDoc.mode,
         });
       } catch {
@@ -252,7 +257,7 @@ export const useLiveAgent = ({
       targetDefault: "active_document",
       threadId,
     };
-  }, [activeDoc, activeEditor, currentRenderableMarkdown, documents, locale, selectedDriveReferences, selectedLocalReferenceIds, threadId]);
+  }, [activeDoc, activeEditor, currentRenderableMarkdown, documents, getFreshRenderableMarkdown, locale, selectedDriveReferences, selectedLocalReferenceIds, threadId]);
 
   const queueDriveImport = useCallback((candidate: Pick<AgentDriveCandidate, "fileId" | "fileName">) => {
     setPendingConfirmation({

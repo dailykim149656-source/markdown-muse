@@ -1,5 +1,5 @@
 import type { JSONContent } from "@tiptap/core";
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { useSearchParams } from "react-router-dom";
@@ -16,9 +16,10 @@ import {
 } from "@/components/editor/editorAdvancedContent";
 import EditorWorkspace from "@/components/editor/EditorWorkspace";
 import ResetDocumentsDialog from "@/components/editor/ResetDocumentsDialog";
-import type { DocumentTemplate } from "@/components/editor/TemplateDialog";
+import { getBuiltInTemplateDefinitions, type DocumentTemplate } from "@/components/editor/TemplateDialog";
 import type { PlainTextFindReplaceAdapter } from "@/components/editor/findReplaceTypes";
 import type { KnowledgeSuggestionContext, KnowledgeSuggestionQueueItem } from "@/components/editor/sidebarFeatureTypes";
+import { Button } from "@/components/ui/button";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
 import { useEditorUiState } from "@/hooks/useEditorUiState";
 import { useFormatConversion } from "@/hooks/useFormatConversion";
@@ -28,8 +29,10 @@ import { featureFlags, isWebProfile } from "@/lib/appProfile";
 import {
   readAdvancedBlocksPreference,
   readDocumentToolsPreference,
+  readUserProfilePreference,
   writeAdvancedBlocksPreference,
   writeDocumentToolsPreference,
+  writeUserProfilePreference,
 } from "@/lib/editor/webEditorPreferences";
 import {
   clearPendingEditorFocusTarget,
@@ -40,6 +43,14 @@ import {
   getCrossFamilyModes,
   getSameFamilyModes,
 } from "@/lib/editor/modeFamilies";
+import {
+  getActiveDocumentCompatibility,
+  getDeploymentUiCapabilities,
+  getUserProfileCapabilities,
+  intersectEditorUiCapabilities,
+  isModeAllowedInCapabilities,
+} from "@/lib/editor/userProfiles";
+import { createLatestDeferredTaskRunner } from "@/lib/editor/latestDeferredTask";
 import { resetLocalDocumentState } from "@/lib/documents/resetLocalDocumentState";
 import { RESTORED_SESSION_TOAST_ID, showRestoredSessionToast } from "@/lib/documents/restoredSessionToast";
 import { getTemplateFallbackContent as getSharedTemplateFallbackContent } from "@/lib/editor/templateFallback";
@@ -53,7 +64,7 @@ import {
   resolveImportedDocumentOptions,
 } from "@/lib/io/documentIoShared";
 import { DOC_SHARE_HASH_PREFIX } from "@/lib/share/shareConstants";
-import type { DocumentVersionSnapshotMetadata, EditorMode } from "@/types/document";
+import type { DocumentVersionSnapshotMetadata, EditorMode, SourceSnapshots } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
 import type { AgentNewDocumentDraft } from "@/types/liveAgent";
 import { toast } from "sonner";
@@ -142,9 +153,25 @@ const scheduleIdleMount = (callback: () => void) => {
     return () => window.cancelIdleCallback(id);
   }
 
-  const timeoutId = window.setTimeout(callback, 600);
-  return () => window.clearTimeout(timeoutId);
+  const timeoutId = globalThis.setTimeout(callback, 600);
+  return () => globalThis.clearTimeout(timeoutId);
 };
+
+const getDeferredEditorSyncDelay = (profileKind: "heavy" | "large" | "normal") => {
+  switch (profileKind) {
+    case "heavy":
+      return 700;
+    case "large":
+      return 240;
+    default:
+      return 80;
+  }
+};
+
+const areSourceSnapshotsEqual = (
+  left: SourceSnapshots | undefined,
+  right: SourceSnapshots | undefined,
+) => JSON.stringify(left || {}) === JSON.stringify(right || {});
 
 const aiIntentRequiresRichTextReadiness = (intent: PendingAiIntent) =>
   intent.type === "generate-toc" || intent.type === "suggest-updates";
@@ -330,6 +357,7 @@ const Index = () => {
   const [activeEditor, setActiveEditor] = useState<TiptapEditor | null>(null);
   const [pendingImpactSuggestions, setPendingImpactSuggestions] = useState<PendingImpactSuggestionEntry[]>([]);
   const [plainTextSearchAdapter, setPlainTextSearchAdapter] = useState<PlainTextFindReplaceAdapter | null>(null);
+  const [userProfile, setUserProfile] = useState(() => readUserProfilePreference());
   const [advancedBlocksPreference, setAdvancedBlocksPreference] = useState(() =>
     featureFlags.advancedBlocksOnInitialMount || readAdvancedBlocksPreference(),
   );
@@ -405,7 +433,12 @@ const Index = () => {
     currentRenderableLatex,
     currentRenderableLatexDocument,
     currentRenderableMarkdown,
+    documentPerformanceProfile,
+    flushSecondaryRenderables,
+    getFreshRenderableLatexDocument,
+    getFreshRenderableMarkdown,
     handleModeChange,
+    secondaryConversionsPending,
     setLiveEditorHtml,
     textStats,
   } = useFormatConversion({
@@ -417,12 +450,67 @@ const Index = () => {
     editorKey,
     updateActiveDoc,
   });
+  const currentActiveDocIdRef = useRef(activeDoc.id);
+  const astSyncRunnerRef = useRef(createLatestDeferredTaskRunner());
+  const sourceSnapshotSyncRunnerRef = useRef(createLatestDeferredTaskRunner());
+  const richTextSeedRef = useRef<{
+    initialContent?: string;
+    initialHtmlOverride?: string;
+    initialTiptapDoc?: JSONContent;
+    revision: string;
+  } | null>(null);
+  const richTextSeedRevision = `${activeDoc.id}:${editorKey}`;
+
+  if (!richTextSeedRef.current || richTextSeedRef.current.revision !== richTextSeedRevision) {
+    richTextSeedRef.current = {
+      initialContent: activeDoc.content || undefined,
+      initialHtmlOverride: activeDoc.sourceSnapshots?.html,
+      initialTiptapDoc: activeDoc.tiptapJson || undefined,
+      revision: richTextSeedRevision,
+    };
+  }
+
+  const richTextSeed = richTextSeedRef.current;
+
+  useEffect(() => {
+    currentActiveDocIdRef.current = activeDoc.id;
+  }, [activeDoc.id]);
+
+  useEffect(() => () => {
+    astSyncRunnerRef.current.cancel();
+    sourceSnapshotSyncRunnerRef.current.cancel();
+  }, []);
+  const deploymentCapabilities = useMemo(
+    () => getDeploymentUiCapabilities(featureFlags.profile),
+    [],
+  );
+  const effectiveCapabilities = useMemo(
+    () => intersectEditorUiCapabilities(deploymentCapabilities, getUserProfileCapabilities(userProfile)),
+    [deploymentCapabilities, userProfile],
+  );
+  const {
+    canAccessAdvancedBlocks,
+    canAccessAiAssistant,
+    canAccessDocumentTools,
+    canAccessHistory,
+    canAccessKnowledge,
+    canAccessPatchReview,
+    canAccessStructuredModes,
+  } = effectiveCapabilities;
+  const handleUserProfileChange = useCallback((nextProfile: "beginner" | "advanced") => {
+    setUserProfile(nextProfile);
+    writeUserProfilePreference(nextProfile);
+  }, []);
   const recordVersionSnapshot = useCallback((
     document: typeof activeDoc,
     trigger: "autosave" | "export" | "patch_apply",
     metadata?: DocumentVersionSnapshotMetadata,
   ) => createVersionHistorySnapshot(document, trigger, metadata), []);
   const requestPatchReviewOpen = useCallback(() => {
+    if (!canAccessPatchReview) {
+      return;
+    }
+
     if (documentSupportRuntimeState) {
       documentSupportRuntimeState.openPatchReview();
       return;
@@ -430,8 +518,12 @@ const Index = () => {
 
     setDocumentSupportRuntimeEnabled(true);
     setPendingDocumentSupportIntent({ type: "open-patch-review" });
-  }, [documentSupportRuntimeState]);
+  }, [canAccessPatchReview, documentSupportRuntimeState]);
   const requestPatchSetLoad = useCallback((nextPatchSet: DocumentPatchSet) => {
+    if (!canAccessPatchReview) {
+      return;
+    }
+
     if (documentSupportRuntimeState) {
       documentSupportRuntimeState.loadPatchSet(nextPatchSet);
       return;
@@ -442,7 +534,7 @@ const Index = () => {
       patchSet: nextPatchSet,
       type: "load-patch-set",
     });
-  }, [documentSupportRuntimeState]);
+  }, [canAccessPatchReview, documentSupportRuntimeState]);
   const openPatchReview = requestPatchReviewOpen;
   const loadPatchSet = requestPatchSetLoad;
   const ensureWorkspaceRuntime = useCallback((pendingAction?: PendingWorkspaceAction) => {
@@ -704,31 +796,66 @@ const Index = () => {
   const workspaceChangesRescanning = workspaceRuntimeState?.isRescanning ?? false;
   const workspaceLastRescannedAt = workspaceRuntimeState?.lastRescannedAt ?? null;
   const remoteChangedSources = workspaceRuntimeState?.remoteChangedSources ?? [];
-  const availableModes = useMemo(
+  const activeDocumentCompatibility = useMemo(
+    () => getActiveDocumentCompatibility(activeDoc, effectiveCapabilities),
+    [activeDoc, effectiveCapabilities],
+  );
+  const sameFamilyModes = useMemo(
     () => getSameFamilyModes(activeDoc.mode),
     [activeDoc.mode],
   );
+  const availableModes = useMemo(() => {
+    const filteredModes = sameFamilyModes.filter((mode) => isModeAllowedInCapabilities(mode, effectiveCapabilities));
+    return filteredModes.length > 0 ? filteredModes : [activeDoc.mode];
+  }, [activeDoc.mode, effectiveCapabilities, sameFamilyModes]);
   const crossFamilyModes = useMemo(
-    () => getCrossFamilyModes(activeDoc.mode),
-    [activeDoc.mode],
+    () => getCrossFamilyModes(activeDoc.mode).filter((mode) => isModeAllowedInCapabilities(mode, effectiveCapabilities)),
+    [activeDoc.mode, effectiveCapabilities],
   );
-  const documentFeaturesEnabled = documentToolsPreference;
-  const advancedBlocksEnabled = advancedBlocksPreference;
-  const canEnableDocumentFeatures = activeDoc.mode !== "json" && activeDoc.mode !== "yaml";
-  const canEnableAdvancedBlocks = activeDoc.mode !== "json" && activeDoc.mode !== "yaml";
+  const documentFeaturesEnabled = canAccessDocumentTools && documentToolsPreference;
+  const advancedBlocksEnabled = canAccessAdvancedBlocks && advancedBlocksPreference;
+  const canEnableDocumentFeatures = canAccessDocumentTools
+    && activeDocumentCompatibility.isCompatible
+    && activeDoc.mode !== "json"
+    && activeDoc.mode !== "yaml";
+  const canEnableAdvancedBlocks = canAccessAdvancedBlocks
+    && activeDocumentCompatibility.isCompatible
+    && activeDoc.mode !== "json"
+    && activeDoc.mode !== "yaml";
 
   const enableStructuredModes = useCallback(() => {
+    if (!canAccessStructuredModes) {
+      return;
+    }
+
     setStructuredModesVisible(true);
-  }, []);
+  }, [canAccessStructuredModes]);
 
   const enableAdvancedBlocks = useCallback(() => {
+    if (!canAccessAdvancedBlocks) {
+      return;
+    }
+
     setAdvancedBlocksPreference(true);
     writeAdvancedBlocksPreference(true);
-  }, []);
+  }, [canAccessAdvancedBlocks]);
   const enableDocumentFeatures = useCallback(() => {
+    if (!canAccessDocumentTools) {
+      return;
+    }
+
     setDocumentToolsPreference(true);
     writeDocumentToolsPreference(true);
-  }, []);
+  }, [canAccessDocumentTools]);
+  const canOpenTemplates = useMemo(() => getBuiltInTemplateDefinitions().some((template) => {
+    const templateContent = template.content.trim().length > 0 || template.id === "blank-markdown"
+      ? template.content
+      : getSharedTemplateFallbackContent(template.mode, locale);
+
+    return isModeAllowedInCapabilities(template.mode, effectiveCapabilities)
+      && (!templateRequiresDocumentFeatures(template.mode, templateContent) || canAccessDocumentTools)
+      && (!templateRequiresAdvancedBlocks(template.mode, templateContent) || canAccessAdvancedBlocks);
+  }), [canAccessAdvancedBlocks, canAccessDocumentTools, effectiveCapabilities, locale]);
   const richTextAvailable = activeDoc.mode === "markdown" || activeDoc.mode === "latex" || activeDoc.mode === "html";
   const resetDocumentsDisabled = isResettingDocuments
     || importState.status === "reading"
@@ -808,8 +935,12 @@ const Index = () => {
   }, [aiRuntimeState, t, updateSuggestionQueueEntry]);
 
   const requestAiIntent = useCallback((intent: PendingAiIntent) => {
+    if (!canAccessAiAssistant) {
+      return;
+    }
+
     const richTextReady = !aiIntentRequiresRichTextReadiness(intent)
-      || (Boolean(activeEditor) && currentRenderableMarkdown.trim().length > 0);
+      || Boolean(activeEditor);
 
     if (aiRuntimeState && richTextReady) {
       void runAiIntent(intent);
@@ -818,7 +949,17 @@ const Index = () => {
 
     setAiRuntimeEnabled(true);
     setPendingAiIntent(intent);
-  }, [activeEditor, aiRuntimeState, currentRenderableMarkdown, runAiIntent]);
+  }, [activeEditor, aiRuntimeState, canAccessAiAssistant, runAiIntent]);
+  const handleTogglePreview = useCallback(() => {
+    if (previewOpen) {
+      togglePreview();
+      return;
+    }
+
+    void flushSecondaryRenderables().finally(() => {
+      togglePreview();
+    });
+  }, [flushSecondaryRenderables, previewOpen, togglePreview]);
   const queueKnowledgeSuggestion = useCallback(({
     context,
     forceQueue = false,
@@ -834,6 +975,10 @@ const Index = () => {
     sourceDocumentId: string;
     targetDocumentId: string;
   }) => {
+    if (!canAccessKnowledge) {
+      return;
+    }
+
     const sourceDocumentName = getDocumentNameById(sourceDocumentId);
     const targetDocumentName = getDocumentNameById(targetDocumentId);
     const nextContext: KnowledgeSuggestionContext | undefined = context
@@ -869,8 +1014,8 @@ const Index = () => {
           })
           : t("knowledge.impactNeedsAttention", { count: 1 }));
 
-    setSuggestionQueue((current) => [
-      {
+    setSuggestionQueue((current) => {
+      const nextEntry: SuggestionQueueEntry = {
         attemptCount: (existingEntry?.attemptCount || 0) + 1,
         context: queueContext,
         errorMessage: undefined,
@@ -891,9 +1036,13 @@ const Index = () => {
         targetDocumentId,
         targetDocumentName,
         updatedAt: Date.now(),
-      },
-      ...current.filter((entry) => entry.id !== entryId),
-    ].slice(0, 12));
+      };
+
+      return [
+        nextEntry,
+        ...current.filter((entry) => entry.id !== entryId),
+      ].slice(0, 12);
+    });
 
     if (!forceQueue && activeDoc.id === sourceDocumentId) {
       requestAiIntent({
@@ -916,7 +1065,7 @@ const Index = () => {
         targetDocumentId,
       },
     ]);
-  }, [activeDoc.id, getDocumentNameById, requestAiIntent, suggestionQueue, t]);
+  }, [activeDoc.id, canAccessKnowledge, getDocumentNameById, requestAiIntent, suggestionQueue, t]);
   const suggestionQueueItems = useMemo(
     () => suggestionQueue.map(({ patchSet: _patchSet, ...entry }) => entry),
     [suggestionQueue],
@@ -1066,11 +1215,13 @@ const Index = () => {
     setPendingIoAction(null);
   }, [ioRuntimeState, pendingIoAction]);
 
-  const resolveActiveWorkspaceMarkdown = useCallback(() => (
-    activeDoc.mode === "json" || activeDoc.mode === "yaml"
-      ? activeDoc.content
-      : currentRenderableMarkdown
-  ), [activeDoc.content, activeDoc.mode, currentRenderableMarkdown]);
+  const resolveActiveWorkspaceMarkdown = useCallback(async () => {
+    if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
+      return activeDoc.content;
+    }
+
+    return getFreshRenderableMarkdown();
+  }, [activeDoc.content, activeDoc.mode, getFreshRenderableMarkdown]);
 
   const executeWorkspaceAction = useCallback(async (action: PendingWorkspaceAction) => {
     const runtime = workspaceRuntimeState;
@@ -1110,7 +1261,7 @@ const Index = () => {
         }
 
         const result = await runtime.syncDocument(activeDoc, {
-          markdown: resolveActiveWorkspaceMarkdown(),
+          markdown: await resolveActiveWorkspaceMarkdown(),
         });
 
         if (!result) {
@@ -1151,7 +1302,7 @@ const Index = () => {
       }
       case "export-workspace-document": {
         const result = await runtime.exportDocument(activeDoc, {
-          markdown: resolveActiveWorkspaceMarkdown(),
+          markdown: await resolveActiveWorkspaceMarkdown(),
           title: action.title,
         });
         setWorkspaceExportOpen(false);
@@ -1547,31 +1698,61 @@ const Index = () => {
       return;
     }
 
-    let ast = activeDoc.ast ?? null;
+    const documentId = activeDoc.id;
+    const syncDelay = getDeferredEditorSyncDelay(documentPerformanceProfile.kind);
 
-    try {
-      ast = serializeTiptapToAst(tiptapJson, {
-        documentNodeId: `doc-${activeDoc.id}`,
-        throwOnUnsupported: false,
+    startTransition(() => {
+      updateActiveDoc({
+        storageKind: "docsy",
+        tiptapJson,
       });
-    } catch (error) {
-      void error;
+    });
+
+    astSyncRunnerRef.current.schedule(() => {
+      if (currentActiveDocIdRef.current !== documentId) {
+        return;
+      }
+
+      try {
+        const ast = serializeTiptapToAst(tiptapJson, {
+          documentNodeId: `doc-${documentId}`,
+          throwOnUnsupported: false,
+        });
+
+        startTransition(() => {
+          if (currentActiveDocIdRef.current !== documentId) {
+            return;
+          }
+
+          updateActiveDoc({
+            ast,
+            storageKind: "docsy",
+          });
+        });
+      } catch (error) {
+        void error;
+      }
+    }, syncDelay);
+  }, [activeDoc.id, documentPerformanceProfile.kind, updateActiveDoc]);
+  const handleModeChangeWithCapabilities = useCallback((mode: EditorMode) => {
+    if (!isModeAllowedInCapabilities(mode, effectiveCapabilities)) {
+      return;
     }
 
-    updateActiveDoc({
-      ast,
-      storageKind: "docsy",
-      tiptapJson,
-    });
-  }, [activeDoc.ast, activeDoc.id, updateActiveDoc]);
+    handleModeChange(mode);
+  }, [effectiveCapabilities, handleModeChange]);
 
   const handleNewDoc = useCallback((mode: EditorMode = "markdown") => {
+    if (!isModeAllowedInCapabilities(mode, effectiveCapabilities)) {
+      return;
+    }
+
     if (mode === "json" || mode === "yaml") {
       enableStructuredModes();
     }
 
     createDocument({ mode });
-  }, [createDocument, enableStructuredModes]);
+  }, [createDocument, effectiveCapabilities, enableStructuredModes]);
   const handleCreateLiveAgentDocumentDraft = useCallback((draft: AgentNewDocumentDraft) => {
     const resolvedTitle = draft.title.trim() || t("common.untitled");
     const markdown = draft.markdown.trim();
@@ -1635,10 +1816,18 @@ const Index = () => {
   }, [closeFindReplace, closePreview, resetDocuments, resetDocumentsDisabled, t]);
 
   const handleTemplateSelect = useCallback((template: DocumentTemplate) => {
-      const fallbackContent = getSharedTemplateFallbackContent(template.mode, locale);
+    const fallbackContent = getSharedTemplateFallbackContent(template.mode, locale);
     const selectedContent = template.content.trim().length > 0 || template.id === "blank-markdown"
       ? template.content
       : fallbackContent;
+
+    if (
+      !isModeAllowedInCapabilities(template.mode, effectiveCapabilities)
+      || (!canAccessDocumentTools && templateRequiresDocumentFeatures(template.mode, selectedContent))
+      || (!canAccessAdvancedBlocks && templateRequiresAdvancedBlocks(template.mode, selectedContent))
+    ) {
+      return;
+    }
 
     if (templateRequiresDocumentFeatures(template.mode, selectedContent)) {
       enableDocumentFeatures();
@@ -1659,7 +1848,16 @@ const Index = () => {
       tiptapJson: null,
     });
     toast.success(t("toasts.templateApplied"));
-  }, [createDocument, enableAdvancedBlocks, enableDocumentFeatures, locale, t]);
+  }, [createDocument, effectiveCapabilities, enableAdvancedBlocks, enableDocumentFeatures, locale, t]);
+
+  useEffect(() => {
+    if (activeDocumentCompatibility.isCompatible) {
+      return;
+    }
+
+    setActiveEditor(null);
+    setPlainTextSearchAdapter(null);
+  }, [activeDocumentCompatibility.isCompatible]);
 
   useEffect(() => {
     if (!hasRestoredDocuments) {
@@ -1753,34 +1951,55 @@ const Index = () => {
   }, [activeDoc.id, activeDoc.mode, pendingImpactSuggestions, requestAiIntent, selectDocument]);
 
   useEffect(() => {
-    if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
-      updateActiveDoc({
-        sourceSnapshots: {
-          ...(activeDoc.sourceSnapshots || {}),
-          [activeDoc.mode]: activeDoc.content,
-        },
-        storageKind: "docsy",
-      });
-      return;
-    }
-
-    updateActiveDoc({
-      sourceSnapshots: {
+    const nextSourceSnapshots = activeDoc.mode === "json" || activeDoc.mode === "yaml"
+      ? {
+        ...(activeDoc.sourceSnapshots || {}),
+        [activeDoc.mode]: activeDoc.content,
+      }
+      : {
         ...(activeDoc.sourceSnapshots || {}),
         html: currentRenderableHtml,
         latex: currentRenderableLatex,
         markdown: currentRenderableMarkdown,
         [activeDoc.mode]: activeDoc.content,
-      },
-      storageKind: "docsy",
-    });
+      };
+
+    if (activeDoc.storageKind === "docsy" && areSourceSnapshotsEqual(activeDoc.sourceSnapshots, nextSourceSnapshots)) {
+      return;
+    }
+
+    const documentId = activeDoc.id;
+
+    sourceSnapshotSyncRunnerRef.current.schedule(() => {
+      if (currentActiveDocIdRef.current !== documentId) {
+        return;
+      }
+
+      startTransition(() => {
+        if (currentActiveDocIdRef.current !== documentId) {
+          return;
+        }
+
+        updateActiveDoc({
+          sourceSnapshots: nextSourceSnapshots,
+          storageKind: "docsy",
+        });
+      });
+    }, getDeferredEditorSyncDelay(documentPerformanceProfile.kind));
+
+    return () => {
+      sourceSnapshotSyncRunnerRef.current.cancel();
+    };
   }, [
+    activeDoc.id,
     activeDoc.content,
     activeDoc.mode,
     activeDoc.sourceSnapshots,
+    activeDoc.storageKind,
     currentRenderableHtml,
     currentRenderableLatex,
     currentRenderableMarkdown,
+    documentPerformanceProfile.kind,
     updateActiveDoc,
   ]);
 
@@ -1818,8 +2037,36 @@ const Index = () => {
       }
     };
   }, [activeDoc.ast, activeDoc.id, activeDoc.mode, activeEditor, currentRenderableHtml, editorKey]);
+  const activeDocumentCompatibilityDescriptionKey = activeDocumentCompatibility.reason === "structuredMode"
+    ? "editorGuard.descriptionStructured"
+    : activeDocumentCompatibility.reason === "advancedBlocks"
+      ? "editorGuard.descriptionAdvancedBlocks"
+      : "editorGuard.descriptionDocumentTools";
 
   const renderEditor = useCallback(() => {
+    if (!activeDocumentCompatibility.isCompatible) {
+      return (
+        <div className="flex h-full items-center justify-center p-6">
+          <div
+            className="w-full max-w-xl rounded-2xl border border-border bg-card p-6 shadow-sm"
+            data-testid="editor-profile-guard"
+          >
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold text-foreground">{t("editorGuard.title")}</h2>
+              <p className="text-sm text-muted-foreground">
+                {t(activeDocumentCompatibilityDescriptionKey)}
+              </p>
+            </div>
+            <div className="mt-4">
+              <Button onClick={() => handleUserProfileChange("advanced")} type="button">
+                {t("editorGuard.action")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (activeDoc.mode === "markdown") {
       return (
         <Suspense fallback={<EditorFallback />}>
@@ -1828,14 +2075,15 @@ const Index = () => {
             canEnableAdvancedBlocks={canEnableAdvancedBlocks}
             canEnableDocumentFeatures={canEnableDocumentFeatures}
             documentFeaturesEnabled={documentFeaturesEnabled}
-            key={`${activeDoc.id}:${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
-            initialContent={activeDoc.content || undefined}
-            initialTiptapDoc={activeDoc.tiptapJson || undefined}
+            key={`${activeDoc.id}:${editorKey}`}
+            initialContent={richTextSeed.initialContent}
+            initialTiptapDoc={richTextSeed.initialTiptapDoc}
             onContentChange={handleContentChange}
             onEnableAdvancedBlocks={enableAdvancedBlocks}
             onEnableDocumentFeatures={enableDocumentFeatures}
             onEditorReady={setActiveEditor}
             onHtmlChange={setLiveEditorHtml}
+            seedRevision={richTextSeed.revision}
             onTiptapChange={handleTiptapChange}
           />
         </Suspense>
@@ -1850,16 +2098,17 @@ const Index = () => {
             canEnableAdvancedBlocks={canEnableAdvancedBlocks}
             canEnableDocumentFeatures={canEnableDocumentFeatures}
             documentFeaturesEnabled={documentFeaturesEnabled}
-            initialHtmlOverride={activeDoc.sourceSnapshots?.html}
-            key={`${activeDoc.id}:${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
-            initialContent={activeDoc.content}
-            initialTiptapDoc={activeDoc.tiptapJson || undefined}
+            initialHtmlOverride={richTextSeed.initialHtmlOverride}
+            key={`${activeDoc.id}:${editorKey}`}
+            initialContent={richTextSeed.initialContent}
+            initialTiptapDoc={richTextSeed.initialTiptapDoc}
             onContentChange={handleContentChange}
             onEnableAdvancedBlocks={enableAdvancedBlocks}
             onEnableDocumentFeatures={enableDocumentFeatures}
             onEditorReady={setActiveEditor}
             onHtmlChange={setLiveEditorHtml}
             onSourceLineTargetApplied={() => setPendingLatexSourceLine(null)}
+            seedRevision={richTextSeed.revision}
             onTiptapChange={handleTiptapChange}
             sourceLineTarget={pendingLatexSourceLine}
           />
@@ -1875,7 +2124,7 @@ const Index = () => {
             initialContent={activeDoc.content}
             mode={activeDoc.mode}
             onContentChange={handleContentChange}
-            onModeChange={handleModeChange}
+            onModeChange={handleModeChangeWithCapabilities}
             onPlainTextSearchAdapterReady={setPlainTextSearchAdapter}
           />
         </Suspense>
@@ -1889,19 +2138,20 @@ const Index = () => {
           canEnableAdvancedBlocks={canEnableAdvancedBlocks}
           canEnableDocumentFeatures={canEnableDocumentFeatures}
           documentFeaturesEnabled={documentFeaturesEnabled}
-          key={`${activeDoc.id}:${editorKey}:${documentFeaturesEnabled ? "document" : "core"}:${advancedBlocksEnabled ? "advanced" : "base"}`}
-          initialContent={activeDoc.content}
-          initialTiptapDoc={activeDoc.tiptapJson || undefined}
+          key={`${activeDoc.id}:${editorKey}`}
+          initialContent={richTextSeed.initialContent}
+          initialTiptapDoc={richTextSeed.initialTiptapDoc}
           onContentChange={handleContentChange}
           onEnableAdvancedBlocks={enableAdvancedBlocks}
           onEnableDocumentFeatures={enableDocumentFeatures}
           onEditorReady={setActiveEditor}
           onHtmlChange={setLiveEditorHtml}
+          seedRevision={richTextSeed.revision}
           onTiptapChange={handleTiptapChange}
         />
       </Suspense>
     );
-  }, [activeDoc.content, activeDoc.id, activeDoc.mode, activeDoc.tiptapJson, advancedBlocksEnabled, canEnableAdvancedBlocks, canEnableDocumentFeatures, documentFeaturesEnabled, editorKey, enableAdvancedBlocks, enableDocumentFeatures, handleContentChange, handleModeChange, handleTiptapChange, setLiveEditorHtml]);
+  }, [activeDoc.id, activeDoc.mode, activeDocumentCompatibility.isCompatible, activeDocumentCompatibilityDescriptionKey, advancedBlocksEnabled, canEnableAdvancedBlocks, canEnableDocumentFeatures, documentFeaturesEnabled, editorKey, enableAdvancedBlocks, enableDocumentFeatures, handleContentChange, handleModeChangeWithCapabilities, handleTiptapChange, handleUserProfileChange, richTextSeed, setLiveEditorHtml, t]);
   const aiUnavailableMessage = useMemo(() => {
     if (workspaceRuntimeState?.apiHealth && !workspaceRuntimeState.apiHealth.configured) {
       return "Gemini가 연결되어 있지 않습니다.";
@@ -1910,7 +2160,7 @@ const Index = () => {
     return aiRuntimeState?.liveAgent.latestStatus?.message || null;
   }, [aiRuntimeState?.liveAgent.latestStatus?.message, workspaceRuntimeState?.apiHealth]);
 
-  const aiAssistantDialogProps = aiRuntimeState
+  const aiAssistantDialogProps = canAccessAiAssistant && aiRuntimeState
     ? {
       activeDocumentName: activeDoc.name,
       aiUnavailableMessage,
@@ -1973,12 +2223,14 @@ const Index = () => {
       onGenerateToc: async () => undefined,
       onLoadTocPatch: async () => undefined,
       onOpenChange: (open: boolean) => {
-        if (open) {
+        if (open && canAccessAiAssistant) {
           requestAiIntent({ type: "open" });
         }
       },
       onSuggestUpdates: async (targetDocumentId: string) => {
-        requestAiIntent({ targetDocumentId, type: "suggest-updates" });
+        if (canAccessAiAssistant) {
+          requestAiIntent({ targetDocumentId, type: "suggest-updates" });
+        }
       },
       onSummarize: async () => undefined,
       open: false,
@@ -1988,7 +2240,8 @@ const Index = () => {
       tocPreview: null,
       updateSuggestionPreview: null,
     };
-  const documentSupportRuntimeActive = documentSupportRuntimeEnabled || historyEnabled;
+  const documentSupportRuntimeActive = canAccessPatchReview
+    && (documentSupportRuntimeEnabled || (canAccessHistory && historyEnabled));
   const patchReviewDialogProps = {
     acceptedPatchCount,
     onAccept: handleAcceptPatch,
@@ -2005,7 +2258,7 @@ const Index = () => {
       openPatchReview();
     },
     onReject: handleRejectPatch,
-    open: patchReviewOpen,
+    open: canAccessPatchReview ? patchReviewOpen : false,
     patchSet,
     workspaceSyncWarnings: activeDoc.workspaceBinding?.syncWarnings,
   };
@@ -2022,11 +2275,15 @@ const Index = () => {
     versionHistorySnapshots,
     versionHistorySyncing,
   };
-  const previewTexValidationProps = previewRuntimeState?.texValidationProps;
+  const previewTexValidationProps = previewOpen
+    && secondaryConversionsPending
+    && documentPerformanceProfile.kind !== "normal"
+    ? undefined
+    : previewRuntimeState?.texValidationProps;
 
   return (
     <>
-      {aiRuntimeEnabled && (
+      {canAccessAiAssistant && aiRuntimeEnabled && (
         <Suspense fallback={null}>
           <AiAssistantRuntime
             activeDoc={activeDoc}
@@ -2034,6 +2291,7 @@ const Index = () => {
             createDocumentDraft={handleCreateLiveAgentDocumentDraft}
             currentRenderableMarkdown={currentRenderableMarkdown}
             documents={documents}
+            getFreshRenderableMarkdown={getFreshRenderableMarkdown}
             importWorkspaceDocument={importWorkspaceDocumentById}
             loadPatchSet={loadPatchSet}
             openWorkspaceConnection={handleOpenWorkspaceConnection}
@@ -2047,7 +2305,7 @@ const Index = () => {
             activeDoc={activeDoc}
             activeEditor={activeEditor}
             bumpEditorKey={bumpEditorKey}
-            historyEnabled={historyEnabled}
+            historyEnabled={canAccessHistory && historyEnabled}
             onStateChange={setDocumentSupportRuntimeState}
             onVersionSnapshot={(document, metadata) => recordVersionSnapshot(document, "patch_apply", metadata)}
             onWorkspaceSync={syncDocument}
@@ -2087,6 +2345,8 @@ const Index = () => {
             activeDoc={activeDoc}
             createDocument={createDocument}
             documents={documents}
+            getRenderableLatexDocument={getFreshRenderableLatexDocument}
+            getRenderableMarkdown={getFreshRenderableMarkdown}
             onPatchSetLoad={loadPatchSet}
             onStateChange={setIoRuntimeState}
             onVersionSnapshot={(metadata) => recordVersionSnapshot(activeDoc, "export", metadata)}
@@ -2120,9 +2380,11 @@ const Index = () => {
           crossFamilyModes,
           mode: activeDoc.mode,
           onCreateDocument: handleNewDoc,
-          onOpenAiAssistant: () => requestAiIntent({ type: "open" }),
+          onOpenAiAssistant: canAccessAiAssistant
+            ? () => requestAiIntent({ type: "open" })
+            : undefined,
           onRequestResetDocuments: handleRequestResetDocuments,
-          onOpenStructuredModes: enableStructuredModes,
+          onOpenStructuredModes: canAccessStructuredModes ? enableStructuredModes : undefined,
           onOpenWorkspaceConnection: handleOpenWorkspaceConnection,
           onOpenWorkspaceExport: handleOpenWorkspaceExport,
           onOpenWorkspaceImport: handleOpenWorkspaceImport,
@@ -2135,10 +2397,11 @@ const Index = () => {
           onCopyYaml: handleCopyYaml,
           onFileNameChange: handleFileNameChange,
           onLoad: handleLoad,
-          onModeChange: handleModeChange,
-          onOpenPatchReview: openPatchReview,
+          onModeChange: handleModeChangeWithCapabilities,
+          onOpenPatchReview: canAccessPatchReview ? openPatchReview : undefined,
           onOpenShortcuts: openShortcuts,
           onPrint: handlePrint,
+          onUserProfileChange: handleUserProfileChange,
           patchCount,
           onSaveAdoc: handleSaveAdoc,
           onSaveDocsy: handleSaveDocsy,
@@ -2152,12 +2415,13 @@ const Index = () => {
           onSaveYaml: handleSaveYaml,
           onToggleCountMode: toggleCountMode,
           onToggleFullscreen: toggleFullscreen,
-          onTogglePreview: togglePreview,
+          onTogglePreview: handleTogglePreview,
           onToggleTheme: toggleTheme,
           previewOpen,
           resetDocumentsDisabled,
           showStructuredModeAction: false,
           textStats,
+          userProfile,
           workspaceBinding: activeDoc.workspaceBinding,
           workspaceConnected,
           workspaceConnectionPending: workspaceConnecting || workspaceDisconnecting || workspaceAuthLoading,
@@ -2192,6 +2456,11 @@ const Index = () => {
           sidebarProps={{
             activeDoc,
             activeDocId,
+            capabilities: {
+              canAccessHistory,
+              canAccessKnowledge,
+              canAccessStructuredModes,
+            },
             createDocument,
             documents,
             historyEnabled,
@@ -2227,26 +2496,45 @@ const Index = () => {
               workspaceRescanning: workspaceChangesRescanning || workspaceRefreshingDocument,
             },
             onDeleteDoc: handleDeleteDoc,
-            onActivateHistory: () => setHistoryEnabled(true),
-            onActivateKnowledge: () => setKnowledgeEnabled(true),
+            onActivateHistory: () => {
+              if (canAccessHistory) {
+                setHistoryEnabled(true);
+              }
+            },
+            onActivateKnowledge: () => {
+              if (canAccessKnowledge) {
+                setKnowledgeEnabled(true);
+              }
+            },
             onNewDoc: handleNewDoc,
-            onOpenStructuredModes: enableStructuredModes,
-            onOpenTemplates: openTemplateDialog,
+            onOpenStructuredModes: canAccessStructuredModes ? enableStructuredModes : undefined,
+            onOpenTemplates: canOpenTemplates ? openTemplateDialog : undefined,
             onRenameDoc: renameDocument,
             onSelectDoc: selectDocument,
-            showStructuredCreateAction: isWebProfile && !structuredModesVisible,
+            showStructuredCreateAction: canAccessStructuredModes && isWebProfile && !structuredModesVisible,
           }}
         tabsProps={{
           activeDocId,
           documents,
           onCloseDoc: closeDocument,
           onNewDoc: () => handleNewDoc(),
+          onResetDocuments: handleRequestResetDocuments,
           onSelectDoc: selectDocument,
+          resetDocumentsDisabled,
         }}
         templateDialogProps={{
           onOpenChange: setTemplateOpen,
           onSelect: handleTemplateSelect,
           open: templateOpen,
+          templateFilter: (template) => {
+            const templateContent = template.content.trim().length > 0 || template.id === "blank-markdown"
+              ? template.content
+              : getSharedTemplateFallbackContent(template.mode, locale);
+
+            return isModeAllowedInCapabilities(template.mode, effectiveCapabilities)
+              && (!templateRequiresDocumentFeatures(template.mode, templateContent) || canAccessDocumentTools)
+              && (!templateRequiresAdvancedBlocks(template.mode, templateContent) || canAccessAdvancedBlocks);
+          },
         }}
       />
       {workspaceConnectionOpen && (

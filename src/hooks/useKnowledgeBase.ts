@@ -8,6 +8,7 @@ import {
 } from "@/lib/knowledge/consistencyAnalysis";
 import {
   buildDocumentOptionsFromKnowledgeRecord,
+  buildKnowledgeDocumentFingerprint,
   buildKnowledgeRecordFromDocument,
   buildKnowledgeRecentRecords,
   getKnowledgeRecordLabel,
@@ -40,22 +41,55 @@ import {
   buildKnowledgeImpactQueue,
   buildKnowledgeWorkspaceInsights,
 } from "@/lib/knowledge/workspaceInsights";
-import type { CreateDocumentOptions, DocumentData } from "@/types/document";
+import { buildDocumentPerformanceProfile } from "@/lib/documents/documentPerformanceProfile";
+import type { CreateDocumentOptions, DirtyKnowledgeDocument, DocumentData } from "@/types/document";
 
-const scheduleIdleSync = (callback: () => void) => {
-  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-    const idleCallbackId = window.requestIdleCallback(callback, { timeout: 1200 });
+const scheduleIdleSync = (callback: () => void, timeout = 1200) => {
+  const browserWindow = typeof window !== "undefined" ? window : undefined;
+
+  if (browserWindow && "requestIdleCallback" in browserWindow) {
+    const idleCallbackId = browserWindow.requestIdleCallback(callback, { timeout });
 
     return () => {
-      window.cancelIdleCallback(idleCallbackId);
+      browserWindow.cancelIdleCallback(idleCallbackId);
     };
   }
 
-  const timeoutId = window.setTimeout(callback, 600);
+  const timeoutId = globalThis.setTimeout(callback, Math.min(timeout, 900));
 
   return () => {
-    window.clearTimeout(timeoutId);
+    globalThis.clearTimeout(timeoutId);
   };
+};
+
+const getKnowledgeQueueDelay = (candidate: DirtyKnowledgeDocument) => {
+  if (candidate.stage === "summary") {
+    return 250;
+  }
+
+  switch (candidate.profile.kind) {
+    case "heavy":
+      return 1_400;
+    case "large":
+      return 500;
+    default:
+      return 120;
+  }
+};
+
+const enqueueDirtyKnowledgeDocument = (
+  queue: DirtyKnowledgeDocument[],
+  candidate: DirtyKnowledgeDocument,
+) => {
+  const existingIndex = queue.findIndex((entry) => entry.documentId === candidate.documentId && entry.stage === candidate.stage);
+  const nextQueue = [...queue];
+
+  if (existingIndex >= 0) {
+    nextQueue[existingIndex] = candidate;
+    return nextQueue;
+  }
+
+  return [...nextQueue, candidate];
 };
 
 interface UseKnowledgeBaseOptions {
@@ -82,23 +116,24 @@ export const useKnowledgeBase = ({
   const [knowledgeReady, setKnowledgeReady] = useState(false);
   const [knowledgeRescanning, setKnowledgeRescanning] = useState(false);
   const [knowledgeSyncing, setKnowledgeSyncing] = useState(false);
+  const [dirtyKnowledgeDocuments, setDirtyKnowledgeDocuments] = useState<DirtyKnowledgeDocument[]>([]);
   const [sourceSnapshotRecords, setSourceSnapshotRecords] = useState(() => [] as ReturnType<typeof buildSourceSnapshotRecordFromKnowledgeRecord>[]);
   const deferredDocuments = useDeferredValue(documents);
   const deferredKnowledgeQuery = useDeferredValue(knowledgeQuery);
+  const deferredKnowledgeRecords = useDeferredValue(knowledgeRecords);
+  const latestDocumentsRef = useRef<Map<string, DocumentData>>(new Map());
+  const latestFingerprintsRef = useRef<Map<string, string>>(new Map());
 
-  const liveKnowledgeRecords = useMemo(
-    () => deferredDocuments
-      .map((document) => buildKnowledgeRecordFromDocument(document))
-      .filter((record): record is KnowledgeDocumentRecord => Boolean(record)),
+  const deferredDocumentMap = useMemo(
+    () => new Map(deferredDocuments.map((document) => [document.id, document])),
     [deferredDocuments],
   );
-  const liveKnowledgeRecordSignature = useMemo(
-    () => liveKnowledgeRecords
-      .map((record) => `${record.documentId}:${record.contentHash}:${record.updatedAt}:${record.sourceUpdatedAt}`)
-      .join("|"),
-    [liveKnowledgeRecords],
+  const deferredFingerprintMap = useMemo(
+    () => new Map(
+      deferredDocuments.map((document) => [document.id, buildKnowledgeDocumentFingerprint(document)]),
+    ),
+    [deferredDocuments],
   );
-  const initialLiveKnowledgeRecords = useRef(liveKnowledgeRecords);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,10 +147,7 @@ export const useKnowledgeBase = ({
 
         if (!cancelled) {
           startTransition(() => {
-            setKnowledgeRecords(reconcileKnowledgeRecords(
-              mergeKnowledgeRecords(storedRecords, initialLiveKnowledgeRecords.current),
-              initialLiveKnowledgeRecords.current,
-            ));
+            setKnowledgeRecords(reconcileKnowledgeRecords(storedRecords, storedRecords));
           });
           setSourceSnapshotRecords(storedSnapshots);
           setKnowledgeLastRescannedAt(
@@ -140,61 +172,180 @@ export const useKnowledgeBase = ({
   }, []);
 
   useEffect(() => {
-    startTransition(() => {
-      setKnowledgeRecords((previousRecords) => reconcileKnowledgeRecords(
-        mergeKnowledgeRecords(previousRecords, liveKnowledgeRecords),
-        liveKnowledgeRecords,
-      ));
-    });
-  }, [liveKnowledgeRecordSignature, liveKnowledgeRecords]);
+    latestDocumentsRef.current = deferredDocumentMap;
+    const previousFingerprints = latestFingerprintsRef.current;
+    const nextFingerprints = new Map(deferredFingerprintMap);
+    const removedDocumentIds = [...previousFingerprints.keys()].filter((documentId) => !nextFingerprints.has(documentId));
+    const nextDirtyQueue: DirtyKnowledgeDocument[] = [];
+    const heavySummaryRecords: KnowledgeDocumentRecord[] = [];
+
+    for (const removedDocumentId of removedDocumentIds) {
+      void removeKnowledgeRecord(removedDocumentId);
+    }
+
+    for (const [documentId, fingerprint] of nextFingerprints) {
+      const document = deferredDocumentMap.get(documentId);
+
+      if (!document) {
+        continue;
+      }
+
+      const previousFingerprint = previousFingerprints.get(documentId);
+
+      if (previousFingerprint === fingerprint) {
+        continue;
+      }
+
+      const profile = buildDocumentPerformanceProfile(document);
+
+      if (profile.kind === "heavy") {
+        const summaryRecord = buildKnowledgeRecordFromDocument(document, {
+          indexedAt: Date.now(),
+          stage: "summary",
+        });
+
+        if (summaryRecord) {
+          heavySummaryRecords.push(summaryRecord);
+        }
+
+        nextDirtyQueue.push({
+          documentId,
+          fingerprint,
+          profile,
+          stage: "full",
+        });
+        continue;
+      }
+
+      nextDirtyQueue.push({
+        documentId,
+        fingerprint,
+        profile,
+        stage: "full",
+      });
+    }
+
+    latestFingerprintsRef.current = nextFingerprints;
+
+    if (removedDocumentIds.length > 0) {
+      startTransition(() => {
+        setKnowledgeRecords((previousRecords) =>
+          previousRecords.filter((record) => !removedDocumentIds.includes(record.documentId)));
+        setKnowledgeChangedSources((previousSources) =>
+          previousSources.filter((source) => !removedDocumentIds.includes(source.documentId)));
+      });
+    }
+
+    if (heavySummaryRecords.length > 0) {
+      startTransition(() => {
+        setKnowledgeRecords((previousRecords) =>
+          reconcileKnowledgeRecords(
+            mergeKnowledgeRecords(
+              previousRecords.filter((record) =>
+                !heavySummaryRecords.some((summaryRecord) => summaryRecord.documentId === record.documentId)),
+              heavySummaryRecords,
+            ),
+            heavySummaryRecords,
+          ));
+      });
+    }
+
+    if (nextDirtyQueue.length > 0) {
+      setDirtyKnowledgeDocuments((previousQueue) => {
+        let queue = previousQueue.filter((entry) => !removedDocumentIds.includes(entry.documentId));
+
+        for (const candidate of nextDirtyQueue) {
+          queue = enqueueDirtyKnowledgeDocument(queue, candidate);
+        }
+
+        return queue;
+      });
+    }
+  }, [deferredDocumentMap, deferredFingerprintMap]);
 
   useEffect(() => {
-    const liveDocumentIds = new Set(liveKnowledgeRecords.map((record) => record.documentId));
+    if (dirtyKnowledgeDocuments.length === 0) {
+      return;
+    }
+
+    const nextCandidate = dirtyKnowledgeDocuments[0];
+
+    return scheduleIdleSync(() => {
+      const document = latestDocumentsRef.current.get(nextCandidate.documentId);
+      const latestFingerprint = latestFingerprintsRef.current.get(nextCandidate.documentId);
+
+      if (!document || latestFingerprint !== nextCandidate.fingerprint) {
+        setDirtyKnowledgeDocuments((previousQueue) => previousQueue.slice(1));
+        return;
+      }
+
+      setKnowledgeSyncing(true);
+
+      const nextRecord = buildKnowledgeRecordFromDocument(document, {
+        indexedAt: Date.now(),
+        stage: nextCandidate.stage,
+      });
+
+      void (async () => {
+        try {
+          if (!nextRecord) {
+            await removeKnowledgeRecord(nextCandidate.documentId);
+            startTransition(() => {
+              setKnowledgeRecords((previousRecords) =>
+                previousRecords.filter((record) => record.documentId !== nextCandidate.documentId));
+            });
+          } else {
+            await upsertKnowledgeRecords([nextRecord]);
+            startTransition(() => {
+              setKnowledgeRecords((previousRecords) =>
+                reconcileKnowledgeRecords(
+                  mergeKnowledgeRecords(
+                    previousRecords.filter((record) => record.documentId !== nextRecord.documentId),
+                    [nextRecord],
+                  ),
+                  [nextRecord],
+                ));
+            });
+          }
+        } finally {
+          setKnowledgeSyncing(false);
+          setDirtyKnowledgeDocuments((previousQueue) => {
+            let queue = previousQueue.slice(1);
+
+            if (nextCandidate.profile.kind === "heavy" && nextCandidate.stage === "full") {
+              return queue;
+            }
+
+            return queue;
+          });
+        }
+      })();
+    }, getKnowledgeQueueDelay(nextCandidate));
+  }, [dirtyKnowledgeDocuments]);
+
+  useEffect(() => {
+    const liveDocumentIds = new Set(deferredDocuments.map((document) => document.id));
     startTransition(() => {
       setKnowledgeChangedSources((previousSources) =>
         previousSources.filter((source) => liveDocumentIds.has(source.documentId)));
     });
-  }, [liveKnowledgeRecordSignature, liveKnowledgeRecords]);
-
-  useEffect(() => {
-    if (liveKnowledgeRecords.length === 0) {
-      return;
-    }
-
-    return scheduleIdleSync(() => {
-      setKnowledgeSyncing(true);
-
-      void upsertKnowledgeRecords(liveKnowledgeRecords)
-        .then(() => {
-          startTransition(() => {
-            setKnowledgeRecords((previousRecords) =>
-              reconcileKnowledgeRecords(
-                mergeKnowledgeRecords(previousRecords, liveKnowledgeRecords),
-                liveKnowledgeRecords,
-              ));
-          });
-        })
-        .finally(() => {
-          setKnowledgeSyncing(false);
-        });
-    });
-  }, [liveKnowledgeRecordSignature, liveKnowledgeRecords]);
+  }, [deferredDocuments]);
 
   const knowledgeSummary = useMemo(
-    () => summarizeKnowledgeRecords(knowledgeRecords),
-    [knowledgeRecords],
+    () => summarizeKnowledgeRecords(deferredKnowledgeRecords),
+    [deferredKnowledgeRecords],
   );
   const knowledgeInsights = useMemo(
-    () => buildKnowledgeWorkspaceInsights(knowledgeRecords),
-    [knowledgeRecords],
+    () => buildKnowledgeWorkspaceInsights(deferredKnowledgeRecords),
+    [deferredKnowledgeRecords],
   );
   const knowledgeActiveImpact = useMemo(
-    () => buildKnowledgeDocumentImpact(knowledgeRecords, knowledgeInsights, activeDocumentId),
-    [activeDocumentId, knowledgeInsights, knowledgeRecords],
+    () => buildKnowledgeDocumentImpact(deferredKnowledgeRecords, knowledgeInsights, activeDocumentId),
+    [activeDocumentId, deferredKnowledgeRecords, knowledgeInsights],
   );
   const activeKnowledgeRecord = useMemo(
-    () => knowledgeRecords.find((record) => record.documentId === activeDocumentId) || null,
-    [activeDocumentId, knowledgeRecords],
+    () => deferredKnowledgeRecords.find((record) => record.documentId === activeDocumentId) || null,
+    [activeDocumentId, deferredKnowledgeRecords],
   );
   const combinedChangedSources = useMemo(() => {
     const merged = new Map<string, SourceChangeRecord>();
@@ -214,11 +365,11 @@ export const useKnowledgeBase = ({
   }, [externalChangedSources, knowledgeChangedSources]);
   const knowledgeImpactQueue = useMemo(
     () => buildKnowledgeImpactQueue(
-      knowledgeRecords,
+      deferredKnowledgeRecords,
       knowledgeInsights,
       combinedChangedSources.map((source) => source.documentId),
     ),
-    [combinedChangedSources, knowledgeInsights, knowledgeRecords],
+    [combinedChangedSources, deferredKnowledgeRecords, knowledgeInsights],
   );
   const knowledgeConsistencyIssues = useMemo<KnowledgeConsistencyIssue[]>(() => {
     if (!activeKnowledgeRecord || !knowledgeActiveImpact) {
@@ -226,9 +377,9 @@ export const useKnowledgeBase = ({
     }
 
     const relatedDocumentIds = new Set(knowledgeActiveImpact.relatedDocuments.map((document) => document.documentId));
-    const candidateRecords = knowledgeRecords.filter((record) => relatedDocumentIds.has(record.documentId));
+    const candidateRecords = deferredKnowledgeRecords.filter((record) => relatedDocumentIds.has(record.documentId));
     return buildKnowledgeConsistencyIssues(activeKnowledgeRecord, candidateRecords);
-  }, [activeKnowledgeRecord, knowledgeActiveImpact, knowledgeRecords]);
+  }, [activeKnowledgeRecord, knowledgeActiveImpact, deferredKnowledgeRecords]);
   const knowledgeHealthIssues = useMemo(() => {
     const impactIssues = knowledgeActiveImpact?.issues || [];
     const consistencyHealthIssues = buildConsistencyHealthIssues(knowledgeConsistencyIssues);
@@ -251,13 +402,13 @@ export const useKnowledgeBase = ({
   }, [activeDocumentId, knowledgeActiveImpact, knowledgeConsistencyIssues, knowledgeImpactQueue]);
 
   const knowledgeResults = useMemo(
-    () => searchKnowledgeRecords(knowledgeRecords, deferredKnowledgeQuery, 12, { mode: knowledgeSearchMode }),
-    [deferredKnowledgeQuery, knowledgeRecords, knowledgeSearchMode],
+    () => searchKnowledgeRecords(deferredKnowledgeRecords, deferredKnowledgeQuery, 12, { mode: knowledgeSearchMode }),
+    [deferredKnowledgeQuery, deferredKnowledgeRecords, knowledgeSearchMode],
   );
 
   const recentKnowledgeRecords = useMemo(
-    () => buildKnowledgeRecentRecords(knowledgeRecords, 6),
-    [knowledgeRecords],
+    () => buildKnowledgeRecentRecords(deferredKnowledgeRecords, 6),
+    [deferredKnowledgeRecords],
   );
 
   const openKnowledgeRecord = useCallback((record: KnowledgeDocumentRecord, result?: KnowledgeSearchResult) => {
@@ -311,7 +462,7 @@ export const useKnowledgeBase = ({
 
     try {
       const scannedAt = Date.now();
-      const nextSnapshots = liveKnowledgeRecords.map((record) =>
+      const nextSnapshots = knowledgeRecords.map((record) =>
         buildSourceSnapshotRecordFromKnowledgeRecord(record, scannedAt));
       const changes = compareSourceSnapshots(sourceSnapshotRecords, nextSnapshots);
 
@@ -330,7 +481,7 @@ export const useKnowledgeBase = ({
     } finally {
       setKnowledgeRescanning(false);
     }
-  }, [liveKnowledgeRecords, sourceSnapshotRecords]);
+  }, [knowledgeRecords, sourceSnapshotRecords]);
 
   const resetKnowledgeBase = useCallback(async () => {
     setKnowledgeSyncing(true);
@@ -341,6 +492,7 @@ export const useKnowledgeBase = ({
       setKnowledgeChangedSources([]);
       setKnowledgeLastRescannedAt(null);
       setKnowledgeRecords([]);
+      setDirtyKnowledgeDocuments([]);
       setSourceSnapshotRecords([]);
       toast.success(t("knowledge.resetDone"));
     } finally {
@@ -364,6 +516,7 @@ export const useKnowledgeBase = ({
       }
 
       setKnowledgeRecords(reconcileKnowledgeRecords(nextRecords, nextRecords));
+      setDirtyKnowledgeDocuments([]);
       toast.success(t("knowledge.rebuildDone", { count: nextRecords.length }));
     } finally {
       setKnowledgeSyncing(false);
@@ -393,13 +546,13 @@ export const useKnowledgeBase = ({
       setKnowledgeRecords((previousRecords) =>
         reconcileKnowledgeRecords(
           mergeKnowledgeRecords(previousRecords, [nextRecord]),
-          mergeKnowledgeRecords(liveKnowledgeRecords, [nextRecord]),
+          [nextRecord],
         ));
       toast.success(t("knowledge.reindexDone", { name: getKnowledgeRecordLabel(nextRecord) }));
     } finally {
       setKnowledgeSyncing(false);
     }
-  }, [documents, liveKnowledgeRecords, t]);
+  }, [documents, t]);
 
   return {
     deleteKnowledgeDocument,
@@ -427,8 +580,8 @@ export const useKnowledgeBase = ({
     openKnowledgeResult,
     recentKnowledgeRecords,
     rebuildKnowledgeBase,
-    rescanKnowledgeSources,
     reindexKnowledgeDocument,
+    rescanKnowledgeSources,
     resetKnowledgeBase,
     setKnowledgeQuery,
     setKnowledgeSearchMode,

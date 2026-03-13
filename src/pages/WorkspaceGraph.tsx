@@ -30,15 +30,15 @@ const WorkspaceGraph = () => {
     const issuePriority = searchParams.get("issuePriority");
 
     return {
-      context,
+      context: context as "change" | "consistency" | "impact",
       issueId: searchParams.get("issueId") || undefined,
       issueKind: issueKind === "changed_section" || issueKind === "conflicting_procedure" || issueKind === "missing_section"
-        ? issueKind
+        ? (issueKind as "changed_section" | "conflicting_procedure" | "missing_section")
         : undefined,
       issuePriority: issuePriority === "high"
         || issuePriority === "medium"
         || issuePriority === "low"
-        ? issuePriority
+        ? (issuePriority as "high" | "medium" | "low")
         : undefined,
       issueReason: searchParams.get("issueReason") || undefined,
       sourceNodeId: searchParams.get("source"),

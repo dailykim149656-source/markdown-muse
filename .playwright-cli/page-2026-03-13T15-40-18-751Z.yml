@@ -1,0 +1,152 @@
+- generic:
+  - generic:
+    - list
+    - region "Notifications alt+T"
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - button:
+                  - img
+              - generic:
+                - generic:
+                  - generic:
+                    - list:
+                      - listitem:
+                        - button:
+                          - img
+              - generic:
+                - generic:
+                  - button:
+                    - img
+                  - button:
+                    - generic:
+                      - img
+        - generic:
+          - banner:
+            - generic:
+              - generic:
+                - button:
+                  - img
+                - link:
+                  - /url: /
+                  - img
+                  - generic: Docsy
+                - generic: "|"
+                - textbox:
+                  - /placeholder: 제목 없음
+                  - text: Untitled
+                - generic: .md
+                - generic:
+                  - generic: 저장됨
+                - button [expanded]:
+                  - text: Markdown
+                  - img
+              - generic:
+                - button:
+                  - generic: 0자
+                  - generic: /
+                  - generic: 0단어
+                  - generic: /
+                  - generic: 0줄
+                - button:
+                  - img
+                - button:
+                  - img
+                  - generic: Google
+                  - img
+                - button:
+                  - img
+                  - img
+                - button:
+                  - img
+                - button:
+                  - img
+                  - generic: ko
+                - button:
+                  - img
+                - button:
+                  - img
+                - button:
+                  - img
+                - button:
+                  - img
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - button:
+                      - generic: Untitled
+                      - generic: .md
+            - button:
+              - img
+            - button:
+              - img
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - button:
+                      - img
+                    - button:
+                      - img
+                    - button:
+                      - img
+                    - button:
+                      - img
+                    - button:
+                      - img
+                  - generic:
+                    - button:
+                      - text: 추가서식
+                      - img
+                    - button:
+                      - text: 구조
+                      - img
+                    - button:
+                      - text: 정렬
+                      - img
+                    - button:
+                      - text: 링크
+                      - img
+                    - button:
+                      - text: 색상
+                      - img
+                    - button:
+                      - text: 문서도구
+                      - img
+                    - button:
+                      - text: 글꼴
+                      - img
+                    - button:
+                      - text: 글자크기
+                      - img
+                    - button:
+                      - text: 캡션
+                      - img
+                    - button:
+                      - text: 수식 삽입
+                      - img
+                    - button:
+                      - text: Mermaid diagram 삽입
+                      - img
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - paragraph: Markdown WYSIWYG with synced source mode.
+                    - button:
+                      - img
+                      - text: Source
+  - menu "Markdown" [active] [ref=e111]:
+    - generic [ref=e112]: 리치 텍스트
+    - menuitem "Markdown" [ref=e113]:
+      - img [ref=e114]
+      - text: Markdown
+    - menuitem "LaTeX" [ref=e116]: LaTeX
+    - menuitem "HTML" [ref=e118]: HTML

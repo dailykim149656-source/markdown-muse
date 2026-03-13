@@ -53,6 +53,7 @@ interface UseAiAssistantOptions {
   activeEditor: TiptapEditor | null;
   currentRenderableMarkdown: string;
   documents: DocumentData[];
+  getFreshRenderableMarkdown: () => Promise<string>;
   loadPatchSet: (patchSet: DocumentPatchSet) => void;
 }
 
@@ -109,6 +110,7 @@ export const useAiAssistant = ({
   activeEditor,
   currentRenderableMarkdown,
   documents,
+  getFreshRenderableMarkdown,
   loadPatchSet,
 }: UseAiAssistantOptions) => {
   const { t, locale } = useI18n();
@@ -121,6 +123,7 @@ export const useAiAssistant = ({
   const [tocPreview, setTocPreview] = useState<TocPreviewResult | null>(null);
 
   const richTextAvailable = isRichTextDocument(activeDoc);
+  const activeRichTextMode = (richTextAvailable ? activeDoc.mode : "markdown") as "html" | "latex" | "markdown";
   const compareCandidates = useMemo(
     () => documents.filter((document) => document.id !== activeDoc.id && isRichTextDocument(document)),
     [activeDoc.id, documents],
@@ -144,30 +147,35 @@ export const useAiAssistant = ({
     }
   }, [currentRenderableMarkdown, richTextAvailable, t]);
 
-  const buildActiveNormalizedDocument = useCallback(async () => {
+  const resolveFreshMarkdown = useCallback(async () => {
     ensureActiveRichText();
+    return getFreshRenderableMarkdown();
+  }, [ensureActiveRichText, getFreshRenderableMarkdown]);
+
+  const buildActiveNormalizedDocument = useCallback(async () => {
+    const markdown = await resolveFreshMarkdown();
     const { normalizeIngestionRequest } = await import("@/lib/ingestion/normalizeIngestionRequest");
 
     return normalizeIngestionRequest({
       fileName: `${activeDoc.name}.${getDocumentExtension(activeDoc.mode)}`,
       importedAt: activeDoc.updatedAt,
       ingestionId: activeDoc.id,
-      rawContent: currentRenderableMarkdown,
+      rawContent: markdown,
       sourceFormat: "markdown",
     });
-  }, [activeDoc.id, activeDoc.mode, activeDoc.name, activeDoc.updatedAt, currentRenderableMarkdown, ensureActiveRichText]);
+  }, [activeDoc.id, activeDoc.mode, activeDoc.name, activeDoc.updatedAt, resolveFreshMarkdown]);
 
-  const captureAiScreenshot = useCallback(async () => {
+  const captureAiScreenshot = useCallback(async (markdown: string) => {
     try {
       return await captureWorkspaceScreenshot({
         documentName: activeDoc.name,
-        markdown: currentRenderableMarkdown,
+        markdown,
         mode: activeDoc.mode,
       });
     } catch {
       return undefined;
     }
-  }, [activeDoc.mode, activeDoc.name, currentRenderableMarkdown]);
+  }, [activeDoc.mode, activeDoc.name]);
 
   const buildSourceAst = useCallback(async () => {
     if (!activeEditor) {
@@ -201,18 +209,18 @@ export const useAiAssistant = ({
   }, [compareCandidates, t]);
 
   const summarizeActiveDocument = useCallback(async (objective: string) => {
-    ensureActiveRichText();
     setBusyAction("summarize");
 
     try {
       const { summarizeDocument } = await import("@/lib/ai/assistantClient");
-      const screenshot = await captureAiScreenshot();
+      const markdown = await resolveFreshMarkdown();
+      const screenshot = await captureAiScreenshot(markdown);
       const result = await summarizeDocument({
         document: {
           documentId: activeDoc.id,
           fileName: activeDoc.name,
-          markdown: currentRenderableMarkdown,
-          mode: activeDoc.mode,
+          markdown,
+          mode: activeRichTextMode,
         },
         objective,
         locale,
@@ -228,10 +236,9 @@ export const useAiAssistant = ({
     } finally {
       setBusyAction((current) => (current === "summarize" ? null : current));
     }
-  }, [activeDoc.id, activeDoc.mode, activeDoc.name, captureAiScreenshot, currentRenderableMarkdown, ensureActiveRichText, locale, t]);
+  }, [activeDoc.id, activeDoc.mode, activeDoc.name, captureAiScreenshot, locale, resolveFreshMarkdown, t]);
 
   const generateSectionPatch = useCallback(async (prompt: string) => {
-    ensureActiveRichText();
     setBusyAction("generate-section");
 
     try {
@@ -245,7 +252,8 @@ export const useAiAssistant = ({
       const sourceAst = await buildSourceAst();
       const headings = buildDerivedDocumentIndex(sourceAst).headings;
       const lastBlock = sourceAst.blocks.at(-1);
-      const screenshot = await captureAiScreenshot();
+      const markdown = await resolveFreshMarkdown();
+      const screenshot = await captureAiScreenshot(markdown);
 
       if (!lastBlock) {
         throw new Error(t("hooks.ai.emptyInsert"));
@@ -255,8 +263,8 @@ export const useAiAssistant = ({
         document: {
           documentId: activeDoc.id,
           fileName: activeDoc.name,
-          markdown: currentRenderableMarkdown,
-          mode: activeDoc.mode,
+          markdown,
+          mode: activeRichTextMode,
         },
         existingHeadings: headings.map((heading) => ({
           level: heading.level,
@@ -291,10 +299,9 @@ export const useAiAssistant = ({
     } finally {
       setBusyAction((current) => (current === "generate-section" ? null : current));
     }
-  }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, captureAiScreenshot, currentRenderableMarkdown, ensureActiveRichText, locale, loadPatchSet, t]);
+  }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, captureAiScreenshot, locale, loadPatchSet, resolveFreshMarkdown, t]);
 
   const generateTocSuggestion = useCallback(async () => {
-    ensureActiveRichText();
     setBusyAction("generate-toc");
 
     try {
@@ -307,13 +314,14 @@ export const useAiAssistant = ({
       ]);
       const sourceAst = await buildSourceAst();
       const headings = buildDerivedDocumentIndex(sourceAst).headings;
-      const screenshot = await captureAiScreenshot();
+      const markdown = await resolveFreshMarkdown();
+      const screenshot = await captureAiScreenshot(markdown);
       const result = await generateToc({
         document: {
           documentId: activeDoc.id,
           fileName: activeDoc.name,
-          markdown: currentRenderableMarkdown,
-          mode: activeDoc.mode,
+          markdown,
+          mode: activeRichTextMode,
         },
         existingHeadings: headings.map((heading) => ({
           level: heading.level,
@@ -357,7 +365,7 @@ export const useAiAssistant = ({
     } finally {
       setBusyAction((current) => (current === "generate-toc" ? null : current));
     }
-  }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, captureAiScreenshot, currentRenderableMarkdown, ensureActiveRichText, locale, t]);
+  }, [activeDoc.id, activeDoc.mode, activeDoc.name, buildSourceAst, captureAiScreenshot, locale, resolveFreshMarkdown, t]);
 
   const loadTocPatch = useCallback(async (maxDepthOverride?: 1 | 2 | 3) => {
     ensureActiveRichText();
@@ -465,7 +473,6 @@ export const useAiAssistant = ({
     targetDocumentId: string,
     context?: KnowledgeSuggestionContext,
   ) => {
-    ensureActiveRichText();
     setBusyAction("suggest-updates");
 
     try {
@@ -490,14 +497,15 @@ export const useAiAssistant = ({
 
       try {
         const headings = buildDerivedDocumentIndex(sourceAst).headings;
-        const screenshot = await captureAiScreenshot();
+        const markdown = await resolveFreshMarkdown();
+        const screenshot = await captureAiScreenshot(markdown);
         actionProposal = await proposeEditorAction({
           candidatePatchCount: result.patchBuild.patchSet.patches.length,
           document: {
             documentId: activeDoc.id,
             fileName: activeDoc.name,
-            markdown: currentRenderableMarkdown,
-            mode: activeDoc.mode,
+            markdown,
+            mode: activeRichTextMode,
           },
           existingHeadings: headings.map((heading) => ({
             level: heading.level,
@@ -550,20 +558,19 @@ export const useAiAssistant = ({
   }, [
     activeDoc.id,
     activeDoc.name,
+    activeDoc.mode,
     buildActiveNormalizedDocument,
     buildSourceAst,
     buildTargetNormalizedDocument,
     captureAiScreenshot,
     ensureActiveRichText,
-    currentRenderableMarkdown,
-    activeDoc.mode,
     locale,
     loadPatchSet,
+    resolveFreshMarkdown,
     t,
   ]);
 
   const extractProcedureFromActiveDocument = useCallback(async () => {
-    ensureActiveRichText();
     setBusyAction("extract-procedure");
 
     try {
@@ -586,7 +593,7 @@ export const useAiAssistant = ({
     } finally {
       setBusyAction((current) => (current === "extract-procedure" ? null : current));
     }
-  }, [buildActiveNormalizedDocument, ensureActiveRichText, t]);
+  }, [buildActiveNormalizedDocument, t]);
 
   return {
     assistantOpen,

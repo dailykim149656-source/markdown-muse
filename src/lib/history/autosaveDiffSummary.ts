@@ -50,6 +50,9 @@ const buildInitialSummaryRequest = (
   currentMarkdown: string,
   locale?: Locale,
 ): AutosaveDiffSummaryRequest | null => {
+  const currentMode = currentSnapshot.mode === "html" || currentSnapshot.mode === "latex"
+    ? currentSnapshot.mode
+    : "markdown";
   const excerpt = normalizeExcerpt(currentMarkdown);
 
   if (!excerpt) {
@@ -74,7 +77,7 @@ const buildInitialSummaryRequest = (
     document: {
       documentId: currentSnapshot.documentId,
       fileName: currentSnapshot.document.name,
-      mode: currentSnapshot.mode,
+      mode: currentMode,
     },
     locale,
   };
@@ -151,6 +154,10 @@ export const buildAutosaveDiffSummaryRequest = ({
     return null;
   }
 
+  const currentMode = currentSnapshot.mode === "html" || currentSnapshot.mode === "latex"
+    ? currentSnapshot.mode
+    : "markdown";
+
   return {
     comparison: {
       counts: comparison.counts,
@@ -159,7 +166,7 @@ export const buildAutosaveDiffSummaryRequest = ({
     document: {
       documentId: currentSnapshot.documentId,
       fileName: currentSnapshot.document.name,
-      mode: currentSnapshot.mode,
+      mode: currentMode,
     },
     locale,
   };

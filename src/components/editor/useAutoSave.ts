@@ -1,10 +1,18 @@
 import { useEffect, useRef } from "react";
 import type { AutoSaveData, DocumentData, EditorMode } from "@/types/document";
 import type { WorkspaceBinding } from "@/types/workspace";
+import {
+  clearAutosavePointer,
+  clearAutosaveV3Snapshot,
+  readAutosaveV3Snapshot,
+  writeAutosavePointer,
+  writeAutosaveV3Snapshot,
+} from "@/lib/documents/autosaveV3Store";
 import { migrateStoredDocumentData } from "@/lib/documents/storedDocument";
 
 export const DOCSY_AUTOSAVE_STORAGE_KEY = "docsy-autosave-v2";
 export const DOCSY_LEGACY_AUTOSAVE_STORAGE_KEY = "docsy-autosave";
+export const DOCSY_AUTOSAVE_VERSION = 2 as const;
 
 const isEditorMode = (value: unknown): value is EditorMode =>
   value === "markdown" || value === "latex" || value === "html" || value === "json" || value === "yaml";
@@ -89,6 +97,16 @@ const getDocumentSignature = (document: DocumentData) => JSON.stringify({
   sourceSnapshot: document.sourceSnapshots?.[document.mode] || "",
   updatedAt: document.updatedAt,
 });
+
+const shouldPersistLocalFallback = (data: AutoSaveData) => {
+  const totalContentLength = data.documents.reduce((sum, document) => (
+    sum
+    + document.content.length
+    + Object.values(document.sourceSnapshots || {}).reduce((sourceSum, source) => sourceSum + (source?.length || 0), 0)
+  ), 0);
+
+  return data.documents.length <= 12 && totalContentLength <= 50_000;
+};
 
 const dedupeDocuments = (documents: DocumentData[], activeDocId: string) => {
   const documentsById = new Map<string, DocumentData>();
@@ -258,13 +276,61 @@ export const loadSavedData = (): AutoSaveData | null => {
   }
 };
 
+export const hydrateSavedData = async (): Promise<AutoSaveData | null> => {
+  const v3Snapshot = await readAutosaveV3Snapshot();
+
+  if (v3Snapshot) {
+    return dedupeDocuments(v3Snapshot.documents.map(migrateStoredDocumentData), v3Snapshot.activeDocId);
+  }
+
+  const legacySnapshot = loadSavedData();
+
+  if (!legacySnapshot) {
+    return null;
+  }
+
+  const savedAt = legacySnapshot.lastSaved || Date.now();
+  const migrated = await writeAutosaveV3Snapshot(
+    {
+      ...legacySnapshot,
+      lastSaved: savedAt,
+      version: DOCSY_AUTOSAVE_VERSION,
+    },
+    {
+      dirtyDocumentIds: legacySnapshot.documents.map((document) => document.id),
+      lastSaved: savedAt,
+    },
+  );
+
+  if (migrated) {
+    writeAutosavePointer({
+      activeDocId: legacySnapshot.activeDocId,
+      documentIds: legacySnapshot.documents.map((document) => document.id),
+      lastSaved: savedAt,
+      version: 3,
+    });
+
+    try {
+      localStorage.removeItem(DOCSY_AUTOSAVE_STORAGE_KEY);
+      localStorage.removeItem(DOCSY_LEGACY_AUTOSAVE_STORAGE_KEY);
+    } catch {
+      // best effort cleanup
+    }
+  }
+
+  return legacySnapshot;
+};
+
 export const clearSavedData = () => {
   try {
     localStorage.removeItem(DOCSY_AUTOSAVE_STORAGE_KEY);
     localStorage.removeItem(DOCSY_LEGACY_AUTOSAVE_STORAGE_KEY);
+    clearAutosavePointer();
   } catch {
     // best effort cleanup
   }
+
+  void clearAutosaveV3Snapshot();
 };
 
 export interface AutoSaveWriteSuccess {
@@ -287,17 +353,43 @@ export const getAutoSaveSnapshotKey = (data: AutoSaveData) => JSON.stringify({
   version: data.version,
 });
 
-export const saveData = (data: AutoSaveData): AutoSaveWriteResult => {
+interface SaveDataOptions {
+  dirtyDocumentIds?: string[];
+}
+
+export const saveData = (data: AutoSaveData, options: SaveDataOptions = {}): AutoSaveWriteResult => {
   const savedAt = Date.now();
   const normalized = dedupeDocuments(data.documents.map(migrateStoredDocumentData), data.activeDocId);
 
   try {
-    localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify({
+    const savedSnapshot = {
       ...normalized,
-      version: 2,
+      version: DOCSY_AUTOSAVE_VERSION,
       lastSaved: savedAt,
-    }));
+    } satisfies AutoSaveData;
+
+    const pointer = {
+      activeDocId: savedSnapshot.activeDocId,
+      documentIds: savedSnapshot.documents.map((document) => document.id),
+      lastSaved: savedAt,
+      version: 3 as const,
+    };
+
+    writeAutosavePointer(pointer);
+    if (shouldPersistLocalFallback(savedSnapshot)) {
+      localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify(savedSnapshot));
+    } else {
+      localStorage.removeItem(DOCSY_AUTOSAVE_STORAGE_KEY);
+    }
     localStorage.removeItem(DOCSY_LEGACY_AUTOSAVE_STORAGE_KEY);
+    void writeAutosaveV3Snapshot(savedSnapshot, {
+      dirtyDocumentIds: options.dirtyDocumentIds,
+      lastSaved: savedAt,
+    }).then((persisted) => {
+      if (!persisted && !shouldPersistLocalFallback(savedSnapshot)) {
+        localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify(savedSnapshot));
+      }
+    });
     return { ok: true, savedAt };
   } catch {
     return {
@@ -308,6 +400,7 @@ export const saveData = (data: AutoSaveData): AutoSaveWriteResult => {
 };
 
 interface UseAutoSaveOptions {
+  getDirtyDocumentIds?: () => string[];
   onError?: (error: string) => void;
   onSaved?: (savedAt: number) => void;
   onSaving?: () => void;
@@ -345,7 +438,9 @@ export const useAutoSave = (
       }
 
       optionsRef.current.onSaving?.();
-      const result = saveData(dataRef.current);
+      const result = saveData(dataRef.current, {
+        dirtyDocumentIds: optionsRef.current.getDirtyDocumentIds?.(),
+      });
 
       if (isAutoSaveWriteFailure(result)) {
         optionsRef.current.onError?.(result.error);

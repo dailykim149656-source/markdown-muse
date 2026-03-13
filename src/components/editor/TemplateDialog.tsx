@@ -33,6 +33,12 @@ export interface DocumentTemplate {
   name: string;
 }
 
+export interface BuiltInTemplateDefinition {
+  content: string;
+  id: string;
+  mode: TemplateMode;
+}
+
 type CategoryKey = "engineering" | "general" | "operations" | "project";
 type TemplateKey =
   | "adr"
@@ -507,6 +513,13 @@ const TEMPLATE_DEFINITIONS: TemplateDefinition[] = [
   { categoryKey: "general", content: "", iconName: "FileText", id: "blank-markdown", itemKey: "blank", mode: "markdown" },
 ];
 
+export const getBuiltInTemplateDefinitions = (): BuiltInTemplateDefinition[] =>
+  TEMPLATE_DEFINITIONS.map(({ content, id, mode }) => ({
+    content,
+    id,
+    mode,
+  }));
+
 const TEMPLATE_DIALOG_TEXT: Record<TemplateLocale, TemplateDialogText> = {
   en: {
     all: "All",
@@ -582,11 +595,12 @@ interface TemplateDialogProps {
   onOpenChange: (open: boolean) => void;
   onSelect: (template: DocumentTemplate) => void;
   open: boolean;
+  templateFilter?: (template: DocumentTemplate) => boolean;
 }
 
 const toTemplateLocale = (locale: string): TemplateLocale => (locale === "ko" ? "ko" : "en");
 
-const TemplateDialog = ({ onOpenChange, onSelect, open }: TemplateDialogProps) => {
+const TemplateDialog = ({ onOpenChange, onSelect, open, templateFilter }: TemplateDialogProps) => {
   const { locale } = useI18n();
   const ui = TEMPLATE_DIALOG_TEXT[toTemplateLocale(locale)];
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -610,13 +624,17 @@ const TemplateDialog = ({ onOpenChange, onSelect, open }: TemplateDialogProps) =
       })),
     [ui],
   );
+  const visibleTemplates = useMemo(
+    () => templateFilter ? templates.filter((template) => templateFilter(template)) : templates,
+    [templateFilter, templates],
+  );
 
   const categories = useMemo(
-    () => Array.from(new Set(templates.map((template) => template.category))),
-    [templates],
+    () => Array.from(new Set(visibleTemplates.map((template) => template.category))),
+    [visibleTemplates],
   );
   const normalizedKeyword = searchKeyword.trim().toLowerCase();
-  const filteredTemplates = templates.filter((template) => {
+  const filteredTemplates = visibleTemplates.filter((template) => {
     const matchesCategory = selectedCategory === null || template.category === selectedCategory;
     const matchesMode = selectedMode === "all" || template.mode === selectedMode;
     const matchesKeyword = !normalizedKeyword

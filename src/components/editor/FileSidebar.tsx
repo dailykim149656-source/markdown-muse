@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import {
   BrainCircuit,
   Braces,
@@ -46,6 +46,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/i18n/useI18n";
+import type { EditorUiCapabilities } from "@/lib/editor/userProfiles";
 import { getWorkspaceProviderLabel, getWorkspaceSyncLabel } from "@/lib/workspace/workspaceLabels";
 import type { DocumentData, EditorMode } from "@/types/document";
 
@@ -61,6 +62,7 @@ const SidebarPanelFallback = () => (
 interface FileSidebarProps {
   activeDoc: DocumentData;
   activeDocId: string;
+  capabilities: Pick<EditorUiCapabilities, "canAccessHistory" | "canAccessKnowledge" | "canAccessStructuredModes">;
   createDocument: KnowledgeSidebarPanelsProps["createDocument"];
   documents: DocumentData[];
   historyEnabled: boolean;
@@ -112,6 +114,7 @@ const modeExtension = (mode: string) => {
 const FileSidebar = ({
   activeDoc,
   activeDocId,
+  capabilities,
   createDocument,
   documents,
   historyEnabled,
@@ -134,6 +137,15 @@ const FileSidebar = ({
   const [activeTab, setActiveTab] = useState<SidebarTab>("documents");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+
+  const showKnowledgeTab = capabilities.canAccessKnowledge;
+  const showHistoryTab = capabilities.canAccessHistory;
+
+  useEffect(() => {
+    if ((activeTab === "knowledge" && !showKnowledgeTab) || (activeTab === "history" && !showHistoryTab)) {
+      setActiveTab("documents");
+    }
+  }, [activeTab, showHistoryTab, showKnowledgeTab]);
 
   const formatDate = (timestamp: number) => {
     const documentDate = new Date(timestamp);
@@ -207,15 +219,24 @@ const FileSidebar = ({
       onSelect: showStructuredCreateAction ? onOpenStructuredModes : undefined,
     },
   ];
+  const visibleCreateDocumentOptions = createDocumentOptions.filter((option) =>
+    capabilities.canAccessStructuredModes || (option.mode !== "json" && option.mode !== "yaml"));
+
+  const structuredOptionsVisible = visibleCreateDocumentOptions.some((option) =>
+    option.mode === "json" || option.mode === "yaml");
+
+  const needsStructuredSeparator = visibleCreateDocumentOptions.some((option) =>
+    option.mode === "markdown" || option.mode === "latex" || option.mode === "html")
+    && structuredOptionsVisible;
 
   const activateTab = (tab: SidebarTab) => {
     setActiveTab(tab);
 
-    if (tab === "knowledge" && !knowledgeEnabled) {
+    if (tab === "knowledge" && showKnowledgeTab && !knowledgeEnabled) {
       onActivateKnowledge();
     }
 
-    if (tab === "history" && !historyEnabled) {
+    if (tab === "history" && showHistoryTab && !historyEnabled) {
       onActivateHistory();
     }
   };
@@ -253,26 +274,30 @@ const FileSidebar = ({
             <FolderOpen className="h-3.5 w-3.5" />
             {t("sidebar.documents")}
           </Button>
-          <Button
-            className="h-7 justify-start gap-1.5 px-2 text-[11px]"
-            onClick={() => activateTab("knowledge")}
-            size="sm"
-            type="button"
-            variant={activeTab === "knowledge" ? "secondary" : "ghost"}
-          >
-            <BrainCircuit className="h-3.5 w-3.5" />
-            {t("sidebar.knowledge")}
-          </Button>
-          <Button
-            className="h-7 justify-start gap-1.5 px-2 text-[11px]"
-            onClick={() => activateTab("history")}
-            size="sm"
-            type="button"
-            variant={activeTab === "history" ? "secondary" : "ghost"}
-          >
-            <History className="h-3.5 w-3.5" />
-            {t("sidebar.history")}
-          </Button>
+          {showKnowledgeTab ? (
+            <Button
+              className="h-7 justify-start gap-1.5 px-2 text-[11px]"
+              onClick={() => activateTab("knowledge")}
+              size="sm"
+              type="button"
+              variant={activeTab === "knowledge" ? "secondary" : "ghost"}
+            >
+              <BrainCircuit className="h-3.5 w-3.5" />
+              {t("sidebar.knowledge")}
+            </Button>
+          ) : null}
+          {showHistoryTab ? (
+            <Button
+              className="h-7 justify-start gap-1.5 px-2 text-[11px]"
+              onClick={() => activateTab("history")}
+              size="sm"
+              type="button"
+              variant={activeTab === "history" ? "secondary" : "ghost"}
+            >
+              <History className="h-3.5 w-3.5" />
+              {t("sidebar.history")}
+            </Button>
+          ) : null}
         </div>
       </SidebarHeader>
 
@@ -393,7 +418,7 @@ const FileSidebar = ({
           </SidebarGroup>
         )}
 
-        {knowledgeEnabled && (
+        {showKnowledgeTab && knowledgeEnabled && (
           <SidebarGroup className={activeTab === "knowledge" ? "" : "hidden"}>
             <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
             <SidebarGroupContent>
@@ -418,7 +443,7 @@ const FileSidebar = ({
           </SidebarGroup>
         )}
 
-        {historyEnabled && (
+        {showHistoryTab && historyEnabled && (
           <SidebarGroup className={activeTab === "history" ? "" : "hidden"}>
             <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
             <SidebarGroupContent>
@@ -469,10 +494,13 @@ const FileSidebar = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-40">
-              {createDocumentOptions.map((option, index) => {
+              {visibleCreateDocumentOptions.map((option, index) => {
                 const Icon = option.icon;
                 const isStructured = option.mode === "json" || option.mode === "yaml";
-                const showSeparator = index === 3;
+                const showSeparator = needsStructuredSeparator && index > 0 && isStructured
+                  && visibleCreateDocumentOptions[index - 1]
+                  && visibleCreateDocumentOptions[index - 1].mode !== "json"
+                  && visibleCreateDocumentOptions[index - 1].mode !== "yaml";
 
                 return (
                   <div key={option.mode}>

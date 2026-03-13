@@ -93,6 +93,7 @@ const ChangeMonitoringPanel = ({
   isRescanning,
   lastRescannedAt,
   onOpenDocument,
+  onRefreshDocument,
   onOpenGraph,
   onRescan,
   onSuggestUpdates,

@@ -72,6 +72,7 @@ const renderHeader = (overrides: Record<string, unknown> = {}) => {
             onOpenShortcuts={vi.fn()}
             onPrint={vi.fn()}
             onRequestResetDocuments={onRequestResetDocuments}
+            onUserProfileChange={vi.fn()}
             onSaveAdoc={vi.fn()}
             onSaveDocsy={vi.fn()}
             onSaveHtml={vi.fn()}
@@ -90,6 +91,7 @@ const renderHeader = (overrides: Record<string, unknown> = {}) => {
             previewOpen={false}
             showStructuredModeAction={false}
             textStats={{ charCount: 10, lines: 1, paragraphs: 1, readingTimeMin: 1, wordCount: 2 }}
+            userProfile="advanced"
             {...overrides}
           />
         </SidebarProvider>

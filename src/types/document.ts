@@ -29,6 +29,35 @@ export interface AutoSaveData {
   lastSaved: number;
 }
 
+export type DocumentPerformanceProfileKind = "normal" | "large" | "heavy";
+
+export interface DocumentPerformanceProfile {
+  blockCount: number;
+  charCount: number;
+  imageCount: number;
+  kind: DocumentPerformanceProfileKind;
+}
+
+export interface AutosaveManifestV3 {
+  activeDocId: string;
+  documentIds: string[];
+  lastSaved: number;
+  version: 3;
+}
+
+export interface StoredDocumentRecordV3 {
+  document: DocumentData;
+  documentId: string;
+  updatedAt: number;
+}
+
+export interface DirtyKnowledgeDocument {
+  documentId: string;
+  fingerprint: string;
+  profile: DocumentPerformanceProfile;
+  stage: "summary" | "full";
+}
+
 export type AutoSaveIndicatorStatus = "saving" | "saved" | "error";
 
 export interface AutoSaveIndicatorState {
