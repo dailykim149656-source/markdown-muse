@@ -6,14 +6,14 @@
       "connectionId": "google:107423509289228120824",
       "provider": "google_drive",
       "tokens": {
-        "accessToken": "ya29.a0ATkoCc4dCv5w3XK8kblpT_foSLw5m53eKwG9A-HVyeSUIAnz0GBgYor7LrCaHYx2-2GfBLrr614OVy7dM85COakSuXBGUC9XBJ2had1xITZhxx0_iMxvPhL2PRiI0L9qIx6QKqeKI7aFNwMlIr0cVOeucFfnajfOog0p-Gf5b9rF2F1JD3_LypXzpmE5OuHq5vOm-S0aCgYKAScSARQSFQHGX2Mi_PqXBnAq48kl_aosaNcSbA0206",
-        "expiryDate": 1773368290492,
-        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjUzMDcyNGQ0OTE3M2EzZWQ2YjRhMDBhYTYzNDQyMDMwMGQ3MmFlNWIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiIzOTkzNTk3ODExOTEtb244Y2tzMzEzMmNrcWsybTZtMDN1cWVoaTRsbWl0MDkuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiIzOTkzNTk3ODExOTEtb244Y2tzMzEzMmNrcWsybTZtMDN1cWVoaTRsbWl0MDkuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMDc0MjM1MDkyODkyMjgxMjA4MjQiLCJlbWFpbCI6ImRhaWx5a2ltMTQ5NjU2QGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJhdF9oYXNoIjoiM0ZyOHpxRm4zeHRDT3MzVmhiMm1TUSIsIm5hbWUiOiLquYDtmqjsl7QiLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSXVmaW8zMTJCdk91Q29FSjZIVTFHWUhFSHBMR3BsVGoxOXdWSlZlX2F4WGpNUnRzaEs9czk2LWMiLCJnaXZlbl9uYW1lIjoi7Zqo7Je0IiwiZmFtaWx5X25hbWUiOiLquYAiLCJpYXQiOjE3NzMzNjQ2OTEsImV4cCI6MTc3MzM2ODI5MX0.lPcZlp9udyYX5S7CF7oi_-A5F5AjO6J-rKdXYEFUFJV8lXTSrP63_xCU1I2HEaEmfDqsfwThjrjT4IoVxre_gALuIptYYmPX09fHXpz_e6mf5amWuq1Dkt1gyyaS2hs3SDFpFazfzHcxtAdzOOpSevDqoTp5Q-JbHfKrxd1dwo2qwOsR1h2PirFJlGh7n2uN7OejjQt7R4DvNG0ks-Nm1rzR2lXOtmiBTUO1XISN2JNL_dxK3b0xMjgJk10MzkHhBcnC0WFQ_lwOnTsMS1q92ukeTMDUfuri9dTIw9Js4Sjt66jjF5tiG3kCWUQgaPzWEIGUQpm4Tefww4Fk05wR1w",
+        "accessToken": "ya29.a0ATkoCc5hzSr3erHrrrAiMJNTPNkF6cBEpJ5zrQzjK-_q7F0yjk6KpL-6ciobHOJobiFE-yNEk6kt5u5dGBI3AofUJTHS46QOezd2PKrNogNfI__hY69GjXUE0zEk60ely5gH4Zt4pOABOUiIe9mt-AF1DTDBWTejQ8N4AuRBl5-h3kUrFrwtuPYMrlJJ1YgM-z9iW_IaCgYKAW4SARQSFQHGX2MiIROvWyzP7fPvfHOy-s_Bhw0206",
+        "expiryDate": 1773371918501,
+        "idToken": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjUzMDcyNGQ0OTE3M2EzZWQ2YjRhMDBhYTYzNDQyMDMwMGQ3MmFlNWIiLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiJodHRwczovL2FjY291bnRzLmdvb2dsZS5jb20iLCJhenAiOiIzOTkzNTk3ODExOTEtb244Y2tzMzEzMmNrcWsybTZtMDN1cWVoaTRsbWl0MDkuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJhdWQiOiIzOTkzNTk3ODExOTEtb244Y2tzMzEzMmNrcWsybTZtMDN1cWVoaTRsbWl0MDkuYXBwcy5nb29nbGV1c2VyY29udGVudC5jb20iLCJzdWIiOiIxMDc0MjM1MDkyODkyMjgxMjA4MjQiLCJlbWFpbCI6ImRhaWx5a2ltMTQ5NjU2QGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJhdF9oYXNoIjoiVzlwRm1UbXNFZkRZYmNEa0FuWTZ0dyIsIm5hbWUiOiLquYDtmqjsl7QiLCJwaWN0dXJlIjoiaHR0cHM6Ly9saDMuZ29vZ2xldXNlcmNvbnRlbnQuY29tL2EvQUNnOG9jSXVmaW8zMTJCdk91Q29FSjZIVTFHWUhFSHBMR3BsVGoxOXdWSlZlX2F4WGpNUnRzaEs9czk2LWMiLCJnaXZlbl9uYW1lIjoi7Zqo7Je0IiwiZmFtaWx5X25hbWUiOiLquYAiLCJpYXQiOjE3NzMzNjgzMTksImV4cCI6MTc3MzM3MTkxOX0.QrCtSZwcQiOaDvjUHbHGKlZm1sjnn4QCb0gZUzjwny7JP93gmSdLpemCo7A2V9cbNxqFAPERMn5l7djkSP60ueRJDTEewj9a_ghALj7RDw9rD3uzm79Xn8nHxTbMfQQ_1xVpXAgoshHN2bZrVZZYjZ-pkSmUYMthzdhF2L6b63wwxo9yjD7NBiPHxyVUYHhg-6xvyKq7vkC8rI9r8IjqxQTKhanmkk_hZfDBMJpKi_ebKVQs26XMUqxTnt0kwUz_hlRHQB9immtP7_xhQGv7DTZ-3qHH1IeyfQuy_02M2KN7K-AIWP07d9S19yP3OdjAFEHCNbHeyI-gI1TEWZME8Q",
         "refreshToken": "1//0eM-73t345rumCgYIARAAGA4SNwF-L9IrzT7TKquNnBwwLlh7pnJhpUBvFhFP-6pQeu55E3ppOw_zlOAG4DlWIGgQjFXBjZh5ORU",
-        "scope": "https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email",
+        "scope": "https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email openid https://www.googleapis.com/auth/drive.metadata.readonly",
         "tokenType": "Bearer"
       },
-      "updatedAt": 1773364691492,
+      "updatedAt": 1773368319502,
       "user": {
         "email": "dailykim149656@gmail.com",
         "name": "김효열",
