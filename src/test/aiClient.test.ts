@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fixTexCompileError, summarizeAutosaveDiff } from "@/lib/ai/client";
+import { summarizeAutosaveDiff } from "@/lib/ai/autosaveSummaryClient";
+import { fixTexCompileError } from "@/lib/ai/texAutoFixClient";
 
 describe("ai client", () => {
   afterEach(() => {

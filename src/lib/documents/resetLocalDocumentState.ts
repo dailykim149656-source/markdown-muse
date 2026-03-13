@@ -1,12 +1,12 @@
-import { clearDocumentVersionSnapshots } from "@/lib/history/versionHistoryStore";
 import { clearKnowledgeRecords } from "@/lib/knowledge/knowledgeStore";
 import { clearSourceSnapshots } from "@/lib/knowledge/sourceSnapshotStore";
 
 const RELEASE_CHECKLIST_STORAGE_KEY = "docsy-release-checklist-v1";
+const loadVersionHistoryStore = () => import("@/lib/history/versionHistoryStore");
 
 export const resetLocalDocumentState = async () => {
   await Promise.all([
-    clearDocumentVersionSnapshots(),
+    loadVersionHistoryStore().then(({ clearDocumentVersionSnapshots }) => clearDocumentVersionSnapshots()),
     clearKnowledgeRecords(),
     clearSourceSnapshots(),
   ]);

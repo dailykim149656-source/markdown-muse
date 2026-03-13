@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { buildDerivedDocumentIndex } from "@/lib/ast/documentIndex";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
 import { captureWorkspaceScreenshot } from "@/lib/ai/captureWorkspaceScreenshot";
-import { liveAgentTurn } from "@/lib/ai/client";
+import { liveAgentTurn } from "@/lib/ai/liveAgentClient";
 import { buildLiveAgentGraphContext } from "@/lib/ai/liveAgentGraphContext";
 import { buildLiveAgentPatchSet } from "@/lib/ai/liveAgentPatchBuilder";
 import { useI18n } from "@/i18n/useI18n";

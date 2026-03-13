@@ -9,7 +9,7 @@ const getTexHealthMock = vi.fn();
 const previewTexMock = vi.fn();
 const exportTexPdfMock = vi.fn();
 
-vi.mock("@/lib/ai/client", () => ({
+vi.mock("@/lib/ai/texClient", () => ({
   exportTexPdf: (...args: unknown[]) => exportTexPdfMock(...args),
   getTexHealth: (...args: unknown[]) => getTexHealthMock(...args),
   previewTex: (...args: unknown[]) => previewTexMock(...args),
@@ -26,6 +26,14 @@ const wrapper = ({ children }: { children: ReactNode }) => (
     {children}
   </I18nContext.Provider>
 );
+
+const flushAsyncValidation = async () => {
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+};
 
 describe("useTexValidation", () => {
   beforeEach(() => {
@@ -102,6 +110,7 @@ describe("useTexValidation", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
+    await flushAsyncValidation();
 
     rerender({
       latexSource: "\\section{Second}",
@@ -110,6 +119,7 @@ describe("useTexValidation", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
+    await flushAsyncValidation();
 
     await act(async () => {
       resolveFirst?.({
@@ -126,6 +136,7 @@ describe("useTexValidation", () => {
       });
       await Promise.resolve();
     });
+    await flushAsyncValidation();
 
     await act(async () => {
       resolveSecond?.({
@@ -138,6 +149,7 @@ describe("useTexValidation", () => {
       });
       await Promise.resolve();
     });
+    await flushAsyncValidation();
 
     expect(result.current.status).toBe("success");
     expect(result.current.logSummary).toBe("new");
@@ -188,6 +200,8 @@ describe("useTexValidation", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
+    await flushAsyncValidation();
+    await flushAsyncValidation();
 
     expect(result.current.previewUrl).toBe("blob:preview-1");
 
@@ -196,6 +210,7 @@ describe("useTexValidation", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
+    await flushAsyncValidation();
 
     expect(result.current.previewUrl).toBe("blob:preview-1");
     expect(result.current.status).toBe("error");

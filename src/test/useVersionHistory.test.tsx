@@ -23,7 +23,7 @@ vi.mock("@/lib/history/versionHistoryStore", () => ({
     upsertDocumentVersionSnapshot(...args),
 }));
 
-vi.mock("@/lib/ai/client", () => ({
+vi.mock("@/lib/ai/autosaveSummaryClient", () => ({
   summarizeAutosaveDiff: (...args: Parameters<typeof summarizeAutosaveDiff>) =>
     summarizeAutosaveDiff(...args),
 }));

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n/useI18n";
+import { markDocumentVersionHistoryInitialized } from "@/lib/history/versionHistoryActions";
 import type {
   DocumentData,
   DocumentVersionSnapshot,
@@ -83,6 +84,7 @@ export const useVersionHistory = ({
         if (!cancelled) {
           setVersionSnapshots(snapshots);
           initializedDocumentIdsRef.current.add(activeDoc.id);
+          markDocumentVersionHistoryInitialized(activeDoc.id);
         }
       } finally {
         if (!cancelled) {
@@ -146,7 +148,7 @@ export const useVersionHistory = ({
           { upsertDocumentVersionSnapshot },
         ] = await Promise.all([
           import("@/lib/history/autosaveDiffSummary"),
-          import("@/lib/ai/client"),
+          import("@/lib/ai/autosaveSummaryClient"),
           loadVersionHistoryStore(),
         ]);
         const request = buildAutosaveDiffSummaryRequest({

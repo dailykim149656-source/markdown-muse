@@ -183,4 +183,17 @@ describe("WorkspaceGraphPanel", () => {
       expect(screen.queryByText("Reference Only Doc")).not.toBeInTheDocument();
     });
   });
+
+  it("filters visible graph results through the search box", async () => {
+    renderPanel();
+
+    fireEvent.change(screen.getByPlaceholderText("knowledge.graphSearchPlaceholder"), {
+      target: { value: "Reference Only" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Reference Only Doc")).toBeInTheDocument();
+      expect(screen.queryByText("Other Doc")).not.toBeInTheDocument();
+    });
+  });
 });

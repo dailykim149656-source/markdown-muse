@@ -19,11 +19,11 @@ const resolveProfile = (): AppProfile => {
 export const appProfile = resolveProfile();
 
 export const featureFlags: FeatureFlags = {
-  advancedBlocksOnInitialMount: appProfile !== "web",
-  aiOnInitialMount: appProfile !== "web",
-  documentToolsOnInitialMount: appProfile !== "web",
-  historyOnInitialMount: appProfile !== "web",
-  knowledgeOnInitialMount: appProfile !== "web",
+  advancedBlocksOnInitialMount: false,
+  aiOnInitialMount: false,
+  documentToolsOnInitialMount: false,
+  historyOnInitialMount: false,
+  knowledgeOnInitialMount: false,
   profile: appProfile,
   structuredModesVisibleOnInitialMount: appProfile !== "web",
   structuredIoOnInitialMount: appProfile !== "web",

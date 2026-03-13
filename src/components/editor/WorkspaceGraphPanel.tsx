@@ -1,8 +1,14 @@
-import { Suspense, lazy, useMemo, useState } from "react";
+import { Suspense, lazy, useDeferredValue, useMemo, useState } from "react";
 import { Boxes, GitBranch, ImageIcon, Maximize2, Network, Search, SquareStack } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import GraphFilterMenus from "@/components/editor/GraphFilterMenus";
+import {
+  buildGraphConnectionSummary,
+  createPreparedGraphView,
+  filterPreparedGraphByQuery,
+} from "@/components/editor/graphViewModel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import GraphFilterMenus from "@/components/editor/GraphFilterMenus";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
@@ -12,11 +18,9 @@ import {
   resolveWorkspaceScale,
 } from "@/lib/knowledge/workspaceScale";
 import type {
-  KnowledgeGraphEdge,
   KnowledgeGraphNavigationTarget,
   KnowledgeWorkspaceInsights,
 } from "@/lib/knowledge/workspaceInsights";
-import { useNavigate } from "react-router-dom";
 import {
   type EdgeFilter,
   type GraphMode,
@@ -25,10 +29,8 @@ import {
   applyGraphMode,
   applyIssueFilter,
   edgeBadgeVariant,
-  edgeGroupOrder,
   edgeKindLabelKey,
   issueKindLabelKey,
-  nodeKindOrder,
   nodeFilterKey,
   toGraphNavigationTarget,
 } from "@/components/editor/workspaceGraphUtils";
@@ -62,91 +64,21 @@ const WorkspaceGraphPanel = ({
   const [issuesOnly, setIssuesOnly] = useState(false);
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [explorerSelectedNodeId, setExplorerSelectedNodeId] = useState<string | null>(null);
+  const deferredQuery = useDeferredValue(query);
   const workspaceScale = useMemo(() => resolveWorkspaceScale(
     insights.summary.documentNodeCount + insights.summary.sectionNodeCount + insights.summary.imageNodeCount,
     insights.summary.edgeCount,
   ), [insights.summary.documentNodeCount, insights.summary.edgeCount, insights.summary.imageNodeCount, insights.summary.sectionNodeCount]);
-
-  const nodeById = useMemo(
-    () => new Map(insights.nodes.map((node) => [node.id, node])),
-    [insights.nodes],
+  const preparedGraph = useMemo(() => createPreparedGraphView({
+    edgeFilter,
+    insights,
+    issuesOnly,
+    nodeFilter,
+  }), [edgeFilter, insights, issuesOnly, nodeFilter]);
+  const filteredGraph = useMemo(
+    () => filterPreparedGraphByQuery(preparedGraph, deferredQuery),
+    [deferredQuery, preparedGraph],
   );
-
-  const baseNodes = useMemo(
-    () => insights.nodes
-      .filter((node) =>
-        (nodeFilter === "all" || node.kind === nodeFilter)
-        && (!issuesOnly || (node.issueCount || 0) > 0))
-      .sort((left, right) =>
-        nodeKindOrder[left.kind] - nodeKindOrder[right.kind]
-        || Number(right.issueSeverity === "warning") - Number(left.issueSeverity === "warning")
-        || (right.issueCount || 0) - (left.issueCount || 0)
-        || left.label.localeCompare(right.label)),
-    [insights.nodes, issuesOnly, nodeFilter],
-  );
-
-  const baseNodeIds = useMemo(
-    () => new Set(baseNodes.map((node) => node.id)),
-    [baseNodes],
-  );
-
-  const baseEdges = useMemo(
-    () => insights.edges
-      .filter((edge) =>
-        (edgeFilter === "all" || edge.group === edgeFilter)
-        && baseNodeIds.has(edge.sourceId)
-        && baseNodeIds.has(edge.targetId))
-      .sort((left, right) =>
-        edgeGroupOrder[left.group] - edgeGroupOrder[right.group]
-        || right.weight - left.weight
-        || left.description.localeCompare(right.description)),
-    [baseNodeIds, edgeFilter, insights.edges],
-  );
-
-  const filteredGraph = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    if (!normalizedQuery) {
-      return {
-        edges: baseEdges,
-        nodes: baseNodes,
-      };
-    }
-
-    const directlyMatchedNodeIds = new Set(
-      baseNodes
-        .filter((node) => node.label.toLowerCase().includes(normalizedQuery))
-        .map((node) => node.id),
-    );
-    const matchedNodeIds = new Set(directlyMatchedNodeIds);
-    const matchedEdgeIds = new Set<string>();
-
-    for (const edge of baseEdges) {
-      const sourceLabel = nodeById.get(edge.sourceId)?.label || "";
-      const targetLabel = nodeById.get(edge.targetId)?.label || "";
-      const edgeMatches = [
-        edge.description,
-        sourceLabel,
-        targetLabel,
-      ].join(" ").toLowerCase().includes(normalizedQuery);
-
-      if (
-        edgeMatches
-        || directlyMatchedNodeIds.has(edge.sourceId)
-        || directlyMatchedNodeIds.has(edge.targetId)
-      ) {
-        matchedEdgeIds.add(edge.id);
-        matchedNodeIds.add(edge.sourceId);
-        matchedNodeIds.add(edge.targetId);
-      }
-    }
-
-    return {
-      edges: baseEdges.filter((edge) => matchedEdgeIds.has(edge.id)),
-      nodes: baseNodes.filter((node) => matchedNodeIds.has(node.id)),
-    };
-  }, [baseEdges, baseNodes, nodeById, query]);
-
   const issueFilteredGraph = useMemo(
     () => applyIssueFilter({
       graph: filteredGraph,
@@ -155,7 +87,6 @@ const WorkspaceGraphPanel = ({
     }),
     [filteredGraph, insights.issues, issueFilter],
   );
-
   const modeGraph = useMemo(
     () => applyGraphMode({
       activeDocumentId,
@@ -164,64 +95,50 @@ const WorkspaceGraphPanel = ({
     }),
     [activeDocumentId, graphMode, issueFilteredGraph],
   );
-
   const visibleNodes = modeGraph.nodes;
   const visibleEdges = modeGraph.edges;
+  const connectionSummary = useMemo(
+    () => buildGraphConnectionSummary(visibleEdges),
+    [visibleEdges],
+  );
   const hasQuery = query.trim().length > 0;
   const emptyMessage = graphMode === "issues"
     ? t("knowledge.graphIssuesEmpty")
     : hasQuery
       ? t("knowledge.graphSearchEmpty")
       : t("knowledge.graphEmpty");
-
   const visibleNodeCount = visibleNodes.length;
   const visibleEdgeCount = visibleEdges.length;
-
   const maxNodeCardCount = hasQuery ? 16 : 12;
   const hasMoreNodeCards = visibleNodeCount > maxNodeCardCount;
   const remainingNodeCardCount = visibleNodeCount - maxNodeCardCount;
   const activeDocumentNode = useMemo(
     () => activeDocumentId
-      ? insights.nodes.find((node) => node.kind === "document" && node.documentId === activeDocumentId) || null
+      ? preparedGraph.nodeById.get(`doc:${activeDocumentId}`) || null
       : null,
-    [activeDocumentId, insights.nodes],
+    [activeDocumentId, preparedGraph.nodeById],
   );
-
-  const connectionSummary = useMemo(() => {
-    const incoming = new Map<string, number>();
-    const outgoing = new Map<string, number>();
-
-    for (const edge of visibleEdges) {
-      outgoing.set(edge.sourceId, (outgoing.get(edge.sourceId) || 0) + 1);
-      incoming.set(edge.targetId, (incoming.get(edge.targetId) || 0) + 1);
-    }
-
-    return { incoming, outgoing };
-  }, [visibleEdges]);
-
+  const largeWorkspaceSimplified = workspaceScale === "large";
   const visibleNodeCards = useMemo(
     () => visibleNodes
       .map((node) => {
-        const connectedEdges = visibleEdges.filter((edge) =>
-          edge.sourceId === node.id || edge.targetId === node.id);
-        const previewEdges = connectedEdges.slice(0, 4);
+        const connectedEdges = connectionSummary.adjacencyByNodeId.get(node.id) || [];
 
         return {
           incoming: connectionSummary.incoming.get(node.id) || 0,
           node,
           outgoing: connectionSummary.outgoing.get(node.id) || 0,
-          previewEdges,
+          previewEdges: connectedEdges.slice(0, 4),
           totalConnections: connectedEdges.length,
         };
       })
       .sort((left, right) =>
-        nodeKindOrder[left.node.kind] - nodeKindOrder[right.node.kind]
+        right.totalConnections - left.totalConnections
         || Number(right.node.issueSeverity === "warning") - Number(left.node.issueSeverity === "warning")
-        || right.totalConnections - left.totalConnections
         || (right.node.issueCount || 0) - (left.node.issueCount || 0)
         || left.node.label.localeCompare(right.node.label))
       .slice(0, maxNodeCardCount),
-    [connectionSummary.incoming, connectionSummary.outgoing, maxNodeCardCount, visibleEdges, visibleNodes],
+    [connectionSummary.adjacencyByNodeId, connectionSummary.incoming, connectionSummary.outgoing, maxNodeCardCount, visibleNodes],
   );
 
   return (
@@ -432,7 +349,7 @@ const WorkspaceGraphPanel = ({
                   <div className="mt-2 space-y-1.5">
                     {previewEdges.map((edge) => {
                       const isOutgoing = edge.sourceId === node.id;
-                      const neighbor = nodeById.get(isOutgoing ? edge.targetId : edge.sourceId);
+                      const neighbor = preparedGraph.nodeById.get(isOutgoing ? edge.targetId : edge.sourceId);
                       const edgeTargetDocumentId = neighbor?.documentId || edge.targetDocumentId || edge.sourceDocumentId;
 
                       return (
@@ -458,9 +375,11 @@ const WorkspaceGraphPanel = ({
                               {neighbor?.label || t("common.untitled")}
                             </span>
                           </div>
-                          <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
-                            {edge.description}
-                          </p>
+                          {!largeWorkspaceSimplified && (
+                            <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-muted-foreground">
+                              {edge.description}
+                            </p>
+                          )}
                         </button>
                       );
                     })}
@@ -493,8 +412,8 @@ const WorkspaceGraphPanel = ({
             insights={insights}
             onOpenChange={setExplorerOpen}
             onOpenDocument={onOpenDocument}
-            selectedNodeId={explorerSelectedNodeId}
             open={explorerOpen}
+            selectedNodeId={explorerSelectedNodeId}
           />
         </Suspense>
       )}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n/useI18n";
 import {
@@ -42,6 +42,22 @@ import {
 } from "@/lib/knowledge/workspaceInsights";
 import type { CreateDocumentOptions, DocumentData } from "@/types/document";
 
+const scheduleIdleSync = (callback: () => void) => {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    const idleCallbackId = window.requestIdleCallback(callback, { timeout: 1200 });
+
+    return () => {
+      window.cancelIdleCallback(idleCallbackId);
+    };
+  }
+
+  const timeoutId = window.setTimeout(callback, 600);
+
+  return () => {
+    window.clearTimeout(timeoutId);
+  };
+};
+
 interface UseKnowledgeBaseOptions {
   activeDocumentId: string;
   createDocument: (options?: CreateDocumentOptions) => DocumentData;
@@ -67,12 +83,20 @@ export const useKnowledgeBase = ({
   const [knowledgeRescanning, setKnowledgeRescanning] = useState(false);
   const [knowledgeSyncing, setKnowledgeSyncing] = useState(false);
   const [sourceSnapshotRecords, setSourceSnapshotRecords] = useState(() => [] as ReturnType<typeof buildSourceSnapshotRecordFromKnowledgeRecord>[]);
+  const deferredDocuments = useDeferredValue(documents);
+  const deferredKnowledgeQuery = useDeferredValue(knowledgeQuery);
 
   const liveKnowledgeRecords = useMemo(
-    () => documents
+    () => deferredDocuments
       .map((document) => buildKnowledgeRecordFromDocument(document))
       .filter((record): record is KnowledgeDocumentRecord => Boolean(record)),
-    [documents],
+    [deferredDocuments],
+  );
+  const liveKnowledgeRecordSignature = useMemo(
+    () => liveKnowledgeRecords
+      .map((record) => `${record.documentId}:${record.contentHash}:${record.updatedAt}:${record.sourceUpdatedAt}`)
+      .join("|"),
+    [liveKnowledgeRecords],
   );
   const initialLiveKnowledgeRecords = useRef(liveKnowledgeRecords);
 
@@ -87,7 +111,12 @@ export const useKnowledgeBase = ({
         ]);
 
         if (!cancelled) {
-          setKnowledgeRecords(reconcileKnowledgeRecords(storedRecords, initialLiveKnowledgeRecords.current));
+          startTransition(() => {
+            setKnowledgeRecords(reconcileKnowledgeRecords(
+              mergeKnowledgeRecords(storedRecords, initialLiveKnowledgeRecords.current),
+              initialLiveKnowledgeRecords.current,
+            ));
+          });
           setSourceSnapshotRecords(storedSnapshots);
           setKnowledgeLastRescannedAt(
             storedSnapshots.reduce<number | null>(
@@ -111,40 +140,45 @@ export const useKnowledgeBase = ({
   }, []);
 
   useEffect(() => {
-    setKnowledgeRecords((previousRecords) => reconcileKnowledgeRecords(previousRecords, liveKnowledgeRecords));
-  }, [liveKnowledgeRecords]);
+    startTransition(() => {
+      setKnowledgeRecords((previousRecords) => reconcileKnowledgeRecords(
+        mergeKnowledgeRecords(previousRecords, liveKnowledgeRecords),
+        liveKnowledgeRecords,
+      ));
+    });
+  }, [liveKnowledgeRecordSignature, liveKnowledgeRecords]);
 
   useEffect(() => {
     const liveDocumentIds = new Set(liveKnowledgeRecords.map((record) => record.documentId));
-    setKnowledgeChangedSources((previousSources) =>
-      previousSources.filter((source) => liveDocumentIds.has(source.documentId)));
-  }, [liveKnowledgeRecords]);
+    startTransition(() => {
+      setKnowledgeChangedSources((previousSources) =>
+        previousSources.filter((source) => liveDocumentIds.has(source.documentId)));
+    });
+  }, [liveKnowledgeRecordSignature, liveKnowledgeRecords]);
 
   useEffect(() => {
     if (liveKnowledgeRecords.length === 0) {
       return;
     }
 
-    const timer = window.setTimeout(() => {
+    return scheduleIdleSync(() => {
       setKnowledgeSyncing(true);
 
       void upsertKnowledgeRecords(liveKnowledgeRecords)
         .then(() => {
-          setKnowledgeRecords((previousRecords) =>
-            reconcileKnowledgeRecords(
-              mergeKnowledgeRecords(previousRecords, liveKnowledgeRecords),
-              liveKnowledgeRecords,
-            ));
+          startTransition(() => {
+            setKnowledgeRecords((previousRecords) =>
+              reconcileKnowledgeRecords(
+                mergeKnowledgeRecords(previousRecords, liveKnowledgeRecords),
+                liveKnowledgeRecords,
+              ));
+          });
         })
         .finally(() => {
           setKnowledgeSyncing(false);
         });
-    }, 600);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [liveKnowledgeRecords]);
+    });
+  }, [liveKnowledgeRecordSignature, liveKnowledgeRecords]);
 
   const knowledgeSummary = useMemo(
     () => summarizeKnowledgeRecords(knowledgeRecords),
@@ -217,8 +251,8 @@ export const useKnowledgeBase = ({
   }, [activeDocumentId, knowledgeActiveImpact, knowledgeConsistencyIssues, knowledgeImpactQueue]);
 
   const knowledgeResults = useMemo(
-    () => searchKnowledgeRecords(knowledgeRecords, knowledgeQuery, 12, { mode: knowledgeSearchMode }),
-    [knowledgeRecords, knowledgeQuery, knowledgeSearchMode],
+    () => searchKnowledgeRecords(knowledgeRecords, deferredKnowledgeQuery, 12, { mode: knowledgeSearchMode }),
+    [deferredKnowledgeQuery, knowledgeRecords, knowledgeSearchMode],
   );
 
   const recentKnowledgeRecords = useMemo(

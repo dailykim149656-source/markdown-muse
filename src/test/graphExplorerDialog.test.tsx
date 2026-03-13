@@ -227,4 +227,17 @@ describe("GraphExplorerDialog", () => {
       expect(screen.getByText("knowledge.graphFilterReferences / knowledge.issueReference")).toBeInTheDocument();
     });
   });
+
+  it("filters the explorer graph through the search input", async () => {
+    renderDialog();
+
+    fireEvent.change(screen.getByPlaceholderText("knowledge.graphSearchPlaceholder"), {
+      target: { value: "Gamma" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Gamma Doc").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Beta Doc")).not.toBeInTheDocument();
+    });
+  });
 });

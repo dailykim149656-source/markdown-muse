@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
 import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
 import { setPendingEditorFocusTarget } from "@/lib/editor/editorFocusTarget";
+import { buildKnowledgeRecordFromDocument, type KnowledgeDocumentRecord } from "@/lib/knowledge/knowledgeIndex";
+import { buildKnowledgeWorkspaceInsights } from "@/lib/knowledge/workspaceInsights";
 
 const GraphExplorerSurface = lazy(() =>
   import("@/components/editor/GraphExplorerDialog").then((module) => ({
@@ -55,13 +57,24 @@ const WorkspaceGraph = () => {
     documents,
     selectDocument,
   });
+  const fallbackInsights = useMemo(() => buildKnowledgeWorkspaceInsights(
+    documents
+      .map((document) => buildKnowledgeRecordFromDocument(document))
+      .filter((record): record is KnowledgeDocumentRecord => Boolean(record)),
+  ), [documents]);
+  const effectiveInsights = useMemo(
+    () => knowledgeInsights.summary.documentNodeCount > 0 || fallbackInsights.summary.documentNodeCount === 0
+      ? knowledgeInsights
+      : fallbackInsights,
+    [fallbackInsights, knowledgeInsights],
+  );
 
   return (
     <Suspense fallback={null}>
       <GraphExplorerSurface
         activeDocumentId={activeDocId}
         contextChain={contextChain}
-        insights={knowledgeInsights}
+        insights={effectiveInsights}
         onOpenChange={(open) => {
           if (!open) {
             navigate("/editor");

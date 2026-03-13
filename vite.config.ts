@@ -122,10 +122,40 @@ export default defineConfig(({ mode }) => {
           }
 
           if (matchesSource(id, [
+            "src/components/editor/AiAssistantRuntime.tsx",
             "src/hooks/useAiAssistant.ts",
-            "src/lib/ai/",
+            "src/lib/ai/assistantClient.ts",
+            "src/lib/ai/captureWorkspaceScreenshot.ts",
+            "src/lib/ai/compareDocuments.ts",
+            "src/lib/ai/procedureExtraction.ts",
+            "src/lib/ai/sectionGeneration.ts",
+            "src/lib/ai/suggestDocumentUpdates.ts",
+            "src/lib/ai/summaryContracts.ts",
+            "src/lib/ai/tocGeneration.ts",
           ])) {
-            return "ai";
+            return "ai-assistant";
+          }
+
+          if (matchesSource(id, [
+            "src/hooks/useLiveAgent.ts",
+            "src/lib/ai/liveAgentClient.ts",
+            "src/lib/ai/liveAgentGraphContext.ts",
+            "src/lib/ai/liveAgentPatchBuilder.ts",
+          ])) {
+            return "ai-agent";
+          }
+
+          if (matchesSource(id, [
+            "src/lib/ai/autosaveSummaryClient.ts",
+          ])) {
+            return "ai-history";
+          }
+
+          if (matchesSource(id, [
+            "src/lib/ai/httpClient.ts",
+            "src/lib/ai/texClient.ts",
+          ])) {
+            return "ai-shared";
           }
 
           if (matchesSource(id, [

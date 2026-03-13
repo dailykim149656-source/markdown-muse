@@ -43,7 +43,6 @@ interface AiAssistantRuntimeProps {
   documents: DocumentData[];
   importWorkspaceDocument: (fileId: string) => Promise<void>;
   loadPatchSet: (patchSet: DocumentPatchSet) => void;
-  openPatchReview: () => void;
   openWorkspaceConnection: () => void;
   onStateChange: (state: AiAssistantRuntimeState | null) => void;
 }
@@ -56,7 +55,6 @@ const AiAssistantRuntime = ({
   documents,
   importWorkspaceDocument,
   loadPatchSet,
-  openPatchReview,
   openWorkspaceConnection,
   onStateChange,
 }: AiAssistantRuntimeProps) => {
@@ -76,7 +74,6 @@ const AiAssistantRuntime = ({
     onImportDriveDocument: importWorkspaceDocument,
     onOpenPatchReview: (patchSet) => {
       loadPatchSet(patchSet);
-      openPatchReview();
     },
     onOpenWorkspaceConnection: openWorkspaceConnection,
   });

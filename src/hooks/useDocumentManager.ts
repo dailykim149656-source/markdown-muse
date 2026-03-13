@@ -366,6 +366,8 @@ export const useDocumentManager = () => {
       ? documents.map((document) => document.id === replaceDocumentId ? newDoc : document)
       : [...documents, newDoc];
 
+    documentsRef.current = nextDocuments;
+    activeDocIdRef.current = newDoc.id;
     setDocuments(nextDocuments);
     setActiveDocId(newDoc.id);
     setEditorKey((key) => key + 1);

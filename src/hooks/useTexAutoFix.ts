@@ -1,6 +1,5 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-import { fixTexCompileError } from "@/lib/ai/client";
 import { useI18n } from "@/i18n/useI18n";
 import type { DocumentPatchSet, PatchSourceAttribution } from "@/types/documentPatch";
 import type { TexDiagnostic, TexSourceType } from "@/types/tex";
@@ -49,6 +48,7 @@ export const useTexAutoFix = ({
     setIsFixing(true);
 
     try {
+      const { fixTexCompileError } = await import("@/lib/ai/texAutoFixClient");
       const result = await fixTexCompileError({
         diagnostics,
         documentName,

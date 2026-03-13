@@ -1,6 +1,6 @@
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import type { Editor } from "@tiptap/react";
-import { useRef, useState } from "react";
+import { Suspense, lazy, useRef, useState } from "react";
 import {
   AlignCenter,
   AlignJustify,
@@ -33,7 +33,6 @@ import {
   Unlink,
 } from "lucide-react";
 import AdvancedColorPicker from "./AdvancedColorPicker";
-import MathRender from "./MathRender";
 import { FONT_FAMILIES, FONT_SIZES } from "./fonts";
 import type { EditorCommand } from "./editorSelectionMemory";
 import { Button } from "@/components/ui/button";
@@ -89,6 +88,7 @@ interface ToolbarFeatureSectionProps extends ToolbarSectionProps {
 }
 
 const sectionSurfaceClassName = "rounded-lg border border-border/70 bg-background/80 p-3";
+const MathRender = lazy(() => import("./MathRender"));
 
 const ToolbarSection = ({
   children,
@@ -978,11 +978,13 @@ export const MathInsertSection = ({
         />
         {latex ? (
           <div className="rounded-md border border-border bg-background p-3">
-            <MathRender
-              displayMode={mode === "block"}
-              latex={latex}
-              renderErrorLabel={t("toolbar.math.renderError")}
-            />
+            <Suspense fallback={<span className="font-mono text-sm text-muted-foreground/80">{latex}</span>}>
+              <MathRender
+                displayMode={mode === "block"}
+                latex={latex}
+                renderErrorLabel={t("toolbar.math.renderError")}
+              />
+            </Suspense>
           </div>
         ) : null}
         <Button

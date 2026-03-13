@@ -18,6 +18,8 @@ export type GraphLayoutPoint = {
   y: number;
 };
 
+export type GraphLayoutMode = "selected" | "stable";
+
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const toPolarPoint = (radius: number, index: number, total: number, offsetRadians = -Math.PI / 2) => {
@@ -87,20 +89,24 @@ const spreadRing = (
 
 export const buildGraphNodeLayout = ({
   edges,
+  layoutMode = "selected",
   nodes,
   selectedNodeId,
 }: {
   edges: KnowledgeGraphEdge[];
+  layoutMode?: GraphLayoutMode;
   nodes: KnowledgeGraphNode[];
   selectedNodeId: string | null;
 }) => {
   const positions = new Map<string, GraphLayoutPoint>();
   const sortedNodes = [...nodes].sort((left, right) =>
-    Number(right.id === selectedNodeId) - Number(left.id === selectedNodeId)
+    (layoutMode === "selected"
+      ? Number(right.id === selectedNodeId) - Number(left.id === selectedNodeId)
+      : 0)
     || sortNodes(left, right));
   const nodeById = new Map(sortedNodes.map((node) => [node.id, node]));
 
-  if (selectedNodeId && nodeById.has(selectedNodeId)) {
+  if (layoutMode === "selected" && selectedNodeId && nodeById.has(selectedNodeId)) {
     positions.set(selectedNodeId, withLabelPlacement({
       angle: Math.PI / 2,
       x: GRAPH_CANVAS_CENTER_X,

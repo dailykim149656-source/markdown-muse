@@ -1,32 +1,32 @@
 {
   "baseUrl": "http://127.0.0.1:4177",
-  "capturedAt": "2026-03-12T01:12:39.535Z",
+  "capturedAt": "2026-03-13T14:06:34.811Z",
   "results": [
     {
       "documentCount": 10,
-      "editorLoadMs": 631,
-      "graphFilterSearchMs": 105,
-      "graphRouteOpenMs": 1002,
-      "knowledgeSearchMs": 477,
-      "queueCreationToReadyMs": 14013,
+      "editorLoadMs": 1526,
+      "graphFilterSearchMs": 123,
+      "graphRouteOpenMs": 504,
+      "knowledgeSearchMs": 688,
+      "queueCreationToReadyMs": 8195,
       "tier": "small"
     },
     {
       "documentCount": 40,
-      "editorLoadMs": 432,
-      "graphFilterSearchMs": 128,
-      "graphRouteOpenMs": 954,
-      "knowledgeSearchMs": 498,
-      "queueCreationToReadyMs": 14854,
+      "editorLoadMs": 324,
+      "graphFilterSearchMs": 120,
+      "graphRouteOpenMs": 224,
+      "knowledgeSearchMs": 454,
+      "queueCreationToReadyMs": 7370,
       "tier": "medium"
     },
     {
       "documentCount": 90,
-      "editorLoadMs": 592,
-      "graphFilterSearchMs": 310,
-      "graphRouteOpenMs": 1222,
-      "knowledgeSearchMs": 514,
-      "queueCreationToReadyMs": 15712,
+      "editorLoadMs": 398,
+      "graphFilterSearchMs": 297,
+      "graphRouteOpenMs": 511,
+      "knowledgeSearchMs": 610,
+      "queueCreationToReadyMs": 9729,
       "tier": "large"
     }
   ]

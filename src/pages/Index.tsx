@@ -1,8 +1,13 @@
 import type { JSONContent } from "@tiptap/core";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { useSearchParams } from "react-router-dom";
 import type { AiAssistantRuntimeState } from "@/components/editor/AiAssistantRuntime";
+import type { DocumentIORuntimeState } from "@/components/editor/DocumentIORuntime";
+import type { DocumentSupportRuntimeState } from "@/components/editor/DocumentSupportRuntime";
+import type { PreviewRuntimeState } from "@/components/editor/PreviewRuntime";
+import type { WorkspaceRuntimeState } from "@/components/editor/WorkspaceRuntime";
 import {
   htmlHasAdvancedContent,
   htmlHasDocumentContent,
@@ -15,19 +20,9 @@ import type { DocumentTemplate } from "@/components/editor/TemplateDialog";
 import type { PlainTextFindReplaceAdapter } from "@/components/editor/findReplaceTypes";
 import type { KnowledgeSuggestionContext, KnowledgeSuggestionQueueItem } from "@/components/editor/sidebarFeatureTypes";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
-import { MAX_IMPORT_FILE_SIZE_BYTES, resolveImportedDocumentOptions, useDocumentIO } from "@/hooks/useDocumentIO";
 import { useEditorUiState } from "@/hooks/useEditorUiState";
 import { useFormatConversion } from "@/hooks/useFormatConversion";
-import { usePatchReview } from "@/hooks/usePatchReview";
-import { useTexAutoFix } from "@/hooks/useTexAutoFix";
-import { useTexValidation } from "@/hooks/useTexValidation";
-import { useWorkspaceFiles } from "@/hooks/useWorkspaceFiles";
-import { useWorkspaceAuth } from "@/hooks/useWorkspaceAuth";
-import { useWorkspaceChanges } from "@/hooks/useWorkspaceChanges";
-import { useWorkspaceExport } from "@/hooks/useWorkspaceExport";
-import { useWorkspaceSync } from "@/hooks/useWorkspaceSync";
 import { useI18n } from "@/i18n/useI18n";
-import { useVersionHistory } from "@/hooks/useVersionHistory";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
 import { featureFlags, isWebProfile } from "@/lib/appProfile";
 import {
@@ -47,8 +42,18 @@ import {
 } from "@/lib/editor/modeFamilies";
 import { resetLocalDocumentState } from "@/lib/documents/resetLocalDocumentState";
 import { RESTORED_SESSION_TOAST_ID, showRestoredSessionToast } from "@/lib/documents/restoredSessionToast";
+import { getTemplateFallbackContent as getSharedTemplateFallbackContent } from "@/lib/editor/templateFallback";
+import {
+  captureAutoSaveVersionSnapshot,
+  createVersionHistorySnapshot,
+  removeDocumentVersionHistory,
+} from "@/lib/history/versionHistoryActions";
+import {
+  MAX_IMPORT_FILE_SIZE_BYTES,
+  resolveImportedDocumentOptions,
+} from "@/lib/io/documentIoShared";
 import { DOC_SHARE_HASH_PREFIX } from "@/lib/share/shareConstants";
-import type { EditorMode } from "@/types/document";
+import type { DocumentVersionSnapshotMetadata, EditorMode } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
 import type { AgentNewDocumentDraft } from "@/types/liveAgent";
 import { toast } from "sonner";
@@ -58,6 +63,10 @@ const LatexEditor = lazy(() => import("@/components/editor/LatexEditor"));
 const HtmlEditor = lazy(() => import("@/components/editor/HtmlEditor"));
 const JsonYamlEditor = lazy(() => import("@/components/editor/JsonYamlEditor"));
 const AiAssistantRuntime = lazy(() => import("@/components/editor/AiAssistantRuntime"));
+const DocumentIORuntime = lazy(() => import("@/components/editor/DocumentIORuntime"));
+const DocumentSupportRuntime = lazy(() => import("@/components/editor/DocumentSupportRuntime"));
+const PreviewRuntime = lazy(() => import("@/components/editor/PreviewRuntime"));
+const WorkspaceRuntime = lazy(() => import("@/components/editor/WorkspaceRuntime"));
 const WorkspaceConnectionDialog = lazy(() => import("@/components/editor/WorkspaceConnectionDialog"));
 const WorkspaceExportDialog = lazy(() => import("@/components/editor/WorkspaceExportDialog"));
 const WorkspaceImportDialog = lazy(() => import("@/components/editor/WorkspaceImportDialog"));
@@ -90,6 +99,52 @@ interface PendingImpactSuggestionEntry {
   sourceDocumentId: string;
   targetDocumentId: string;
 }
+
+type PendingDocumentSupportIntent =
+  | { type: "open-patch-review" }
+  | { openAfterLoad?: boolean; patchSet: DocumentPatchSet; type: "load-patch-set" };
+
+type PendingWorkspaceAction =
+  | { type: "open-connection-dialog" }
+  | { type: "open-export-dialog" }
+  | { type: "open-import-dialog" }
+  | { type: "save-bound-document" }
+  | { type: "connect-workspace" }
+  | { type: "disconnect-workspace" }
+  | { fileId: string; type: "import-workspace-file" }
+  | { title: string; type: "export-workspace-document" }
+  | { documentId: string; type: "refresh-workspace-document" }
+  | { type: "rescan-workspace-changes" };
+
+type PendingIoAction =
+  | { type: "copy-html" }
+  | { type: "copy-json" }
+  | { type: "copy-md" }
+  | { type: "copy-share-link" }
+  | { type: "copy-yaml" }
+  | { type: "load-file" }
+  | { type: "open-share-dialog" }
+  | { type: "print" }
+  | { type: "save-adoc" }
+  | { type: "save-docsy" }
+  | { type: "save-html" }
+  | { type: "save-json" }
+  | { type: "save-md" }
+  | { type: "save-pdf" }
+  | { type: "save-rst" }
+  | { type: "save-tex" }
+  | { type: "save-typst" }
+  | { type: "save-yaml" };
+
+const scheduleIdleMount = (callback: () => void) => {
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    const id = window.requestIdleCallback(callback, { timeout: 1500 });
+    return () => window.cancelIdleCallback(id);
+  }
+
+  const timeoutId = window.setTimeout(callback, 600);
+  return () => window.clearTimeout(timeoutId);
+};
 
 const aiIntentRequiresRichTextReadiness = (intent: PendingAiIntent) =>
   intent.type === "generate-toc" || intent.type === "suggest-updates";
@@ -284,6 +339,16 @@ const Index = () => {
   const [aiRuntimeEnabled, setAiRuntimeEnabled] = useState(() => featureFlags.aiOnInitialMount);
   const [aiRuntimeState, setAiRuntimeState] = useState<AiAssistantRuntimeState | null>(null);
   const [pendingAiIntent, setPendingAiIntent] = useState<PendingAiIntent | null>(null);
+  const [ioRuntimeEnabled, setIoRuntimeEnabled] = useState(false);
+  const [ioRuntimeState, setIoRuntimeState] = useState<DocumentIORuntimeState | null>(null);
+  const [pendingIoAction, setPendingIoAction] = useState<PendingIoAction | null>(null);
+  const [documentSupportRuntimeEnabled, setDocumentSupportRuntimeEnabled] = useState(false);
+  const [documentSupportRuntimeState, setDocumentSupportRuntimeState] = useState<DocumentSupportRuntimeState | null>(null);
+  const [pendingDocumentSupportIntent, setPendingDocumentSupportIntent] = useState<PendingDocumentSupportIntent | null>(null);
+  const [previewRuntimeState, setPreviewRuntimeState] = useState<PreviewRuntimeState | null>(null);
+  const [workspaceRuntimeEnabled, setWorkspaceRuntimeEnabled] = useState(false);
+  const [workspaceRuntimeState, setWorkspaceRuntimeState] = useState<WorkspaceRuntimeState | null>(null);
+  const [pendingWorkspaceAction, setPendingWorkspaceAction] = useState<PendingWorkspaceAction | null>(null);
   const [suggestionQueue, setSuggestionQueue] = useState<SuggestionQueueEntry[]>([]);
   const [historyEnabled, setHistoryEnabled] = useState(() => featureFlags.historyOnInitialMount);
   const [knowledgeEnabled, setKnowledgeEnabled] = useState(() => featureFlags.knowledgeOnInitialMount);
@@ -296,6 +361,7 @@ const Index = () => {
   const [workspaceExportOpen, setWorkspaceExportOpen] = useState(false);
   const [workspaceImportOpen, setWorkspaceImportOpen] = useState(false);
   const [pendingLatexSourceLine, setPendingLatexSourceLine] = useState<number | null>(null);
+  const shellFileInputRef = useRef<HTMLInputElement | null>(null);
   const {
     activeDoc,
     activeDocId,
@@ -351,170 +417,293 @@ const Index = () => {
     editorKey,
     updateActiveDoc,
   });
-  const workspaceAuth = useWorkspaceAuth();
-  const {
-    captureAutoSaveSnapshot,
-    createVersionSnapshot,
-    removeDocumentVersionSnapshots,
-    restoreVersionSnapshot,
-    versionHistoryReady,
-    versionHistoryRestoring,
-    versionHistorySnapshots,
-    versionHistorySyncing,
-  } = useVersionHistory({
-    activeDoc,
-    aiSummaryAvailable: workspaceAuth.aiSummaryAvailable,
-    bumpEditorKey,
-    enabled: historyEnabled,
-    updateActiveDoc,
-  });
-  const {
-    isSyncing: workspaceSyncing,
-    syncDocument,
-  } = useWorkspaceSync({
-    updateActiveDoc,
-  });
-  const {
-    error: workspaceExportError,
-    exportDocument: exportWorkspaceDocument,
-    isExporting: workspaceExporting,
-  } = useWorkspaceExport({
-    updateActiveDoc,
-  });
-  const {
-    acceptedPatchCount,
-    applyReviewedPatches,
-    clearPatchSet,
-    closePatchReview,
-    handleAcceptPatch,
-    handleEditPatch,
-    handleRejectPatch,
-    loadPatchSet,
-    openPatchReview,
-    patchCount,
-    patchReviewOpen,
-    patchSet,
-  } = usePatchReview({
-    activeDoc,
-    activeEditor,
-    bumpEditorKey,
-    onWorkspaceSync: syncDocument,
-    onVersionSnapshot: (document, metadata) => createVersionSnapshot(document, "patch_apply", metadata),
-    setLiveEditorHtml,
-    updateActiveDoc,
-  });
-  const {
-    fileInputRef,
-    importState,
-    prepareShareLink,
-    shareLinkInfo,
-    handleCopyHtml,
-    handleCopyJson,
-    handleCopyMd,
-    handleCopyShareLink,
-    handleCopyYaml,
-    handleFileChange,
-    handleLoad,
-    handlePrint,
-    handleSaveAdoc,
-    handleSaveDocsy,
-    handleSaveHtml,
-    handleSaveJson,
-    handleSaveMd,
-    handleSavePdf,
-    handleSaveRst,
-    handleSaveTex,
-    handleSaveTypst,
-    handleSaveYaml,
-  } = useDocumentIO({
-    activeDoc,
-    createDocument,
-    documents,
-    onPatchSetLoad: loadPatchSet,
-    onVersionSnapshot: (metadata) => createVersionSnapshot(activeDoc, "export", metadata),
-    renderableEditorHtml: currentRenderableHtml,
-    renderableLatexDocument: currentRenderableLatexDocument,
-    renderableMarkdown: currentRenderableMarkdown,
-  });
-  const texValidation = useTexValidation({
-    documentName: activeDoc.name,
-    latexSource: activeDoc.mode === "latex"
-      ? activeDoc.content
-      : currentRenderableLatexDocument,
-    mode: activeDoc.mode,
-    onPdfExported: () => {
-      void createVersionSnapshot(activeDoc, "export", { exportFormat: "XeLaTeX PDF" });
+  const recordVersionSnapshot = useCallback((
+    document: typeof activeDoc,
+    trigger: "autosave" | "export" | "patch_apply",
+    metadata?: DocumentVersionSnapshotMetadata,
+  ) => createVersionHistorySnapshot(document, trigger, metadata), []);
+  const requestPatchReviewOpen = useCallback(() => {
+    if (documentSupportRuntimeState) {
+      documentSupportRuntimeState.openPatchReview();
+      return;
+    }
+
+    setDocumentSupportRuntimeEnabled(true);
+    setPendingDocumentSupportIntent({ type: "open-patch-review" });
+  }, [documentSupportRuntimeState]);
+  const requestPatchSetLoad = useCallback((nextPatchSet: DocumentPatchSet) => {
+    if (documentSupportRuntimeState) {
+      documentSupportRuntimeState.loadPatchSet(nextPatchSet);
+      return;
+    }
+
+    setDocumentSupportRuntimeEnabled(true);
+    setPendingDocumentSupportIntent({
+      patchSet: nextPatchSet,
+      type: "load-patch-set",
+    });
+  }, [documentSupportRuntimeState]);
+  const openPatchReview = requestPatchReviewOpen;
+  const loadPatchSet = requestPatchSetLoad;
+  const ensureWorkspaceRuntime = useCallback((pendingAction?: PendingWorkspaceAction) => {
+    setWorkspaceRuntimeEnabled(true);
+
+    if (pendingAction) {
+      setPendingWorkspaceAction(pendingAction);
+    }
+  }, []);
+  const ensureIoRuntime = useCallback((pendingAction?: PendingIoAction) => {
+    setIoRuntimeEnabled(true);
+
+    if (pendingAction) {
+      setPendingIoAction(pendingAction);
+    }
+  }, []);
+  const workspaceSyncing = workspaceRuntimeState?.isSyncing ?? false;
+  const workspaceExporting = workspaceRuntimeState?.isExporting ?? false;
+  const fileInputRef = ioRuntimeState?.fileInputRef ?? shellFileInputRef;
+  const importState = ioRuntimeState?.importState ?? {
+    error: null,
+    fileName: null,
+    progress: null,
+    status: "idle" as const,
+  };
+  const shareLinkInfo = ioRuntimeState?.shareLinkInfo ?? { available: false, link: null };
+  const handleCopyHtml = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleCopyHtml();
+      return;
+    }
+
+    ensureIoRuntime({ type: "copy-html" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleCopyJson = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleCopyJson();
+      return;
+    }
+
+    ensureIoRuntime({ type: "copy-json" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleCopyMd = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleCopyMd();
+      return;
+    }
+
+    ensureIoRuntime({ type: "copy-md" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleCopyShareLink = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleCopyShareLink();
+      return;
+    }
+
+    ensureIoRuntime({ type: "copy-share-link" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleCopyYaml = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleCopyYaml();
+      return;
+    }
+
+    ensureIoRuntime({ type: "copy-yaml" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    ioRuntimeState?.handleFileChange(event);
+  }, [ioRuntimeState]);
+  const handleLoad = useCallback(() => {
+    if (ioRuntimeState) {
+      ioRuntimeState.handleLoad();
+      return;
+    }
+
+    ensureIoRuntime({ type: "load-file" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handlePrint = useCallback(() => {
+    if (ioRuntimeState) {
+      ioRuntimeState.handlePrint();
+      return;
+    }
+
+    ensureIoRuntime({ type: "print" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleSaveAdoc = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleSaveAdoc();
+      return;
+    }
+
+    ensureIoRuntime({ type: "save-adoc" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleSaveDocsy = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleSaveDocsy();
+      return;
+    }
+
+    ensureIoRuntime({ type: "save-docsy" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleSaveHtml = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleSaveHtml();
+      return;
+    }
+
+    ensureIoRuntime({ type: "save-html" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleSaveJson = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleSaveJson();
+      return;
+    }
+
+    ensureIoRuntime({ type: "save-json" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleSaveMd = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleSaveMd();
+      return;
+    }
+
+    ensureIoRuntime({ type: "save-md" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleSavePdf = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleSavePdf();
+      return;
+    }
+
+    ensureIoRuntime({ type: "save-pdf" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleSaveRst = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleSaveRst();
+      return;
+    }
+
+    ensureIoRuntime({ type: "save-rst" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleSaveTex = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleSaveTex();
+      return;
+    }
+
+    ensureIoRuntime({ type: "save-tex" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleSaveTypst = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleSaveTypst();
+      return;
+    }
+
+    ensureIoRuntime({ type: "save-typst" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleSaveYaml = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.handleSaveYaml();
+      return;
+    }
+
+    ensureIoRuntime({ type: "save-yaml" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const handleOpenShare = useCallback(() => {
+    if (ioRuntimeState) {
+      void ioRuntimeState.prepareShareLink().finally(() => setShareDialogOpen(true));
+      return;
+    }
+
+    ensureIoRuntime({ type: "open-share-dialog" });
+  }, [ensureIoRuntime, ioRuntimeState]);
+  const syncDocument = useCallback(async (
+    document: typeof activeDoc,
+    options?: {
+      markdown?: string;
     },
-  });
-  const {
-    generatePatchSet: generateTexAutoFixPatchSet,
-    isFixing: isFixingTexAutoFix,
-  } = useTexAutoFix({
-    diagnostics: texValidation.diagnostics,
-    documentId: activeDoc.id,
-    documentName: activeDoc.name,
-    latexSource: activeDoc.content,
-    logSummary: texValidation.logSummary,
-    sourceType: texValidation.sourceType,
-  });
-  const handleOpenTexAutoFixReview = useCallback(async () => {
-    const nextPatchSet = await generateTexAutoFixPatchSet();
-    loadPatchSet(nextPatchSet);
-    openPatchReview();
-  }, [generateTexAutoFixPatchSet, loadPatchSet, openPatchReview]);
-  const canAiFixTex = texValidation.validationEnabled
-    && texValidation.status === "error"
-    && texValidation.sourceType === "raw-latex"
-    && texValidation.diagnostics.length > 0;
+  ) => {
+    if (!workspaceRuntimeState) {
+      ensureWorkspaceRuntime();
+      return null;
+    }
+
+    return workspaceRuntimeState.syncDocument(document, options);
+  }, [ensureWorkspaceRuntime, workspaceRuntimeState]);
+  const refetchWorkspaceFiles = useCallback(() => {
+    if (workspaceRuntimeState) {
+      void workspaceRuntimeState.refetchFiles();
+      return;
+    }
+
+    ensureWorkspaceRuntime();
+  }, [ensureWorkspaceRuntime, workspaceRuntimeState]);
+  const setWorkspaceFileQuery = useCallback((value: string) => {
+    if (workspaceRuntimeState) {
+      workspaceRuntimeState.setQuery(value);
+      return;
+    }
+
+    ensureWorkspaceRuntime();
+  }, [ensureWorkspaceRuntime, workspaceRuntimeState]);
+  const closePatchReview = useCallback(() => {
+    documentSupportRuntimeState?.closePatchReview();
+  }, [documentSupportRuntimeState]);
+  const clearPatchSet = useCallback(() => {
+    documentSupportRuntimeState?.clearPatchSet();
+  }, [documentSupportRuntimeState]);
+  const handleAcceptPatch = useCallback((patch: import("@/types/documentPatch").DocumentPatch) => {
+    documentSupportRuntimeState?.handleAcceptPatch(patch);
+  }, [documentSupportRuntimeState]);
+  const handleEditPatch = useCallback((
+    patch: import("@/types/documentPatch").DocumentPatch,
+    suggestedText: string,
+  ) => {
+    documentSupportRuntimeState?.handleEditPatch(patch, suggestedText);
+  }, [documentSupportRuntimeState]);
+  const handleRejectPatch = useCallback((patch: import("@/types/documentPatch").DocumentPatch) => {
+    documentSupportRuntimeState?.handleRejectPatch(patch);
+  }, [documentSupportRuntimeState]);
+  const applyReviewedPatches = useCallback(async () => {
+    await documentSupportRuntimeState?.applyReviewedPatches();
+  }, [documentSupportRuntimeState]);
+  const restoreVersionSnapshot = useCallback(async (snapshotId: string) => {
+    await documentSupportRuntimeState?.restoreVersionSnapshot(snapshotId);
+  }, [documentSupportRuntimeState]);
+  const acceptedPatchCount = documentSupportRuntimeState?.acceptedPatchCount ?? 0;
+  const patchCount = documentSupportRuntimeState?.patchCount ?? 0;
+  const patchReviewOpen = documentSupportRuntimeState?.patchReviewOpen ?? false;
+  const patchSet = documentSupportRuntimeState?.patchSet ?? null;
+  const versionHistoryReady = documentSupportRuntimeState?.versionHistoryReady ?? false;
+  const versionHistoryRestoring = documentSupportRuntimeState?.versionHistoryRestoring ?? false;
+  const versionHistorySnapshots = documentSupportRuntimeState?.versionHistorySnapshots ?? [];
+  const versionHistorySyncing = documentSupportRuntimeState?.versionHistorySyncing ?? false;
 
   useEffect(() => {
     setPendingLatexSourceLine(null);
   }, [activeDoc.id, activeDoc.mode]);
-  const {
-    connected: workspaceConnected,
-    connectivityDiagnostic,
-    disconnect: disconnectWorkspace,
-    error: workspaceAuthError,
-    isConnecting: workspaceConnecting,
-    isDisconnecting: workspaceDisconnecting,
-    isLoading: workspaceAuthLoading,
-    openGoogleConnect,
-    refetch: refetchWorkspaceAuth,
-    session: workspaceSession,
-  } = workspaceAuth;
-  const {
-    error: workspaceFilesError,
-    files: workspaceFiles,
-    importFile: importWorkspaceFile,
-    isImporting: workspaceImporting,
-    isLoading: workspaceFilesLoading,
-    isRefreshing: workspaceFilesRefreshing,
-    query: workspaceFileQuery,
-    refetch: refetchWorkspaceFiles,
-    setQuery: setWorkspaceFileQuery,
-  } = useWorkspaceFiles({
-    enabled: workspaceImportOpen && workspaceConnected,
-  });
-  const {
-    error: workspaceChangesError,
-    isRefreshingDocument: workspaceRefreshingDocument,
-    isRescanning: workspaceChangesRescanning,
-    lastRescannedAt: workspaceLastRescannedAt,
-    refreshDocument: refreshWorkspaceDocument,
-    remoteChangedSources,
-    rescan: rescanWorkspaceChanges,
-  } = useWorkspaceChanges({
-    documents,
-    enabled: workspaceConnected,
-    onImportRefresh: (importedDocument) => {
-      createDocument(resolveImportedDocumentOptions({
-        activeDocId,
-        documents,
-        importedDocument,
-      }));
-    },
-    updateDocument,
-  });
+  const workspaceConnected = workspaceRuntimeState?.connected ?? false;
+  const connectivityDiagnostic = workspaceRuntimeState?.connectivityDiagnostic ?? null;
+  const workspaceAuthError = workspaceRuntimeState?.authError ?? null;
+  const workspaceConnecting = workspaceRuntimeState?.isConnecting ?? false;
+  const workspaceDisconnecting = workspaceRuntimeState?.isDisconnecting ?? false;
+  const workspaceAuthLoading = workspaceRuntimeState?.isAuthLoading ?? false;
+  const workspaceSession = workspaceRuntimeState?.session ?? {
+    connected: false,
+    provider: null,
+    user: null,
+  };
+  const workspaceFiles = workspaceRuntimeState?.files ?? [];
+  const workspaceImporting = workspaceRuntimeState?.isImporting ?? false;
+  const workspaceFilesLoading = workspaceRuntimeState
+    ? workspaceRuntimeState.isFilesLoading
+    : workspaceImportOpen;
+  const workspaceFilesRefreshing = workspaceRuntimeState?.isRefreshingFiles ?? false;
+  const workspaceFileQuery = workspaceRuntimeState?.query ?? "";
+  const workspaceChangesError = workspaceRuntimeState?.changesError ?? null;
+  const workspaceRefreshingDocument = workspaceRuntimeState?.isRefreshingDocument ?? false;
+  const workspaceChangesRescanning = workspaceRuntimeState?.isRescanning ?? false;
+  const workspaceLastRescannedAt = workspaceRuntimeState?.lastRescannedAt ?? null;
+  const remoteChangedSources = workspaceRuntimeState?.remoteChangedSources ?? [];
   const availableModes = useMemo(
     () => getSameFamilyModes(activeDoc.mode),
     [activeDoc.mode],
@@ -523,10 +712,10 @@ const Index = () => {
     () => getCrossFamilyModes(activeDoc.mode),
     [activeDoc.mode],
   );
-  const documentFeaturesEnabled = !isWebProfile || documentToolsPreference;
-  const advancedBlocksEnabled = !isWebProfile || advancedBlocksPreference;
-  const canEnableDocumentFeatures = isWebProfile && activeDoc.mode !== "json" && activeDoc.mode !== "yaml";
-  const canEnableAdvancedBlocks = isWebProfile && activeDoc.mode !== "json" && activeDoc.mode !== "yaml";
+  const documentFeaturesEnabled = documentToolsPreference;
+  const advancedBlocksEnabled = advancedBlocksPreference;
+  const canEnableDocumentFeatures = activeDoc.mode !== "json" && activeDoc.mode !== "yaml";
+  const canEnableAdvancedBlocks = activeDoc.mode !== "json" && activeDoc.mode !== "yaml";
 
   const enableStructuredModes = useCallback(() => {
     setStructuredModesVisible(true);
@@ -602,13 +791,6 @@ const Index = () => {
         }));
       }
 
-      if (
-        (intent.openPatchReviewAfter || result?.actionProposal?.action === "open_patch_review")
-        && result?.patchSet
-        && (result.patchCount || 0) > 0
-      ) {
-        openPatchReview();
-      }
     } catch (error) {
       if (intent.queueEntryId) {
         updateSuggestionQueueEntry(intent.queueEntryId, (entry) => ({
@@ -623,7 +805,7 @@ const Index = () => {
 
       throw error;
     }
-  }, [aiRuntimeState, openPatchReview, t, updateSuggestionQueueEntry]);
+  }, [aiRuntimeState, t, updateSuggestionQueueEntry]);
 
   const requestAiIntent = useCallback((intent: PendingAiIntent) => {
     const richTextReady = !aiIntentRequiresRichTextReadiness(intent)
@@ -747,8 +929,7 @@ const Index = () => {
     }
 
     loadPatchSet(entry.patchSet);
-    openPatchReview();
-  }, [loadPatchSet, openPatchReview, suggestionQueue]);
+  }, [loadPatchSet, suggestionQueue]);
   const handleDismissSuggestionQueueItem = useCallback((entryId: string) => {
     setSuggestionQueue((current) => current.filter((entry) => entry.id !== entryId));
   }, []);
@@ -802,122 +983,136 @@ const Index = () => {
       return next;
     }, { replace: true });
   }, [setSearchParams]);
-  const workspaceErrorMessage = useMemo(() => {
-    if (!(workspaceAuthError instanceof Error)) {
-      return null;
+  useEffect(() => {
+    if (searchParams.get("workspaceAuth") || searchParams.get("workspaceAuthError") || aiRuntimeEnabled) {
+      setWorkspaceRuntimeEnabled(true);
+    }
+  }, [aiRuntimeEnabled, searchParams]);
+
+  useEffect(() => {
+    if (workspaceRuntimeEnabled || !documents.some((document) => document.workspaceBinding)) {
+      return;
     }
 
-    if (workspaceAuthError.message.includes("Workspace API is not reachable")) {
-      return t("hooks.workspace.apiUnreachable", {
-        target: connectivityDiagnostic?.target || "/api",
-      });
+    return scheduleIdleMount(() => {
+      setWorkspaceRuntimeEnabled(true);
+    });
+  }, [documents, workspaceRuntimeEnabled]);
+
+  useEffect(() => {
+    if (!ioRuntimeState || !pendingIoAction) {
+      return;
     }
 
-    return workspaceAuthError.message;
-  }, [connectivityDiagnostic?.target, t, workspaceAuthError]);
-  const workspaceExportErrorMessage = workspaceExportError instanceof Error ? workspaceExportError.message : null;
-  const workspaceImportErrorMessage = workspaceFilesError instanceof Error ? workspaceFilesError.message : null;
-  const workspaceChangesErrorMessage = workspaceChangesError instanceof Error ? workspaceChangesError.message : null;
-  const workspaceExportEnabled = activeDoc.mode !== "json" && activeDoc.mode !== "yaml" && !activeDoc.workspaceBinding;
+    switch (pendingIoAction.type) {
+      case "copy-html":
+        void ioRuntimeState.handleCopyHtml();
+        break;
+      case "copy-json":
+        void ioRuntimeState.handleCopyJson();
+        break;
+      case "copy-md":
+        void ioRuntimeState.handleCopyMd();
+        break;
+      case "copy-share-link":
+        void ioRuntimeState.handleCopyShareLink();
+        break;
+      case "copy-yaml":
+        void ioRuntimeState.handleCopyYaml();
+        break;
+      case "load-file":
+        ioRuntimeState.handleLoad();
+        break;
+      case "open-share-dialog":
+        void ioRuntimeState.prepareShareLink().finally(() => setShareDialogOpen(true));
+        break;
+      case "print":
+        ioRuntimeState.handlePrint();
+        break;
+      case "save-adoc":
+        void ioRuntimeState.handleSaveAdoc();
+        break;
+      case "save-docsy":
+        void ioRuntimeState.handleSaveDocsy();
+        break;
+      case "save-html":
+        void ioRuntimeState.handleSaveHtml();
+        break;
+      case "save-json":
+        void ioRuntimeState.handleSaveJson();
+        break;
+      case "save-md":
+        void ioRuntimeState.handleSaveMd();
+        break;
+      case "save-pdf":
+        void ioRuntimeState.handleSavePdf();
+        break;
+      case "save-rst":
+        void ioRuntimeState.handleSaveRst();
+        break;
+      case "save-tex":
+        void ioRuntimeState.handleSaveTex();
+        break;
+      case "save-typst":
+        void ioRuntimeState.handleSaveTypst();
+        break;
+      case "save-yaml":
+        void ioRuntimeState.handleSaveYaml();
+        break;
+      default:
+        break;
+    }
+
+    setPendingIoAction(null);
+  }, [ioRuntimeState, pendingIoAction]);
+
   const resolveActiveWorkspaceMarkdown = useCallback(() => (
     activeDoc.mode === "json" || activeDoc.mode === "yaml"
       ? activeDoc.content
       : currentRenderableMarkdown
   ), [activeDoc.content, activeDoc.mode, currentRenderableMarkdown]);
-  const handleOpenWorkspaceConnection = useCallback(() => {
-    setWorkspaceConnectionOpen(true);
-  }, []);
-  const handleOpenWorkspaceExport = useCallback(() => {
-    if (!workspaceConnected) {
-      setWorkspaceConnectionOpen(true);
+
+  const executeWorkspaceAction = useCallback(async (action: PendingWorkspaceAction) => {
+    const runtime = workspaceRuntimeState;
+
+    if (!runtime) {
       return;
     }
 
-    if (!workspaceExportEnabled) {
-      toast.error(t("hooks.workspace.exportUnavailable"));
-      return;
-    }
-
-    setWorkspaceExportOpen(true);
-  }, [t, workspaceConnected, workspaceExportEnabled]);
-  const handleOpenWorkspaceImport = useCallback(() => {
-    if (!workspaceConnected) {
-      setWorkspaceConnectionOpen(true);
-      return;
-    }
-
-    setWorkspaceImportOpen(true);
-  }, [workspaceConnected]);
-  const handleConnectWorkspace = useCallback(() => {
-    const returnTo = typeof window !== "undefined"
-      ? `${window.location.pathname}${window.location.search}`
-      : "/editor";
-
-    void openGoogleConnect(returnTo).catch((error) => {
-      const message = error instanceof Error ? error.message : t("hooks.workspace.authStartFailed");
-      toast.error(message);
-    });
-  }, [openGoogleConnect, t]);
-  const handleDisconnectWorkspace = useCallback(() => {
-    void disconnectWorkspace()
-      .then(() => {
-        toast.success(t("hooks.workspace.disconnected"));
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : t("hooks.workspace.disconnectFailed");
-        toast.error(message);
-      });
-  }, [disconnectWorkspace, t]);
-  const importWorkspaceDocumentById = useCallback(async (fileId: string) => {
-    const result = await importWorkspaceFile({ fileId });
-
-    createDocument(resolveImportedDocumentOptions({
-      activeDocId,
-      documents,
-      importedDocument: result.document,
-    }));
-    setWorkspaceImportOpen(false);
-    toast.success(t("hooks.workspace.importSuccess", {
-      name: result.document.name || "Google document",
-    }));
-
-    return result;
-  }, [activeDocId, createDocument, documents, importWorkspaceFile, t]);
-  const handleImportWorkspaceFile = useCallback((fileId: string) => {
-    void importWorkspaceDocumentById(fileId).catch((error) => {
-      const message = error instanceof Error ? error.message : t("hooks.workspace.importFailed");
-      toast.error(message);
-    });
-  }, [importWorkspaceDocumentById, t]);
-  const handleExportWorkspaceDocument = useCallback((title: string) => {
-    void exportWorkspaceDocument(activeDoc, {
-      markdown: resolveActiveWorkspaceMarkdown(),
-      title,
-    })
-      .then((result) => {
-        setWorkspaceExportOpen(false);
-        if (result.warnings.length > 0) {
-          toast.warning(result.warnings[0]);
-        } else {
-          toast.success(t("hooks.workspace.exportSuccess", {
-            name: title.trim() || activeDoc.name || t("common.untitled"),
-          }));
+    switch (action.type) {
+      case "open-connection-dialog":
+        setWorkspaceConnectionOpen(true);
+        return;
+      case "open-export-dialog":
+        if (!runtime.connected) {
+          setWorkspaceConnectionOpen(true);
+          return;
         }
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : t("hooks.workspace.exportFailed");
-        toast.error(message);
-      });
-  }, [activeDoc, exportWorkspaceDocument, resolveActiveWorkspaceMarkdown, t]);
-  const handleSaveWorkspaceDocument = useCallback(() => {
-    if (!activeDoc.workspaceBinding) {
-      return;
-    }
 
-    void syncDocument(activeDoc, {
-      markdown: resolveActiveWorkspaceMarkdown(),
-    })
-      .then((result) => {
+        if (activeDoc.mode === "json" || activeDoc.mode === "yaml" || activeDoc.workspaceBinding) {
+          toast.error(t("hooks.workspace.exportUnavailable"));
+          return;
+        }
+
+        setWorkspaceExportOpen(true);
+        return;
+      case "open-import-dialog":
+        if (!runtime.connected) {
+          setWorkspaceConnectionOpen(true);
+          return;
+        }
+
+        setWorkspaceImportOpen(true);
+        return;
+      case "save-bound-document": {
+        if (!activeDoc.workspaceBinding) {
+          return;
+        }
+
+        const result = await runtime.syncDocument(activeDoc, {
+          markdown: resolveActiveWorkspaceMarkdown(),
+        });
+
         if (!result) {
           return;
         }
@@ -928,40 +1123,208 @@ const Index = () => {
         }
 
         toast.success(t("hooks.workspace.saveSuccess"));
-      })
-      .catch((error) => {
-        const message = error instanceof Error ? error.message : t("hooks.workspace.saveFailed");
-        toast.error(message);
-      });
-  }, [activeDoc, resolveActiveWorkspaceMarkdown, syncDocument, t]);
-  const handleRescanWorkspaceChanges = useCallback(() => {
-    void rescanWorkspaceChanges()
-      .then((result) => {
+        return;
+      }
+      case "connect-workspace": {
+        const returnTo = typeof window !== "undefined"
+          ? `${window.location.pathname}${window.location.search}`
+          : "/editor";
+        await runtime.openGoogleConnect(returnTo);
+        return;
+      }
+      case "disconnect-workspace":
+        await runtime.disconnect();
+        toast.success(t("hooks.workspace.disconnected"));
+        return;
+      case "import-workspace-file": {
+        const result = await runtime.importFile({ fileId: action.fileId });
+        createDocument(resolveImportedDocumentOptions({
+          activeDocId,
+          documents,
+          importedDocument: result.document,
+        }));
+        setWorkspaceImportOpen(false);
+        toast.success(t("hooks.workspace.importSuccess", {
+          name: result.document.name || "Google document",
+        }));
+        return;
+      }
+      case "export-workspace-document": {
+        const result = await runtime.exportDocument(activeDoc, {
+          markdown: resolveActiveWorkspaceMarkdown(),
+          title: action.title,
+        });
+        setWorkspaceExportOpen(false);
+        if (result.warnings.length > 0) {
+          toast.warning(result.warnings[0]);
+          return;
+        }
+        toast.success(t("hooks.workspace.exportSuccess", {
+          name: action.title.trim() || activeDoc.name || t("common.untitled"),
+        }));
+        return;
+      }
+      case "refresh-workspace-document":
+        await runtime.refreshDocument(action.documentId);
+        toast.success(t("hooks.workspace.refreshSuccess"));
+        return;
+      case "rescan-workspace-changes": {
+        const result = await runtime.rescan();
         if (result.changes.length === 0) {
           toast.info(t("hooks.workspace.rescanNone"));
           return;
         }
-
         toast.warning(t("hooks.workspace.rescanDetected", {
           count: result.changes.length,
           suffix: result.changes.length === 1 ? "" : "s",
         }));
+        return;
+      }
+      default:
+        return;
+    }
+  }, [activeDoc, activeDocId, createDocument, documents, resolveActiveWorkspaceMarkdown, t, workspaceRuntimeState]);
+
+  useEffect(() => {
+    if (!workspaceRuntimeState || !pendingWorkspaceAction) {
+      return;
+    }
+
+    void executeWorkspaceAction(pendingWorkspaceAction)
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : t("hooks.workspace.saveFailed");
+        toast.error(message);
       })
+      .finally(() => {
+        setPendingWorkspaceAction(null);
+      });
+  }, [executeWorkspaceAction, pendingWorkspaceAction, t, workspaceRuntimeState]);
+  const workspaceErrorMessage = useMemo(() => {
+    if (!(workspaceRuntimeState?.authError instanceof Error)) {
+      return null;
+    }
+
+    if (workspaceRuntimeState.authError.message.includes("Workspace API is not reachable")) {
+      return t("hooks.workspace.apiUnreachable", {
+        target: workspaceRuntimeState.connectivityDiagnostic?.target || "/api",
+      });
+    }
+
+    return workspaceRuntimeState.authError.message;
+  }, [t, workspaceRuntimeState]);
+  const workspaceExportErrorMessage = workspaceRuntimeState?.exportError instanceof Error ? workspaceRuntimeState.exportError.message : null;
+  const workspaceImportErrorMessage = workspaceRuntimeState?.filesError instanceof Error ? workspaceRuntimeState.filesError.message : null;
+  const workspaceChangesErrorMessage = workspaceRuntimeState?.changesError instanceof Error ? workspaceRuntimeState.changesError.message : null;
+  const workspaceExportEnabled = activeDoc.mode !== "json" && activeDoc.mode !== "yaml" && !activeDoc.workspaceBinding;
+  const handleOpenWorkspaceConnection = useCallback(() => {
+    setWorkspaceRuntimeEnabled(true);
+    setWorkspaceConnectionOpen(true);
+  }, []);
+  const handleOpenWorkspaceExport = useCallback(() => {
+    if (!workspaceRuntimeState) {
+      ensureWorkspaceRuntime({ type: "open-export-dialog" });
+      return;
+    }
+
+    void executeWorkspaceAction({ type: "open-export-dialog" });
+  }, [ensureWorkspaceRuntime, executeWorkspaceAction, workspaceRuntimeState]);
+  const handleOpenWorkspaceImport = useCallback(() => {
+    if (!workspaceRuntimeState) {
+      ensureWorkspaceRuntime({ type: "open-import-dialog" });
+      return;
+    }
+
+    void executeWorkspaceAction({ type: "open-import-dialog" });
+  }, [ensureWorkspaceRuntime, executeWorkspaceAction, workspaceRuntimeState]);
+  const handleConnectWorkspace = useCallback(() => {
+    if (!workspaceRuntimeState) {
+      ensureWorkspaceRuntime({ type: "connect-workspace" });
+      return;
+    }
+
+    void executeWorkspaceAction({ type: "connect-workspace" }).catch((error) => {
+      const message = error instanceof Error ? error.message : t("hooks.workspace.authStartFailed");
+      toast.error(message);
+    });
+  }, [ensureWorkspaceRuntime, executeWorkspaceAction, t, workspaceRuntimeState]);
+  const handleDisconnectWorkspace = useCallback(() => {
+    if (!workspaceRuntimeState) {
+      ensureWorkspaceRuntime({ type: "disconnect-workspace" });
+      return;
+    }
+
+    void executeWorkspaceAction({ type: "disconnect-workspace" }).catch((error) => {
+      const message = error instanceof Error ? error.message : t("hooks.workspace.disconnectFailed");
+      toast.error(message);
+    });
+  }, [ensureWorkspaceRuntime, executeWorkspaceAction, t, workspaceRuntimeState]);
+  const importWorkspaceDocumentById = useCallback(async (fileId: string) => {
+    if (!workspaceRuntimeState) {
+      ensureWorkspaceRuntime({ fileId, type: "import-workspace-file" });
+      return null;
+    }
+
+    await executeWorkspaceAction({ fileId, type: "import-workspace-file" });
+    return null;
+  }, [ensureWorkspaceRuntime, executeWorkspaceAction, workspaceRuntimeState]);
+  const handleImportWorkspaceFile = useCallback((fileId: string) => {
+    void importWorkspaceDocumentById(fileId).catch((error) => {
+      const message = error instanceof Error ? error.message : t("hooks.workspace.importFailed");
+      toast.error(message);
+    });
+  }, [importWorkspaceDocumentById, t]);
+  const handleExportWorkspaceDocument = useCallback((title: string) => {
+    if (!workspaceRuntimeState) {
+      ensureWorkspaceRuntime({ title, type: "export-workspace-document" });
+      return;
+    }
+
+    void executeWorkspaceAction({ title, type: "export-workspace-document" })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : t("hooks.workspace.exportFailed");
+        toast.error(message);
+      });
+  }, [ensureWorkspaceRuntime, executeWorkspaceAction, t, workspaceRuntimeState]);
+  const handleSaveWorkspaceDocument = useCallback(() => {
+    if (!activeDoc.workspaceBinding) {
+      return;
+    }
+
+    if (!workspaceRuntimeState) {
+      ensureWorkspaceRuntime({ type: "save-bound-document" });
+      return;
+    }
+
+    void executeWorkspaceAction({ type: "save-bound-document" })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : t("hooks.workspace.saveFailed");
+        toast.error(message);
+      });
+  }, [activeDoc.workspaceBinding, ensureWorkspaceRuntime, executeWorkspaceAction, t, workspaceRuntimeState]);
+  const handleRescanWorkspaceChanges = useCallback(() => {
+    if (!workspaceRuntimeState) {
+      ensureWorkspaceRuntime({ type: "rescan-workspace-changes" });
+      return;
+    }
+
+    void executeWorkspaceAction({ type: "rescan-workspace-changes" })
       .catch((error) => {
         const message = error instanceof Error ? error.message : t("hooks.workspace.rescanFailed");
         toast.error(message);
       });
-  }, [rescanWorkspaceChanges, t]);
+  }, [ensureWorkspaceRuntime, executeWorkspaceAction, t, workspaceRuntimeState]);
   const handleRefreshWorkspaceDocument = useCallback((documentId: string) => {
-    void refreshWorkspaceDocument(documentId)
-      .then(() => {
-        toast.success(t("hooks.workspace.refreshSuccess"));
-      })
+    if (!workspaceRuntimeState) {
+      ensureWorkspaceRuntime({ documentId, type: "refresh-workspace-document" });
+      return;
+    }
+
+    void executeWorkspaceAction({ documentId, type: "refresh-workspace-document" })
       .catch((error) => {
         const message = error instanceof Error ? error.message : t("hooks.workspace.refreshFailed");
         toast.error(message);
       });
-  }, [refreshWorkspaceDocument, t]);
+  }, [ensureWorkspaceRuntime, executeWorkspaceAction, t, workspaceRuntimeState]);
 
   useEffect(() => {
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
@@ -995,7 +1358,6 @@ const Index = () => {
         }
 
         loadPatchSet(nextPatchSet);
-        openPatchReview();
         return true;
       },
       selectText: (value: string) => {
@@ -1040,7 +1402,21 @@ const Index = () => {
     return () => {
       delete e2eWindow.__docsyE2E;
     };
-  }, [activeEditor, isE2E, loadPatchSet, openPatchReview]);
+  }, [activeEditor, isE2E, loadPatchSet]);
+
+  useEffect(() => {
+    if (!documentSupportRuntimeState || !pendingDocumentSupportIntent) {
+      return;
+    }
+
+    if (pendingDocumentSupportIntent.type === "open-patch-review") {
+      documentSupportRuntimeState.openPatchReview();
+    } else {
+      documentSupportRuntimeState.loadPatchSet(pendingDocumentSupportIntent.patchSet);
+    }
+
+    setPendingDocumentSupportIntent(null);
+  }, [documentSupportRuntimeState, pendingDocumentSupportIntent]);
 
   useEffect(() => {
     if (!aiRuntimeState || !pendingAiIntent) {
@@ -1076,28 +1452,33 @@ const Index = () => {
       return;
     }
 
+    if (!workspaceRuntimeState) {
+      setWorkspaceRuntimeEnabled(true);
+      return;
+    }
+
     if (authResult === "connected") {
       toast.success(t("hooks.workspace.connected"));
-      void refetchWorkspaceAuth();
+      void workspaceRuntimeState.refetchAuth();
     } else if (authError) {
       toast.error(authError);
       setWorkspaceConnectionOpen(true);
     }
 
     clearWorkspaceAuthParams();
-  }, [clearWorkspaceAuthParams, refetchWorkspaceAuth, searchParams, t]);
+  }, [clearWorkspaceAuthParams, searchParams, t, workspaceRuntimeState]);
 
   useEffect(() => {
-    if (!workspaceConnected && workspaceImportOpen) {
+    if (workspaceRuntimeState && !workspaceConnected && workspaceImportOpen) {
       setWorkspaceImportOpen(false);
     }
-  }, [workspaceConnected, workspaceImportOpen]);
+  }, [workspaceConnected, workspaceImportOpen, workspaceRuntimeState]);
 
   useEffect(() => {
-    if (!workspaceConnected && workspaceExportOpen) {
+    if (workspaceRuntimeState && !workspaceConnected && workspaceExportOpen) {
       setWorkspaceExportOpen(false);
     }
-  }, [workspaceConnected, workspaceExportOpen]);
+  }, [workspaceConnected, workspaceExportOpen, workspaceRuntimeState]);
 
   useEffect(() => {
     if (!workspaceImportOpen && workspaceFileQuery) {
@@ -1210,8 +1591,8 @@ const Index = () => {
 
   const handleDeleteDoc = useCallback((id: string) => {
     deleteDocument(id);
-    void removeDocumentVersionSnapshots(id);
-  }, [deleteDocument, removeDocumentVersionSnapshots]);
+    void removeDocumentVersionHistory(id);
+  }, [deleteDocument]);
 
   const handleRequestResetDocuments = useCallback(() => {
     if (resetDocumentsDisabled) {
@@ -1254,7 +1635,7 @@ const Index = () => {
   }, [closeFindReplace, closePreview, resetDocuments, resetDocumentsDisabled, t]);
 
   const handleTemplateSelect = useCallback((template: DocumentTemplate) => {
-    const fallbackContent = getStableTemplateFallbackContent(template.mode, locale);
+      const fallbackContent = getSharedTemplateFallbackContent(template.mode, locale);
     const selectedContent = template.content.trim().length > 0 || template.id === "blank-markdown"
       ? template.content
       : fallbackContent;
@@ -1340,8 +1721,8 @@ const Index = () => {
     }
 
     lastCapturedAutoSaveAtRef.current = autoSaveState.lastSavedAt;
-    void captureAutoSaveSnapshot(activeDoc);
-  }, [activeDoc, autoSaveState.lastSavedAt, autoSaveState.status, captureAutoSaveSnapshot]);
+    void captureAutoSaveVersionSnapshot(activeDoc, locale);
+  }, [activeDoc, autoSaveState.lastSavedAt, autoSaveState.status, locale]);
 
   useEffect(() => {
     const nextPendingSuggestion = pendingImpactSuggestions[0];
@@ -1522,12 +1903,12 @@ const Index = () => {
     );
   }, [activeDoc.content, activeDoc.id, activeDoc.mode, activeDoc.tiptapJson, advancedBlocksEnabled, canEnableAdvancedBlocks, canEnableDocumentFeatures, documentFeaturesEnabled, editorKey, enableAdvancedBlocks, enableDocumentFeatures, handleContentChange, handleModeChange, handleTiptapChange, setLiveEditorHtml]);
   const aiUnavailableMessage = useMemo(() => {
-    if (workspaceAuth.apiHealth && !workspaceAuth.apiHealth.configured) {
+    if (workspaceRuntimeState?.apiHealth && !workspaceRuntimeState.apiHealth.configured) {
       return "Gemini가 연결되어 있지 않습니다.";
     }
 
     return aiRuntimeState?.liveAgent.latestStatus?.message || null;
-  }, [aiRuntimeState?.liveAgent.latestStatus?.message, workspaceAuth.apiHealth]);
+  }, [aiRuntimeState?.liveAgent.latestStatus?.message, workspaceRuntimeState?.apiHealth]);
 
   const aiAssistantDialogProps = aiRuntimeState
     ? {
@@ -1543,11 +1924,6 @@ const Index = () => {
       onGenerateToc: aiRuntimeState.generateTocSuggestion,
       onLoadTocPatch: async (maxDepthOverride?: 1 | 2 | 3) => {
         const patchSet = await aiRuntimeState.loadTocPatch(maxDepthOverride);
-
-        if (patchSet) {
-          openPatchReview();
-        }
-
         return patchSet;
       },
       onOpenChange: aiRuntimeState.setAssistantOpen,
@@ -1612,6 +1988,41 @@ const Index = () => {
       tocPreview: null,
       updateSuggestionPreview: null,
     };
+  const documentSupportRuntimeActive = documentSupportRuntimeEnabled || historyEnabled;
+  const patchReviewDialogProps = {
+    acceptedPatchCount,
+    onAccept: handleAcceptPatch,
+    onApply: applyReviewedPatches,
+    onClear: clearPatchSet,
+    onEdit: handleEditPatch,
+    onLoadPatchSet: handleLoad,
+    onOpenChange: (open: boolean) => {
+      if (!open) {
+        closePatchReview();
+        return;
+      }
+
+      openPatchReview();
+    },
+    onReject: handleRejectPatch,
+    open: patchReviewOpen,
+    patchSet,
+    workspaceSyncWarnings: activeDoc.workspaceBinding?.syncWarnings,
+  };
+  const historySidebarProps = {
+    activeDoc,
+    onGenerateTocSuggestion: () => {
+      requestAiIntent({ type: "generate-toc" });
+    },
+    onRestoreVersionSnapshot: (snapshotId: string) => {
+      void restoreVersionSnapshot(snapshotId);
+    },
+    versionHistoryReady,
+    versionHistoryRestoring,
+    versionHistorySnapshots,
+    versionHistorySyncing,
+  };
+  const previewTexValidationProps = previewRuntimeState?.texValidationProps;
 
   return (
     <>
@@ -1625,9 +2036,63 @@ const Index = () => {
             documents={documents}
             importWorkspaceDocument={importWorkspaceDocumentById}
             loadPatchSet={loadPatchSet}
-            openPatchReview={openPatchReview}
             openWorkspaceConnection={handleOpenWorkspaceConnection}
             onStateChange={setAiRuntimeState}
+          />
+        </Suspense>
+      )}
+      {documentSupportRuntimeActive && (
+        <Suspense fallback={null}>
+          <DocumentSupportRuntime
+            activeDoc={activeDoc}
+            activeEditor={activeEditor}
+            bumpEditorKey={bumpEditorKey}
+            historyEnabled={historyEnabled}
+            onStateChange={setDocumentSupportRuntimeState}
+            onVersionSnapshot={(document, metadata) => recordVersionSnapshot(document, "patch_apply", metadata)}
+            onWorkspaceSync={syncDocument}
+            setLiveEditorHtml={setLiveEditorHtml}
+            updateActiveDoc={updateActiveDoc}
+          />
+        </Suspense>
+      )}
+      {previewOpen && (
+        <Suspense fallback={null}>
+          <PreviewRuntime
+            activeDoc={activeDoc}
+            currentRenderableLatexDocument={currentRenderableLatexDocument}
+            onJumpToLatexLine={setPendingLatexSourceLine}
+            onLoadPatchSet={loadPatchSet}
+            onStateChange={setPreviewRuntimeState}
+            onVersionSnapshot={(document, metadata) => recordVersionSnapshot(document, "export", metadata)}
+          />
+        </Suspense>
+      )}
+      {workspaceRuntimeEnabled && (
+        <Suspense fallback={null}>
+          <WorkspaceRuntime
+            activeDocId={activeDocId}
+            createDocument={createDocument}
+            documents={documents}
+            importDialogOpen={workspaceImportOpen}
+            onStateChange={setWorkspaceRuntimeState}
+            updateActiveDoc={updateActiveDoc}
+            updateDocument={updateDocument}
+          />
+        </Suspense>
+      )}
+      {ioRuntimeEnabled && (
+        <Suspense fallback={null}>
+          <DocumentIORuntime
+            activeDoc={activeDoc}
+            createDocument={createDocument}
+            documents={documents}
+            onPatchSetLoad={loadPatchSet}
+            onStateChange={setIoRuntimeState}
+            onVersionSnapshot={(metadata) => recordVersionSnapshot(activeDoc, "export", metadata)}
+            renderableEditorHtml={currentRenderableHtml}
+            renderableLatexDocument={currentRenderableLatexDocument}
+            renderableMarkdown={currentRenderableMarkdown}
           />
         </Suspense>
       )}
@@ -1662,9 +2127,7 @@ const Index = () => {
           onOpenWorkspaceExport: handleOpenWorkspaceExport,
           onOpenWorkspaceImport: handleOpenWorkspaceImport,
           onSaveWorkspaceDocument: handleSaveWorkspaceDocument,
-          onOpenShare: () => {
-            void prepareShareLink().finally(() => setShareDialogOpen(true));
-          },
+          onOpenShare: handleOpenShare,
           onCopyHtml: handleCopyHtml,
           onCopyJson: handleCopyJson,
           onCopyMd: handleCopyMd,
@@ -1704,26 +2167,7 @@ const Index = () => {
           workspaceSyncPending: workspaceSyncing,
         }}
         onFileChange={handleFileChange}
-        patchReviewDialogProps={{
-          acceptedPatchCount,
-          onAccept: handleAcceptPatch,
-          onApply: applyReviewedPatches,
-          onClear: clearPatchSet,
-          onEdit: handleEditPatch,
-          onLoadPatchSet: handleLoad,
-          onOpenChange: (open) => {
-            if (!open) {
-              closePatchReview();
-              return;
-            }
-
-            openPatchReview();
-          },
-          onReject: handleRejectPatch,
-          open: patchReviewOpen,
-          patchSet,
-          workspaceSyncWarnings: activeDoc.workspaceBinding?.syncWarnings,
-        }}
+        patchReviewDialogProps={patchReviewDialogProps}
         shareLinkDialogProps={{
           link: shareLinkInfo.link,
           onCopy: () => {
@@ -1741,31 +2185,7 @@ const Index = () => {
           fileName: activeDoc.name,
           onClose: closePreview,
           rawContent: activeDoc.content,
-          texValidationProps: {
-            canAiFix: canAiFixTex,
-            compileMs: texValidation.compileMs,
-            diagnostics: texValidation.diagnostics,
-            health: texValidation.health,
-            isAiFixing: isFixingTexAutoFix,
-            isExportingPdf: texValidation.isExportingPdf,
-            lastValidatedAt: texValidation.lastValidatedAt,
-            latexSource: activeDoc.mode === "latex" ? activeDoc.content : currentRenderableLatexDocument,
-            logSummary: texValidation.logSummary,
-            onAiFix: () => {
-              void handleOpenTexAutoFixReview();
-            },
-            onCompilePdf: texValidation.downloadCompiledPdf,
-            onJumpToLine: (line) => {
-              if (activeDoc.mode === "latex") {
-                setPendingLatexSourceLine(line);
-              }
-            },
-            onRunValidation: texValidation.runValidation,
-            previewUrl: texValidation.previewUrl,
-            sourceType: texValidation.sourceType,
-            status: texValidation.status,
-            validationEnabled: texValidation.validationEnabled,
-          },
+          texValidationProps: previewTexValidationProps,
         }}
         renderEditor={renderEditor}
         shortcutsModalProps={{ onOpenChange: setShortcutsOpen, open: shortcutsOpen }}
@@ -1775,19 +2195,7 @@ const Index = () => {
             createDocument,
             documents,
             historyEnabled,
-            historyProps: {
-              activeDoc,
-              onGenerateTocSuggestion: () => {
-                requestAiIntent({ type: "generate-toc" });
-              },
-              onRestoreVersionSnapshot: (snapshotId: string) => {
-                void restoreVersionSnapshot(snapshotId);
-              },
-              versionHistoryReady,
-              versionHistoryRestoring,
-              versionHistorySnapshots,
-              versionHistorySyncing,
-            },
+            historyProps: historySidebarProps,
             knowledgeEnabled,
             knowledgePanelResetKey: documentResetVersion,
             knowledgeProps: {

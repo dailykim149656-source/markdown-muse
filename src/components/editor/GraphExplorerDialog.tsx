@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -40,6 +40,11 @@ import type {
   KnowledgeWorkspaceInsights,
 } from "@/lib/knowledge/workspaceInsights";
 import {
+  buildGraphConnectionSummary,
+  createPreparedGraphView,
+  filterPreparedGraphByQuery,
+} from "@/components/editor/graphViewModel";
+import {
   type EdgeFilter,
   type GraphMode,
   type IssueFilter,
@@ -47,10 +52,8 @@ import {
   applyGraphMode,
   applyIssueFilter,
   edgeBadgeVariant,
-  edgeGroupOrder,
   edgeKindLabelKey,
   issueKindLabelKey,
-  nodeKindOrder,
   nodeFilterKey,
   toGraphNavigationTarget,
 } from "@/components/editor/workspaceGraphUtils";
@@ -92,17 +95,6 @@ interface GraphExplorerDialogProps {
   selectedNodeId?: string | null;
   variant?: GraphExplorerVariant;
 }
-
-const sortNodes = (left: KnowledgeGraphNode, right: KnowledgeGraphNode) =>
-  nodeKindOrder[left.kind] - nodeKindOrder[right.kind]
-  || Number(right.issueSeverity === "warning") - Number(left.issueSeverity === "warning")
-  || (right.issueCount || 0) - (left.issueCount || 0)
-  || left.label.localeCompare(right.label);
-
-const sortEdges = (left: KnowledgeGraphEdge, right: KnowledgeGraphEdge) =>
-  edgeGroupOrder[left.group] - edgeGroupOrder[right.group]
-  || right.weight - left.weight
-  || left.description.localeCompare(right.description);
 
 const semanticKindLabelKey = (kind: "depends_on" | "conflicts_with") => {
   switch (kind) {
@@ -182,73 +174,22 @@ const GraphExplorerDialog = ({
   const [issuesOnly, setIssuesOnly] = useState(false);
   const [semanticOverlayEnabled, setSemanticOverlayEnabled] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const deferredQuery = useDeferredValue(query);
   const workspaceScale = useMemo(() => resolveWorkspaceScale(
     insights.summary.documentNodeCount + insights.summary.sectionNodeCount + insights.summary.imageNodeCount,
     insights.summary.edgeCount,
   ), [insights.summary.documentNodeCount, insights.summary.edgeCount, insights.summary.imageNodeCount, insights.summary.sectionNodeCount]);
-
-  const nodeById = useMemo(
-    () => new Map(insights.nodes.map((node) => [node.id, node])),
-    [insights.nodes],
+  const preparedGraph = useMemo(() => createPreparedGraphView({
+    edgeFilter,
+    insights,
+    issuesOnly,
+    nodeFilter,
+  }), [edgeFilter, insights, issuesOnly, nodeFilter]);
+  const nodeById = preparedGraph.nodeById;
+  const filteredGraph = useMemo(
+    () => filterPreparedGraphByQuery(preparedGraph, deferredQuery),
+    [deferredQuery, preparedGraph],
   );
-
-  const baseNodes = useMemo(
-    () => insights.nodes
-      .filter((node) => (nodeFilter === "all" || node.kind === nodeFilter) && (!issuesOnly || (node.issueCount || 0) > 0))
-      .sort(sortNodes),
-    [insights.nodes, issuesOnly, nodeFilter],
-  );
-
-  const filteredGraph = useMemo(() => {
-    const baseNodeIds = new Set(baseNodes.map((node) => node.id));
-    const baseEdges = insights.edges
-      .filter((edge) =>
-        (edgeFilter === "all" || edge.group === edgeFilter)
-        && baseNodeIds.has(edge.sourceId)
-        && baseNodeIds.has(edge.targetId))
-      .sort(sortEdges);
-    const normalizedQuery = query.trim().toLowerCase();
-
-    if (!normalizedQuery) {
-      return {
-        edges: baseEdges,
-        nodes: baseNodes,
-      };
-    }
-
-    const directlyMatchedNodeIds = new Set(
-      baseNodes
-        .filter((node) => node.label.toLowerCase().includes(normalizedQuery))
-        .map((node) => node.id),
-    );
-    const matchedNodeIds = new Set(directlyMatchedNodeIds);
-    const matchedEdgeIds = new Set<string>();
-
-    for (const edge of baseEdges) {
-      const sourceLabel = nodeById.get(edge.sourceId)?.label || "";
-      const targetLabel = nodeById.get(edge.targetId)?.label || "";
-      const edgeMatches = [
-        edge.description,
-        sourceLabel,
-        targetLabel,
-      ].join(" ").toLowerCase().includes(normalizedQuery);
-
-      if (
-        edgeMatches
-        || directlyMatchedNodeIds.has(edge.sourceId)
-        || directlyMatchedNodeIds.has(edge.targetId)
-      ) {
-        matchedEdgeIds.add(edge.id);
-        matchedNodeIds.add(edge.sourceId);
-        matchedNodeIds.add(edge.targetId);
-      }
-    }
-
-    return {
-      edges: baseEdges.filter((edge) => matchedEdgeIds.has(edge.id)),
-      nodes: baseNodes.filter((node) => matchedNodeIds.has(node.id)),
-    };
-  }, [baseNodes, edgeFilter, insights.edges, nodeById, query]);
 
   const issueFilteredGraph = useMemo(
     () => applyIssueFilter({
@@ -266,6 +207,10 @@ const GraphExplorerDialog = ({
       mode: graphMode,
     }),
     [activeDocumentId, graphMode, issueFilteredGraph],
+  );
+  const modeGraphConnectionSummary = useMemo(
+    () => buildGraphConnectionSummary(modeGraph.edges),
+    [modeGraph.edges],
   );
 
   useEffect(() => {
@@ -302,8 +247,7 @@ const GraphExplorerDialog = ({
       return modeGraph;
     }
 
-    const focusedEdges = modeGraph.edges.filter((edge) =>
-      edge.sourceId === selectedNodeId || edge.targetId === selectedNodeId);
+    const focusedEdges = modeGraphConnectionSummary.adjacencyByNodeId.get(selectedNodeId) || [];
     const visibleNodeIds = new Set<string>([selectedNodeId]);
 
     for (const edge of focusedEdges) {
@@ -315,30 +259,21 @@ const GraphExplorerDialog = ({
       edges: focusedEdges,
       nodes: modeGraph.nodes.filter((node) => visibleNodeIds.has(node.id)),
     };
-  }, [focusMode, modeGraph, selectedNodeId]);
+  }, [focusMode, modeGraph, modeGraphConnectionSummary.adjacencyByNodeId, selectedNodeId]);
 
   const selectedNode = displayedGraph.nodes.find((node) => node.id === selectedNodeId)
     || modeGraph.nodes.find((node) => node.id === selectedNodeId)
     || null;
-
-  const connectionSummary = useMemo(() => {
-    const incoming = new Map<string, number>();
-    const outgoing = new Map<string, number>();
-
-    for (const edge of displayedGraph.edges) {
-      outgoing.set(edge.sourceId, (outgoing.get(edge.sourceId) || 0) + 1);
-      incoming.set(edge.targetId, (incoming.get(edge.targetId) || 0) + 1);
-    }
-
-    return { incoming, outgoing };
-  }, [displayedGraph.edges]);
+  const connectionSummary = useMemo(
+    () => buildGraphConnectionSummary(displayedGraph.edges),
+    [displayedGraph.edges],
+  );
 
   const selectedNodeEdges = useMemo(
     () => selectedNode
-      ? displayedGraph.edges.filter((edge) =>
-        edge.sourceId === selectedNode.id || edge.targetId === selectedNode.id)
+      ? connectionSummary.adjacencyByNodeId.get(selectedNode.id) || []
       : [],
-    [displayedGraph.edges, selectedNode],
+    [connectionSummary.adjacencyByNodeId, selectedNode],
   );
 
   const selectedNodeIssues = useMemo(
@@ -368,6 +303,7 @@ const GraphExplorerDialog = ({
   const selectedNodeOutgoing = selectedNode
     ? connectionSummary.outgoing.get(selectedNode.id) || 0
     : 0;
+  const graphCanvasLayoutMode = workspaceScale === "large" && !focusMode ? "stable" : "selected";
   const sourceChainNode = contextChain?.sourceNodeId
     ? nodeById.get(contextChain.sourceNodeId) || null
     : null;
@@ -711,10 +647,12 @@ const GraphExplorerDialog = ({
               <div className="space-y-4">
                 <GraphCanvas
                   edges={displayedGraph.edges}
+                  layoutMode={graphCanvasLayoutMode}
                   nodes={displayedGraph.nodes}
                   onOpenDocument={handleOpenDocument}
                   onSelectNode={setSelectedNodeId}
                   selectedNodeId={selectedNodeId}
+                  workspaceScale={workspaceScale}
                 />
 
                 <div

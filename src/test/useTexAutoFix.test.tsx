@@ -7,7 +7,7 @@ import { useTexAutoFix } from "@/hooks/useTexAutoFix";
 
 const fixTexCompileErrorMock = vi.fn();
 
-vi.mock("@/lib/ai/client", () => ({
+vi.mock("@/lib/ai/texAutoFixClient", () => ({
   fixTexCompileError: (...args: unknown[]) => fixTexCompileErrorMock(...args),
 }));
 

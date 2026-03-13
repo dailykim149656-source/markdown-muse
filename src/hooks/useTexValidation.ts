@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { exportTexPdf, getTexHealth, previewTex } from "@/lib/ai/client";
+import { exportTexPdf, getTexHealth, previewTex } from "@/lib/ai/texClient";
 import { useI18n } from "@/i18n/useI18n";
 import type { EditorMode } from "@/types/document";
 import type {

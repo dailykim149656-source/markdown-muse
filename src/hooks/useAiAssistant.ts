@@ -205,7 +205,7 @@ export const useAiAssistant = ({
     setBusyAction("summarize");
 
     try {
-      const { summarizeDocument } = await import("@/lib/ai/client");
+      const { summarizeDocument } = await import("@/lib/ai/assistantClient");
       const screenshot = await captureAiScreenshot();
       const result = await summarizeDocument({
         document: {
@@ -240,7 +240,7 @@ export const useAiAssistant = ({
         { generateSection },
       ] = await Promise.all([
         import("@/lib/ai/sectionGeneration"),
-        import("@/lib/ai/client"),
+        import("@/lib/ai/assistantClient"),
       ]);
       const sourceAst = await buildSourceAst();
       const headings = buildDerivedDocumentIndex(sourceAst).headings;
@@ -302,7 +302,7 @@ export const useAiAssistant = ({
         { generateToc },
         { analyzeTocSuggestion, buildTocPatchSetWithAst },
       ] = await Promise.all([
-        import("@/lib/ai/client"),
+        import("@/lib/ai/assistantClient"),
         import("@/lib/ai/tocGeneration"),
       ]);
       const sourceAst = await buildSourceAst();
@@ -470,7 +470,7 @@ export const useAiAssistant = ({
 
     try {
       const [{ proposeEditorAction }, { suggestDocumentUpdates }] = await Promise.all([
-        import("@/lib/ai/client"),
+        import("@/lib/ai/assistantClient"),
         import("@/lib/ai/suggestDocumentUpdates"),
       ]);
       const sourceAst = await buildSourceAst();

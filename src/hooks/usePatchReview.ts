@@ -1,15 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
-import { applyDocumentPatchSet } from "@/lib/ast/applyDocumentPatch";
-import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
-import { renderAstToHtml } from "@/lib/ast/renderAstToHtml";
-import { renderAstToLatex } from "@/lib/ast/renderAstToLatex";
-import { renderAstToMarkdown } from "@/lib/ast/renderAstToMarkdown";
-import { validateDocumentAst } from "@/lib/ast/validateDocumentAst";
 import { useI18n } from "@/i18n/useI18n";
 import { importLatexToDocsy } from "@/lib/latex/importLatexToDocsy";
-import { applyDocumentTextPatchSet } from "@/lib/patches/applyDocumentTextPatchSet";
 import { applyPatchDecision } from "@/lib/patches/reviewPatchSet";
 import type { DocumentData, DocumentVersionSnapshotMetadata } from "@/types/document";
 import type { DocumentPatch, DocumentPatchSet } from "@/types/documentPatch";
@@ -42,6 +35,34 @@ const isStructuredPatchSet = (patchSet: DocumentPatchSet) =>
 
 const isDocumentTextPatchSet = (patchSet: DocumentPatchSet) =>
   patchSet.patches.every((patch) => patch.target.targetType === "document_text");
+
+const loadDocumentTextPatchSet = () => import("@/lib/patches/applyDocumentTextPatchSet");
+const loadRichTextPatchModules = async () => {
+  const [
+    { applyDocumentPatchSet },
+    { serializeTiptapToAst },
+    { renderAstToHtml },
+    { renderAstToLatex },
+    { renderAstToMarkdown },
+    { validateDocumentAst },
+  ] = await Promise.all([
+    import("@/lib/ast/applyDocumentPatch"),
+    import("@/lib/ast/tiptapAst"),
+    import("@/lib/ast/renderAstToHtml"),
+    import("@/lib/ast/renderAstToLatex"),
+    import("@/lib/ast/renderAstToMarkdown"),
+    import("@/lib/ast/validateDocumentAst"),
+  ]);
+
+  return {
+    applyDocumentPatchSet,
+    renderAstToHtml,
+    renderAstToLatex,
+    renderAstToMarkdown,
+    serializeTiptapToAst,
+    validateDocumentAst,
+  };
+};
 
 export const usePatchReview = ({
   activeDoc,
@@ -209,6 +230,7 @@ export const usePatchReview = ({
     }
 
     if (isDocumentTextPatchSet(patchSet)) {
+      const { applyDocumentTextPatchSet } = await loadDocumentTextPatchSet();
       const result = applyDocumentTextPatchSet(activeDoc.content, patchSet);
 
       if (result.appliedPatchIds.length === 0 && result.failures.length === 0) {
@@ -285,6 +307,14 @@ export const usePatchReview = ({
       return;
     }
 
+    const {
+      applyDocumentPatchSet,
+      renderAstToHtml,
+      renderAstToLatex,
+      renderAstToMarkdown,
+      serializeTiptapToAst,
+      validateDocumentAst,
+    } = await loadRichTextPatchModules();
     let documentAst;
 
     try {
