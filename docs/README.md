@@ -41,6 +41,7 @@ Read these if you are changing code or need implementation context:
 - [Google Docs Export Session Summary (Korean)](session-summary-2026-03-12-google-docs-export-and-google-dropdown-ko.md)
 - [GCP, Firebase, and Google OAuth Hardening](session-summary-2026-03-13-gcp-firebase-google-oauth-hardening.md)
 - [Autosave History AI Summary and Sidebar Create Menu (Korean)](session-summary-2026-03-13-autosave-history-ai-summary-and-sidebar-create-menu-ko.md)
+- [Vertex AI Migration for Gemini Runtime](session-summary-2026-03-13-vertex-ai-migration.md)
 - [Google OAuth Testing Mode Plan](google-oauth-testing-mode-plan-2026-03-13.md)
 - [Workspace Graph, Editor, and i18n Session Summary](session-summary-2026-03-11-workspace-graph-editor-i18n-polish.md)
 - [Architecture Overview](architecture-overview-2026-03-10.md)
@@ -58,6 +59,7 @@ Read these if you are validating release readiness or operational review state:
 - [Google Workspace Live Validation Runbook](google-workspace-live-validation-runbook-2026-03-12.md)
 - [Google Docs Sync Support Matrix](google-docs-sync-support-matrix-2026-03-12.md)
 - [GCP, Firebase, and Google OAuth Hardening](session-summary-2026-03-13-gcp-firebase-google-oauth-hardening.md)
+- [Vertex AI Migration for Gemini Runtime](session-summary-2026-03-13-vertex-ai-migration.md)
 - [Google OAuth Testing Mode Plan](google-oauth-testing-mode-plan-2026-03-13.md)
 - [Release Closeout Results Template](release-closeout-results-template-2026-03-12.md)
 - [Demo Runbook](demo-runbook-2026-03-11.md)
@@ -129,6 +131,7 @@ Read these if you are validating release readiness or operational review state:
 - [Web Performance Optimization Summary](session-summary-2026-03-10-web-performance-optimization.md)
 - [GCP Deployment Guide](gcp-deployment.md)
 - [GCP, Firebase, and Google OAuth Hardening](session-summary-2026-03-13-gcp-firebase-google-oauth-hardening.md)
+- [Vertex AI Migration for Gemini Runtime](session-summary-2026-03-13-vertex-ai-migration.md)
 - [Google OAuth Testing Mode Plan](google-oauth-testing-mode-plan-2026-03-13.md)
 
 ### Planning docs
@@ -153,6 +156,7 @@ Read these if you are validating release readiness or operational review state:
 - [2026-03-12 Google Docs Export and Dropdown Summary (Korean)](session-summary-2026-03-12-google-docs-export-and-google-dropdown-ko.md)
 - [2026-03-13 GCP, Firebase, and Google OAuth Hardening](session-summary-2026-03-13-gcp-firebase-google-oauth-hardening.md)
 - [2026-03-13 Autosave History AI Summary and Sidebar Create Menu (Korean)](session-summary-2026-03-13-autosave-history-ai-summary-and-sidebar-create-menu-ko.md)
+- [2026-03-13 Vertex AI Migration for Gemini Runtime](session-summary-2026-03-13-vertex-ai-migration.md)
 - [2026-03-13 Google OAuth Testing Mode Plan](google-oauth-testing-mode-plan-2026-03-13.md)
 - [2026-03-12 Google Docs Sync Support Matrix](google-docs-sync-support-matrix-2026-03-12.md)
 - [2026-03-11 Workspace Graph, Editor, and i18n Session Summary](session-summary-2026-03-11-workspace-graph-editor-i18n-polish.md)

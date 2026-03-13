@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const VERTEX_AI_FLAG = "true";
 
 export interface GeminiInlineImage {
   dataBase64: string;
@@ -17,19 +18,33 @@ interface MultimodalStructuredJsonRequest extends StructuredJsonRequest {
   images?: GeminiInlineImage[];
 }
 
-const getApiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+const isVertexAiEnabled = () =>
+  process.env.GOOGLE_GENAI_USE_VERTEXAI?.trim().toLowerCase() === VERTEX_AI_FLAG;
+
+const getVertexProject = () => process.env.GOOGLE_CLOUD_PROJECT?.trim() || "";
+const getVertexLocation = () =>
+  process.env.GOOGLE_CLOUD_LOCATION?.trim()
+  || process.env.VERTEX_AI_LOCATION?.trim()
+  || "";
+
+export const isGeminiConfigured = () =>
+  isVertexAiEnabled() && getVertexProject().length > 0 && getVertexLocation().length > 0;
 
 let cachedClient: GoogleGenAI | null = null;
 
 const getClient = () => {
-  const apiKey = getApiKey();
-
-  if (!apiKey) {
-    throw new Error("Gemini API key is not configured. Set GEMINI_API_KEY or GOOGLE_API_KEY.");
+  if (!isGeminiConfigured()) {
+    throw new Error(
+      "Vertex AI is not configured. Set GOOGLE_GENAI_USE_VERTEXAI=true, GOOGLE_CLOUD_PROJECT, and GOOGLE_CLOUD_LOCATION.",
+    );
   }
 
   if (!cachedClient) {
-    cachedClient = new GoogleGenAI({ apiKey });
+    cachedClient = new GoogleGenAI({
+      location: getVertexLocation(),
+      project: getVertexProject(),
+      vertexai: true,
+    });
   }
 
   return cachedClient;

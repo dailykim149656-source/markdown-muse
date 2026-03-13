@@ -109,11 +109,19 @@ Copy-Item .env.example .env.local
 
 Set at least:
 
-- `GEMINI_API_KEY`
+- `GOOGLE_GENAI_USE_VERTEXAI=true`
+- `GOOGLE_CLOUD_PROJECT`
+- `GOOGLE_CLOUD_LOCATION`
 - `GEMINI_MODEL`
 - `AI_SERVER_PORT`
 - `AI_ALLOWED_ORIGIN`
 - `VITE_AI_API_BASE_URL`
+
+Authenticate locally with Application Default Credentials:
+
+```bash
+gcloud auth application-default login
+```
 
 Then run:
 
@@ -128,7 +136,9 @@ The AI service is prepared for Cloud Run.
 Runtime contract:
 
 - `PORT` is provided by Cloud Run
-- `GEMINI_API_KEY` should come from Secret Manager
+- `GOOGLE_GENAI_USE_VERTEXAI=true`
+- `GOOGLE_CLOUD_PROJECT` selects the Vertex AI project
+- `GOOGLE_CLOUD_LOCATION` selects the Vertex AI region
 - `GEMINI_MODEL` selects the model
 - `AI_ALLOWED_ORIGIN` controls allowed frontend origins
 
@@ -136,6 +146,11 @@ Build and deploy pipeline:
 
 - [Dockerfile.ai](Dockerfile.ai)
 - [cloudbuild.ai.yaml](cloudbuild.ai.yaml)
+
+Cloud Run auth:
+
+- the runtime service account must have Vertex AI permissions
+- the local API key path is no longer used for Cloud Run
 
 Frontend deployment:
 

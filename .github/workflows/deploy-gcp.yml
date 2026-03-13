@@ -23,10 +23,10 @@ jobs:
       ai_service_url: ${{ steps.ai.outputs.url }}
     env:
       GCP_REGION: asia-northeast3
+      VERTEX_LOCATION: asia-northeast3
       AI_SERVICE_NAME: docsy
       ARTIFACT_REPOSITORY: docsy
       GEMINI_MODEL: gemini-2.5-flash
-      GEMINI_API_KEY_SECRET: gemini-api-key
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -74,9 +74,10 @@ jobs:
           fi
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_GEMINI_API_KEY_SECRET=%s,_GOOGLE_CLIENT_SECRET_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_VERTEX_LOCATION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_GOOGLE_CLIENT_SECRET_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
+            "$VERTEX_LOCATION" \
             "$AI_SERVICE_NAME" \
             "$GEMINI_MODEL" \
             "$ALLOWED_ORIGIN" \
@@ -84,7 +85,6 @@ jobs:
             "${GOOGLE_OAUTH_REDIRECT_URI}" \
             "${WORKSPACE_FRONTEND_ORIGIN}" \
             "${GOOGLE_WORKSPACE_SCOPES}" \
-            "$GEMINI_API_KEY_SECRET" \
             "${GOOGLE_CLIENT_SECRET_SECRET}" \
             "$RUN_SERVICE_ACCOUNT")
 

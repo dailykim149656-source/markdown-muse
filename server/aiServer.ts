@@ -21,6 +21,7 @@ import {
   generateStructuredJson,
   generateMultimodalStructuredJson,
   getGeminiModel,
+  isGeminiConfigured,
   schemaType,
 } from "./modules/gemini/client";
 import { handleAuthRoute } from "./modules/auth/routes";
@@ -784,7 +785,7 @@ const server = createServer(async (request, response) => {
       console.log(`[AI Server] [${requestId}] Health check passed`);
       writeHttpResponse(response, json({
         allowedOrigins: ALLOWED_ORIGINS,
-        configured: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
+        configured: isGeminiConfigured(),
         model: getGeminiModel(),
         ok: true,
       }, 200, request.headers.origin));
