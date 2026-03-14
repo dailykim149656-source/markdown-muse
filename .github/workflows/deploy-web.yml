@@ -5,6 +5,9 @@ on:
     branches:
       - main
     paths:
+      - ".github/workflows/deploy-web.yml"
+      - ".github/workflows/deploy-full-stack.yml"
+      - "scripts/validate-public-deploy-config.mjs"
       - "src/**"
       - "!src/test/**"
       - "public/**"
@@ -17,6 +20,10 @@ on:
       - "components.json"
       - "firebase.json"
   workflow_dispatch:
+
+concurrency:
+  group: deploy-web-main
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -46,6 +53,15 @@ jobs:
       - name: Build web profile frontend
         run: |
           set -euo pipefail
+
+          require_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "${value}" ]; then
+              echo "${name} is required."
+              exit 1
+            fi
+          }
 
           AI_API_BASE_URL="${{ secrets.GCP_WEB_VITE_AI_API_BASE_URL }}"
           if [ -z "${AI_API_BASE_URL}" ]; then
@@ -85,6 +101,20 @@ jobs:
           export GOOGLE_WORKSPACE_SCOPE_PROFILE
           export WORKSPACE_FRONTEND_ORIGIN="${FRONTEND_ORIGIN}"
 
+          require_secret "GCP_GOOGLE_CLIENT_ID" "${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
+          require_secret "GCP_GOOGLE_OAUTH_REDIRECT_URI" "${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+
+          FIREBASE_PROJECT_ID="${{ secrets.GCP_FIREBASE_PROJECT_ID }}"
+          if [ -z "${FIREBASE_PROJECT_ID}" ]; then
+            FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          fi
+
+          echo "Deployment summary:"
+          echo "  firebase_project: ${FIREBASE_PROJECT_ID}"
+          echo "  effective_ai_url_source: ${AI_API_BASE_URL}"
+          echo "  frontend_origin: ${FRONTEND_ORIGIN}"
+          echo "  oauth_redirect_uri: ${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+
           node scripts/validate-public-deploy-config.mjs
 
           echo "Building frontend with VITE_AI_API_BASE_URL=${AI_API_BASE_URL}"
@@ -112,6 +142,7 @@ jobs:
           if [ -z "${FIREBASE_PROJECT_ID}" ]; then
             FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           fi
+          echo "Deploying frontend to Firebase project: ${FIREBASE_PROJECT_ID}"
           firebase deploy \
             --only hosting \
             --project "${FIREBASE_PROJECT_ID}" \

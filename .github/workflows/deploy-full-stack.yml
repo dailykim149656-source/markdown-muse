@@ -9,6 +9,10 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: deploy-full-stack-main
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -46,10 +50,24 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
-            echo "GCP_PROJECT_ID is required."
-            exit 1
-          fi
+          require_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "${value}" ]; then
+              echo "${name} is required."
+              exit 1
+            fi
+          }
+
+          ensure_secret_exists() {
+            local secret_name="$1"
+            if ! gcloud secrets describe "${secret_name}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
+              echo "Secret Manager secret ${secret_name} is required."
+              exit 1
+            fi
+          }
+
+          require_secret "GCP_PROJECT_ID" "${{ secrets.GCP_PROJECT_ID }}"
 
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
@@ -79,6 +97,17 @@ jobs:
             export TEX_ALLOWED_PACKAGES
           fi
 
+          ensure_secret_exists "${TEX_SERVICE_AUTH_TOKEN_SECRET}"
+
+          echo "Deployment summary:"
+          echo "  project: ${PROJECT_ID}"
+          echo "  region: ${GCP_REGION}"
+          echo "  service: ${TEX_SERVICE_NAME}"
+          echo "  tex_allow_raw_document: ${TEX_ALLOW_RAW_DOCUMENT}"
+          echo "  tex_allow_restricted_commands: ${TEX_ALLOW_RESTRICTED_COMMANDS}"
+          echo "  tex_allowed_packages: ${TEX_ALLOWED_PACKAGES}"
+          echo "  app_token_secret: ${TEX_SERVICE_AUTH_TOKEN_SECRET}"
+
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${TEX_SERVICE_NAME}:latest"
           SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_TEX_COMPILE_TIMEOUT_MS=%s,_TEX_MAX_SOURCE_BYTES=%s,_TEX_MAX_REQUEST_BYTES=%s,_TEX_MAX_CONCURRENCY=%s,_TEX_ALLOW_RAW_DOCUMENT=%s,_TEX_ALLOW_RESTRICTED_COMMANDS=%s,_TEX_ALLOWED_PACKAGES=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s,_CALLER_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
@@ -107,6 +136,7 @@ jobs:
             exit 1
           fi
 
+          echo "TeX service deployed at: ${TEX_URL}"
           echo "url=${TEX_URL}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify TeX health
@@ -164,10 +194,32 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
-            echo "GCP_PROJECT_ID is required."
-            exit 1
-          fi
+          require_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "${value}" ]; then
+              echo "${name} is required."
+              exit 1
+            fi
+          }
+
+          ensure_secret_exists() {
+            local secret_name="$1"
+            if ! gcloud secrets describe "${secret_name}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
+              echo "Secret Manager secret ${secret_name} is required."
+              exit 1
+            fi
+          }
+
+          maybe_secret_exists() {
+            local secret_name="$1"
+            gcloud secrets describe "${secret_name}" --project "${PROJECT_ID}" >/dev/null 2>&1
+          }
+
+          require_secret "GCP_PROJECT_ID" "${{ secrets.GCP_PROJECT_ID }}"
+          require_secret "GCP_AI_ALLOWED_ORIGIN" "${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          require_secret "GCP_GOOGLE_CLIENT_ID" "${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
+          require_secret "GCP_GOOGLE_OAUTH_REDIRECT_URI" "${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
 
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
@@ -231,6 +283,25 @@ jobs:
             TEX_SERVICE_AUTH_TOKEN_SECRET="tex-service-auth-token"
           fi
 
+          ensure_secret_exists "${GOOGLE_CLIENT_SECRET_SECRET}"
+          ensure_secret_exists "${TEX_SERVICE_AUTH_TOKEN_SECRET}"
+
+          DIAGNOSTICS_SECRET_STATUS="missing"
+          if maybe_secret_exists "${AI_DIAGNOSTICS_TOKEN_SECRET}"; then
+            DIAGNOSTICS_SECRET_STATUS="present"
+          fi
+
+          echo "Deployment summary:"
+          echo "  project: ${PROJECT_ID}"
+          echo "  region: ${GCP_REGION}"
+          echo "  ai_url_source: TeX output ${TEX_SERVICE_BASE_URL}"
+          echo "  frontend_origin: ${WORKSPACE_FRONTEND_ORIGIN}"
+          echo "  oauth_redirect_uri: ${GOOGLE_OAUTH_REDIRECT_URI}"
+          echo "  tex_allow_raw_document: ${TEX_ALLOW_RAW_DOCUMENT}"
+          echo "  tex_allow_restricted_commands: ${TEX_ALLOW_RESTRICTED_COMMANDS}"
+          echo "  diagnostics_secret_name: ${AI_DIAGNOSTICS_TOKEN_SECRET}"
+          echo "  diagnostics_secret_status: ${DIAGNOSTICS_SECRET_STATUS}"
+
           TEX_SERVICE_BASE_URL="${{ needs.deploy-tex.outputs.tex_service_url }}"
           if [ -z "${TEX_SERVICE_BASE_URL}" ]; then
             echo "TeX service URL could not be resolved."
@@ -288,6 +359,7 @@ jobs:
             exit 1
           fi
 
+          echo "AI service deployed at: ${AI_URL}"
           echo "url=${AI_URL}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify AI health
@@ -323,13 +395,18 @@ jobs:
           exit 1
 
       - name: Verify internal AI diagnostics health
-        if: ${{ secrets.GCP_AI_DIAGNOSTICS_TOKEN_SECRET_NAME != '' }}
         run: |
           set -euo pipefail
           TOKEN_SECRET_NAME="${{ secrets.GCP_AI_DIAGNOSTICS_TOKEN_SECRET_NAME }}"
           if [ -z "${TOKEN_SECRET_NAME}" ]; then
             TOKEN_SECRET_NAME="ai-diagnostics-token"
           fi
+
+          if ! gcloud secrets describe "${TOKEN_SECRET_NAME}" >/dev/null 2>&1; then
+            echo "Diagnostics secret ${TOKEN_SECRET_NAME} not found. Skipping internal diagnostics health check."
+            exit 0
+          fi
+
           DIAGNOSTICS_TOKEN="$(gcloud secrets versions access latest --secret="${TOKEN_SECRET_NAME}")"
           echo "Verifying internal AI diagnostics health at: ${{ steps.ai.outputs.url }}/api/internal/ai/health"
           for i in {1..10}; do
@@ -371,6 +448,15 @@ jobs:
       - name: Build web profile frontend
         run: |
           set -euo pipefail
+
+          require_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "${value}" ]; then
+              echo "${name} is required."
+              exit 1
+            fi
+          }
 
           AI_API_BASE_URL="${{ secrets.GCP_WEB_VITE_AI_API_BASE_URL }}"
           if [ -z "${AI_API_BASE_URL}" ]; then
@@ -419,6 +505,20 @@ jobs:
           export GOOGLE_WORKSPACE_SCOPE_PROFILE
           export WORKSPACE_FRONTEND_ORIGIN="${FRONTEND_ORIGIN}"
 
+          require_secret "GCP_GOOGLE_CLIENT_ID" "${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
+          require_secret "GCP_GOOGLE_OAUTH_REDIRECT_URI" "${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+
+          FIREBASE_PROJECT_ID="${{ secrets.GCP_FIREBASE_PROJECT_ID }}"
+          if [ -z "${FIREBASE_PROJECT_ID}" ]; then
+            FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          fi
+
+          echo "Deployment summary:"
+          echo "  firebase_project: ${FIREBASE_PROJECT_ID}"
+          echo "  effective_ai_url_source: ${AI_API_BASE_URL}"
+          echo "  frontend_origin: ${FRONTEND_ORIGIN}"
+          echo "  oauth_redirect_uri: ${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+
           node scripts/validate-public-deploy-config.mjs
 
           echo "Building frontend with VITE_AI_API_BASE_URL=${AI_API_BASE_URL}"
@@ -446,6 +546,7 @@ jobs:
           if [ -z "${FIREBASE_PROJECT_ID}" ]; then
             FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           fi
+          echo "Deploying frontend to Firebase project: ${FIREBASE_PROJECT_ID}"
           firebase deploy \
             --only hosting \
             --project "${FIREBASE_PROJECT_ID}" \

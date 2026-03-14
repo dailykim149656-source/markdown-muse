@@ -5,12 +5,18 @@ on:
     branches:
       - main
     paths:
+      - ".github/workflows/deploy-tex.yml"
+      - ".github/workflows/deploy-full-stack.yml"
       - "Dockerfile.tex"
       - "cloudbuild.tex.yaml"
       - "server/texService.ts"
       - "server/modules/tex/**"
       - "src/types/tex.ts"
   workflow_dispatch:
+
+concurrency:
+  group: deploy-tex-main
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -47,10 +53,24 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
-            echo "GCP_PROJECT_ID is required."
-            exit 1
-          fi
+          require_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "${value}" ]; then
+              echo "${name} is required."
+              exit 1
+            fi
+          }
+
+          ensure_secret_exists() {
+            local secret_name="$1"
+            if ! gcloud secrets describe "${secret_name}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
+              echo "Secret Manager secret ${secret_name} is required."
+              exit 1
+            fi
+          }
+
+          require_secret "GCP_PROJECT_ID" "${{ secrets.GCP_PROJECT_ID }}"
 
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
@@ -80,6 +100,17 @@ jobs:
             export TEX_ALLOWED_PACKAGES
           fi
 
+          ensure_secret_exists "${TEX_SERVICE_AUTH_TOKEN_SECRET}"
+
+          echo "Deployment summary:"
+          echo "  project: ${PROJECT_ID}"
+          echo "  region: ${GCP_REGION}"
+          echo "  service: ${TEX_SERVICE_NAME}"
+          echo "  tex_allow_raw_document: ${TEX_ALLOW_RAW_DOCUMENT}"
+          echo "  tex_allow_restricted_commands: ${TEX_ALLOW_RESTRICTED_COMMANDS}"
+          echo "  tex_allowed_packages: ${TEX_ALLOWED_PACKAGES}"
+          echo "  app_token_secret: ${TEX_SERVICE_AUTH_TOKEN_SECRET}"
+
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${TEX_SERVICE_NAME}:latest"
           SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_TEX_COMPILE_TIMEOUT_MS=%s,_TEX_MAX_SOURCE_BYTES=%s,_TEX_MAX_REQUEST_BYTES=%s,_TEX_MAX_CONCURRENCY=%s,_TEX_ALLOW_RAW_DOCUMENT=%s,_TEX_ALLOW_RESTRICTED_COMMANDS=%s,_TEX_ALLOWED_PACKAGES=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s,_CALLER_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
@@ -108,6 +139,7 @@ jobs:
             exit 1
           fi
 
+          echo "TeX service deployed at: ${TEX_URL}"
           echo "url=${TEX_URL}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify TeX health
