@@ -63,6 +63,34 @@ describe("publicDeploymentConfig", () => {
     expect(validation.warnings.some((warning) => warning.includes("run.app"))).toBe(true);
   });
 
+  it("normalizes equivalent origins before comparing frontend and CORS config", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev/",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://api.docsy.dev/api/auth/google/callback",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(config.allowedOrigins).toEqual(["https://app.docsy.dev"]);
+    expect(config.frontendOrigin).toBe("https://app.docsy.dev");
+    expect(validation.errors).toEqual([]);
+  });
+
+  it("rejects allowed origins that are not origin-only URLs", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev/editor",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://api.docsy.dev/api/auth/google/callback",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(validation.errors.some((error) => error.includes("AI_ALLOWED_ORIGIN must be an origin without path"))).toBe(true);
+  });
+
   it("rejects wildcard CORS for non-local deployments even in testing mode", () => {
     const config = readPublicDeploymentConfig({
       AI_ALLOWED_ORIGIN: "*",

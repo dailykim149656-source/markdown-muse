@@ -1,6 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import { assertWorkspaceSession } from "../auth/routes";
 import { ensureGoogleAccessToken } from "../auth/googleOAuth";
+import { parseConfiguredAllowedOrigins } from "../config/publicDeploymentConfig.js";
 import { HttpError, getRequestUrl, json, parseOptionalRequestBody, type HttpResponse } from "../http/http";
 import { getWorkspaceRepository } from "./repository";
 import {
@@ -65,10 +66,7 @@ const requiresExplicitFrontendOrigin = () =>
   Boolean(
     process.env.K_SERVICE
     || process.env.NODE_ENV === "production"
-    || (process.env.AI_ALLOWED_ORIGIN || "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean)
+    || parseConfiguredAllowedOrigins(process.env.AI_ALLOWED_ORIGIN || "")
       .some((origin) => origin !== "*" && !isLocalAbsoluteOrigin(origin)),
   );
 

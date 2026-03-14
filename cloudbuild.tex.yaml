@@ -15,20 +15,30 @@ steps:
       - push
       - ${_IMAGE_URI}
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - ${_SERVICE_NAME}
-      - --image=${_IMAGE_URI}
-      - --region=${_REGION}
-      - --platform=managed
-      - --no-allow-unauthenticated
-      - --port=8081
-      - --ingress=all
-      - --service-account=${_RUN_SERVICE_ACCOUNT}
-      - --set-env-vars=TEX_COMPILE_TIMEOUT_MS=${_TEX_COMPILE_TIMEOUT_MS},TEX_MAX_SOURCE_BYTES=${_TEX_MAX_SOURCE_BYTES},TEX_MAX_REQUEST_BYTES=${_TEX_MAX_REQUEST_BYTES},TEX_MAX_CONCURRENCY=${_TEX_MAX_CONCURRENCY},TEX_ALLOW_RAW_DOCUMENT=${_TEX_ALLOW_RAW_DOCUMENT},TEX_ALLOW_RESTRICTED_COMMANDS=${_TEX_ALLOW_RESTRICTED_COMMANDS},TEX_ALLOWED_PACKAGES=${_TEX_ALLOWED_PACKAGES}
-      - --update-secrets=TEX_SERVICE_AUTH_TOKEN=${_TEX_SERVICE_AUTH_TOKEN_SECRET}:latest
+      - -ceu
+      - |
+        cat > /workspace/tex-service-env.yaml <<EOF
+        TEX_COMPILE_TIMEOUT_MS: "${_TEX_COMPILE_TIMEOUT_MS}"
+        TEX_MAX_SOURCE_BYTES: "${_TEX_MAX_SOURCE_BYTES}"
+        TEX_MAX_REQUEST_BYTES: "${_TEX_MAX_REQUEST_BYTES}"
+        TEX_MAX_CONCURRENCY: "${_TEX_MAX_CONCURRENCY}"
+        TEX_ALLOW_RAW_DOCUMENT: "${_TEX_ALLOW_RAW_DOCUMENT}"
+        TEX_ALLOW_RESTRICTED_COMMANDS: "${_TEX_ALLOW_RESTRICTED_COMMANDS}"
+        TEX_ALLOWED_PACKAGES: "${_TEX_ALLOWED_PACKAGES}"
+        EOF
+
+        gcloud run deploy "${_SERVICE_NAME}" \
+          --image="${_IMAGE_URI}" \
+          --region="${_REGION}" \
+          --platform=managed \
+          --no-allow-unauthenticated \
+          --port=8081 \
+          --ingress=all \
+          --service-account="${_RUN_SERVICE_ACCOUNT}" \
+          --env-vars-file=/workspace/tex-service-env.yaml \
+          --update-secrets="TEX_SERVICE_AUTH_TOKEN=${_TEX_SERVICE_AUTH_TOKEN_SECRET}:latest"
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
     args:

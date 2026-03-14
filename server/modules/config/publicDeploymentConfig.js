@@ -43,6 +43,31 @@ const splitList = (value) => (value || "")
   .map((part) => part.trim())
   .filter((part) => part.length > 0);
 
+export const normalizeConfiguredOrigin = (value) => {
+  const trimmed = value?.trim() || "";
+
+  if (!trimmed || trimmed === "*") {
+    return trimmed;
+  }
+
+  try {
+    const url = new URL(trimmed);
+
+    if (url.pathname === "/" && !url.search && !url.hash) {
+      return url.origin;
+    }
+  } catch {
+    return trimmed;
+  }
+
+  return trimmed;
+};
+
+export const parseConfiguredAllowedOrigins = (value) => (value || "")
+  .split(",")
+  .map((part) => normalizeConfiguredOrigin(part))
+  .filter((part) => part.length > 0);
+
 const isLocalhostHost = (hostname) => LOCALHOST_HOSTNAMES.has(hostname.trim().toLowerCase());
 
 const usesManagedGoogleHost = (hostname) => MANAGED_GOOGLE_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
@@ -118,11 +143,8 @@ const pushDynamicDnsMessage = ({ bucket, fieldName, hostname, publishingStatus }
 export const readPublicDeploymentConfig = (env = process.env) => {
   const publishingStatus = normalizeGoogleOAuthPublishingStatus(env.GOOGLE_OAUTH_PUBLISHING_STATUS);
   const configuredAllowedOrigins = env.AI_ALLOWED_ORIGIN?.trim() || "*";
-  const allowedOrigins = configuredAllowedOrigins
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-  const frontendOrigin = env.WORKSPACE_FRONTEND_ORIGIN?.trim() || "";
+  const allowedOrigins = parseConfiguredAllowedOrigins(configuredAllowedOrigins);
+  const frontendOrigin = normalizeConfiguredOrigin(env.WORKSPACE_FRONTEND_ORIGIN);
   const googleClientId = env.GOOGLE_CLIENT_ID?.trim() || "";
   const redirectUri = env.GOOGLE_OAUTH_REDIRECT_URI?.trim() || "";
   const explicitScopes = splitList(env.GOOGLE_WORKSPACE_SCOPES);
@@ -150,6 +172,15 @@ export const validatePublicDeploymentConfig = (config) => {
   const errors = [];
   const warnings = [];
   const notes = [];
+
+  for (const allowedOrigin of config.allowedOrigins) {
+    if (allowedOrigin === "*") {
+      continue;
+    }
+
+    const allowedOriginUrl = parseUrl(allowedOrigin, "AI_ALLOWED_ORIGIN", errors);
+    validateOriginOnlyUrl(allowedOriginUrl, "AI_ALLOWED_ORIGIN", errors);
+  }
 
   const frontendUrl = parseUrl(config.frontendOrigin, "WORKSPACE_FRONTEND_ORIGIN", errors);
   const redirectUrl = parseUrl(config.redirectUri, "GOOGLE_OAUTH_REDIRECT_URI", errors);

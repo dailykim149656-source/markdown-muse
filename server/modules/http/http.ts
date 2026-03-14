@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { OutgoingHttpHeaders } from "node:http";
+import { parseConfiguredAllowedOrigins } from "../config/publicDeploymentConfig.js";
 
 export interface HttpResponse {
   body?: Buffer | string | Uint8Array;
@@ -23,10 +24,7 @@ interface RequestBodyOptions {
 
 const getAllowedOrigins = () => {
   const configured = process.env.AI_ALLOWED_ORIGIN || "http://localhost:8080";
-  return configured
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
+  return parseConfiguredAllowedOrigins(configured);
 };
 
 export const ALLOWED_ORIGINS = getAllowedOrigins();
