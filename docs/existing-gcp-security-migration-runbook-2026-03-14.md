@@ -57,7 +57,7 @@ GitHub Actions secrets needed for the migration:
 
 Recommended optional GitHub Actions secrets:
 
-- `GCP_AI_DIAGNOSTICS_TOKEN`
+- `GCP_AI_DIAGNOSTICS_TOKEN_SECRET_NAME`
 - `GCP_AI_MAX_REQUEST_BYTES`
 - `GCP_TEX_MAX_REQUEST_BYTES`
 - `GCP_TEX_ALLOW_RAW_DOCUMENT`
@@ -71,6 +71,7 @@ Secret Manager secrets expected by the runtime:
 
 - `google-client-secret`
 - `tex-service-auth-token`
+- `ai-diagnostics-token` when internal diagnostics access is required
 
 ## 3. Recommended migration values
 
@@ -135,7 +136,7 @@ Expected:
 
 - `GET /api/ai/health` returns minimal readiness data
 - `GET /api/tex/health` through the AI proxy succeeds
-- `GET /api/internal/ai/health` succeeds only when `GCP_AI_DIAGNOSTICS_TOKEN` is configured and supplied
+- `GET /api/internal/ai/health` succeeds when the diagnostics secret exists and its value is supplied
 
 ### Step 5. Rebuild and deploy Firebase Hosting
 

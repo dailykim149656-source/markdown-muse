@@ -175,10 +175,21 @@ The split workflows do:
   - manual coordinated release workflow
   - runs TeX -> AI -> web in sequence
 
+Trigger behavior:
+
+- each split workflow includes its own workflow file in `push.paths`
+- deployment validation script changes trigger the relevant workflows
+- `deploy-full-stack.yml` remains manual by design and does not auto-run on push
+
 Recommended usage:
 
 - day-to-day deploys: use the split workflows
 - coordinated releases or contract changes: use `deploy-full-stack.yml`
+
+Diagnostics secret fallback:
+
+- if `GCP_AI_DIAGNOSTICS_TOKEN_SECRET_NAME` is unset, deploy workflows fall back to `ai-diagnostics-token`
+- internal diagnostics verification now checks Secret Manager directly and logs a clear skip when the secret does not exist
 
 ## TeX validation service
 
