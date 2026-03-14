@@ -40,6 +40,7 @@ Read these if you are changing code or need implementation context:
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
 - [Security Status](security-status-2026-03-14.md)
+- [Existing GCP Security Migration Runbook](existing-gcp-security-migration-runbook-2026-03-14.md)
 - [Security Credential Rotation Runbook](security-credential-rotation-runbook-2026-03-14.md)
 - [Edge and Browser Security Runbook](edge-and-browser-security-runbook-2026-03-14.md)
 - [Devpost Submission Copy](devpost-submission-copy-2026-03-14.md)
@@ -74,6 +75,7 @@ Read these if you are validating release readiness or operational review state:
 
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
 - [Security Status](security-status-2026-03-14.md)
+- [Existing GCP Security Migration Runbook](existing-gcp-security-migration-runbook-2026-03-14.md)
 - [Google Workspace Live Validation Runbook](google-workspace-live-validation-runbook-2026-03-12.md)
 - [Google Docs Sync Support Matrix](google-docs-sync-support-matrix-2026-03-12.md)
 - [GCP, Firebase, and Google OAuth Hardening](session-summary-2026-03-13-gcp-firebase-google-oauth-hardening.md)

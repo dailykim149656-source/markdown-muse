@@ -71,6 +71,7 @@ security program.
 
 - Public health endpoints were reduced to minimal readiness output.
 - A token-protected internal diagnostics route was added for detailed AI health.
+- Internal diagnostics can be moved to Secret Manager-backed runtime injection instead of plain env configuration.
 - Baseline browser security headers were added to API responses.
 - Firebase Hosting now serves:
   - `Content-Security-Policy-Report-Only`
@@ -174,5 +175,6 @@ findings, but they affect confidence and release hygiene.
 
 - [Security Credential Rotation Runbook](security-credential-rotation-runbook-2026-03-14.md)
 - [Edge and Browser Security Runbook](edge-and-browser-security-runbook-2026-03-14.md)
+- [Existing GCP Security Migration Runbook](existing-gcp-security-migration-runbook-2026-03-14.md)
 - [GCP Deployment Guide](gcp-deployment.md)
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)

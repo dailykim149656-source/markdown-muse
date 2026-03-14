@@ -97,7 +97,7 @@ Recommended values:
 - `AI_SERVER_PORT=8080`
 - `AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
 - `AI_MAX_REQUEST_BYTES=2097152`
-- `AI_DIAGNOSTICS_TOKEN` set only for internal diagnostics consumers
+- `AI_DIAGNOSTICS_TOKEN` should be provided through a Secret Manager-backed env when internal diagnostics access is needed
 - `WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN`
 - `GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
 - `GOOGLE_OAUTH_PUBLISHING_STATUS=testing`
@@ -153,6 +153,7 @@ Required repository secrets:
 - `GCP_GOOGLE_OAUTH_REDIRECT_URI` (exact API callback URL)
 - `GCP_GOOGLE_OAUTH_PUBLISHING_STATUS` (`testing` or `production`)
 - `GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE` (`restricted` or `reduced`)
+- `GCP_AI_DIAGNOSTICS_TOKEN_SECRET_NAME` (optional, defaults to `ai-diagnostics-token`)
 - `GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME` (optional, defaults to `tex-service-auth-token`)
 - `GCP_TEX_SERVICE_BASE_URL`
 - `GCP_WEB_VITE_AI_API_BASE_URL`

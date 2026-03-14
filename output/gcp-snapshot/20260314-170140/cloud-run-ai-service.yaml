@@ -1,0 +1,108 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/ingress-status: all
+    run.googleapis.com/invoker-iam-disabled: 'true'
+    run.googleapis.com/maxScale: '20'
+    run.googleapis.com/urls: '["https://docsy-399359781191.asia-northeast3.run.app","https://docsy-mc32v24cyq-du.a.run.app"]'
+  labels:
+    cloud.googleapis.com/location: asia-northeast3
+    commit-sha: 03fdc57b1f5c0f5fa7a2c15fd4e0ec7b353a53ac
+    gcb-build-id: fabd9abe-5e73-43c0-9f5b-194f582e84f0
+    gcb-trigger-id: 45a94861-af82-4d1f-9f3e-d6ab0221d626
+    gcb-trigger-region: global
+    managed-by: gcp-cloud-build-deploy-cloud-run
+    run.googleapis.com/satisfiesPzs: 'true'
+  name: docsy
+  namespace: '399359781191'
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '20'
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 560.0.0
+        run.googleapis.com/startup-cpu-boost: 'true'
+      labels:
+        client.knative.dev/nonce: xpcxpdzjsx
+        commit-sha: 03fdc57b1f5c0f5fa7a2c15fd4e0ec7b353a53ac
+        gcb-build-id: fabd9abe-5e73-43c0-9f5b-194f582e84f0
+        gcb-trigger-id: 45a94861-af82-4d1f-9f3e-d6ab0221d626
+        gcb-trigger-region: global
+        managed-by: gcp-cloud-build-deploy-cloud-run
+        run.googleapis.com/startupProbeType: Default
+    spec:
+      containerConcurrency: 80
+      containers:
+      - env:
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: gemini-api-key
+        - name: GOOGLE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: google-client-secret
+        - name: TEX_SERVICE_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: tex-service-auth-token
+        - name: GOOGLE_GENAI_USE_VERTEXAI
+          value: 'true'
+        - name: GOOGLE_CLOUD_PROJECT
+          value: urban-dds
+        - name: GOOGLE_CLOUD_LOCATION
+          value: asia-northeast3
+        - name: GEMINI_MODEL
+          value: gemini-3.1-flash-lite-preview
+        - name: GEMINI_FALLBACK_MODEL
+          value: gemini-2.5-flash
+        - name: AI_ALLOWED_ORIGIN
+          value: https://urban-dds.web.app/
+        - name: AI_DIAGNOSTICS_TOKEN
+        - name: AI_MAX_REQUEST_BYTES
+          value: '2097152'
+        - name: GOOGLE_CLIENT_ID
+          value: 399359781191-on8cks3132ckqk2m6m03uqehi4lmit09.apps.googleusercontent.com
+        - name: GOOGLE_OAUTH_REDIRECT_URI
+          value: https://docsy-mc32v24cyq-du.a.run.app/api/auth/google/callback
+        - name: GOOGLE_OAUTH_PUBLISHING_STATUS
+          value: testing
+        - name: GOOGLE_WORKSPACE_SCOPE_PROFILE
+          value: restricted
+        - name: WORKSPACE_FRONTEND_ORIGIN
+          value: https://urban-dds.web.app
+        - name: GOOGLE_WORKSPACE_SCOPES
+        - name: TEX_ALLOW_RAW_DOCUMENT
+          value: 'false'
+        - name: TEX_ALLOW_RESTRICTED_COMMANDS
+          value: 'false'
+        - name: TEX_ALLOWED_PACKAGES
+          value: amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK
+        - name: TEX_SERVICE_BASE_URL
+          value: https://docsy-tex-399359781191.asia-northeast3.run.app
+        image: asia-northeast3-docker.pkg.dev/urban-dds/docsy/docsy:latest
+        name: placeholder-1
+        ports:
+        - containerPort: 8080
+          name: http1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        startupProbe:
+          failureThreshold: 1
+          periodSeconds: 240
+          tcpSocket:
+            port: 8080
+          timeoutSeconds: 240
+      serviceAccountName: 399359781191-compute@developer.gserviceaccount.com
+      timeoutSeconds: 300
+  traffic:
+  - latestRevision: true
+    percent: 100

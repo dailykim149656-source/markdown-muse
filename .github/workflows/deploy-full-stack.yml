@@ -24,7 +24,11 @@ jobs:
       ARTIFACT_REPOSITORY: docsy
       TEX_COMPILE_TIMEOUT_MS: "15000"
       TEX_MAX_SOURCE_BYTES: "300000"
+      TEX_MAX_REQUEST_BYTES: "400000"
       TEX_MAX_CONCURRENCY: "2"
+      TEX_ALLOW_RAW_DOCUMENT: "false"
+      TEX_ALLOW_RESTRICTED_COMMANDS: "false"
+      TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,enumitem,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,tabularx,xcolor,xeCJK"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -55,14 +59,38 @@ jobs:
             TEX_SERVICE_AUTH_TOKEN_SECRET="tex-service-auth-token"
           fi
 
+          TEX_MAX_REQUEST_BYTES="${{ secrets.GCP_TEX_MAX_REQUEST_BYTES }}"
+          if [ -n "${TEX_MAX_REQUEST_BYTES}" ]; then
+            export TEX_MAX_REQUEST_BYTES
+          fi
+
+          TEX_ALLOW_RAW_DOCUMENT="${{ secrets.GCP_TEX_ALLOW_RAW_DOCUMENT }}"
+          if [ -n "${TEX_ALLOW_RAW_DOCUMENT}" ]; then
+            export TEX_ALLOW_RAW_DOCUMENT
+          fi
+
+          TEX_ALLOW_RESTRICTED_COMMANDS="${{ secrets.GCP_TEX_ALLOW_RESTRICTED_COMMANDS }}"
+          if [ -n "${TEX_ALLOW_RESTRICTED_COMMANDS}" ]; then
+            export TEX_ALLOW_RESTRICTED_COMMANDS
+          fi
+
+          TEX_ALLOWED_PACKAGES="${{ secrets.GCP_TEX_ALLOWED_PACKAGES }}"
+          if [ -n "${TEX_ALLOWED_PACKAGES}" ]; then
+            export TEX_ALLOWED_PACKAGES
+          fi
+
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${TEX_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_TEX_COMPILE_TIMEOUT_MS=%s,_TEX_MAX_SOURCE_BYTES=%s,_TEX_MAX_CONCURRENCY=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s,_CALLER_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_SERVICE_NAME=%s,_TEX_COMPILE_TIMEOUT_MS=%s,_TEX_MAX_SOURCE_BYTES=%s,_TEX_MAX_REQUEST_BYTES=%s,_TEX_MAX_CONCURRENCY=%s,_TEX_ALLOW_RAW_DOCUMENT=%s,_TEX_ALLOW_RESTRICTED_COMMANDS=%s,_TEX_ALLOWED_PACKAGES=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_RUN_SERVICE_ACCOUNT=%s,_CALLER_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$TEX_SERVICE_NAME" \
             "$TEX_COMPILE_TIMEOUT_MS" \
             "$TEX_MAX_SOURCE_BYTES" \
+            "${TEX_MAX_REQUEST_BYTES}" \
             "$TEX_MAX_CONCURRENCY" \
+            "${TEX_ALLOW_RAW_DOCUMENT}" \
+            "${TEX_ALLOW_RESTRICTED_COMMANDS}" \
+            "${TEX_ALLOWED_PACKAGES}" \
             "$TEX_SERVICE_AUTH_TOKEN_SECRET" \
             "$RUN_SERVICE_ACCOUNT" \
             "$RUN_SERVICE_ACCOUNT")
@@ -168,10 +196,34 @@ jobs:
           fi
 
           GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
+          AI_MAX_REQUEST_BYTES="${{ secrets.GCP_AI_MAX_REQUEST_BYTES }}"
+          if [ -z "${AI_MAX_REQUEST_BYTES}" ]; then
+            AI_MAX_REQUEST_BYTES="2097152"
+          fi
+
+          TEX_ALLOW_RAW_DOCUMENT="${{ secrets.GCP_TEX_ALLOW_RAW_DOCUMENT }}"
+          if [ -z "${TEX_ALLOW_RAW_DOCUMENT}" ]; then
+            TEX_ALLOW_RAW_DOCUMENT="false"
+          fi
+
+          TEX_ALLOW_RESTRICTED_COMMANDS="${{ secrets.GCP_TEX_ALLOW_RESTRICTED_COMMANDS }}"
+          if [ -z "${TEX_ALLOW_RESTRICTED_COMMANDS}" ]; then
+            TEX_ALLOW_RESTRICTED_COMMANDS="false"
+          fi
+
+          TEX_ALLOWED_PACKAGES="${{ secrets.GCP_TEX_ALLOWED_PACKAGES }}"
+          if [ -z "${TEX_ALLOWED_PACKAGES}" ]; then
+            TEX_ALLOWED_PACKAGES="amsmath,amssymb,amsthm,array,booktabs,enumitem,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,tabularx,xcolor,xeCJK"
+          fi
 
           GOOGLE_CLIENT_SECRET_SECRET="${{ secrets.GCP_GOOGLE_CLIENT_SECRET_SECRET_NAME }}"
           if [ -z "${GOOGLE_CLIENT_SECRET_SECRET}" ]; then
             GOOGLE_CLIENT_SECRET_SECRET="google-client-secret"
+          fi
+
+          AI_DIAGNOSTICS_TOKEN_SECRET="${{ secrets.GCP_AI_DIAGNOSTICS_TOKEN_SECRET_NAME }}"
+          if [ -z "${AI_DIAGNOSTICS_TOKEN_SECRET}" ]; then
+            AI_DIAGNOSTICS_TOKEN_SECRET="ai-diagnostics-token"
           fi
 
           TEX_SERVICE_AUTH_TOKEN_SECRET="${{ secrets.GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME }}"
@@ -192,11 +244,15 @@ jobs:
           export GOOGLE_WORKSPACE_SCOPES
           export GOOGLE_WORKSPACE_SCOPE_PROFILE
           export WORKSPACE_FRONTEND_ORIGIN
+          export AI_MAX_REQUEST_BYTES
+          export TEX_ALLOW_RAW_DOCUMENT
+          export TEX_ALLOW_RESTRICTED_COMMANDS
+          export TEX_ALLOWED_PACKAGES
 
           node scripts/validate-public-deploy-config.mjs
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_VERTEX_LOCATION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_GEMINI_FALLBACK_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_GOOGLE_OAUTH_PUBLISHING_STATUS=%s,_GOOGLE_WORKSPACE_SCOPE_PROFILE=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_GOOGLE_CLIENT_SECRET_SECRET=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_TEX_SERVICE_BASE_URL=%s,_RUN_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_VERTEX_LOCATION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_GEMINI_FALLBACK_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_AI_MAX_REQUEST_BYTES=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_GOOGLE_OAUTH_PUBLISHING_STATUS=%s,_GOOGLE_WORKSPACE_SCOPE_PROFILE=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_AI_DIAGNOSTICS_TOKEN_SECRET=%s,_GOOGLE_CLIENT_SECRET_SECRET=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_TEX_ALLOW_RAW_DOCUMENT=%s,_TEX_ALLOW_RESTRICTED_COMMANDS=%s,_TEX_ALLOWED_PACKAGES=%s,_TEX_SERVICE_BASE_URL=%s,_RUN_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$VERTEX_LOCATION" \
@@ -204,14 +260,19 @@ jobs:
             "$GEMINI_MODEL" \
             "$GEMINI_FALLBACK_MODEL" \
             "$ALLOWED_ORIGIN" \
+            "${AI_MAX_REQUEST_BYTES}" \
             "${{ secrets.GCP_GOOGLE_CLIENT_ID }}" \
             "${GOOGLE_OAUTH_REDIRECT_URI}" \
             "${GOOGLE_OAUTH_PUBLISHING_STATUS}" \
             "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" \
             "${WORKSPACE_FRONTEND_ORIGIN}" \
             "${GOOGLE_WORKSPACE_SCOPES}" \
+            "${AI_DIAGNOSTICS_TOKEN_SECRET}" \
             "${GOOGLE_CLIENT_SECRET_SECRET}" \
             "${TEX_SERVICE_AUTH_TOKEN_SECRET}" \
+            "${TEX_ALLOW_RAW_DOCUMENT}" \
+            "${TEX_ALLOW_RESTRICTED_COMMANDS}" \
+            "${TEX_ALLOWED_PACKAGES}" \
             "${TEX_SERVICE_BASE_URL}" \
             "$RUN_SERVICE_ACCOUNT")
 
@@ -259,6 +320,30 @@ jobs:
           done
 
           echo "AI TeX proxy health check failed after 10 attempts."
+          exit 1
+
+      - name: Verify internal AI diagnostics health
+        if: ${{ secrets.GCP_AI_DIAGNOSTICS_TOKEN_SECRET_NAME != '' }}
+        run: |
+          set -euo pipefail
+          TOKEN_SECRET_NAME="${{ secrets.GCP_AI_DIAGNOSTICS_TOKEN_SECRET_NAME }}"
+          if [ -z "${TOKEN_SECRET_NAME}" ]; then
+            TOKEN_SECRET_NAME="ai-diagnostics-token"
+          fi
+          DIAGNOSTICS_TOKEN="$(gcloud secrets versions access latest --secret="${TOKEN_SECRET_NAME}")"
+          echo "Verifying internal AI diagnostics health at: ${{ steps.ai.outputs.url }}/api/internal/ai/health"
+          for i in {1..10}; do
+            if curl -fsS \
+              -H "X-Docsy-Diagnostics-Token: ${DIAGNOSTICS_TOKEN}" \
+              "${{ steps.ai.outputs.url }}/api/internal/ai/health" >/dev/null; then
+              echo "Internal AI diagnostics health check passed!"
+              exit 0
+            fi
+            echo "Internal AI diagnostics health check failed (attempt $i), retrying in 5 seconds..."
+            sleep 5
+          done
+
+          echo "Internal AI diagnostics health check failed after 10 attempts."
           exit 1
 
   deploy-web:

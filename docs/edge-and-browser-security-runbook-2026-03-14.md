@@ -88,6 +88,11 @@ If you need the detailed AI diagnostics payload in a deployed environment:
 If `AI_DIAGNOSTICS_TOKEN` is unset, the internal route is available only for
 local development.
 
+Recommended deployment shape:
+
+- store the diagnostics token in Secret Manager
+- inject it into Cloud Run as a secret-backed env var instead of a plain env var
+
 ## Validation checklist
 
 1. `GET /health` returns only minimal readiness fields.
