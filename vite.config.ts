@@ -69,8 +69,6 @@ const bundleReportPlugin = () => ({
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  const profile = mode === "web" ? "web" : "desktop";
-
   return ({
   server: {
     host: "::",
@@ -104,48 +102,6 @@ export default defineConfig(({ mode }) => {
       output: {
         manualChunks(id) {
           if (matchesSource(id, [
-            "src/components/editor/FileSidebarKnowledgePanels.tsx",
-            "src/components/editor/WorkspaceGraphPanel.tsx",
-            "src/components/editor/GraphExplorerDialog.tsx",
-            "src/hooks/useKnowledgeBase.ts",
-            "src/lib/knowledge/",
-          ])) {
-            return "knowledge";
-          }
-
-          if (matchesSource(id, [
-            "src/components/editor/FileSidebarHistoryPanels.tsx",
-            "src/lib/history/",
-            "src/lib/analysis/formatConsistency.ts",
-          ])) {
-            return "history";
-          }
-
-          if (matchesSource(id, [
-            "src/components/editor/AiAssistantRuntime.tsx",
-            "src/hooks/useAiAssistant.ts",
-            "src/lib/ai/assistantClient.ts",
-            "src/lib/ai/captureWorkspaceScreenshot.ts",
-            "src/lib/ai/compareDocuments.ts",
-            "src/lib/ai/procedureExtraction.ts",
-            "src/lib/ai/sectionGeneration.ts",
-            "src/lib/ai/suggestDocumentUpdates.ts",
-            "src/lib/ai/summaryContracts.ts",
-            "src/lib/ai/tocGeneration.ts",
-          ])) {
-            return "ai-assistant";
-          }
-
-          if (matchesSource(id, [
-            "src/hooks/useLiveAgent.ts",
-            "src/lib/ai/liveAgentClient.ts",
-            "src/lib/ai/liveAgentGraphContext.ts",
-            "src/lib/ai/liveAgentPatchBuilder.ts",
-          ])) {
-            return "ai-agent";
-          }
-
-          if (matchesSource(id, [
             "src/lib/ai/autosaveSummaryClient.ts",
           ])) {
             return "ai-history";
@@ -156,19 +112,6 @@ export default defineConfig(({ mode }) => {
             "src/lib/ai/texClient.ts",
           ])) {
             return "ai-shared";
-          }
-
-          if (matchesSource(id, [
-            "src/components/editor/ShareLinkDialog.tsx",
-          ])) {
-            return "share";
-          }
-
-          if (profile === "web" && matchesSource(id, [
-            "src/components/editor/TemplateDialog.tsx",
-            "src/components/editor/PatchReviewDialog.tsx",
-          ])) {
-            return "editor-aux";
           }
 
           if (!id.includes("node_modules")) {

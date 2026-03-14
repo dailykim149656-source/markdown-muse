@@ -102,7 +102,7 @@ Recommended values:
 - `GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
 - `GOOGLE_OAUTH_PUBLISHING_STATUS=testing`
 - `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted`
-- `TEX_ALLOW_RAW_DOCUMENT=false`
+- `TEX_ALLOW_RAW_DOCUMENT=true`
 - `TEX_ALLOW_RESTRICTED_COMMANDS=false`
 - `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK`
 - `TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
@@ -111,6 +111,9 @@ Recommended values:
 validator now treats wildcard CORS as invalid outside local development.
 For external production Google OAuth, keep managed preview domains such as
 `*.web.app` and `*.run.app` out of the final config.
+LaTeX mode sends raw LaTeX to the backend. Full preambles and
+`\documentclass ... \begin{document} ... \end{document}` wrappers require
+`TEX_ALLOW_RAW_DOCUMENT=true`.
 
 ### 3. Deploy to Cloud Run
 
@@ -222,12 +225,15 @@ Recommended values:
 - `TEX_MAX_SOURCE_BYTES=300000`
 - `TEX_MAX_REQUEST_BYTES=400000`
 - `TEX_MAX_CONCURRENCY=2`
-- `TEX_ALLOW_RAW_DOCUMENT=false`
+- `TEX_ALLOW_RAW_DOCUMENT=true`
 - `TEX_ALLOW_RESTRICTED_COMMANDS=false`
 - `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK`
 
 The TeX service is called by the AI API, not directly by the browser. The
 frontend should continue to use only `VITE_AI_API_BASE_URL`.
+This repo's public/demo deployment keeps full raw LaTeX documents enabled while
+still blocking dangerous file/process primitives with
+`TEX_ALLOW_RESTRICTED_COMMANDS=false`.
 
 The current TeX image is a coverage-first profile, not a minimal fast-build
 profile. It intentionally includes a broader curated TeX Live package set for
@@ -452,6 +458,24 @@ Fix:
 
 - set `AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
 - use the exact frontend origin, including protocol
+
+### Raw LaTeX document compilation is disabled for this deployment
+
+Symptom:
+
+- preview or PDF export fails with:
+  - `Raw LaTeX document compilation is disabled for this deployment. Submit document body content instead of a full preamble/document wrapper.`
+
+Cause:
+
+- the deployed AI service and/or TeX service revision drifted to `TEX_ALLOW_RAW_DOCUMENT=false`
+- this usually happens after a redeploy when workflow defaults or Cloud Build substitutions no longer match the intended demo policy
+
+Fix:
+
+- confirm both Cloud Run services have `TEX_ALLOW_RAW_DOCUMENT=true`
+- keep `TEX_ALLOW_RESTRICTED_COMMANDS=false` unless you explicitly trust file/process primitives
+- redeploy through the repo-managed workflows so AI and TeX receive the same TeX policy values
 
 ### Secret preflight says a secret is required, but the secret already exists
 

@@ -148,7 +148,7 @@ jobs:
 
           TEX_ALLOW_RAW_DOCUMENT="${{ secrets.GCP_TEX_ALLOW_RAW_DOCUMENT }}"
           if [ -z "${TEX_ALLOW_RAW_DOCUMENT}" ]; then
-            TEX_ALLOW_RAW_DOCUMENT="false"
+            TEX_ALLOW_RAW_DOCUMENT="true"
           fi
 
           TEX_ALLOW_RESTRICTED_COMMANDS="${{ secrets.GCP_TEX_ALLOW_RESTRICTED_COMMANDS }}"
@@ -158,7 +158,7 @@ jobs:
 
           TEX_ALLOWED_PACKAGES="${{ secrets.GCP_TEX_ALLOWED_PACKAGES }}"
           if [ -z "${TEX_ALLOWED_PACKAGES}" ]; then
-            TEX_ALLOWED_PACKAGES="amsmath,amssymb,amsthm,array,booktabs,enumitem,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,tabularx,xcolor,xeCJK"
+            TEX_ALLOWED_PACKAGES="amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK"
           fi
 
           GOOGLE_CLIENT_SECRET_SECRET="${{ secrets.GCP_GOOGLE_CLIENT_SECRET_SECRET_NAME }}"

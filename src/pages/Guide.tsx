@@ -390,6 +390,8 @@ const Guide = () => {
               {[
                 t("guide.workspaceFlowStepConnect"),
                 t("guide.workspaceFlowStepRescan"),
+                t("guide.workspaceFlowStepExport"),
+                t("guide.workspaceFlowStepSave"),
                 t("guide.workspaceFlowStepConflict"),
                 t("guide.workspaceFlowStepWarnings"),
               ].map((step, index) => (

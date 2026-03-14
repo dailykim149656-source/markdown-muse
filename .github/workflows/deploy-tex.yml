@@ -9,7 +9,9 @@ on:
       - ".github/workflows/deploy-full-stack.yml"
       - "Dockerfile.tex"
       - "cloudbuild.tex.yaml"
+      - "scripts/validate-public-deploy-config.mjs"
       - "server/texService.ts"
+      - "server/modules/config/**"
       - "server/modules/tex/**"
       - "src/types/tex.ts"
   workflow_dispatch:
@@ -33,9 +35,9 @@ jobs:
       TEX_MAX_SOURCE_BYTES: "300000"
       TEX_MAX_REQUEST_BYTES: "400000"
       TEX_MAX_CONCURRENCY: "2"
-      TEX_ALLOW_RAW_DOCUMENT: "false"
+      TEX_ALLOW_RAW_DOCUMENT: "true"
       TEX_ALLOW_RESTRICTED_COMMANDS: "false"
-      TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,enumitem,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,tabularx,xcolor,xeCJK"
+      TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -113,6 +115,12 @@ jobs:
           if [ -n "${TEX_ALLOWED_PACKAGES}" ]; then
             export TEX_ALLOWED_PACKAGES
           fi
+
+          export TEX_ALLOW_RAW_DOCUMENT
+          export TEX_ALLOW_RESTRICTED_COMMANDS
+          export TEX_ALLOWED_PACKAGES
+
+          node scripts/validate-public-deploy-config.mjs
 
           ensure_secret_access "${TEX_SERVICE_AUTH_TOKEN_SECRET}"
 

@@ -5,6 +5,13 @@ import {
 
 const config = readPublicDeploymentConfig(process.env);
 const validation = validatePublicDeploymentConfig(config);
+const formatOptionalBoolean = (value, rawValue) => {
+  if (value === true || value === false) {
+    return value ? "true" : "false";
+  }
+
+  return rawValue || "(unset)";
+};
 
 console.log("[public-deploy] OAuth publishing status:", config.publishingStatus);
 console.log("[public-deploy] Allowed origins:", config.allowedOrigins.join(", ") || "(none)");
@@ -12,6 +19,11 @@ console.log("[public-deploy] Frontend origin:", config.frontendOrigin || "(unset
 console.log("[public-deploy] Redirect URI:", config.redirectUri || "(unset)");
 console.log("[public-deploy] Scope profile:", config.scopeProfile);
 console.log("[public-deploy] Scope risk:", validation.scopeRisk);
+if (config.hasTexPolicy) {
+  console.log("[public-deploy] TeX raw documents:", formatOptionalBoolean(config.texAllowRawDocument, config.texAllowRawDocumentRaw));
+  console.log("[public-deploy] TeX restricted commands:", formatOptionalBoolean(config.texAllowRestrictedCommands, config.texAllowRestrictedCommandsRaw));
+  console.log("[public-deploy] TeX allowed packages:", config.texAllowedPackages.join(", ") || "(unset)");
+}
 
 for (const note of validation.notes) {
   console.log(`[public-deploy] note: ${note}`);

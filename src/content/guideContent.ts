@@ -1606,5 +1606,591 @@ const koGuideContentLatest: GuideContent = {
   },
 };
 
+const insertGuideSectionAfter = (
+  sections: GuideSection[],
+  anchorId: string,
+  nextSection: GuideSection,
+): GuideSection[] => {
+  const withoutExisting = sections.filter((section) => section.id !== nextSection.id);
+  const anchorIndex = withoutExisting.findIndex((section) => section.id === anchorId);
+
+  if (anchorIndex === -1) {
+    return [...withoutExisting, nextSection];
+  }
+
+  return [
+    ...withoutExisting.slice(0, anchorIndex + 1),
+    nextSection,
+    ...withoutExisting.slice(anchorIndex + 1),
+  ];
+};
+
+const mergeGuideFaqItems = (
+  items: GuideFaqItem[],
+  additions: GuideFaqItem[],
+  position: "append" | "prepend" = "append",
+): GuideFaqItem[] => {
+  const additionQuestions = new Set(additions.map((item) => item.question));
+  const filtered = items.filter((item) => !additionQuestions.has(item.question));
+
+  return position === "prepend"
+    ? [...additions, ...filtered]
+    : [...filtered, ...additions];
+};
+
+const replaceScenarioItem = (
+  items: GuideScenarioItem[],
+  title: string,
+  nextItem: GuideScenarioItem,
+) => items.map((item) => (item.title === title ? nextItem : item));
+
+const enProfilesSection: GuideSection = {
+  audience: ["beginner", "advanced"],
+  bullets: [
+    "Docsy opens in Beginner by default, with templates, tabs, core rich-text editing, sharing, export, and Google Workspace connection surfaces visible first.",
+    "Advanced unlocks History, Patch Review, AI Assistant, Knowledge, Graph, structured JSON or YAML documents, document tools, and advanced blocks.",
+    "Use the profile toggle in the header when the task moves from drafting into review, maintenance, or structured editing.",
+  ],
+  id: "profiles-and-availability",
+  steps: [
+    "Start in Beginner for first drafts, template selection, tabs, and delivery basics.",
+    "Use Advanced when you need review or maintenance surfaces such as History, Patch Review, AI, Knowledge, or structured JSON and YAML.",
+    "Treat the profile switch as the point where the product expands from drafting into document operations.",
+  ],
+  summary: "The biggest onboarding rule is that first launch is intentionally simpler. Docsy hides review and maintenance surfaces until you switch from Beginner to Advanced in the header.",
+  title: "Profiles and surface availability",
+};
+
+const enWorkspaceManagementSection: GuideSection = {
+  audience: ["beginner"],
+  bullets: [
+    "Tabs across the top keep multiple documents open at once and show file extensions plus Google sync badges.",
+    "The plus button opens another document without leaving the current draft, while the close action removes only that tab from the active set.",
+    "\"Start fresh\" clears local browser state, including autosave, version history, and knowledge index data, and resets the workspace to a blank document.",
+  ],
+  id: "workspace-management",
+  steps: [
+    "Use tabs to switch between related drafts before exporting or sharing anything.",
+    "Open a new tab when the work should branch into another document instead of overloading the current file.",
+    "Use Start fresh only when you want to wipe the local workspace and begin again from a clean state.",
+  ],
+  summary: "Docsy is not a single-document canvas. Tabs and reset controls are part of the everyday workspace model, even before advanced review surfaces are needed.",
+  title: "Workspace management",
+};
+
+const enLatexValidationSection: GuideSection = {
+  audience: ["advanced"],
+  bullets: [
+    "LaTeX documents can open XeLaTeX validation and engine preview from the preview panel.",
+    "Diagnostics list compiler issues, jump back to the relevant source line, and expose the compile log beside the rendered PDF preview.",
+    "AI Fix is scoped to compile-safe LaTeX repair and only becomes available for raw LaTeX validation flows.",
+  ],
+  id: "latex-validation",
+  steps: [
+    "Open Preview on a LaTeX document and switch to the XeLaTeX tabs.",
+    "Run validation or compile PDF, then inspect diagnostics and jump back to the source line when needed.",
+    "Use AI Fix only after reading the diagnostics so the generated patch stays a reviewable repair rather than a blind rewrite.",
+  ],
+  summary: "LaTeX support is more than rich-text editing. The current build also includes engine-grounded validation, compiled preview, and a targeted AI fix path.",
+  title: "LaTeX validation and engine preview",
+};
+
+const enVersioningSection: GuideSection = {
+  audience: ["advanced"],
+  bullets: [
+    "History is an Advanced surface because it sits next to review and recovery workflows rather than basic drafting.",
+    "Autosave keeps recent state without manual effort once the document is open.",
+    "Version History lets you inspect snapshots and restore older states, especially before and after patch application or export.",
+  ],
+  id: "versioning-and-recovery",
+  steps: [
+    "Switch to Advanced first, then open the History tab in the sidebar.",
+    "Inspect recent snapshots and preview the state you need.",
+    "Restore the target state and continue editing from there.",
+  ],
+  summary: "Version history is both a recovery tool and a review tool, but it is not part of the default Beginner surface.",
+  title: "Versioning and recovery",
+};
+
+const enPatchReviewSection: GuideSection = {
+  audience: ["advanced"],
+  bullets: [
+    "AI changes never mutate the document directly.",
+    "Patch Review exposes patch count, confidence, provenance, source attribution, and Google Workspace warning state in one place.",
+    "Low-confidence patches, provenance gaps, sync warnings, or conflicts are all reasons to slow down before acceptance.",
+  ],
+  id: "patch-review",
+  steps: [
+    "Switch to Advanced, then open Patch Review from compare, update suggestions, AI generation, or graph-driven actions.",
+    "Inspect original vs suggested changes, metadata, and any workspace sync warning summary that appears above the diff.",
+    "Accept, reject, or edit only after the reasoning, provenance, and sync risk are clear.",
+  ],
+  summary: "Patch Review is the safety boundary for Advanced review work. It is intentionally separate from the default Beginner drafting flow.",
+  title: "Patch Review",
+};
+
+const enGoogleWorkspaceSection: GuideSection = {
+  audience: ["advanced"],
+  bullets: [
+    "Connect Google Workspace and use Drive Import to search and import existing Google Docs into the local review flow.",
+    "Rescan and refresh make remote changes, stale copies, warnings, and conflicts visible before sync or patch application.",
+    "Export creates a new Google Doc from a local rich-text document, while Save to Google Docs pushes reviewed changes back to an already linked tab.",
+    "\"Synced with warnings\" and conflict state are first-class UI states, not diagnostics hidden behind logs.",
+  ],
+  id: "google-workspace-sync",
+  steps: [
+    "Connect Google Workspace and choose the correct branch first: import an existing Google Doc or export the current local rich-text document to a new Google Doc.",
+    "When the document is already linked, use rescan and refresh to inspect remote changes before trusting local state.",
+    "Use Save to Google Docs only after reviewed changes are ready to push back to the linked file.",
+    "Treat warning or conflict badges as blockers until review catches up and the round-trip risk is understood.",
+  ],
+  summary: "Google Workspace now covers both directions of the workflow: importing existing Docs into review-first maintenance and exporting or saving local work back to Google Docs.",
+  title: "Google Workspace and sync state",
+};
+
+const enShareAndExportSection: GuideSection = {
+  audience: ["beginner", "advanced"],
+  bullets: [
+    "Share link and QR are the fastest delivery surfaces when the recipient only needs the current document view.",
+    "Clipboard copy supports Markdown and HTML for rich-text documents, or JSON and YAML for structured documents.",
+    "File export covers .docsy, Markdown, LaTeX, HTML, JSON, YAML, Typst, AsciiDoc, RST, PDF, and print, depending on the active mode.",
+    "PDF is output-only in this product. It is a delivery or compile artifact, not an editable document mode or a supported import target.",
+  ],
+  id: "share-and-export",
+  steps: [
+    "Decide whether the handoff should be a share link, clipboard copy, or a durable file export.",
+    "Use .docsy when you need to preserve Docsy-specific editor state for later local work.",
+    "Use PDF or print only after the document has already passed review, validation, or sync checks.",
+  ],
+  summary: "The export surface is broader than a single download button. It includes quick sharing, clipboard interchange, durable Docsy state, and output-only delivery artifacts.",
+  title: "Share and export",
+};
+
+const enUpdatedGuideContent: GuideContent = {
+  ...enGuideContentLatest,
+  guidePage: {
+    ...enGuideContentLatest.guidePage,
+    faqItems: mergeGuideFaqItems(
+      enGuideContentLatest.guidePage.faqItems,
+      [
+        {
+          answer: "Docsy starts in Beginner, so History, Patch Review, AI, Knowledge, and structured JSON or YAML stay hidden until you switch the header profile to Advanced.",
+          question: "Why are History or Patch Review missing?",
+        },
+        {
+          answer: "No. After switching to Advanced, AI output should still be inspected in Patch Review before any change is applied to a document.",
+          question: "Do AI suggestions apply directly to the document?",
+        },
+        {
+          answer: "The safest order is Beginner drafting first, then Advanced review surfaces when you need History, Patch Review, AI, or structured JSON and YAML, and only after that the workspace-level tools like Knowledge, Graph, and Suggestion Queue.",
+          question: "What should I learn first?",
+        },
+      ],
+      "prepend",
+    ),
+    heroDescription: "This guide explains Docsy in task order, starting with the default Beginner surface and then moving into Advanced review, Google Workspace, and multi-document maintenance only when they become necessary.",
+    recommendedPathDescription: "If this is your first time using Docsy, start with the simpler Beginner surface first and only unlock Advanced review or maintenance tools when the task actually needs them.",
+    recommendedPathSteps: [
+      "Create the first document in Beginner from a template or blank file.",
+      "Use tabs, core editing, and share or export basics before touching review surfaces.",
+      "Switch to Advanced when you need History, Patch Review, AI, or structured JSON and YAML.",
+      "Open Knowledge, Graph, and Suggestion Queue only when related-document maintenance begins.",
+      "Use Google Workspace import, export, save, and sync warnings when the source of truth lives in Google Docs.",
+    ],
+    scenarioItems: replaceScenarioItem(
+      enGuideContentLatest.guidePage.scenarioItems,
+      "Fast single-document writing",
+      {
+        audience: ["beginner"],
+        caution: "Do not switch into Advanced just because the controls exist. Stay in Beginner unless the task truly needs review, history, or structured editing.",
+        role: "Someone who needs to finish one document quickly",
+        steps: [
+          "Start in Beginner from a template or blank file.",
+          "Use basic editing, tabs, and share or export surfaces only.",
+          "Switch to Advanced later only if review, history, or structured JSON and YAML become necessary.",
+        ],
+        summary: "This is the safest first-session path. Finish the draft in Beginner first, then expand only when the workflow becomes more complex.",
+        title: "Fast single-document writing",
+      },
+    ),
+    sections: [
+      enProfilesSection,
+      enWorkspaceManagementSection,
+      enLatexValidationSection,
+      enVersioningSection,
+      enPatchReviewSection,
+      enGoogleWorkspaceSection,
+      enShareAndExportSection,
+    ].reduce((sections, nextSection) => {
+      if (nextSection.id === "profiles-and-availability") {
+        return insertGuideSectionAfter(sections, "getting-started", nextSection);
+      }
+
+      if (nextSection.id === "workspace-management") {
+        return insertGuideSectionAfter(sections, "basic-editing", nextSection);
+      }
+
+      if (nextSection.id === "latex-validation") {
+        return insertGuideSectionAfter(sections, "workspace-management", nextSection);
+      }
+
+      return replaceGuideSection(sections, nextSection);
+    }, enGuideContentLatest.guidePage.sections),
+  },
+  landing: {
+    ...enGuideContentLatest.landing,
+    featureCards: enGuideContentLatest.landing.featureCards.map((card) => {
+      if (card.title === "Version History") {
+        return {
+          ...card,
+          description: "An Advanced recovery and review surface built around recent local snapshots.",
+          useWhen: "You switched to Advanced and need to restore or compare earlier document states.",
+        };
+      }
+
+      if (card.title === "Google Workspace") {
+        return {
+          ...card,
+          description: "A live Google Docs bridge for Drive Import, rescan, refresh, export-to-new-doc, and save-back-to-linked-doc workflows.",
+          useWhen: "The source of truth lives in Google Docs and you need import, export, save, warning, or conflict state to stay visible.",
+        };
+      }
+
+      if (card.title === "Share and export") {
+        return {
+          ...card,
+          description: "A delivery surface for share links, QR, clipboard copy, .docsy, print, and mode-specific file export after review or sync checks are complete.",
+          useWhen: "You are handing off a reviewed document, preserving editor state, or publishing an output-only artifact such as PDF.",
+        };
+      }
+
+      return card;
+    }),
+    quickStartDescription: "Most first sessions follow three moves: start in Beginner, switch to Advanced only when review surfaces are needed, and then deliver or sync the result safely.",
+    quickStartSteps: [
+      {
+        description: "Start in Beginner with a blank file or a template and choose the right document mode first.",
+        detail: "Use the header format dropdown to confirm whether the document stays in rich text or branches into a separate structured JSON or YAML flow.",
+        title: "Create in Beginner",
+      },
+      {
+        description: "Stay in Beginner for drafting, then switch to Advanced when you need History, Patch Review, AI, or structured editing.",
+        detail: "The header profile toggle is the gate into review-first maintenance surfaces.",
+        title: "Unlock review surfaces when needed",
+      },
+      {
+        description: "Share, export, or use Google Workspace import, export, save, and sync only after the current state is understood.",
+        detail: "PDF is delivery output, not an editor mode.",
+        title: "Deliver or sync",
+      },
+    ],
+    workflowCards: enGuideContentLatest.landing.workflowCards.map((card) => {
+      if (card.title === "Create and write") {
+        return {
+          ...card,
+          description: "Start quickly in Beginner with templates, tabs, the header format dropdown, and rich-text editing.",
+        };
+      }
+
+      if (card.title === "Review changes safely") {
+        return {
+          ...card,
+          description: "Switch to Advanced only when History, Patch Review, AI, or structured JSON and YAML are actually needed.",
+        };
+      }
+
+      if (card.title === "Sync with Google Workspace") {
+        return {
+          ...card,
+          description: "Import existing Google Docs, rescan and refresh remote changes, export a local doc to Google Docs, and save reviewed linked docs back safely.",
+        };
+      }
+
+      if (card.title === "Prepare handoff") {
+        return {
+          ...card,
+          description: "Use queue, Patch Review, sync warnings, and the full export surface to decide when the result is ready to share, copy, print, or publish.",
+        };
+      }
+
+      return card;
+    }),
+  },
+};
+
+const koProfilesSection: GuideSection = {
+  audience: ["beginner", "advanced"],
+  bullets: [
+    "Docsy는 처음에 Beginner로 열리며, 템플릿, 탭, 기본 리치 텍스트 편집, 공유/내보내기, Google Workspace 연결 surface를 먼저 보여줍니다.",
+    "Advanced로 바꾸면 History, Patch Review, AI Assistant, Knowledge, Graph, 구조화 JSON/YAML, document tools, advanced blocks가 열립니다.",
+    "헤더의 프로필 토글은 초안 작성 단계에서 검토·유지보수 단계로 넘어가는 기준점이라고 보면 됩니다.",
+  ],
+  id: "profiles-and-availability",
+  steps: [
+    "첫 문서와 빠른 초안은 Beginner에서 시작합니다.",
+    "History, Patch Review, AI, Knowledge, JSON/YAML 같은 surface가 필요할 때만 Advanced로 전환합니다.",
+    "프로필 전환 이후부터 Docsy를 단순 편집기가 아니라 review-first 운영 surface로 이해하면 됩니다.",
+  ],
+  summary: "가장 먼저 알아야 할 규칙은 기본 진입점이 Beginner라는 점입니다. 검토와 유지보수 surface는 헤더에서 Advanced로 바꾸기 전까지 숨겨집니다.",
+  title: "프로필과 기능 노출 범위",
+};
+
+const koWorkspaceManagementSection: GuideSection = {
+  audience: ["beginner"],
+  bullets: [
+    "상단 탭은 여러 문서를 동시에 열어 두는 기본 workspace surface이며, 파일 확장자와 Google sync badge도 함께 보여줍니다.",
+    "플러스 버튼은 현재 문서를 벗어나지 않고 새 문서를 열고, 탭 닫기는 열린 집합에서 해당 문서만 정리합니다.",
+    "\"Start fresh\"는 autosave, version history, knowledge index 같은 로컬 브라우저 상태를 지우고 빈 문서부터 다시 시작합니다.",
+  ],
+  id: "workspace-management",
+  steps: [
+    "관련 초안을 오갈 때는 export보다 탭 전환을 먼저 사용합니다.",
+    "현재 문서를 과하게 늘리기보다 새 탭으로 분기하는 편이 자연스러운 경우에는 새 문서를 엽니다.",
+    "Start fresh는 로컬 workspace를 완전히 비우고 다시 시작하려는 경우에만 사용합니다.",
+  ],
+  summary: "Docsy는 단일 문서 캔버스가 아닙니다. 탭과 reset control도 Beginner 단계부터 쓰는 실제 workspace 모델의 일부입니다.",
+  title: "Workspace 관리",
+};
+
+const koLatexValidationSection: GuideSection = {
+  audience: ["advanced"],
+  bullets: [
+    "LaTeX 문서에서는 preview panel 안에서 XeLaTeX validation과 engine preview를 열 수 있습니다.",
+    "진단 목록은 컴파일 오류를 보여주고, 관련 source line으로 다시 이동하며, compile log와 PDF preview를 함께 확인하게 해줍니다.",
+    "AI Fix는 raw LaTeX validation 흐름에서 compile-safe 수정에 한해 제공됩니다.",
+  ],
+  id: "latex-validation",
+  steps: [
+    "LaTeX 문서에서 Preview를 열고 XeLaTeX 탭으로 이동합니다.",
+    "Validate 또는 Compile PDF를 실행한 뒤 diagnostics를 읽고 필요한 line으로 다시 점프합니다.",
+    "AI Fix는 diagnostics를 먼저 이해한 뒤, 검토 가능한 복구 patch로 받아들이는 용도로만 사용합니다.",
+  ],
+  summary: "LaTeX 지원은 리치 텍스트 편집만이 아닙니다. 현재 빌드는 engine-grounded validation, compiled preview, AI Fix까지 포함합니다.",
+  title: "LaTeX validation과 엔진 preview",
+};
+
+const koVersioningSection: GuideSection = {
+  audience: ["advanced"],
+  bullets: [
+    "History는 기본 초안 작성보다 검토·복구 흐름에 붙어 있는 Advanced surface입니다.",
+    "문서를 열어 두는 동안 autosave는 최근 상태를 계속 유지합니다.",
+    "Version History는 snapshot을 열고 복원하며, patch apply 전후나 export 전후를 비교할 때 특히 중요합니다.",
+  ],
+  id: "versioning-and-recovery",
+  steps: [
+    "먼저 Advanced로 전환한 뒤 sidebar의 History 탭을 엽니다.",
+    "최근 snapshot을 미리 보고 필요한 시점을 고릅니다.",
+    "복원 후 이어서 작업합니다.",
+  ],
+  summary: "Version History는 중요한 recovery 도구이지만, 기본 Beginner surface에는 포함되지 않습니다.",
+  title: "Versioning and recovery",
+};
+
+const koPatchReviewSection: GuideSection = {
+  audience: ["advanced"],
+  bullets: [
+    "AI 변경안은 문서에 직접 적용되지 않습니다.",
+    "Patch Review는 patch count, confidence, provenance, source attribution, Google Workspace warning state를 한 화면에서 보여줍니다.",
+    "low confidence, provenance gap, sync warning, conflict는 모두 acceptance 전에 속도를 늦춰야 하는 신호입니다.",
+  ],
+  id: "patch-review",
+  steps: [
+    "Advanced로 전환한 뒤 compare, update suggestions, AI generation, graph-driven action에서 Patch Review를 엽니다.",
+    "원본과 제안 diff, metadata, workspace sync warning summary를 함께 읽습니다.",
+    "근거와 sync risk가 분명해진 뒤에만 accept, reject, edit를 결정합니다.",
+  ],
+  summary: "Patch Review는 Advanced 검토 작업의 안전 경계입니다. 기본 Beginner 작성 흐름과 의도적으로 분리되어 있습니다.",
+  title: "Patch Review",
+};
+
+const koGoogleWorkspaceSection: GuideSection = {
+  audience: ["advanced"],
+  bullets: [
+    "Google Workspace를 연결한 뒤 Drive Import로 기존 Google Docs를 검색하고 local review 흐름 안으로 가져올 수 있습니다.",
+    "rescan과 refresh는 remote change, stale copy, warning, conflict를 sync 이전에 보이게 만듭니다.",
+    "Export는 local rich-text 문서로 새 Google Doc을 만들고, Save to Google Docs는 이미 linked된 탭에 reviewed change를 다시 보냅니다.",
+    "\"Synced with warnings\"와 conflict는 로그 뒤에 숨은 예외가 아니라 UI에서 바로 다뤄야 하는 상태입니다.",
+  ],
+  id: "google-workspace-sync",
+  steps: [
+    "Google Workspace를 연결한 뒤 먼저 흐름을 고릅니다. 기존 Google Doc을 import할지, 현재 local rich-text 문서를 새 Google Doc으로 export할지 결정합니다.",
+    "이미 linked된 문서라면 remote 쪽 변경을 신뢰하기 전에 rescan과 refresh로 상태를 확인합니다.",
+    "Save to Google Docs는 reviewed change를 linked file로 돌려보낼 준비가 끝났을 때만 실행합니다.",
+    "warning이나 conflict badge가 남아 있으면 review가 따라잡을 때까지 blocker로 취급합니다.",
+  ],
+  summary: "Google Workspace는 이제 import만 하는 기능이 아닙니다. 기존 Docs를 review-first 흐름으로 가져오고, local 작업을 export/save로 다시 Google Docs에 연결하는 양방향 흐름을 포함합니다.",
+  title: "Google Workspace와 동기화 상태",
+};
+
+const koShareAndExportSection: GuideSection = {
+  audience: ["beginner", "advanced"],
+  bullets: [
+    "share link와 QR은 현재 문서 상태를 빠르게 전달할 때 가장 짧은 surface입니다.",
+    "clipboard copy는 rich-text 문서에서는 Markdown/HTML, structured 문서에서는 JSON/YAML을 제공합니다.",
+    "file export는 .docsy, Markdown, LaTeX, HTML, JSON, YAML, Typst, AsciiDoc, RST, PDF, print까지 현재 mode에 맞게 나뉩니다.",
+    "PDF는 output-only 결과물입니다. 편집 가능한 document mode도 아니고 import 대상도 아닙니다.",
+  ],
+  id: "share-and-export",
+  steps: [
+    "handoff가 share link인지, clipboard copy인지, durable file export인지 먼저 정합니다.",
+    "Docsy 고유 편집 상태를 보존해야 한다면 .docsy를 사용합니다.",
+    "PDF나 print는 review, validation, sync 확인이 끝난 뒤 최종 전달 결과물로만 다룹니다.",
+  ],
+  summary: "내보내기 surface는 단순 다운로드 버튼보다 넓습니다. 빠른 공유, clipboard interchange, durable Docsy state, output-only deliverable을 함께 포함합니다.",
+  title: "공유와 내보내기",
+};
+
+const koUpdatedGuideContent: GuideContent = {
+  ...koGuideContentLatest,
+  guidePage: {
+    ...koGuideContentLatest.guidePage,
+    faqItems: mergeGuideFaqItems(
+      koGuideContentLatest.guidePage.faqItems,
+      [
+        {
+          answer: "Docsy는 Beginner로 시작하기 때문에 History, Patch Review, AI, Knowledge, 구조화 JSON/YAML은 헤더 프로필을 Advanced로 바꾸기 전까지 보이지 않습니다.",
+          question: "왜 History나 Patch Review가 안 보이나요?",
+        },
+        {
+          answer: "아니요. Advanced로 전환한 뒤에도 AI가 만든 결과는 Patch Review에서 확인한 다음에만 적용해야 합니다.",
+          question: "AI 제안이 문서에 바로 적용되나요?",
+        },
+        {
+          answer: "가장 안전한 순서는 Beginner에서 초안을 만들고, History·Patch Review·AI·구조화 JSON/YAML이 필요할 때만 Advanced로 바꾼 뒤, 마지막에 Knowledge/Graph/Suggestion Queue 같은 workspace surface로 확장하는 것입니다.",
+          question: "무엇부터 익히는 것이 좋나요?",
+        },
+      ],
+      "prepend",
+    ),
+    heroDescription: "이 가이드는 Docsy를 실제 작업 순서로 설명합니다. 기본 Beginner surface에서 시작하고, 필요할 때만 Advanced review, Google Workspace, multi-document maintenance로 확장하는 흐름을 기준으로 정리했습니다.",
+    recommendedPathDescription: "처음이라면 우선 Beginner에서 시작하고, 실제 작업이 요구할 때만 Advanced review 또는 maintenance surface를 여는 것이 가장 덜 복잡합니다.",
+    recommendedPathSteps: [
+      "Beginner에서 템플릿이나 빈 문서로 첫 문서를 만든다.",
+      "탭, 기본 편집, 공유/내보내기만으로 초안을 먼저 마무리한다.",
+      "History, Patch Review, AI, JSON/YAML이 필요해질 때만 Advanced로 전환한다.",
+      "문서 간 유지보수가 시작되면 Knowledge, Graph, Suggestion Queue를 연다.",
+      "source of truth가 Google Docs에 있을 때만 import/export/save와 sync warning 흐름을 함께 본다.",
+    ],
+    scenarioItems: replaceScenarioItem(
+      koGuideContentLatest.guidePage.scenarioItems,
+      "빠른 단일 문서 작성",
+      {
+        audience: ["beginner"],
+        caution: "기능이 보여도 바로 Advanced로 갈 필요는 없습니다. review, history, structured editing이 실제로 필요할 때만 전환하는 편이 낫습니다.",
+        role: "하나의 문서를 빠르게 끝내야 하는 사용자",
+        steps: [
+          "Beginner에서 템플릿이나 빈 문서로 시작합니다.",
+          "기본 편집, 탭, 공유/내보내기까지만 사용합니다.",
+          "review, history, JSON/YAML이 정말 필요해질 때만 Advanced로 넘어갑니다.",
+        ],
+        summary: "가장 안전한 첫 세션 경로는 먼저 Beginner에서 초안을 끝내고, 복잡도가 올라갈 때만 surface를 확장하는 것입니다.",
+        title: "빠른 단일 문서 작성",
+      },
+    ),
+    sections: [
+      koProfilesSection,
+      koWorkspaceManagementSection,
+      koLatexValidationSection,
+      koVersioningSection,
+      koPatchReviewSection,
+      koGoogleWorkspaceSection,
+      koShareAndExportSection,
+    ].reduce((sections, nextSection) => {
+      if (nextSection.id === "profiles-and-availability") {
+        return insertGuideSectionAfter(sections, "getting-started", nextSection);
+      }
+
+      if (nextSection.id === "workspace-management") {
+        return insertGuideSectionAfter(sections, "basic-editing", nextSection);
+      }
+
+      if (nextSection.id === "latex-validation") {
+        return insertGuideSectionAfter(sections, "workspace-management", nextSection);
+      }
+
+      return replaceGuideSection(sections, nextSection);
+    }, koGuideContentLatest.guidePage.sections),
+  },
+  landing: {
+    ...koGuideContentLatest.landing,
+    featureCards: koGuideContentLatest.landing.featureCards.map((card) => {
+      if (card.title === "Version History") {
+        return {
+          ...card,
+          description: "Advanced에서 열리는 recovery 및 review surface로, 최근 local snapshot을 기준으로 비교와 복구를 지원합니다.",
+          useWhen: "Advanced로 전환한 뒤 이전 상태를 복원하거나 비교해야 할 때",
+        };
+      }
+
+      if (card.title === "Google Workspace") {
+        return {
+          ...card,
+          description: "Drive Import, rescan, refresh, 새 Google Doc export, linked 문서 save-back까지 포함하는 Google Docs 양방향 bridge입니다.",
+          useWhen: "source of truth가 Google Docs에 있고 import, export, save, warning, conflict 상태를 함께 추적해야 할 때",
+        };
+      }
+
+      if (card.title === "공유와 내보내기") {
+        return {
+          ...card,
+          description: "share link, QR, clipboard copy, .docsy, print, mode별 file export를 review나 sync 확인 이후에 다루는 전달 surface입니다.",
+          useWhen: "검토가 끝난 문서를 handoff하거나 editor state를 보존하거나 PDF 같은 output-only 결과물을 전달해야 할 때",
+        };
+      }
+
+      return card;
+    }),
+    quickStartDescription: "대부분의 첫 세션은 세 단계면 충분합니다. Beginner에서 시작하고, review surface가 필요할 때만 Advanced로 전환한 뒤, 마지막에 전달 또는 sync를 수행합니다.",
+    quickStartSteps: [
+      {
+        description: "Beginner에서 빈 문서나 템플릿으로 시작하고 먼저 맞는 document mode를 고릅니다.",
+        detail: "상단 format dropdown으로 rich text에 남을지, 별도의 structured JSON/YAML 흐름으로 갈지를 먼저 확인합니다.",
+        title: "Beginner에서 시작하기",
+      },
+      {
+        description: "초안은 Beginner에서 쓰고, History, Patch Review, AI, structured editing이 필요할 때만 Advanced로 전환합니다.",
+        detail: "헤더 프로필 토글이 review-first maintenance surface로 들어가는 관문입니다.",
+        title: "필요할 때만 Advanced 열기",
+      },
+      {
+        description: "현재 상태가 이해된 뒤 share, export, Google Workspace import/export/save를 사용합니다.",
+        detail: "PDF는 editor mode가 아니라 전달용 output입니다.",
+        title: "전달 또는 동기화",
+      },
+    ],
+    workflowCards: koGuideContentLatest.landing.workflowCards.map((card) => {
+      if (card.title === "만들고 작성하기") {
+        return {
+          ...card,
+          description: "Beginner에서 template, tabs, header format dropdown, rich-text editing으로 빠르게 시작합니다.",
+        };
+      }
+
+      if (card.title === "안전하게 변경 검토하기") {
+        return {
+          ...card,
+          description: "History, Patch Review, AI, structured JSON/YAML이 실제로 필요해질 때만 Advanced로 넘어갑니다.",
+        };
+      }
+
+      if (card.title === "Google Workspace와 동기화하기") {
+        return {
+          ...card,
+          description: "기존 Google Docs를 import하고, remote change를 rescan/refresh하며, local 문서를 새 Google Doc으로 export하거나 linked 문서를 save-back합니다.",
+        };
+      }
+
+      if (card.title === "전달 준비하기") {
+        return {
+          ...card,
+          description: "queue, Patch Review, sync warning, export surface를 함께 보면서 share, copy, print, publish 시점을 결정합니다.",
+        };
+      }
+
+      return card;
+    }),
+  },
+};
+
 export const getGuideContent = (locale: Locale): GuideContent =>
-  locale === "ko" ? koGuideContentLatest : enGuideContentLatest;
+  locale === "ko" ? koUpdatedGuideContent : enUpdatedGuideContent;

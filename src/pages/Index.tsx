@@ -16,7 +16,7 @@ import {
 } from "@/components/editor/editorAdvancedContent";
 import EditorWorkspace from "@/components/editor/EditorWorkspace";
 import ResetDocumentsDialog from "@/components/editor/ResetDocumentsDialog";
-import { getBuiltInTemplateDefinitions, type DocumentTemplate } from "@/components/editor/TemplateDialog";
+import { getBuiltInTemplateDefinitions, type DocumentTemplate } from "@/components/editor/templateCatalog";
 import type { PlainTextFindReplaceAdapter } from "@/components/editor/findReplaceTypes";
 import type { KnowledgeSuggestionContext, KnowledgeSuggestionQueueItem } from "@/components/editor/sidebarFeatureTypes";
 import { Button } from "@/components/ui/button";

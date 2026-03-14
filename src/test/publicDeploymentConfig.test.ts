@@ -103,4 +103,38 @@ describe("publicDeploymentConfig", () => {
 
     expect(validation.errors).toContain('AI_ALLOWED_ORIGIN must not contain "*" outside local development.');
   });
+
+  it("rejects public deploy config when raw LaTeX documents are disabled", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://api.docsy.dev/api/auth/google/callback",
+      TEX_ALLOW_RAW_DOCUMENT: "false",
+      TEX_ALLOW_RESTRICTED_COMMANDS: "false",
+      TEX_ALLOWED_PACKAGES: "amsmath,graphicx",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(validation.errors.some((error) => error.includes("TEX_ALLOW_RAW_DOCUMENT must be true"))).toBe(true);
+    expect(validation.notes.some((note) => note.includes("TeX raw document compilation is disabled"))).toBe(true);
+  });
+
+  it("warns when restricted TeX commands are enabled for deployment", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://api.docsy.dev/api/auth/google/callback",
+      TEX_ALLOW_RAW_DOCUMENT: "true",
+      TEX_ALLOW_RESTRICTED_COMMANDS: "true",
+      TEX_ALLOWED_PACKAGES: "amsmath,graphicx",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(validation.errors).toEqual([]);
+    expect(validation.warnings.some((warning) => warning.includes("TEX_ALLOW_RESTRICTED_COMMANDS=true"))).toBe(true);
+  });
 });
