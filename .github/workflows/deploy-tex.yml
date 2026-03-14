@@ -97,25 +97,26 @@ jobs:
           fi
 
           TEX_MAX_REQUEST_BYTES="${{ secrets.GCP_TEX_MAX_REQUEST_BYTES }}"
-          if [ -n "${TEX_MAX_REQUEST_BYTES}" ]; then
-            export TEX_MAX_REQUEST_BYTES
+          if [ -z "${TEX_MAX_REQUEST_BYTES}" ]; then
+            TEX_MAX_REQUEST_BYTES="400000"
           fi
 
           TEX_ALLOW_RAW_DOCUMENT="${{ secrets.GCP_TEX_ALLOW_RAW_DOCUMENT }}"
-          if [ -n "${TEX_ALLOW_RAW_DOCUMENT}" ]; then
-            export TEX_ALLOW_RAW_DOCUMENT
+          if [ -z "${TEX_ALLOW_RAW_DOCUMENT}" ]; then
+            TEX_ALLOW_RAW_DOCUMENT="true"
           fi
 
           TEX_ALLOW_RESTRICTED_COMMANDS="${{ secrets.GCP_TEX_ALLOW_RESTRICTED_COMMANDS }}"
-          if [ -n "${TEX_ALLOW_RESTRICTED_COMMANDS}" ]; then
-            export TEX_ALLOW_RESTRICTED_COMMANDS
+          if [ -z "${TEX_ALLOW_RESTRICTED_COMMANDS}" ]; then
+            TEX_ALLOW_RESTRICTED_COMMANDS="false"
           fi
 
           TEX_ALLOWED_PACKAGES="${{ secrets.GCP_TEX_ALLOWED_PACKAGES }}"
-          if [ -n "${TEX_ALLOWED_PACKAGES}" ]; then
-            export TEX_ALLOWED_PACKAGES
+          if [ -z "${TEX_ALLOWED_PACKAGES}" ]; then
+            TEX_ALLOWED_PACKAGES="amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,latexsym,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK"
           fi
 
+          export TEX_MAX_REQUEST_BYTES
           export TEX_ALLOW_RAW_DOCUMENT
           export TEX_ALLOW_RESTRICTED_COMMANDS
           export TEX_ALLOWED_PACKAGES

@@ -104,7 +104,7 @@ Recommended values:
 - `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted`
 - `TEX_ALLOW_RAW_DOCUMENT=true`
 - `TEX_ALLOW_RESTRICTED_COMMANDS=false`
-- `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK`
+- `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,latexsym,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK`
 - `TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
 
 `AI_ALLOWED_ORIGIN` should be the exact frontend origin, not `*`. The deploy
@@ -230,7 +230,7 @@ Recommended values:
 - `TEX_MAX_CONCURRENCY=2`
 - `TEX_ALLOW_RAW_DOCUMENT=true`
 - `TEX_ALLOW_RESTRICTED_COMMANDS=false`
-- `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK`
+- `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,latexsym,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK`
 
 The TeX service is called by the AI API, not directly by the browser. The
 frontend should continue to use only `VITE_AI_API_BASE_URL`.
@@ -500,6 +500,7 @@ Fix:
 
 - first compare the package against repo-generated features such as highlighting, code blocks, floats, captions, admonitions, and font-family helpers
 - if the package is repo-generated, update and redeploy the checked-in allowlist instead of treating the document as unsafe
+- low-risk compatibility packages such as `latexsym` can also be allowlisted explicitly when real documents depend on them
 - if the package comes from custom/raw user LaTeX outside the built-in feature set, leave it blocked unless you explicitly trust and support it
 
 ### Secret preflight says a secret is required, but the secret already exists

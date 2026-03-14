@@ -40,11 +40,13 @@ describe("tex security", () => {
     expect(getAllowedTexPackages().has("caption")).toBe(true);
     expect(getAllowedTexPackages().has("etoolbox")).toBe(true);
     expect(getAllowedTexPackages().has("float")).toBe(true);
+    expect(getAllowedTexPackages().has("latexsym")).toBe(true);
     expect(getAllowedTexPackages().has("listings")).toBe(true);
     expect(getAllowedTexPackages().has("soul")).toBe(true);
     expect(getAllowedTexPackages().has("tcolorbox")).toBe(true);
     expect(getAllowedTexPackages().has("ulem")).toBe(true);
     expect(findDisallowedTexPackage("\\usepackage[utf8]{inputenc}", {})).toBe(null);
+    expect(findDisallowedTexPackage("\\usepackage{latexsym}", {})).toBe(null);
     expect(findDisallowedTexPackage("\\usepackage{minted}", {})).toBe("minted");
 
     expect(() => assertTexCompilationAllowed({
@@ -67,6 +69,7 @@ describe("tex security", () => {
       "\\usepackage{caption}",
       "\\usepackage{etoolbox}",
       "\\usepackage{float}",
+      "\\usepackage{latexsym}",
       "\\usepackage{listings}",
       "\\usepackage{soul}",
       "\\usepackage[most]{tcolorbox}",

@@ -32,6 +32,7 @@ const DEFAULT_ALLOWED_TEX_PACKAGES = [
   "hyperref",
   "inputenc",
   "listings",
+  "latexsym",
   "longtable",
   "makecell",
   "mathtools",
