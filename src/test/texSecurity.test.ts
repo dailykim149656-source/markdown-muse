@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   assertTexCompilationAllowed,
+  extractRequestedTexPackages,
+  findDisallowedTexPackage,
   findRestrictedTexPrimitive,
+  getAllowedTexPackages,
   isFullLatexDocument,
+  isRestrictedTexCommandsAllowed,
 } from "../../server/modules/tex/security";
 
 describe("tex security", () => {
@@ -18,13 +22,30 @@ describe("tex security", () => {
     })).not.toThrow();
   });
 
-  it("rejects restricted file and package primitives", () => {
+  it("rejects restricted file and process primitives", () => {
     expect(findRestrictedTexPrimitive("\\input{secret.tex}")).toBe("\\input");
 
     expect(() => assertTexCompilationAllowed({
       latex: "\\includegraphics{secret.png}",
       sourceType: "raw-latex",
     })).toThrow(/restricted command/i);
+  });
+
+  it("extracts requested packages and rejects packages outside the allowlist", () => {
+    const latex = "\\documentclass{article}\n\\usepackage{amsmath,graphicx}\n\\usepackage[table]{xcolor}\n\\begin{document}\nHi\n\\end{document}";
+
+    expect(extractRequestedTexPackages(latex)).toEqual(["amsmath", "graphicx", "xcolor"]);
+    expect(getAllowedTexPackages().has("amsmath")).toBe(true);
+    expect(findDisallowedTexPackage("\\usepackage{minted}", {})).toBe("minted");
+
+    expect(() => assertTexCompilationAllowed({
+      env: {
+        TEX_ALLOW_RAW_DOCUMENT: "true",
+        TEX_ALLOW_RESTRICTED_COMMANDS: "false",
+      },
+      latex: "\\documentclass{article}\n\\usepackage{minted}\n\\begin{document}\nHi\n\\end{document}",
+      sourceType: "raw-latex",
+    })).toThrow(/allowed package list/i);
   });
 
   it("rejects full raw latex documents unless explicitly enabled", () => {
@@ -44,6 +65,32 @@ describe("tex security", () => {
         TEX_ALLOW_RAW_DOCUMENT: "true",
       },
       latex: fullDocument,
+      sourceType: "raw-latex",
+    })).not.toThrow();
+  });
+
+  it("keeps restricted primitives blocked unless explicitly enabled", () => {
+    const restrictedDocument = "\\documentclass{article}\n\\begin{document}\n\\includegraphics{secret.png}\n\\end{document}";
+
+    expect(isRestrictedTexCommandsAllowed({
+      TEX_ALLOW_RESTRICTED_COMMANDS: "false",
+    })).toBe(false);
+
+    expect(() => assertTexCompilationAllowed({
+      env: {
+        TEX_ALLOW_RAW_DOCUMENT: "true",
+        TEX_ALLOW_RESTRICTED_COMMANDS: "false",
+      },
+      latex: restrictedDocument,
+      sourceType: "raw-latex",
+    })).toThrow(/restricted command/i);
+
+    expect(() => assertTexCompilationAllowed({
+      env: {
+        TEX_ALLOW_RAW_DOCUMENT: "true",
+        TEX_ALLOW_RESTRICTED_COMMANDS: "true",
+      },
+      latex: restrictedDocument,
       sourceType: "raw-latex",
     })).not.toThrow();
   });

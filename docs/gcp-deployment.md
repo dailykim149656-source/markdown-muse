@@ -84,6 +84,8 @@ gcloud builds submit \
 - `TEX_SERVICE_BASE_URL`
 - `TEX_SERVICE_AUTH_TOKEN`
 - `TEX_ALLOW_RAW_DOCUMENT`
+- `TEX_ALLOW_RESTRICTED_COMMANDS`
+- `TEX_ALLOWED_PACKAGES`
 - `WORKSPACE_FRONTEND_ORIGIN`
 - `GOOGLE_OAUTH_REDIRECT_URI`
 - `GOOGLE_OAUTH_PUBLISHING_STATUS`
@@ -101,6 +103,8 @@ Recommended values:
 - `GOOGLE_OAUTH_PUBLISHING_STATUS=testing`
 - `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted`
 - `TEX_ALLOW_RAW_DOCUMENT=false`
+- `TEX_ALLOW_RESTRICTED_COMMANDS=false`
+- `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK`
 - `TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
 
 `AI_ALLOWED_ORIGIN` should be the exact frontend origin, not `*`. The deploy
@@ -196,6 +200,8 @@ gcloud builds submit \
 - `TEX_MAX_CONCURRENCY`
 - `TEX_SERVICE_AUTH_TOKEN`
 - `TEX_ALLOW_RAW_DOCUMENT`
+- `TEX_ALLOW_RESTRICTED_COMMANDS`
+- `TEX_ALLOWED_PACKAGES`
 
 Recommended values:
 
@@ -205,6 +211,8 @@ Recommended values:
 - `TEX_MAX_REQUEST_BYTES=400000`
 - `TEX_MAX_CONCURRENCY=2`
 - `TEX_ALLOW_RAW_DOCUMENT=false`
+- `TEX_ALLOW_RESTRICTED_COMMANDS=false`
+- `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK`
 
 The TeX service is called by the AI API, not directly by the browser. The
 frontend should continue to use only `VITE_AI_API_BASE_URL`.
@@ -234,7 +242,9 @@ The AI service calls the TeX service with:
 
 - a Cloud Run identity token in `Authorization: Bearer ...`
 - an app-level shared secret in `X-Docsy-Tex-Token`
-- request-time LaTeX validation that rejects raw full-document compilation and file/process primitives unless `TEX_ALLOW_RAW_DOCUMENT=true`
+- request-time LaTeX validation that rejects raw full-document compilation unless `TEX_ALLOW_RAW_DOCUMENT=true`
+- file/process primitives remain blocked unless `TEX_ALLOW_RESTRICTED_COMMANDS=true`
+- `\usepackage{...}` declarations are checked against `TEX_ALLOWED_PACKAGES` unless restricted commands are fully enabled
 
 ## Credential exposure response
 

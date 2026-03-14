@@ -27,7 +27,7 @@ steps:
       - --port=8081
       - --ingress=all
       - --service-account=${_RUN_SERVICE_ACCOUNT}
-      - --set-env-vars=TEX_COMPILE_TIMEOUT_MS=${_TEX_COMPILE_TIMEOUT_MS},TEX_MAX_SOURCE_BYTES=${_TEX_MAX_SOURCE_BYTES},TEX_MAX_REQUEST_BYTES=${_TEX_MAX_REQUEST_BYTES},TEX_MAX_CONCURRENCY=${_TEX_MAX_CONCURRENCY},TEX_ALLOW_RAW_DOCUMENT=${_TEX_ALLOW_RAW_DOCUMENT}
+      - --set-env-vars=TEX_COMPILE_TIMEOUT_MS=${_TEX_COMPILE_TIMEOUT_MS},TEX_MAX_SOURCE_BYTES=${_TEX_MAX_SOURCE_BYTES},TEX_MAX_REQUEST_BYTES=${_TEX_MAX_REQUEST_BYTES},TEX_MAX_CONCURRENCY=${_TEX_MAX_CONCURRENCY},TEX_ALLOW_RAW_DOCUMENT=${_TEX_ALLOW_RAW_DOCUMENT},TEX_ALLOW_RESTRICTED_COMMANDS=${_TEX_ALLOW_RESTRICTED_COMMANDS},TEX_ALLOWED_PACKAGES=${_TEX_ALLOWED_PACKAGES}
       - --update-secrets=TEX_SERVICE_AUTH_TOKEN=${_TEX_SERVICE_AUTH_TOKEN_SECRET}:latest
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
@@ -47,6 +47,8 @@ substitutions:
   _TEX_MAX_REQUEST_BYTES: "400000"
   _TEX_MAX_CONCURRENCY: "2"
   _TEX_ALLOW_RAW_DOCUMENT: "false"
+  _TEX_ALLOW_RESTRICTED_COMMANDS: "false"
+  _TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK"
   _TEX_SERVICE_AUTH_TOKEN_SECRET: tex-service-auth-token
   _CALLER_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
   _RUN_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
