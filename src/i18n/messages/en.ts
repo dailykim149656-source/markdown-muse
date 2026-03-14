@@ -79,6 +79,8 @@ const en: MessageTree = {
       current: "Current: {profile}",
       beginner: "Beginner",
       advanced: "Advanced",
+      toggleToBeginner: "Switch to beginner",
+      toggleToAdvanced: "Switch to advanced",
     },
   },
   editorGuard: {
@@ -1083,6 +1085,12 @@ const en: MessageTree = {
       apiUnreachable: "Google Workspace API is not reachable. Check VITE_AI_API_BASE_URL (current: {target}) and restart the dev server.",
       exportUnavailable: "Google Docs export is available only for unlinked rich-text documents.",
       authStartFailed: "Failed to start Google Workspace auth.",
+      authErrors: {
+        oauth_callback_failed: "Google Workspace sign-in could not be completed.",
+        workspace_auth_expired: "Your Google Workspace session expired. Connect the account again.",
+        workspace_auth_forbidden: "This request was blocked by the current browser origin policy.",
+        workspace_provider_error: "Google Workspace returned an upstream error. Try again in a moment.",
+      },
       connected: "Google Workspace connected.",
       disconnected: "Google Workspace disconnected.",
       disconnectFailed: "Failed to disconnect Google Workspace.",

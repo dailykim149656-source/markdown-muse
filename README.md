@@ -143,6 +143,7 @@ Runtime contract:
 - `GEMINI_MODEL` selects the primary model
 - `GEMINI_FALLBACK_MODEL` selects the fallback model used for model/quota failures
 - `AI_ALLOWED_ORIGIN` controls allowed frontend origins
+- `AI_ALLOWED_ORIGIN` must be an explicit frontend origin outside local development
 
 Build and deploy pipeline:
 
@@ -164,6 +165,12 @@ Health check:
 - `GET /api/ai/health`
 - returns primary `model` and optional `fallbackModel`
 
+Google OAuth production guard:
+
+- set `GOOGLE_OAUTH_PUBLISHING_STATUS=testing|production`
+- set `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted|reduced`
+- run `npm run check:public-deploy` before public deploys to validate custom-domain and OAuth settings
+
 ## Main scripts
 
 - `npm run dev` - start the Vite dev server
@@ -181,6 +188,9 @@ Health check:
 - [Final submission package](docs/final-submission-package-2026-03-11.md)
 - [Hackathon implementation session summary](docs/session-summary-2026-03-11-hackathon-implementation.md)
 - [Google Docs export session summary](docs/session-summary-2026-03-12-google-docs-export-and-google-dropdown.md)
+- [Google OAuth production migration runbook](docs/google-oauth-production-migration-2026-03-14.md)
+- [Security credential rotation runbook](docs/security-credential-rotation-runbook-2026-03-14.md)
+- [Edge and browser security runbook](docs/edge-and-browser-security-runbook-2026-03-14.md)
 - [Docs index](docs/README.md)
 - [PRD index](PRD/README.md)
 - [GCP deployment guide](docs/gcp-deployment.md)
@@ -190,6 +200,7 @@ Health check:
 - `GEMINI_API_KEY` is never exposed to the browser bundle.
 - Gemini calls are routed through the server layer.
 - The frontend sends document payloads to the AI service, while secrets stay in server environment variables.
+- Workspace state now defaults outside the repository, and `.data/` is ignored to prevent token-bearing state from being committed.
 
 ## Status
 

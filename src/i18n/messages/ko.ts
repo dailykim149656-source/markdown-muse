@@ -98,6 +98,8 @@ const ko: MessageTree = {
       current: "현재 설정: {profile}",
       beginner: "초급",
       advanced: "고급",
+      toggleToBeginner: "초급으로 전환",
+      toggleToAdvanced: "고급으로 전환",
     },
   },
   editorGuard: {
@@ -1162,6 +1164,12 @@ const ko: MessageTree = {
       apiUnreachable: "Google Workspace API에 연결할 수 없습니다. VITE_AI_API_BASE_URL 값을 확인하세요. 현재 대상: {target}. 개발 서버를 다시 시작해야 할 수 있습니다.",
       exportUnavailable: "Google Docs 내보내기는 아직 연결되지 않은 리치 텍스트 문서에서만 사용할 수 있습니다.",
       authStartFailed: "Google Workspace 인증을 시작하지 못했습니다.",
+      authErrors: {
+        oauth_callback_failed: "Google Workspace 로그인을 완료하지 못했습니다.",
+        workspace_auth_expired: "Google Workspace 세션이 만료되었습니다. 다시 연결해 주세요.",
+        workspace_auth_forbidden: "현재 브라우저 origin 정책 때문에 요청이 차단되었습니다.",
+        workspace_provider_error: "Google Workspace 상위 서비스에서 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+      },
       connected: "Google Workspace에 연결되었습니다.",
       disconnected: "Google Workspace 연결을 해제했습니다.",
       disconnectFailed: "Google Workspace 연결을 해제하지 못했습니다.",

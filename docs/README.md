@@ -39,6 +39,8 @@ Read these if you are changing code or need implementation context:
 - [Hackathon Architecture](architecture-hackathon-2026-03-11.md)
 - [Hackathon Implementation Session Summary](session-summary-2026-03-11-hackathon-implementation.md)
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
+- [Security Credential Rotation Runbook](security-credential-rotation-runbook-2026-03-14.md)
+- [Edge and Browser Security Runbook](edge-and-browser-security-runbook-2026-03-14.md)
 - [Devpost Submission Copy](devpost-submission-copy-2026-03-14.md)
 - [Devpost Submission Copy (Korean)](devpost-submission-copy-ko-2026-03-14.md)
 - [Remaining Work Execution Plan](remaining-work-execution-plan-2026-03-11.md)
@@ -46,6 +48,9 @@ Read these if you are changing code or need implementation context:
 - [Google Docs Export and Dropdown Summary](session-summary-2026-03-12-google-docs-export-and-google-dropdown.md)
 - [Google Docs Export Session Summary (Korean)](session-summary-2026-03-12-google-docs-export-and-google-dropdown-ko.md)
 - [GCP, Firebase, and Google OAuth Hardening](session-summary-2026-03-13-gcp-firebase-google-oauth-hardening.md)
+- [Google OAuth Production Migration Runbook](google-oauth-production-migration-2026-03-14.md)
+- [Security Credential Rotation Runbook](security-credential-rotation-runbook-2026-03-14.md)
+- [Edge and Browser Security Runbook](edge-and-browser-security-runbook-2026-03-14.md)
 - [Autosave History AI Summary and Sidebar Create Menu (Korean)](session-summary-2026-03-13-autosave-history-ai-summary-and-sidebar-create-menu-ko.md)
 - [Vertex AI Migration for Gemini Runtime](session-summary-2026-03-13-vertex-ai-migration.md)
 - [Google OAuth Testing Mode Plan](google-oauth-testing-mode-plan-2026-03-13.md)
@@ -70,6 +75,9 @@ Read these if you are validating release readiness or operational review state:
 - [Google Workspace Live Validation Runbook](google-workspace-live-validation-runbook-2026-03-12.md)
 - [Google Docs Sync Support Matrix](google-docs-sync-support-matrix-2026-03-12.md)
 - [GCP, Firebase, and Google OAuth Hardening](session-summary-2026-03-13-gcp-firebase-google-oauth-hardening.md)
+- [Google OAuth Production Migration Runbook](google-oauth-production-migration-2026-03-14.md)
+- [Security Credential Rotation Runbook](security-credential-rotation-runbook-2026-03-14.md)
+- [Edge and Browser Security Runbook](edge-and-browser-security-runbook-2026-03-14.md)
 - [Vertex AI Migration for Gemini Runtime](session-summary-2026-03-13-vertex-ai-migration.md)
 - [Google OAuth Testing Mode Plan](google-oauth-testing-mode-plan-2026-03-13.md)
 - [Release Closeout Results Template](release-closeout-results-template-2026-03-12.md)
@@ -152,6 +160,9 @@ Read these if you are validating release readiness or operational review state:
 - [GCP, Firebase, and Google OAuth Hardening](session-summary-2026-03-13-gcp-firebase-google-oauth-hardening.md)
 - [Vertex AI Migration for Gemini Runtime](session-summary-2026-03-13-vertex-ai-migration.md)
 - [Google OAuth Testing Mode Plan](google-oauth-testing-mode-plan-2026-03-13.md)
+- [Google OAuth Production Migration Runbook](google-oauth-production-migration-2026-03-14.md)
+- [Security Credential Rotation Runbook](security-credential-rotation-runbook-2026-03-14.md)
+- [Edge and Browser Security Runbook](edge-and-browser-security-runbook-2026-03-14.md)
 
 ### Planning docs
 

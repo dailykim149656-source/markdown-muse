@@ -25,6 +25,9 @@ export class WorkspaceApiError extends Error {
 export interface WorkspaceApiHealthStatus {
   configured: boolean;
   fallbackModel?: string | null;
+  googleOAuthPublishingStatus?: "production" | "testing";
+  googleWorkspaceScopeProfile?: "custom" | "reduced" | "restricted";
+  googleWorkspaceScopeRisk?: "basic" | "restricted" | "sensitive";
   model?: string;
   ok: boolean;
 }

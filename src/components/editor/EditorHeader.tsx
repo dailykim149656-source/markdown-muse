@@ -228,6 +228,10 @@ const EditorHeader = ({
   const shouldShowStructuredSwitchActions = showStructuredModeAction && !shouldShowCrossFamilyCreateActions;
   const isAdvancedProfile = userProfile === "advanced";
   const userProfileLabel = t(`header.userProfile.${userProfile}`);
+  const nextUserProfile = isAdvancedProfile ? "beginner" : "advanced";
+  const toggleUserProfileTitle = t(
+    isAdvancedProfile ? "header.userProfile.toggleToBeginner" : "header.userProfile.toggleToAdvanced",
+  );
 
   return (
     <header className="border-b border-border bg-background">
@@ -572,6 +576,17 @@ const EditorHeader = ({
             </Button>
           )}
 
+          <Button
+            className="h-8 gap-1 px-2 text-xs"
+            onClick={() => onUserProfileChange(nextUserProfile)}
+            size="sm"
+            title={toggleUserProfileTitle}
+            type="button"
+            variant={isAdvancedProfile ? "secondary" : "outline"}
+          >
+            {userProfileLabel}
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="sm" title={t("common.language.menu")} className="hidden h-8 gap-1 px-2 sm:inline-flex">
@@ -642,25 +657,6 @@ const EditorHeader = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                {t("header.userProfile.title")}
-              </DropdownMenuLabel>
-              <DropdownMenuItem
-                className={userProfile === "beginner" ? "bg-accent" : ""}
-                onClick={() => onUserProfileChange("beginner")}
-              >
-                {t("header.userProfile.beginner")}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={userProfile === "advanced" ? "bg-accent" : ""}
-                onClick={() => onUserProfileChange("advanced")}
-              >
-                {t("header.userProfile.advanced")}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-[10px] text-muted-foreground">
-                {t("header.userProfile.current", { profile: userProfileLabel })}
-              </DropdownMenuLabel>
               {isAdvancedProfile && onOpenPatchReview && (
                 <DropdownMenuItem onClick={onOpenPatchReview}>
                   {t("header.patchReview")}

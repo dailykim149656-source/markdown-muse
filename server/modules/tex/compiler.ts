@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { HttpError } from "../http/http";
+import { assertTexCompilationAllowed } from "./security";
 import { buildResumeSupportBlock, hasResumeLatexCommands } from "@/lib/latex/resumeSupport";
 import { parseTexDiagnostics, summarizeTexLog } from "./diagnostics";
 import type { TexDiagnostic, TexExportPdfRequest, TexPreviewRequest, TexValidateRequest } from "@/types/tex";
@@ -142,8 +143,13 @@ const readLogOutput = async (workdir: string, fallbackOutput: string) => {
   }
 };
 
-const compileLatexDocument = async (latex: string, documentName?: string) => {
+const compileLatexDocument = async (
+  latex: string,
+  documentName: string | undefined,
+  sourceType: TexValidateRequest["sourceType"],
+) => {
   ensureLatexLength(latex);
+  assertTexCompilationAllowed({ latex, sourceType });
   await acquireCompileSlot();
 
   const startedAt = Date.now();
@@ -173,7 +179,7 @@ const compileLatexDocument = async (latex: string, documentName?: string) => {
 };
 
 export const validateLatex = async (request: TexValidateRequest): Promise<CompileTexResult> => {
-  const result = await compileLatexDocument(request.latex, request.documentName);
+  const result = await compileLatexDocument(request.latex, request.documentName, request.sourceType);
 
   return {
     compileMs: result.compileMs,
@@ -184,7 +190,7 @@ export const validateLatex = async (request: TexValidateRequest): Promise<Compil
 };
 
 export const exportPdf = async (request: TexExportPdfRequest) => {
-  const result = await compileLatexDocument(request.latex, request.documentName);
+  const result = await compileLatexDocument(request.latex, request.documentName, request.sourceType);
 
   if (!result.ok || !result.pdfBuffer) {
     const primaryError = result.diagnostics.find((diagnostic) => diagnostic.severity === "error")?.message || "XeLaTeX compilation failed.";
@@ -195,7 +201,7 @@ export const exportPdf = async (request: TexExportPdfRequest) => {
 };
 
 export const previewLatex = async (request: TexPreviewRequest) => {
-  const result = await compileLatexDocument(request.latex, request.documentName);
+  const result = await compileLatexDocument(request.latex, request.documentName, request.sourceType);
 
   return {
     compileMs: result.compileMs,

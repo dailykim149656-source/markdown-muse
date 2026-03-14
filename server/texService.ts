@@ -2,9 +2,12 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { binary, HttpError, json, parseRequestBody, writeHttpResponse } from "./modules/http/http";
 import { exportPdf, getTexToolingHealth, previewLatex, validateLatex } from "./modules/tex/compiler";
+import { assertTexCompilationAllowed } from "./modules/tex/security";
 import type { TexExportPdfRequest, TexPreviewRequest, TexValidateRequest } from "@/types/tex";
 
+process.env.TEX_MAX_REQUEST_BYTES = process.env.TEX_MAX_REQUEST_BYTES || "400000";
 const PORT = Number(process.env.PORT || process.env.TEX_SERVICE_PORT || 8081);
+const MAX_REQUEST_BYTES = Number(process.env.TEX_MAX_REQUEST_BYTES || 400000);
 
 const getExpectedAuthToken = () => process.env.TEX_SERVICE_AUTH_TOKEN?.trim() || "";
 
@@ -38,7 +41,8 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "POST" && request.url === "/validate") {
-      const payload = await parseRequestBody<TexValidateRequest>(request);
+      const payload = await parseRequestBody<TexValidateRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await validateLatex(payload);
       writeHttpResponse(response, json({
         compileMs: result.compileMs,
@@ -51,7 +55,8 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "POST" && request.url === "/preview") {
-      const payload = await parseRequestBody<TexPreviewRequest>(request);
+      const payload = await parseRequestBody<TexPreviewRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await previewLatex(payload);
       writeHttpResponse(response, json({
         compileMs: result.compileMs,
@@ -65,7 +70,8 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "POST" && request.url === "/export-pdf") {
-      const payload = await parseRequestBody<TexExportPdfRequest>(request);
+      const payload = await parseRequestBody<TexExportPdfRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await exportPdf(payload);
       const safeFileName = (payload.documentName || "Untitled").replace(/[^a-zA-Z0-9._-]+/g, "-");
       writeHttpResponse(response, binary(result.pdfBuffer!, "application/pdf", 200, request.headers.origin, {

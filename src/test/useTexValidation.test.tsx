@@ -191,7 +191,7 @@ describe("useTexValidation", () => {
     const { result, rerender } = renderHook((props: { latexSource: string }) => useTexValidation({
       documentName: "Draft",
       latexSource: props.latexSource,
-      mode: "latex",
+      mode: "markdown",
     }), {
       initialProps: { latexSource: "\\section{A}" },
       wrapper,

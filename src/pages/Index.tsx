@@ -1595,6 +1595,21 @@ const Index = () => {
     });
   }, [workspaceErrorMessage]);
 
+  const resolveWorkspaceAuthErrorMessage = useCallback((authError: string) => {
+    switch (authError) {
+      case "oauth_callback_failed":
+        return t("hooks.workspace.authErrors.oauth_callback_failed");
+      case "workspace_auth_expired":
+        return t("hooks.workspace.authErrors.workspace_auth_expired");
+      case "workspace_auth_forbidden":
+        return t("hooks.workspace.authErrors.workspace_auth_forbidden");
+      case "workspace_provider_error":
+        return t("hooks.workspace.authErrors.workspace_provider_error");
+      default:
+        return authError;
+    }
+  }, [t]);
+
   useEffect(() => {
     const authResult = searchParams.get("workspaceAuth");
     const authError = searchParams.get("workspaceAuthError");
@@ -1612,12 +1627,12 @@ const Index = () => {
       toast.success(t("hooks.workspace.connected"));
       void workspaceRuntimeState.refetchAuth();
     } else if (authError) {
-      toast.error(authError);
+      toast.error(resolveWorkspaceAuthErrorMessage(authError));
       setWorkspaceConnectionOpen(true);
     }
 
     clearWorkspaceAuthParams();
-  }, [clearWorkspaceAuthParams, searchParams, t, workspaceRuntimeState]);
+  }, [clearWorkspaceAuthParams, resolveWorkspaceAuthErrorMessage, searchParams, t, workspaceRuntimeState]);
 
   useEffect(() => {
     if (workspaceRuntimeState && !workspaceConnected && workspaceImportOpen) {

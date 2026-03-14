@@ -18,13 +18,13 @@ Create a web deployment env file or inject the same values from CI/CD.
 Required frontend values:
 
 - `VITE_APP_PROFILE=web`
-- `VITE_AI_API_BASE_URL=https://YOUR_CLOUD_RUN_URL`
+- `VITE_AI_API_BASE_URL=https://api.YOUR_DOMAIN`
 
 Example:
 
 ```bash
 echo VITE_APP_PROFILE=web > .env.production.local
-echo VITE_AI_API_BASE_URL=https://YOUR_CLOUD_RUN_URL >> .env.production.local
+echo VITE_AI_API_BASE_URL=https://api.YOUR_DOMAIN >> .env.production.local
 ```
 
 ### 2. Build the web profile
@@ -78,18 +78,35 @@ gcloud builds submit \
 - `GEMINI_API_KEY`
 - `GEMINI_MODEL`
 - `AI_ALLOWED_ORIGIN`
+- `AI_MAX_REQUEST_BYTES`
+- `AI_DIAGNOSTICS_TOKEN`
 - `AI_SERVER_PORT`
 - `TEX_SERVICE_BASE_URL`
 - `TEX_SERVICE_AUTH_TOKEN`
+- `TEX_ALLOW_RAW_DOCUMENT`
+- `WORKSPACE_FRONTEND_ORIGIN`
+- `GOOGLE_OAUTH_REDIRECT_URI`
+- `GOOGLE_OAUTH_PUBLISHING_STATUS`
+- `GOOGLE_WORKSPACE_SCOPE_PROFILE`
 
 Recommended values:
 
 - `GEMINI_MODEL=gemini-2.5-flash`
 - `AI_SERVER_PORT=8080`
-- `AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- `AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
+- `AI_MAX_REQUEST_BYTES=2097152`
+- `AI_DIAGNOSTICS_TOKEN` set only for internal diagnostics consumers
+- `WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN`
+- `GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
+- `GOOGLE_OAUTH_PUBLISHING_STATUS=testing`
+- `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted`
+- `TEX_ALLOW_RAW_DOCUMENT=false`
 - `TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
 
-`AI_ALLOWED_ORIGIN` should be the exact frontend origin, not `*`.
+`AI_ALLOWED_ORIGIN` should be the exact frontend origin, not `*`. The deploy
+validator now treats wildcard CORS as invalid outside local development.
+For external production Google OAuth, keep managed preview domains such as
+`*.web.app` and `*.run.app` out of the final config.
 
 ### 3. Deploy to Cloud Run
 
@@ -98,11 +115,17 @@ gcloud run deploy markdown-muse-ai \
   --image REGION-docker.pkg.dev/PROJECT/REPO/markdown-muse-ai \
   --region REGION \
   --allow-unauthenticated \
-  --set-env-vars GEMINI_MODEL=gemini-2.5-flash,AI_SERVER_PORT=8080,AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN,TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL
+  --set-env-vars GEMINI_MODEL=gemini-2.5-flash,AI_SERVER_PORT=8080,AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN,WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN,GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback,GOOGLE_OAUTH_PUBLISHING_STATUS=testing,GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted,TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL
 ```
 
 Set `GEMINI_API_KEY` through Secret Manager or Cloud Run secrets rather than
 inline CLI flags when possible.
+
+Run the public-deploy validator before switching the OAuth app to production:
+
+```bash
+npm run check:public-deploy
+```
 
 ### 4. GitHub Actions deployment (recommended)
 
@@ -120,7 +143,12 @@ Required repository secrets:
 
 - `GCP_SA_KEY` (service account JSON, or replace with workload identity auth)
 - `GCP_PROJECT_ID`
+- `GCP_FIREBASE_PROJECT_ID` (optional override when Hosting lives in a separate production project)
 - `GCP_AI_ALLOWED_ORIGIN` (exact frontend origin)
+- `GCP_WORKSPACE_FRONTEND_ORIGIN` (exact app origin used for OAuth redirects)
+- `GCP_GOOGLE_OAUTH_REDIRECT_URI` (exact API callback URL)
+- `GCP_GOOGLE_OAUTH_PUBLISHING_STATUS` (`testing` or `production`)
+- `GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE` (`restricted` or `reduced`)
 - `GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME` (optional, defaults to `tex-service-auth-token`)
 - `GCP_TEX_SERVICE_BASE_URL`
 - `GCP_WEB_VITE_AI_API_BASE_URL`
@@ -164,15 +192,19 @@ gcloud builds submit \
 - `TEX_SERVICE_PORT`
 - `TEX_COMPILE_TIMEOUT_MS`
 - `TEX_MAX_SOURCE_BYTES`
+- `TEX_MAX_REQUEST_BYTES`
 - `TEX_MAX_CONCURRENCY`
 - `TEX_SERVICE_AUTH_TOKEN`
+- `TEX_ALLOW_RAW_DOCUMENT`
 
 Recommended values:
 
 - `TEX_SERVICE_PORT=8081`
 - `TEX_COMPILE_TIMEOUT_MS=15000`
 - `TEX_MAX_SOURCE_BYTES=300000`
+- `TEX_MAX_REQUEST_BYTES=400000`
 - `TEX_MAX_CONCURRENCY=2`
+- `TEX_ALLOW_RAW_DOCUMENT=false`
 
 The TeX service is called by the AI API, not directly by the browser. The
 frontend should continue to use only `VITE_AI_API_BASE_URL`.
@@ -202,6 +234,14 @@ The AI service calls the TeX service with:
 
 - a Cloud Run identity token in `Authorization: Bearer ...`
 - an app-level shared secret in `X-Docsy-Tex-Token`
+- request-time LaTeX validation that rejects raw full-document compilation and file/process primitives unless `TEX_ALLOW_RAW_DOCUMENT=true`
+
+## Credential exposure response
+
+If any workspace state file or OAuth token is committed to Git history, follow:
+
+- [Security Credential Rotation Runbook](security-credential-rotation-runbook-2026-03-14.md)
+- [Edge and Browser Security Runbook](edge-and-browser-security-runbook-2026-03-14.md)
 
 ### 4. Rollback and health checks
 
@@ -260,13 +300,14 @@ The AI service calls the TeX service with:
 Verify all of the following:
 
 - `GET https://YOUR_TEX_CLOUD_RUN_URL/health` returns success
-- `GET https://YOUR_CLOUD_RUN_URL/api/ai/health` returns success
-- `GET https://YOUR_CLOUD_RUN_URL/api/tex/health` returns success
+- `GET https://api.YOUR_DOMAIN/api/ai/health` returns success
+- `GET https://api.YOUR_DOMAIN/api/tex/health` returns success
 - browser requests from the frontend origin pass CORS
 - direct navigation to `/editor` works
 - refresh on `/editor` works
 - share-link hash routes still open correctly
 - web build loads the `web` profile, not the desktop profile
+- `googleOAuthPublishingStatus` and `googleWorkspaceScopeProfile` in `/api/ai/health` match the intended rollout mode
 
 ## Deployment Checklist
 
@@ -282,6 +323,8 @@ Required:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_OAUTH_REDIRECT_URI`
+- `GOOGLE_OAUTH_PUBLISHING_STATUS`
+- `GOOGLE_WORKSPACE_SCOPE_PROFILE`
 - `WORKSPACE_FRONTEND_ORIGIN`
 
 Recommended:
@@ -291,10 +334,12 @@ Recommended:
 
 Expected shape:
 
-- `AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- `AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
 - `TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
-- `WORKSPACE_FRONTEND_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
-- `GOOGLE_OAUTH_REDIRECT_URI=https://YOUR_CLOUD_RUN_URL/api/auth/google/callback`
+- `WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN`
+- `GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
+- `GOOGLE_OAUTH_PUBLISHING_STATUS=testing|production`
+- `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted|reduced`
 - the AI service account has `roles/run.invoker` on the TeX service
 
 ### GitHub repository secrets
@@ -303,7 +348,12 @@ Required:
 
 - `GCP_SA_KEY`
 - `GCP_PROJECT_ID`
+- `GCP_FIREBASE_PROJECT_ID`
 - `GCP_AI_ALLOWED_ORIGIN`
+- `GCP_WORKSPACE_FRONTEND_ORIGIN`
+- `GCP_GOOGLE_OAUTH_REDIRECT_URI`
+- `GCP_GOOGLE_OAUTH_PUBLISHING_STATUS`
+- `GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE`
 - `GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME` (optional, defaults to `tex-service-auth-token`)
 - `GCP_TEX_SERVICE_BASE_URL`
 - `FIREBASE_SERVICE_ACCOUNT_URBAN_DDS`
@@ -314,16 +364,20 @@ Recommended:
 
 Expected shape:
 
-- `GCP_AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- `GCP_AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
+- `GCP_WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN`
+- `GCP_GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
+- `GCP_GOOGLE_OAUTH_PUBLISHING_STATUS=testing|production`
+- `GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted|reduced`
 - `GCP_TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
-- `GCP_WEB_VITE_AI_API_BASE_URL=https://YOUR_CLOUD_RUN_URL`
+- `GCP_WEB_VITE_AI_API_BASE_URL=https://api.YOUR_DOMAIN`
 
 ### Frontend build env
 
 Required:
 
 - `VITE_APP_PROFILE=web`
-- `VITE_AI_API_BASE_URL=https://YOUR_CLOUD_RUN_URL`
+- `VITE_AI_API_BASE_URL=https://api.YOUR_DOMAIN`
 
 ## Troubleshooting
 
@@ -344,10 +398,10 @@ Cause:
 Fix:
 
 1. Confirm the Cloud Run service is healthy:
-   - `GET https://YOUR_CLOUD_RUN_URL/api/ai/health`
+   - `GET https://api.YOUR_DOMAIN/api/ai/health`
 2. Set frontend build env:
    - `VITE_APP_PROFILE=web`
-   - `VITE_AI_API_BASE_URL=https://YOUR_CLOUD_RUN_URL`
+   - `VITE_AI_API_BASE_URL=https://api.YOUR_DOMAIN`
 3. Rebuild and redeploy the frontend
 4. If you intentionally use `/api`, configure an actual reverse proxy from the frontend host to Cloud Run
 
@@ -361,8 +415,8 @@ Symptom:
 Fix:
 
 - Cloud Run env:
-  - `GOOGLE_OAUTH_REDIRECT_URI=https://YOUR_CLOUD_RUN_URL/api/auth/google/callback`
-  - `WORKSPACE_FRONTEND_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+  - `GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
+  - `WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN`
 - Google Cloud OAuth client:
   - add the exact same callback URL to `Authorized redirect URIs`
 
@@ -374,7 +428,7 @@ Symptom:
 
 Fix:
 
-- set `AI_ALLOWED_ORIGIN=https://YOUR_FRONTEND_DOMAIN`
+- set `AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
 - use the exact frontend origin, including protocol
 
 ## Notes

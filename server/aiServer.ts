@@ -29,17 +29,36 @@ import {
   isGeminiConfigured,
   schemaType,
 } from "./modules/gemini/client";
+import {
+  readPublicDeploymentConfig,
+  validatePublicDeploymentConfig,
+} from "./modules/config/publicDeploymentConfig.js";
+import { getGoogleOAuthRuntimeSummary } from "./modules/auth/googleOAuth";
 import { handleAuthRoute } from "./modules/auth/routes";
 import { getWorkspaceSession } from "./modules/auth/sessionStore";
 import {
   ALLOWED_ORIGINS,
   binary,
+  empty,
+  getRequestUrl,
   HttpError,
   json,
+  parseOptionalRequestBody,
   parseRequestBody,
   writeHttpResponse,
 } from "./modules/http/http";
+import {
+  buildInternalAiHealthPayload,
+  buildPublicAiHealthPayload,
+  isAuthorizedDiagnosticsRequest,
+  sanitizeLogMessage,
+} from "./modules/http/aiDiagnostics";
 import { handleListenError } from "./modules/http/handleListenError";
+import {
+  consumeRateLimit,
+  getRequestClientId,
+  resolveRateLimitPolicy,
+} from "./modules/http/rateLimit";
 import { handleTexAutoFix } from "./modules/tex/autoFix";
 import {
   exportTexPdf,
@@ -47,6 +66,7 @@ import {
   previewTex as previewTexWithService,
   validateTex as validateTexWithService,
 } from "./modules/tex/client";
+import { assertTexCompilationAllowed } from "./modules/tex/security";
 import { handleWorkspaceRoute } from "./modules/workspace/routes";
 import {
   loadDriveReferenceDocuments,
@@ -74,9 +94,35 @@ import type {
 } from "../src/types/tex";
 
 console.log("[AI Server] Initializing modules...");
+process.env.AI_MAX_REQUEST_BYTES = process.env.AI_MAX_REQUEST_BYTES || "2097152";
 const PORT = Number(process.env.PORT || process.env.AI_SERVER_PORT || 8080);
 const MAX_CHUNKS = 8;
-console.log(`[AI Server] Configuration: PORT=${PORT}, MAX_CHUNKS=${MAX_CHUNKS}`);
+const MAX_REQUEST_BYTES = Number(process.env.AI_MAX_REQUEST_BYTES || 2097152);
+console.log(`[AI Server] Configuration: PORT=${PORT}, MAX_CHUNKS=${MAX_CHUNKS}, MAX_REQUEST_BYTES=${MAX_REQUEST_BYTES}`);
+
+const publicDeploymentConfig = readPublicDeploymentConfig(process.env);
+const publicDeploymentValidation = validatePublicDeploymentConfig(publicDeploymentConfig);
+
+for (const note of publicDeploymentValidation.notes) {
+  console.info(`[AI Server] Public deploy note: ${note}`);
+}
+
+for (const warning of publicDeploymentValidation.warnings) {
+  console.warn(`[AI Server] Public deploy warning: ${warning}`);
+}
+
+if (publicDeploymentValidation.errors.length > 0 && (
+  publicDeploymentConfig.oauthEnabled
+  || publicDeploymentConfig.publishingStatus === "production"
+)) {
+  throw new Error(
+    `Public deployment configuration is invalid: ${publicDeploymentValidation.errors.join(" | ")}`,
+  );
+}
+
+console.log(
+  `[AI Server] Google OAuth deployment status=${publicDeploymentConfig.publishingStatus} scopeProfile=${publicDeploymentConfig.scopeProfile} scopeRisk=${publicDeploymentValidation.scopeRisk}`,
+);
 
 const resolveAiLocale = (value: string | undefined): Locale => (value === "ko" ? "ko" : "en");
 
@@ -615,6 +661,41 @@ const shouldWarnOnReplyOnlySuccessText = (response: AgentTurnResponse) =>
   response.effect.type === "reply_only"
   && SUCCESS_REPLY_ONLY_PATTERN.test(response.assistantMessage.text);
 
+const summarizeCspReportPayload = (payload: unknown) => {
+  const reports = Array.isArray(payload) ? payload : [payload];
+  return reports
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return "invalid_report";
+      }
+
+      const report = "csp-report" in entry
+        ? (entry as { "csp-report"?: Record<string, unknown> })["csp-report"]
+        : entry as Record<string, unknown>;
+      const directive = typeof report?.["effective-directive"] === "string"
+        ? report["effective-directive"]
+        : typeof report?.["violated-directive"] === "string"
+          ? report["violated-directive"]
+          : "unknown-directive";
+      const blockedUri = typeof report?.["blocked-uri"] === "string"
+        ? sanitizeLogMessage(report["blocked-uri"])
+        : "unknown-blocked-uri";
+
+      return `${directive}:${blockedUri}`;
+    })
+    .join(" | ");
+};
+
+const handleCspReport = async (request: import("node:http").IncomingMessage, requestId: string) => {
+  try {
+    const payload = await parseOptionalRequestBody<unknown>(request, { maxBytes: 32_768 });
+    console.info(`[AI Server] [${requestId}] CSP report ${summarizeCspReportPayload(payload)}`);
+  } catch (error) {
+    const message = error instanceof Error ? sanitizeLogMessage(error.message) : "invalid_csp_report";
+    console.warn(`[AI Server] [${requestId}] CSP report parse failed: ${message}`);
+  }
+};
+
 const handleAgentTurn = async (
   httpRequest: import("node:http").IncomingMessage,
   request: AgentTurnRequest,
@@ -746,16 +827,62 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    const requestUrl = getRequestUrl(request);
+
     // Health check - ABSOLUTELY FIRST
-    if (request.method === "GET" && (request.url === "/api/ai/health" || request.url === "/health")) {
+    if (request.method === "GET" && (requestUrl.pathname === "/api/ai/health" || requestUrl.pathname === "/health")) {
       console.log(`[AI Server] [${requestId}] Health check passed`);
-      writeHttpResponse(response, json({
+      writeHttpResponse(response, json(buildPublicAiHealthPayload({
+        configured: isGeminiConfigured(),
+      }), 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "GET" && requestUrl.pathname === "/api/internal/ai/health") {
+      if (!isAuthorizedDiagnosticsRequest(request)) {
+        throw new HttpError(404, "Route not found.");
+      }
+
+      const googleOAuthSummary = getGoogleOAuthRuntimeSummary();
+      writeHttpResponse(response, json(buildInternalAiHealthPayload({
         allowedOrigins: ALLOWED_ORIGINS,
         configured: isGeminiConfigured(),
         fallbackModel: getGeminiFallbackModel(),
+        googleOAuthPublishingStatus: googleOAuthSummary.publishingStatus,
+        googleWorkspaceScopeProfile: googleOAuthSummary.scopeProfile,
+        googleWorkspaceScopeRisk: googleOAuthSummary.scopeRisk,
         model: getGeminiModel(),
-        ok: true,
-      }, 200, request.headers.origin));
+      }), 200, request.headers.origin));
+      return;
+    }
+
+    const rateLimitPolicy = resolveRateLimitPolicy({
+      method: request.method || "GET",
+      pathname: requestUrl.pathname,
+    });
+
+    if (rateLimitPolicy) {
+      const rateLimitDecision = consumeRateLimit({
+        clientId: getRequestClientId(request),
+        policy: rateLimitPolicy,
+      });
+
+      if (!rateLimitDecision.allowed) {
+        console.warn(
+          `[AI Server] [${requestId}] rate_limited bucket=${rateLimitPolicy.bucket} path=${requestUrl.pathname}`,
+        );
+        writeHttpResponse(response, json({
+          error: "Rate limit exceeded.",
+        }, 429, request.headers.origin, {
+          "Retry-After": String(rateLimitDecision.retryAfterSeconds),
+        }));
+        return;
+      }
+    }
+
+    if (request.method === "POST" && requestUrl.pathname === "/api/security/csp-report") {
+      await handleCspReport(request, requestId);
+      writeHttpResponse(response, empty(204, request.headers.origin));
       return;
     }
 
@@ -776,49 +903,49 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "POST" && request.url === "/api/ai/summarize") {
-      const payload = await parseRequestBody<SummarizeDocumentRequest>(request);
+      const payload = await parseRequestBody<SummarizeDocumentRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleSummarize(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/autosave-diff-summary") {
-      const payload = await parseRequestBody<AutosaveDiffSummaryRequest>(request);
+      const payload = await parseRequestBody<AutosaveDiffSummaryRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleAutosaveDiffSummary(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/agent/turn") {
-      const payload = await parseRequestBody<AgentTurnRequest>(request);
+      const payload = await parseRequestBody<AgentTurnRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleAgentTurn(request, payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/generate-section") {
-      const payload = await parseRequestBody<GenerateSectionRequest>(request);
+      const payload = await parseRequestBody<GenerateSectionRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleGenerateSection(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/generate-toc") {
-      const payload = await parseRequestBody<GenerateTocRequest>(request);
+      const payload = await parseRequestBody<GenerateTocRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleGenerateToc(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/propose-action") {
-      const payload = await parseRequestBody<ProposeEditorActionRequest>(request);
+      const payload = await parseRequestBody<ProposeEditorActionRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleProposeAction(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/tex/fix") {
-      const payload = await parseRequestBody<TexAutoFixRequest>(request);
+      const payload = await parseRequestBody<TexAutoFixRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleTexAutoFix(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
@@ -831,21 +958,24 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "POST" && request.url === "/api/tex/validate") {
-      const payload = await parseRequestBody<TexValidateRequest>(request);
+      const payload = await parseRequestBody<TexValidateRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await validateTexWithService(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/tex/preview") {
-      const payload = await parseRequestBody<TexPreviewRequest>(request);
+      const payload = await parseRequestBody<TexPreviewRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await previewTexWithService(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/tex/export-pdf") {
-      const payload = await parseRequestBody<TexExportPdfRequest>(request);
+      const payload = await parseRequestBody<TexExportPdfRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await exportTexPdf(payload);
       writeHttpResponse(response, binary(result.body, result.contentType, 200, request.headers.origin, {
         "Content-Disposition": result.contentDisposition || "attachment; filename=\"document.pdf\"",
@@ -857,9 +987,19 @@ const server = createServer(async (request, response) => {
     throw new HttpError(404, "Route not found.");
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
-    const message = error instanceof Error ? error.message : "Unexpected server error.";
-    console.error(`[AI Server] [${requestId}] Error [${statusCode}]: ${message}`, error);
-    writeHttpResponse(response, json({ error: message }, statusCode, request.headers.origin));
+    const rawMessage = error instanceof Error ? error.message : "Unexpected server error.";
+    const sanitizedMessage = sanitizeLogMessage(rawMessage);
+    const publicMessage = error instanceof HttpError && statusCode < 500
+      ? sanitizedMessage || "Request failed."
+      : "Unexpected server error.";
+
+    if (process.env.NODE_ENV === "production") {
+      console.error(`[AI Server] [${requestId}] Error [${statusCode}]: ${sanitizedMessage}`);
+    } else {
+      console.error(`[AI Server] [${requestId}] Error [${statusCode}]: ${sanitizedMessage}`, error);
+    }
+
+    writeHttpResponse(response, json({ error: publicMessage }, statusCode, request.headers.origin));
   }
 });
 

@@ -3,6 +3,7 @@ import type { Locale } from "../../../src/i18n/types";
 import type { TexAutoFixRequest, TexAutoFixResponse, TexValidateRequest, TexValidateResponse } from "../../../src/types/tex";
 import { generateStructuredJson, schemaType } from "../gemini/client";
 import { HttpError } from "../http/http";
+import { assertTexCompilationAllowed } from "./security";
 import { validateTex } from "./client";
 
 const localePromptSuffix = (locale: Locale) => (locale === "ko" ? "Respond in Korean." : "Respond in English.");
@@ -66,6 +67,11 @@ export const handleTexAutoFix = async (
   if (!request.latex.trim()) {
     throw new HttpError(400, "LaTeX source is required.");
   }
+
+  assertTexCompilationAllowed({
+    latex: request.latex,
+    sourceType: request.sourceType,
+  });
 
   if (!Array.isArray(request.diagnostics) || request.diagnostics.length === 0) {
     throw new HttpError(400, "At least one LaTeX diagnostic is required.");

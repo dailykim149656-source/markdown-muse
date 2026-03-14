@@ -17,8 +17,12 @@ export class HttpError extends Error {
   }
 }
 
+interface RequestBodyOptions {
+  maxBytes?: number;
+}
+
 const getAllowedOrigins = () => {
-  const configured = process.env.AI_ALLOWED_ORIGIN || "*";
+  const configured = process.env.AI_ALLOWED_ORIGIN || "http://localhost:8080";
   return configured
     .split(",")
     .map((value) => value.trim())
@@ -42,7 +46,7 @@ export const resolveCorsOrigin = (requestOrigin: string | undefined) => {
 const buildCorsHeaders = (requestOrigin?: string) => {
   const origin = resolveCorsOrigin(requestOrigin);
   const headers: OutgoingHttpHeaders = {
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, X-Docsy-Diagnostics-Token",
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Origin": origin,
     Vary: "Origin",
@@ -55,6 +59,13 @@ const buildCorsHeaders = (requestOrigin?: string) => {
   return headers;
 };
 
+const buildSecurityHeaders = (): OutgoingHttpHeaders => ({
+  "Permissions-Policy": "accelerometer=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+});
+
 export const json = (
   responseBody: unknown,
   statusCode = 200,
@@ -64,6 +75,7 @@ export const json = (
   body: JSON.stringify(responseBody),
   headers: {
     ...buildCorsHeaders(requestOrigin),
+    ...buildSecurityHeaders(),
     "Content-Type": "application/json; charset=utf-8",
     ...(headers || {}),
   },
@@ -79,6 +91,7 @@ export const redirect = (
   body: "",
   headers: {
     ...buildCorsHeaders(requestOrigin),
+    ...buildSecurityHeaders(),
     Location: location,
     ...(headers || {}),
   },
@@ -95,7 +108,22 @@ export const binary = (
   body: responseBody,
   headers: {
     ...buildCorsHeaders(requestOrigin),
+    ...buildSecurityHeaders(),
     "Content-Type": contentType,
+    ...(headers || {}),
+  },
+  statusCode,
+});
+
+export const empty = (
+  statusCode = 204,
+  requestOrigin?: string,
+  headers?: OutgoingHttpHeaders,
+): HttpResponse => ({
+  body: "",
+  headers: {
+    ...buildCorsHeaders(requestOrigin),
+    ...buildSecurityHeaders(),
     ...(headers || {}),
   },
   statusCode,
@@ -106,14 +134,46 @@ export const writeHttpResponse = (response: ServerResponse, result: HttpResponse
   response.end(result.body || "");
 };
 
-export const parseRequestBody = async <TRequest>(request: IncomingMessage): Promise<TRequest> => {
-  const chunks: Buffer[] = [];
-
-  for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+const resolveMaxRequestBytes = (options?: RequestBodyOptions) => {
+  if (typeof options?.maxBytes === "number" && options.maxBytes > 0) {
+    return Math.floor(options.maxBytes);
   }
 
-  const rawBody = Buffer.concat(chunks).toString("utf8");
+  const configuredMaxBytes = Number(
+    process.env.TEX_MAX_REQUEST_BYTES
+    || process.env.AI_MAX_REQUEST_BYTES
+    || 0,
+  );
+
+  return Number.isFinite(configuredMaxBytes) && configuredMaxBytes > 0
+    ? Math.floor(configuredMaxBytes)
+    : null;
+};
+
+const readRequestBody = async (request: IncomingMessage, options?: RequestBodyOptions) => {
+  const chunks: Buffer[] = [];
+  const maxBytes = resolveMaxRequestBytes(options);
+  let totalBytes = 0;
+
+  for await (const chunk of request) {
+    const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += bufferChunk.byteLength;
+
+    if (maxBytes !== null && totalBytes > maxBytes) {
+      throw new HttpError(413, `Request body exceeds ${maxBytes} bytes.`);
+    }
+
+    chunks.push(bufferChunk);
+  }
+
+  return Buffer.concat(chunks).toString("utf8");
+};
+
+export const parseRequestBody = async <TRequest>(
+  request: IncomingMessage,
+  options?: RequestBodyOptions,
+): Promise<TRequest> => {
+  const rawBody = await readRequestBody(request, options);
 
   if (!rawBody) {
     throw new HttpError(400, "Request body is required.");
@@ -122,14 +182,11 @@ export const parseRequestBody = async <TRequest>(request: IncomingMessage): Prom
   return JSON.parse(rawBody) as TRequest;
 };
 
-export const parseOptionalRequestBody = async <TRequest>(request: IncomingMessage): Promise<TRequest | null> => {
-  const chunks: Buffer[] = [];
-
-  for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-
-  const rawBody = Buffer.concat(chunks).toString("utf8").trim();
+export const parseOptionalRequestBody = async <TRequest>(
+  request: IncomingMessage,
+  options?: RequestBodyOptions,
+): Promise<TRequest | null> => {
+  const rawBody = (await readRequestBody(request, options)).trim();
 
   if (!rawBody) {
     return null;

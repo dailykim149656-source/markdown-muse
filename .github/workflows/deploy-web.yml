@@ -62,6 +62,31 @@ jobs:
               ;;
           esac
 
+          FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
+          if [ -z "${FRONTEND_ORIGIN}" ]; then
+            FRONTEND_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          fi
+
+          GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
+          if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then
+            GOOGLE_OAUTH_PUBLISHING_STATUS="testing"
+          fi
+
+          GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
+          if [ -z "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" ]; then
+            GOOGLE_WORKSPACE_SCOPE_PROFILE="restricted"
+          fi
+
+          export AI_ALLOWED_ORIGIN="${FRONTEND_ORIGIN}"
+          export GOOGLE_CLIENT_ID="${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
+          export GOOGLE_OAUTH_PUBLISHING_STATUS
+          export GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          export GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
+          export GOOGLE_WORKSPACE_SCOPE_PROFILE
+          export WORKSPACE_FRONTEND_ORIGIN="${FRONTEND_ORIGIN}"
+
+          node scripts/validate-public-deploy-config.mjs
+
           echo "Building frontend with VITE_AI_API_BASE_URL=${AI_API_BASE_URL}"
           printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\n" "${AI_API_BASE_URL}" > .env.web.local
 
@@ -83,7 +108,11 @@ jobs:
       - name: Deploy to Firebase Hosting
         run: |
           set -euo pipefail
+          FIREBASE_PROJECT_ID="${{ secrets.GCP_FIREBASE_PROJECT_ID }}"
+          if [ -z "${FIREBASE_PROJECT_ID}" ]; then
+            FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          fi
           firebase deploy \
             --only hosting \
-            --project urban-dds \
+            --project "${FIREBASE_PROJECT_ID}" \
             --non-interactive

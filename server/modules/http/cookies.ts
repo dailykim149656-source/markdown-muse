@@ -22,7 +22,11 @@ export const parseCookieHeader = (cookieHeader?: string | null) => {
     }
 
     const value = rawValueParts.join("=").trim();
-    cookies.set(name, decodeURIComponent(value));
+    try {
+      cookies.set(name, decodeURIComponent(value));
+    } catch {
+      cookies.set(name, value);
+    }
   }
 
   return cookies;

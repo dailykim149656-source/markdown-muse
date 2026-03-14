@@ -147,7 +147,8 @@ jobs:
 
           ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
           if [ -z "${ALLOWED_ORIGIN}" ]; then
-            ALLOWED_ORIGIN="*"
+            echo "GCP_AI_ALLOWED_ORIGIN is required."
+            exit 1
           fi
 
           WORKSPACE_FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
@@ -156,10 +157,17 @@ jobs:
           fi
 
           GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
-          GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
-          if [ -z "${GOOGLE_WORKSPACE_SCOPES}" ]; then
-            GOOGLE_WORKSPACE_SCOPES="openid email profile https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents"
+          GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
+          if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then
+            GOOGLE_OAUTH_PUBLISHING_STATUS="testing"
           fi
+
+          GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
+          if [ -z "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" ]; then
+            GOOGLE_WORKSPACE_SCOPE_PROFILE="restricted"
+          fi
+
+          GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
 
           GOOGLE_CLIENT_SECRET_SECRET="${{ secrets.GCP_GOOGLE_CLIENT_SECRET_SECRET_NAME }}"
           if [ -z "${GOOGLE_CLIENT_SECRET_SECRET}" ]; then
@@ -177,8 +185,18 @@ jobs:
             exit 1
           fi
 
+          export AI_ALLOWED_ORIGIN="${ALLOWED_ORIGIN}"
+          export GOOGLE_CLIENT_ID="${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
+          export GOOGLE_OAUTH_PUBLISHING_STATUS
+          export GOOGLE_OAUTH_REDIRECT_URI
+          export GOOGLE_WORKSPACE_SCOPES
+          export GOOGLE_WORKSPACE_SCOPE_PROFILE
+          export WORKSPACE_FRONTEND_ORIGIN
+
+          node scripts/validate-public-deploy-config.mjs
+
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_VERTEX_LOCATION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_GEMINI_FALLBACK_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_GOOGLE_CLIENT_SECRET_SECRET=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_TEX_SERVICE_BASE_URL=%s,_RUN_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '_IMAGE_URI=%s,_REGION=%s,_VERTEX_LOCATION=%s,_SERVICE_NAME=%s,_GEMINI_MODEL=%s,_GEMINI_FALLBACK_MODEL=%s,_AI_ALLOWED_ORIGIN=%s,_GOOGLE_CLIENT_ID=%s,_GOOGLE_OAUTH_REDIRECT_URI=%s,_GOOGLE_OAUTH_PUBLISHING_STATUS=%s,_GOOGLE_WORKSPACE_SCOPE_PROFILE=%s,_WORKSPACE_FRONTEND_ORIGIN=%s,_GOOGLE_WORKSPACE_SCOPES=%s,_GOOGLE_CLIENT_SECRET_SECRET=%s,_TEX_SERVICE_AUTH_TOKEN_SECRET=%s,_TEX_SERVICE_BASE_URL=%s,_RUN_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$VERTEX_LOCATION" \
@@ -188,6 +206,8 @@ jobs:
             "$ALLOWED_ORIGIN" \
             "${{ secrets.GCP_GOOGLE_CLIENT_ID }}" \
             "${GOOGLE_OAUTH_REDIRECT_URI}" \
+            "${GOOGLE_OAUTH_PUBLISHING_STATUS}" \
+            "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" \
             "${WORKSPACE_FRONTEND_ORIGIN}" \
             "${GOOGLE_WORKSPACE_SCOPES}" \
             "${GOOGLE_CLIENT_SECRET_SECRET}" \
@@ -291,6 +311,31 @@ jobs:
               ;;
           esac
 
+          FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
+          if [ -z "${FRONTEND_ORIGIN}" ]; then
+            FRONTEND_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          fi
+
+          GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
+          if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then
+            GOOGLE_OAUTH_PUBLISHING_STATUS="testing"
+          fi
+
+          GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
+          if [ -z "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" ]; then
+            GOOGLE_WORKSPACE_SCOPE_PROFILE="restricted"
+          fi
+
+          export AI_ALLOWED_ORIGIN="${FRONTEND_ORIGIN}"
+          export GOOGLE_CLIENT_ID="${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
+          export GOOGLE_OAUTH_PUBLISHING_STATUS
+          export GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          export GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
+          export GOOGLE_WORKSPACE_SCOPE_PROFILE
+          export WORKSPACE_FRONTEND_ORIGIN="${FRONTEND_ORIGIN}"
+
+          node scripts/validate-public-deploy-config.mjs
+
           echo "Building frontend with VITE_AI_API_BASE_URL=${AI_API_BASE_URL}"
           printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\n" "${AI_API_BASE_URL}" > .env.web.local
 
@@ -312,7 +357,11 @@ jobs:
       - name: Deploy to Firebase Hosting
         run: |
           set -euo pipefail
+          FIREBASE_PROJECT_ID="${{ secrets.GCP_FIREBASE_PROJECT_ID }}"
+          if [ -z "${FIREBASE_PROJECT_ID}" ]; then
+            FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          fi
           firebase deploy \
             --only hosting \
-            --project urban-dds \
+            --project "${FIREBASE_PROJECT_ID}" \
             --non-interactive

@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MermaidNodeView } from "@/components/editor/extensions/MermaidBlock";
 import { loadMermaid } from "@/lib/rendering/loadMermaid";
+import { sanitizeMermaidSvg } from "@/lib/rendering/sanitizeMermaidSvg";
 
 type NodeViewWrapperProps = HTMLAttributes<HTMLDivElement> & {
   children?: ReactNode;
@@ -228,5 +229,15 @@ describe("MermaidNodeView", () => {
     });
 
     expect(mermaid.render).toHaveBeenCalledTimes(2);
+  });
+
+  it("sanitizes rendered Mermaid SVG before insertion", () => {
+    const sanitized = sanitizeMermaidSvg(
+      '<svg><a xlink:href="javascript:alert(1)"><text>Unsafe</text></a><script>alert(1)</script></svg>',
+    );
+
+    expect(sanitized).toContain("Unsafe");
+    expect(sanitized).not.toContain("javascript:alert(1)");
+    expect(sanitized).not.toContain("<script");
   });
 });

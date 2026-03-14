@@ -52,6 +52,62 @@ interface WorkspaceRemoteChangePayload {
   revisionId?: string;
 }
 
+const isLocalAbsoluteOrigin = (value: string) => {
+  try {
+    const url = new URL(value);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+};
+
+const requiresExplicitFrontendOrigin = () =>
+  Boolean(
+    process.env.K_SERVICE
+    || process.env.NODE_ENV === "production"
+    || (process.env.AI_ALLOWED_ORIGIN || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .some((origin) => origin !== "*" && !isLocalAbsoluteOrigin(origin)),
+  );
+
+const resolveTrustedFrontendOrigin = () => {
+  const configured = process.env.WORKSPACE_FRONTEND_ORIGIN?.trim();
+
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  if (requiresExplicitFrontendOrigin()) {
+    throw new HttpError(500, "WORKSPACE_FRONTEND_ORIGIN must be configured for this deployment.");
+  }
+
+  return "http://localhost:8080";
+};
+
+const assertTrustedPostOrigin = (request: IncomingMessage) => {
+  if (request.method !== "POST") {
+    return;
+  }
+
+  const requestOrigin = typeof request.headers.origin === "string"
+    ? request.headers.origin.trim().replace(/\/$/, "")
+    : "";
+
+  if (!requestOrigin) {
+    if (requiresExplicitFrontendOrigin()) {
+      throw new HttpError(403, "Origin header is required.");
+    }
+
+    return;
+  }
+
+  if (requestOrigin !== resolveTrustedFrontendOrigin()) {
+    throw new HttpError(403, "Origin is not allowed.");
+  }
+};
+
 const buildRemoteChangePayload = ({
   detectedAt,
   documentId,
@@ -259,6 +315,7 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/workspace/import") {
+    assertTrustedPostOrigin(request);
     const { accessToken, connection } = await getAuthorizedConnection(request);
     const body = await parseOptionalRequestBody<WorkspaceImportRequest>(request);
     const documentId = body?.documentId?.trim();
@@ -285,9 +342,7 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
 
     await repository.upsertImportedDocument({
       connectionId: connection.connectionId,
-      content: document.content || "",
       createdAt: importedAt,
-      docsJson: docsJson || undefined,
       documentId: document.id || documentId || fileId,
       driveModifiedTime: file.modifiedTime,
       fileId: file.fileId,
@@ -305,6 +360,7 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/workspace/export") {
+    assertTrustedPostOrigin(request);
     const { accessToken, connection } = await getAuthorizedConnection(request);
     const body = await parseOptionalRequestBody<WorkspaceExportRequest>(request);
     const documentId = body?.documentId?.trim();
@@ -347,9 +403,7 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
 
     await repository.upsertImportedDocument({
       connectionId: connection.connectionId,
-      content: markdown,
       createdAt: existingImportedDocument?.createdAt || exportedAt,
-      docsJson: updatedDocument || existingImportedDocument?.docsJson,
       documentId,
       driveModifiedTime: file.modifiedTime,
       fileId: file.fileId,
@@ -371,6 +425,7 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/workspace/rescan") {
+    assertTrustedPostOrigin(request);
     const { accessToken, connection } = await getAuthorizedConnection(request);
     const importedDocuments = await repository.listImportedDocuments(connection.connectionId);
     const rescannedAt = Date.now();
@@ -411,6 +466,7 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/patches/apply") {
+    assertTrustedPostOrigin(request);
     const { accessToken, connection } = await getAuthorizedConnection(request);
     const body = await parseOptionalRequestBody<WorkspaceApplyRequest>(request);
     const fileId = body?.fileId?.trim();
@@ -454,8 +510,6 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
 
     await repository.upsertImportedDocument({
       ...importedDocument,
-      content: markdown,
-      docsJson: updatedDocument || importedDocument.docsJson,
       driveModifiedTime: updatedFile.modifiedTime,
       latestRemoteModifiedTime: undefined,
       latestRemoteRevisionId: undefined,

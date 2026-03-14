@@ -33,6 +33,8 @@ vi.mock("@/components/ui/dropdown-menu", () => ({
 }));
 
 const renderHeader = (overrides: Record<string, unknown> = {}) => {
+  const onUserProfileChange = vi.fn();
+
   render(
     <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
       <I18nContext.Provider
@@ -74,7 +76,7 @@ const renderHeader = (overrides: Record<string, unknown> = {}) => {
             onOpenShare={vi.fn()}
             onOpenShortcuts={vi.fn()}
             onPrint={vi.fn()}
-            onUserProfileChange={vi.fn()}
+            onUserProfileChange={onUserProfileChange}
             onSaveAdoc={vi.fn()}
             onSaveDocsy={vi.fn()}
             onSaveHtml={vi.fn()}
@@ -100,6 +102,8 @@ const renderHeader = (overrides: Record<string, unknown> = {}) => {
       </I18nContext.Provider>
     </MemoryRouter>,
   );
+
+  return { onUserProfileChange };
 };
 
 describe("EditorHeader mode dropdown", () => {
@@ -111,12 +115,12 @@ describe("EditorHeader mode dropdown", () => {
     expect(screen.queryByText("YAML")).not.toBeInTheDocument();
   });
 
-  it("shows user profile actions in the overflow menu", () => {
-    renderHeader();
+  it("shows a user profile toggle button and toggles to the opposite profile", () => {
+    const { onUserProfileChange } = renderHeader();
 
-    expect(screen.getByText("header.userProfile.title")).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "header.userProfile.beginner" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "header.userProfile.advanced" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "header.userProfile.advanced" }));
+
+    expect(onUserProfileChange).toHaveBeenCalledWith("beginner");
   });
 
   it("hides AI and patch review buttons in beginner mode", () => {

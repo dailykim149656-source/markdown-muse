@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadMermaid } from "@/lib/rendering/loadMermaid";
+import { sanitizeMermaidSvg } from "@/lib/rendering/sanitizeMermaidSvg";
 
 const INVALID_PREVIEW_MESSAGE = "Preview paused until Mermaid syntax is valid.";
 const RENDER_FAILURE_MESSAGE = "Unable to render Mermaid preview.";
@@ -13,7 +14,7 @@ const initMermaid = async (dark: boolean) => {
   mermaid.initialize({
     startOnLoad: false,
     theme: dark ? "dark" : "default",
-    securityLevel: "loose",
+    securityLevel: "strict",
     fontFamily: "inherit",
   });
 
@@ -110,7 +111,7 @@ export const MermaidNodeView = ({ node, updateAttributes, selected }: MermaidNod
         return;
       }
 
-      setSvg(rendered);
+      setSvg(sanitizeMermaidSvg(rendered));
       setPreviewMessage("");
     } catch {
       if (requestId !== renderRequestRef.current) {
