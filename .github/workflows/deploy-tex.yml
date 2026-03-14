@@ -48,6 +48,12 @@ jobs:
       - name: Setup gcloud
         uses: google-github-actions/setup-gcloud@v3
 
+      - name: Show active GCP deploy principal
+        run: |
+          set -euo pipefail
+          ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
+          echo "Active gcloud account: ${ACTIVE_ACCOUNT}"
+
       - name: Deploy TeX service via Cloud Build
         id: tex
         run: |
@@ -62,10 +68,18 @@ jobs:
             fi
           }
 
-          ensure_secret_exists() {
+          ensure_secret_access() {
             local secret_name="$1"
-            if ! gcloud secrets describe "${secret_name}" --project "${PROJECT_ID}" >/dev/null 2>&1; then
-              echo "Secret Manager secret ${secret_name} is required."
+            local output
+            if ! output="$(gcloud secrets versions access latest --secret="${secret_name}" --project "${PROJECT_ID}" 2>&1 >/dev/null)"; then
+              echo "Unable to access required Secret Manager secret ${secret_name}."
+              if printf '%s' "${output}" | grep -qi 'NOT_FOUND'; then
+                echo "Secret ${secret_name} was not found in project ${PROJECT_ID}."
+              elif printf '%s' "${output}" | grep -qi 'PERMISSION_DENIED'; then
+                ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
+                echo "Grant roles/secretmanager.secretAccessor on ${secret_name} to ${ACTIVE_ACCOUNT}."
+              fi
+              echo "${output}"
               exit 1
             fi
           }
@@ -100,7 +114,7 @@ jobs:
             export TEX_ALLOWED_PACKAGES
           fi
 
-          ensure_secret_exists "${TEX_SERVICE_AUTH_TOKEN_SECRET}"
+          ensure_secret_access "${TEX_SERVICE_AUTH_TOKEN_SECRET}"
 
           echo "Deployment summary:"
           echo "  project: ${PROJECT_ID}"

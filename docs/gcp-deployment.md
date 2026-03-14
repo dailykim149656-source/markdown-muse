@@ -453,6 +453,28 @@ Fix:
 - set `AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
 - use the exact frontend origin, including protocol
 
+### Secret preflight says a secret is required, but the secret already exists
+
+Symptom:
+
+- workflow logs show `Unable to access required Secret Manager secret ...`
+- the secret is visible from an operator shell in the target project
+
+Cause:
+
+- the GitHub Actions service account behind `GCP_SA_KEY` does not have access to
+  the secret metadata or latest version
+- workflow preflight now checks actual secret access, not just the configured name
+
+Fix:
+
+- check the `Show active GCP deploy principal` step in the same workflow run and
+  use that service account email for IAM binding
+- grant the GitHub Actions service account `roles/secretmanager.secretAccessor`
+  on the required secret
+- for diagnostics checks, do the same for `ai-diagnostics-token` if you want the
+  internal health verification to run
+
 ## Notes
 
 - `npm run build` is for desktop-oriented output and should not be used for the
