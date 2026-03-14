@@ -32,10 +32,19 @@ describe("tex security", () => {
   });
 
   it("extracts requested packages and rejects packages outside the allowlist", () => {
-    const latex = "\\documentclass{article}\n\\usepackage{amsmath,graphicx}\n\\usepackage[table]{xcolor}\n\\begin{document}\nHi\n\\end{document}";
+    const latex = "\\documentclass{article}\n\\usepackage{amsmath,graphicx}\n\\usepackage[utf8]{inputenc}\n\\usepackage[table]{xcolor}\n\\begin{document}\nHi\n\\end{document}";
 
-    expect(extractRequestedTexPackages(latex)).toEqual(["amsmath", "graphicx", "xcolor"]);
+    expect(extractRequestedTexPackages(latex)).toEqual(["amsmath", "graphicx", "inputenc", "xcolor"]);
     expect(getAllowedTexPackages().has("amsmath")).toBe(true);
+    expect(getAllowedTexPackages().has("inputenc")).toBe(true);
+    expect(getAllowedTexPackages().has("caption")).toBe(true);
+    expect(getAllowedTexPackages().has("etoolbox")).toBe(true);
+    expect(getAllowedTexPackages().has("float")).toBe(true);
+    expect(getAllowedTexPackages().has("listings")).toBe(true);
+    expect(getAllowedTexPackages().has("soul")).toBe(true);
+    expect(getAllowedTexPackages().has("tcolorbox")).toBe(true);
+    expect(getAllowedTexPackages().has("ulem")).toBe(true);
+    expect(findDisallowedTexPackage("\\usepackage[utf8]{inputenc}", {})).toBe(null);
     expect(findDisallowedTexPackage("\\usepackage{minted}", {})).toBe("minted");
 
     expect(() => assertTexCompilationAllowed({
@@ -46,6 +55,36 @@ describe("tex security", () => {
       latex: "\\documentclass{article}\n\\usepackage{minted}\n\\begin{document}\nHi\n\\end{document}",
       sourceType: "raw-latex",
     })).toThrow(/allowed package list/i);
+  });
+
+  it("allows the repo-generated package bundle by default", () => {
+    const latex = [
+      "\\documentclass{article}",
+      "\\usepackage[utf8]{inputenc}",
+      "\\usepackage{amsmath,amssymb,graphicx}",
+      "\\usepackage[hidelinks]{hyperref}",
+      "\\usepackage{xcolor}",
+      "\\usepackage{caption}",
+      "\\usepackage{etoolbox}",
+      "\\usepackage{float}",
+      "\\usepackage{listings}",
+      "\\usepackage{soul}",
+      "\\usepackage[most]{tcolorbox}",
+      "\\usepackage{ulem}",
+      "\\begin{document}",
+      "Hello",
+      "\\end{document}",
+    ].join("\n");
+
+    expect(findDisallowedTexPackage(latex, {})).toBe(null);
+    expect(() => assertTexCompilationAllowed({
+      env: {
+        TEX_ALLOW_RAW_DOCUMENT: "true",
+        TEX_ALLOW_RESTRICTED_COMMANDS: "false",
+      },
+      latex,
+      sourceType: "raw-latex",
+    })).not.toThrow();
   });
 
   it("rejects full raw latex documents unless explicitly enabled", () => {

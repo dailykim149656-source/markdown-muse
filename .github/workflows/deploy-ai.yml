@@ -158,7 +158,7 @@ jobs:
 
           TEX_ALLOWED_PACKAGES="${{ secrets.GCP_TEX_ALLOWED_PACKAGES }}"
           if [ -z "${TEX_ALLOWED_PACKAGES}" ]; then
-            TEX_ALLOWED_PACKAGES="amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK"
+            TEX_ALLOWED_PACKAGES="amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK"
           fi
 
           GOOGLE_CLIENT_SECRET_SECRET="${{ secrets.GCP_GOOGLE_CLIENT_SECRET_SECRET_NAME }}"

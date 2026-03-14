@@ -104,7 +104,7 @@ Recommended values:
 - `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted`
 - `TEX_ALLOW_RAW_DOCUMENT=true`
 - `TEX_ALLOW_RESTRICTED_COMMANDS=false`
-- `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK`
+- `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK`
 - `TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
 
 `AI_ALLOWED_ORIGIN` should be the exact frontend origin, not `*`. The deploy
@@ -114,6 +114,9 @@ For external production Google OAuth, keep managed preview domains such as
 LaTeX mode sends raw LaTeX to the backend. Full preambles and
 `\documentclass ... \begin{document} ... \end{document}` wrappers require
 `TEX_ALLOW_RAW_DOCUMENT=true`.
+The default allowlist is sized to cover repo-generated output for highlighting,
+strike/underline, code blocks, figures/tables, captions, admonitions, and
+font-family helpers.
 
 ### 3. Deploy to Cloud Run
 
@@ -227,13 +230,17 @@ Recommended values:
 - `TEX_MAX_CONCURRENCY=2`
 - `TEX_ALLOW_RAW_DOCUMENT=true`
 - `TEX_ALLOW_RESTRICTED_COMMANDS=false`
-- `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK`
+- `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK`
 
 The TeX service is called by the AI API, not directly by the browser. The
 frontend should continue to use only `VITE_AI_API_BASE_URL`.
 This repo's public/demo deployment keeps full raw LaTeX documents enabled while
 still blocking dangerous file/process primitives with
 `TEX_ALLOW_RESTRICTED_COMMANDS=false`.
+That default package surface includes built-in editor features such as
+highlighting (`soul`), strike/underline (`ulem`), code blocks (`listings`),
+floats/captions (`float`, `caption`), admonitions (`tcolorbox`), and
+font-family helpers (`etoolbox`).
 
 The current TeX image is a coverage-first profile, not a minimal fast-build
 profile. It intentionally includes a broader curated TeX Live package set for
@@ -476,6 +483,24 @@ Fix:
 - confirm both Cloud Run services have `TEX_ALLOW_RAW_DOCUMENT=true`
 - keep `TEX_ALLOW_RESTRICTED_COMMANDS=false` unless you explicitly trust file/process primitives
 - redeploy through the repo-managed workflows so AI and TeX receive the same TeX policy values
+
+### LaTeX source requests package "...", which is not on the allowed package list
+
+Symptom:
+
+- preview or PDF export fails with:
+  - `LaTeX source requests package "..." , which is not on the allowed package list for this deployment.`
+
+Cause:
+
+- the deployed `TEX_ALLOWED_PACKAGES` drifted behind the repo's generated package surface
+- or the document is requesting a package outside the repo's supported/default trust boundary
+
+Fix:
+
+- first compare the package against repo-generated features such as highlighting, code blocks, floats, captions, admonitions, and font-family helpers
+- if the package is repo-generated, update and redeploy the checked-in allowlist instead of treating the document as unsafe
+- if the package comes from custom/raw user LaTeX outside the built-in feature set, leave it blocked unless you explicitly trust and support it
 
 ### Secret preflight says a secret is required, but the secret already exists
 

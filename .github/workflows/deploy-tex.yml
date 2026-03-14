@@ -37,7 +37,7 @@ jobs:
       TEX_MAX_CONCURRENCY: "2"
       TEX_ALLOW_RAW_DOCUMENT: "true"
       TEX_ALLOW_RESTRICTED_COMMANDS: "false"
-      TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK"
+      TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK"
     steps:
       - name: Checkout
         uses: actions/checkout@v5

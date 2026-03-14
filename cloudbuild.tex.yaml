@@ -58,7 +58,7 @@ substitutions:
   _TEX_MAX_CONCURRENCY: "2"
   _TEX_ALLOW_RAW_DOCUMENT: "true"
   _TEX_ALLOW_RESTRICTED_COMMANDS: "false"
-  _TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK"
+  _TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK"
   _TEX_SERVICE_AUTH_TOKEN_SECRET: tex-service-auth-token
   _CALLER_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
   _RUN_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
