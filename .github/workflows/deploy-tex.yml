@@ -101,6 +101,11 @@ jobs:
             TEX_MAX_REQUEST_BYTES="400000"
           fi
 
+          TEX_ALLOW_ALL_PACKAGES="${{ secrets.GCP_TEX_ALLOW_ALL_PACKAGES }}"
+          if [ -z "${TEX_ALLOW_ALL_PACKAGES}" ]; then
+            TEX_ALLOW_ALL_PACKAGES="true"
+          fi
+
           TEX_ALLOW_RAW_DOCUMENT="${{ secrets.GCP_TEX_ALLOW_RAW_DOCUMENT }}"
           if [ -z "${TEX_ALLOW_RAW_DOCUMENT}" ]; then
             TEX_ALLOW_RAW_DOCUMENT="true"
@@ -117,6 +122,7 @@ jobs:
           fi
 
           export TEX_MAX_REQUEST_BYTES
+          export TEX_ALLOW_ALL_PACKAGES
           export TEX_ALLOW_RAW_DOCUMENT
           export TEX_ALLOW_RESTRICTED_COMMANDS
           export TEX_ALLOWED_PACKAGES
@@ -129,13 +135,14 @@ jobs:
           echo "  project: ${PROJECT_ID}"
           echo "  region: ${GCP_REGION}"
           echo "  service: ${TEX_SERVICE_NAME}"
+          echo "  tex_allow_all_packages: ${TEX_ALLOW_ALL_PACKAGES}"
           echo "  tex_allow_raw_document: ${TEX_ALLOW_RAW_DOCUMENT}"
           echo "  tex_allow_restricted_commands: ${TEX_ALLOW_RESTRICTED_COMMANDS}"
           echo "  tex_allowed_packages: ${TEX_ALLOWED_PACKAGES}"
           echo "  app_token_secret: ${TEX_SERVICE_AUTH_TOKEN_SECRET}"
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${TEX_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_SERVICE_NAME=%s|_TEX_COMPILE_TIMEOUT_MS=%s|_TEX_MAX_SOURCE_BYTES=%s|_TEX_MAX_REQUEST_BYTES=%s|_TEX_MAX_CONCURRENCY=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_RUN_SERVICE_ACCOUNT=%s|_CALLER_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_SERVICE_NAME=%s|_TEX_COMPILE_TIMEOUT_MS=%s|_TEX_MAX_SOURCE_BYTES=%s|_TEX_MAX_REQUEST_BYTES=%s|_TEX_MAX_CONCURRENCY=%s|_TEX_ALLOW_ALL_PACKAGES=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_RUN_SERVICE_ACCOUNT=%s|_CALLER_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$TEX_SERVICE_NAME" \
@@ -143,6 +150,7 @@ jobs:
             "$TEX_MAX_SOURCE_BYTES" \
             "${TEX_MAX_REQUEST_BYTES}" \
             "$TEX_MAX_CONCURRENCY" \
+            "${TEX_ALLOW_ALL_PACKAGES}" \
             "${TEX_ALLOW_RAW_DOCUMENT}" \
             "${TEX_ALLOW_RESTRICTED_COMMANDS}" \
             "${TEX_ALLOWED_PACKAGES}" \

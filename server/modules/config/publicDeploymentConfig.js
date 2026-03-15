@@ -171,12 +171,15 @@ export const readPublicDeploymentConfig = (env = process.env) => {
     ? explicitScopes
     : [...GOOGLE_WORKSPACE_SCOPE_PROFILES[scopeProfile]];
   const texAllowRawDocumentRaw = env.TEX_ALLOW_RAW_DOCUMENT?.trim() || "";
+  const texAllowAllPackagesRaw = env.TEX_ALLOW_ALL_PACKAGES?.trim() || "";
   const texAllowRestrictedCommandsRaw = env.TEX_ALLOW_RESTRICTED_COMMANDS?.trim() || "";
   const texAllowedPackages = splitList(env.TEX_ALLOWED_PACKAGES);
   const texAllowRawDocument = parseOptionalBooleanFlag(texAllowRawDocumentRaw);
+  const texAllowAllPackages = parseOptionalBooleanFlag(texAllowAllPackagesRaw);
   const texAllowRestrictedCommands = parseOptionalBooleanFlag(texAllowRestrictedCommandsRaw);
   const hasTexPolicy = Boolean(
     texAllowRawDocumentRaw
+    || texAllowAllPackagesRaw
     || texAllowRestrictedCommandsRaw
     || texAllowedPackages.length > 0,
   );
@@ -195,6 +198,8 @@ export const readPublicDeploymentConfig = (env = process.env) => {
     scopeProfile,
     hasTexPolicy,
     texAllowedPackages,
+    texAllowAllPackages,
+    texAllowAllPackagesRaw,
     texAllowRawDocument,
     texAllowRawDocumentRaw,
     texAllowRestrictedCommands,
@@ -211,15 +216,22 @@ export const validatePublicDeploymentConfig = (config) => {
     errors.push(`TEX_ALLOW_RAW_DOCUMENT must be "true" or "false". Received "${config.texAllowRawDocumentRaw}".`);
   }
 
+  if (config.texAllowAllPackages === "invalid") {
+    errors.push(`TEX_ALLOW_ALL_PACKAGES must be "true" or "false". Received "${config.texAllowAllPackagesRaw}".`);
+  }
+
   if (config.texAllowRestrictedCommands === "invalid") {
     errors.push(`TEX_ALLOW_RESTRICTED_COMMANDS must be "true" or "false". Received "${config.texAllowRestrictedCommandsRaw}".`);
   }
 
   if (config.hasTexPolicy) {
     notes.push(`TeX raw document compilation is ${config.texAllowRawDocument === true ? "enabled" : config.texAllowRawDocument === false ? "disabled" : "unset"}.`);
+    notes.push(`TeX package policy is ${config.texAllowAllPackages === true ? "allow-all" : config.texAllowAllPackages === false ? "allowlist" : "unset"}.`);
     notes.push(`TeX restricted command policy is ${config.texAllowRestrictedCommands === true ? "enabled" : config.texAllowRestrictedCommands === false ? "blocked" : "unset"}.`);
 
-    if (config.texAllowedPackages.length > 0) {
+    if (config.texAllowAllPackages === true) {
+      notes.push("TeX package allowlist enforcement is disabled for this deployment.");
+    } else if (config.texAllowedPackages.length > 0) {
       notes.push(`TeX allowed package count: ${config.texAllowedPackages.length}.`);
     } else {
       warnings.push("TEX_ALLOWED_PACKAGES is unset. Deployments should pin the TeX package allowlist explicitly.");
@@ -227,6 +239,10 @@ export const validatePublicDeploymentConfig = (config) => {
 
     if (config.texAllowRawDocument === false) {
       errors.push("TEX_ALLOW_RAW_DOCUMENT must be true for the repo's public/demo LaTeX deployments. Leaving it false causes the runtime error: \"Raw LaTeX document compilation is disabled for this deployment. Submit document body content instead of a full preamble/document wrapper.\"");
+    }
+
+    if (config.texAllowAllPackages !== true) {
+      errors.push("TEX_ALLOW_ALL_PACKAGES must be true for the repo's public/demo LaTeX deployments. Leaving it false keeps package allowlist rejections active for raw user-authored LaTeX.");
     }
 
     if (config.texAllowRestrictedCommands === true) {

@@ -110,6 +110,7 @@ describe("publicDeploymentConfig", () => {
       GOOGLE_CLIENT_ID: "client-id",
       GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
       GOOGLE_OAUTH_REDIRECT_URI: "https://api.docsy.dev/api/auth/google/callback",
+      TEX_ALLOW_ALL_PACKAGES: "true",
       TEX_ALLOW_RAW_DOCUMENT: "false",
       TEX_ALLOW_RESTRICTED_COMMANDS: "false",
       TEX_ALLOWED_PACKAGES: "amsmath,graphicx",
@@ -127,6 +128,7 @@ describe("publicDeploymentConfig", () => {
       GOOGLE_CLIENT_ID: "client-id",
       GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
       GOOGLE_OAUTH_REDIRECT_URI: "https://api.docsy.dev/api/auth/google/callback",
+      TEX_ALLOW_ALL_PACKAGES: "true",
       TEX_ALLOW_RAW_DOCUMENT: "true",
       TEX_ALLOW_RESTRICTED_COMMANDS: "true",
       TEX_ALLOWED_PACKAGES: "amsmath,graphicx",
@@ -136,5 +138,41 @@ describe("publicDeploymentConfig", () => {
 
     expect(validation.errors).toEqual([]);
     expect(validation.warnings.some((warning) => warning.includes("TEX_ALLOW_RESTRICTED_COMMANDS=true"))).toBe(true);
+  });
+
+  it("rejects public deploy config when package allow-all mode is disabled", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://api.docsy.dev/api/auth/google/callback",
+      TEX_ALLOW_ALL_PACKAGES: "false",
+      TEX_ALLOW_RAW_DOCUMENT: "true",
+      TEX_ALLOW_RESTRICTED_COMMANDS: "false",
+      TEX_ALLOWED_PACKAGES: "amsmath,graphicx",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(validation.errors.some((error) => error.includes("TEX_ALLOW_ALL_PACKAGES must be true"))).toBe(true);
+    expect(validation.notes.some((note) => note.includes("TeX package policy is allowlist"))).toBe(true);
+  });
+
+  it("accepts public deploy config when all TeX packages are allowed and restricted commands stay blocked", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://api.docsy.dev/api/auth/google/callback",
+      TEX_ALLOW_ALL_PACKAGES: "true",
+      TEX_ALLOW_RAW_DOCUMENT: "true",
+      TEX_ALLOW_RESTRICTED_COMMANDS: "false",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(validation.errors).toEqual([]);
+    expect(validation.notes.some((note) => note.includes("TeX package policy is allow-all"))).toBe(true);
+    expect(validation.notes.some((note) => note.includes("allowlist enforcement is disabled"))).toBe(true);
   });
 });

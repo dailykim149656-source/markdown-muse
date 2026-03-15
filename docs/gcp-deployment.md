@@ -83,6 +83,7 @@ gcloud builds submit \
 - `AI_SERVER_PORT`
 - `TEX_SERVICE_BASE_URL`
 - `TEX_SERVICE_AUTH_TOKEN`
+- `TEX_ALLOW_ALL_PACKAGES`
 - `TEX_ALLOW_RAW_DOCUMENT`
 - `TEX_ALLOW_RESTRICTED_COMMANDS`
 - `TEX_ALLOWED_PACKAGES`
@@ -102,6 +103,7 @@ Recommended values:
 - `GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
 - `GOOGLE_OAUTH_PUBLISHING_STATUS=testing`
 - `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted`
+- `TEX_ALLOW_ALL_PACKAGES=true`
 - `TEX_ALLOW_RAW_DOCUMENT=true`
 - `TEX_ALLOW_RESTRICTED_COMMANDS=false`
 - `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,latexsym,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK`
@@ -114,9 +116,9 @@ For external production Google OAuth, keep managed preview domains such as
 LaTeX mode sends raw LaTeX to the backend. Full preambles and
 `\documentclass ... \begin{document} ... \end{document}` wrappers require
 `TEX_ALLOW_RAW_DOCUMENT=true`.
-The default allowlist is sized to cover repo-generated output for highlighting,
-strike/underline, code blocks, figures/tables, captions, admonitions, and
-font-family helpers.
+Public/demo deployments now default to `TEX_ALLOW_ALL_PACKAGES=true`, which
+disables package allowlist enforcement while still keeping dangerous
+file/process primitives blocked with `TEX_ALLOW_RESTRICTED_COMMANDS=false`.
 
 ### 3. Deploy to Cloud Run
 
@@ -217,6 +219,7 @@ gcloud builds submit \
 - `TEX_MAX_REQUEST_BYTES`
 - `TEX_MAX_CONCURRENCY`
 - `TEX_SERVICE_AUTH_TOKEN`
+- `TEX_ALLOW_ALL_PACKAGES`
 - `TEX_ALLOW_RAW_DOCUMENT`
 - `TEX_ALLOW_RESTRICTED_COMMANDS`
 - `TEX_ALLOWED_PACKAGES`
@@ -228,6 +231,7 @@ Recommended values:
 - `TEX_MAX_SOURCE_BYTES=300000`
 - `TEX_MAX_REQUEST_BYTES=400000`
 - `TEX_MAX_CONCURRENCY=2`
+- `TEX_ALLOW_ALL_PACKAGES=true`
 - `TEX_ALLOW_RAW_DOCUMENT=true`
 - `TEX_ALLOW_RESTRICTED_COMMANDS=false`
 - `TEX_ALLOWED_PACKAGES=amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,latexsym,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK`
@@ -235,12 +239,11 @@ Recommended values:
 The TeX service is called by the AI API, not directly by the browser. The
 frontend should continue to use only `VITE_AI_API_BASE_URL`.
 This repo's public/demo deployment keeps full raw LaTeX documents enabled while
-still blocking dangerous file/process primitives with
+allows arbitrary installed LaTeX packages while still blocking dangerous
+file/process primitives with
 `TEX_ALLOW_RESTRICTED_COMMANDS=false`.
-That default package surface includes built-in editor features such as
-highlighting (`soul`), strike/underline (`ulem`), code blocks (`listings`),
-floats/captions (`float`, `caption`), admonitions (`tcolorbox`), and
-font-family helpers (`etoolbox`).
+`TEX_ALLOWED_PACKAGES` remains available only for stricter/private deployments
+that opt back into allowlist enforcement with `TEX_ALLOW_ALL_PACKAGES=false`.
 
 The current TeX image is a coverage-first profile, not a minimal fast-build
 profile. It intentionally includes a broader curated TeX Live package set for
@@ -268,6 +271,7 @@ The AI service calls the TeX service with:
 - a Cloud Run identity token in `Authorization: Bearer ...`
 - an app-level shared secret in `X-Docsy-Tex-Token`
 - request-time LaTeX validation that rejects raw full-document compilation unless `TEX_ALLOW_RAW_DOCUMENT=true`
+- package allowlist enforcement is skipped when `TEX_ALLOW_ALL_PACKAGES=true`
 - file/process primitives remain blocked unless `TEX_ALLOW_RESTRICTED_COMMANDS=true`
 - `\usepackage{...}` declarations are checked against `TEX_ALLOWED_PACKAGES` unless restricted commands are fully enabled
 
@@ -493,15 +497,31 @@ Symptom:
 
 Cause:
 
-- the deployed `TEX_ALLOWED_PACKAGES` drifted behind the repo's generated package surface
-- or the document is requesting a package outside the repo's supported/default trust boundary
+- the deployment is still running with `TEX_ALLOW_ALL_PACKAGES=false`
+- or a stricter/private environment intentionally opted back into allowlist mode
 
 Fix:
 
-- first compare the package against repo-generated features such as highlighting, code blocks, floats, captions, admonitions, and font-family helpers
-- if the package is repo-generated, update and redeploy the checked-in allowlist instead of treating the document as unsafe
-- low-risk compatibility packages such as `latexsym` can also be allowlisted explicitly when real documents depend on them
+- for public/demo deployments, set `TEX_ALLOW_ALL_PACKAGES=true` on both AI and TeX services and redeploy
+- for stricter/private deployments, extend `TEX_ALLOWED_PACKAGES` only if you intentionally want allowlist mode
 - if the package comes from custom/raw user LaTeX outside the built-in feature set, leave it blocked unless you explicitly trust and support it
+
+### Package is allowed, but XeLaTeX still fails to load it
+
+Symptom:
+
+- the package-policy error is gone, but compile logs still report that a package or style file cannot be found
+
+Cause:
+
+- the TeX package is allowed by policy but not installed in the container image
+- the current image is broad (`texlive-latex-extra`, `texlive-publishers`, `texlive-science`, etc.) but it is still not equivalent to `texlive-full`
+
+Fix:
+
+- treat this as TeX image coverage, not policy enforcement
+- inspect compile logs to identify the missing package
+- either install the missing TeX Live collection(s) or evaluate moving to `texlive-full` if package churn remains high
 
 ### Secret preflight says a secret is required, but the secret already exists
 

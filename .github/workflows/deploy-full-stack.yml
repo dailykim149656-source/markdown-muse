@@ -30,6 +30,7 @@ jobs:
       TEX_MAX_SOURCE_BYTES: "300000"
       TEX_MAX_REQUEST_BYTES: "400000"
       TEX_MAX_CONCURRENCY: "2"
+      TEX_ALLOW_ALL_PACKAGES: "true"
       TEX_ALLOW_RAW_DOCUMENT: "true"
       TEX_ALLOW_RESTRICTED_COMMANDS: "false"
       TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,latexsym,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK"
@@ -96,6 +97,11 @@ jobs:
             TEX_MAX_REQUEST_BYTES="400000"
           fi
 
+          TEX_ALLOW_ALL_PACKAGES="${{ secrets.GCP_TEX_ALLOW_ALL_PACKAGES }}"
+          if [ -z "${TEX_ALLOW_ALL_PACKAGES}" ]; then
+            TEX_ALLOW_ALL_PACKAGES="true"
+          fi
+
           TEX_ALLOW_RAW_DOCUMENT="${{ secrets.GCP_TEX_ALLOW_RAW_DOCUMENT }}"
           if [ -z "${TEX_ALLOW_RAW_DOCUMENT}" ]; then
             TEX_ALLOW_RAW_DOCUMENT="true"
@@ -112,6 +118,7 @@ jobs:
           fi
 
           export TEX_MAX_REQUEST_BYTES
+          export TEX_ALLOW_ALL_PACKAGES
           export TEX_ALLOW_RAW_DOCUMENT
           export TEX_ALLOW_RESTRICTED_COMMANDS
           export TEX_ALLOWED_PACKAGES
@@ -124,13 +131,14 @@ jobs:
           echo "  project: ${PROJECT_ID}"
           echo "  region: ${GCP_REGION}"
           echo "  service: ${TEX_SERVICE_NAME}"
+          echo "  tex_allow_all_packages: ${TEX_ALLOW_ALL_PACKAGES}"
           echo "  tex_allow_raw_document: ${TEX_ALLOW_RAW_DOCUMENT}"
           echo "  tex_allow_restricted_commands: ${TEX_ALLOW_RESTRICTED_COMMANDS}"
           echo "  tex_allowed_packages: ${TEX_ALLOWED_PACKAGES}"
           echo "  app_token_secret: ${TEX_SERVICE_AUTH_TOKEN_SECRET}"
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${TEX_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_SERVICE_NAME=%s|_TEX_COMPILE_TIMEOUT_MS=%s|_TEX_MAX_SOURCE_BYTES=%s|_TEX_MAX_REQUEST_BYTES=%s|_TEX_MAX_CONCURRENCY=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_RUN_SERVICE_ACCOUNT=%s|_CALLER_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_SERVICE_NAME=%s|_TEX_COMPILE_TIMEOUT_MS=%s|_TEX_MAX_SOURCE_BYTES=%s|_TEX_MAX_REQUEST_BYTES=%s|_TEX_MAX_CONCURRENCY=%s|_TEX_ALLOW_ALL_PACKAGES=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_RUN_SERVICE_ACCOUNT=%s|_CALLER_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$TEX_SERVICE_NAME" \
@@ -138,6 +146,7 @@ jobs:
             "$TEX_MAX_SOURCE_BYTES" \
             "${TEX_MAX_REQUEST_BYTES}" \
             "$TEX_MAX_CONCURRENCY" \
+            "${TEX_ALLOW_ALL_PACKAGES}" \
             "${TEX_ALLOW_RAW_DOCUMENT}" \
             "${TEX_ALLOW_RESTRICTED_COMMANDS}" \
             "${TEX_ALLOWED_PACKAGES}" \
@@ -301,6 +310,11 @@ jobs:
             AI_MAX_REQUEST_BYTES="2097152"
           fi
 
+          TEX_ALLOW_ALL_PACKAGES="${{ secrets.GCP_TEX_ALLOW_ALL_PACKAGES }}"
+          if [ -z "${TEX_ALLOW_ALL_PACKAGES}" ]; then
+            TEX_ALLOW_ALL_PACKAGES="true"
+          fi
+
           TEX_ALLOW_RAW_DOCUMENT="${{ secrets.GCP_TEX_ALLOW_RAW_DOCUMENT }}"
           if [ -z "${TEX_ALLOW_RAW_DOCUMENT}" ]; then
             TEX_ALLOW_RAW_DOCUMENT="true"
@@ -348,6 +362,7 @@ jobs:
           echo "  ai_url_source: TeX output ${TEX_SERVICE_BASE_URL}"
           echo "  frontend_origin: ${WORKSPACE_FRONTEND_ORIGIN}"
           echo "  oauth_redirect_uri: ${GOOGLE_OAUTH_REDIRECT_URI}"
+          echo "  tex_allow_all_packages: ${TEX_ALLOW_ALL_PACKAGES}"
           echo "  tex_allow_raw_document: ${TEX_ALLOW_RAW_DOCUMENT}"
           echo "  tex_allow_restricted_commands: ${TEX_ALLOW_RESTRICTED_COMMANDS}"
           echo "  diagnostics_secret_name: ${AI_DIAGNOSTICS_TOKEN_SECRET}"
@@ -361,6 +376,7 @@ jobs:
           export GOOGLE_WORKSPACE_SCOPE_PROFILE
           export WORKSPACE_FRONTEND_ORIGIN
           export AI_MAX_REQUEST_BYTES
+          export TEX_ALLOW_ALL_PACKAGES
           export TEX_ALLOW_RAW_DOCUMENT
           export TEX_ALLOW_RESTRICTED_COMMANDS
           export TEX_ALLOWED_PACKAGES
@@ -368,7 +384,7 @@ jobs:
           node scripts/validate-public-deploy-config.mjs
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_VERTEX_LOCATION=%s|_SERVICE_NAME=%s|_GEMINI_MODEL=%s|_GEMINI_FALLBACK_MODEL=%s|_AI_ALLOWED_ORIGIN=%s|_AI_MAX_REQUEST_BYTES=%s|_GOOGLE_CLIENT_ID=%s|_GOOGLE_OAUTH_REDIRECT_URI=%s|_GOOGLE_OAUTH_PUBLISHING_STATUS=%s|_GOOGLE_WORKSPACE_SCOPE_PROFILE=%s|_WORKSPACE_FRONTEND_ORIGIN=%s|_GOOGLE_WORKSPACE_SCOPES=%s|_AI_DIAGNOSTICS_TOKEN_SECRET=%s|_GOOGLE_CLIENT_SECRET_SECRET=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_SERVICE_BASE_URL=%s|_RUN_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_VERTEX_LOCATION=%s|_SERVICE_NAME=%s|_GEMINI_MODEL=%s|_GEMINI_FALLBACK_MODEL=%s|_AI_ALLOWED_ORIGIN=%s|_AI_MAX_REQUEST_BYTES=%s|_GOOGLE_CLIENT_ID=%s|_GOOGLE_OAUTH_REDIRECT_URI=%s|_GOOGLE_OAUTH_PUBLISHING_STATUS=%s|_GOOGLE_WORKSPACE_SCOPE_PROFILE=%s|_WORKSPACE_FRONTEND_ORIGIN=%s|_GOOGLE_WORKSPACE_SCOPES=%s|_AI_DIAGNOSTICS_TOKEN_SECRET=%s|_GOOGLE_CLIENT_SECRET_SECRET=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_TEX_ALLOW_ALL_PACKAGES=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_SERVICE_BASE_URL=%s|_RUN_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$VERTEX_LOCATION" \
@@ -386,6 +402,7 @@ jobs:
             "${AI_DIAGNOSTICS_TOKEN_SECRET}" \
             "${GOOGLE_CLIENT_SECRET_SECRET}" \
             "${TEX_SERVICE_AUTH_TOKEN_SECRET}" \
+            "${TEX_ALLOW_ALL_PACKAGES}" \
             "${TEX_ALLOW_RAW_DOCUMENT}" \
             "${TEX_ALLOW_RESTRICTED_COMMANDS}" \
             "${TEX_ALLOWED_PACKAGES}" \

@@ -53,6 +53,9 @@ export const isRawDocumentCompilationAllowed = (env = process.env) =>
 export const isRestrictedTexCommandsAllowed = (env = process.env) =>
   env.TEX_ALLOW_RESTRICTED_COMMANDS?.trim().toLowerCase() === "true";
 
+export const isAllTexPackagesAllowed = (env = process.env) =>
+  env.TEX_ALLOW_ALL_PACKAGES?.trim().toLowerCase() === "true";
+
 export const isFullLatexDocument = (latex: string) => FULL_DOCUMENT_PATTERN.test(latex);
 
 export const getAllowedTexPackages = (env = process.env) => {
@@ -113,17 +116,22 @@ export const assertTexCompilationAllowed = ({
     );
   }
 
-  if (isRestrictedTexCommandsAllowed(env)) {
-    return;
+  const restrictedCommandsAllowed = isRestrictedTexCommandsAllowed(env);
+  const allPackagesAllowed = isAllTexPackagesAllowed(env);
+
+  if (!allPackagesAllowed) {
+    const disallowedPackage = findDisallowedTexPackage(latex, env);
+
+    if (disallowedPackage) {
+      throw new HttpError(
+        400,
+        `LaTeX source requests package "${disallowedPackage}", which is not on the allowed package list for this deployment.`,
+      );
+    }
   }
 
-  const disallowedPackage = findDisallowedTexPackage(latex, env);
-
-  if (disallowedPackage) {
-    throw new HttpError(
-      400,
-      `LaTeX source requests package "${disallowedPackage}", which is not on the allowed package list for this deployment.`,
-    );
+  if (restrictedCommandsAllowed) {
+    return;
   }
 
   const restrictedPrimitive = findRestrictedTexPrimitive(latex);

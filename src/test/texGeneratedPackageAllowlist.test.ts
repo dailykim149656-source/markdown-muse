@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { renderAstToLatex } from "@/lib/ast/renderAstToLatex";
 import { htmlToLatex } from "@/components/editor/utils/htmlToLatex";
 import type { DocumentAst } from "@/types/documentAst";
-import { extractRequestedTexPackages, getAllowedTexPackages } from "../../server/modules/tex/security";
+import { assertTexCompilationAllowed, extractRequestedTexPackages, getAllowedTexPackages } from "../../server/modules/tex/security";
 
 const assertAllowedPackages = (packages: string[]) => {
   const allowed = getAllowedTexPackages();
@@ -223,5 +223,25 @@ describe("tex generated package allowlist", () => {
       "xeCJK",
     ]));
     assertAllowedPackages(compilerPackages);
+  });
+
+  it("accepts representative raw LaTeX with fullpage when all packages are allowed", () => {
+    const latex = [
+      "\\documentclass{article}",
+      "\\usepackage{fullpage}",
+      "\\begin{document}",
+      "Hello",
+      "\\end{document}",
+    ].join("\n");
+
+    expect(() => assertTexCompilationAllowed({
+      env: {
+        TEX_ALLOW_ALL_PACKAGES: "true",
+        TEX_ALLOW_RAW_DOCUMENT: "true",
+        TEX_ALLOW_RESTRICTED_COMMANDS: "false",
+      },
+      latex,
+      sourceType: "raw-latex",
+    })).not.toThrow();
   });
 });

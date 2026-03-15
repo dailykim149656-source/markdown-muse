@@ -90,6 +90,30 @@ describe("tex security", () => {
     })).not.toThrow();
   });
 
+  it("allows non-curated packages when TEX_ALLOW_ALL_PACKAGES=true", () => {
+    const latex = "\\documentclass{article}\n\\usepackage{fullpage}\n\\begin{document}\nHi\n\\end{document}";
+
+    expect(() => assertTexCompilationAllowed({
+      env: {
+        TEX_ALLOW_ALL_PACKAGES: "true",
+        TEX_ALLOW_RAW_DOCUMENT: "true",
+        TEX_ALLOW_RESTRICTED_COMMANDS: "false",
+      },
+      latex,
+      sourceType: "raw-latex",
+    })).not.toThrow();
+
+    expect(() => assertTexCompilationAllowed({
+      env: {
+        TEX_ALLOW_ALL_PACKAGES: "false",
+        TEX_ALLOW_RAW_DOCUMENT: "true",
+        TEX_ALLOW_RESTRICTED_COMMANDS: "false",
+      },
+      latex,
+      sourceType: "raw-latex",
+    })).toThrow(/allowed package list/i);
+  });
+
   it("rejects full raw latex documents unless explicitly enabled", () => {
     const fullDocument = "\\documentclass{article}\n\\begin{document}\nHi\n\\end{document}";
 
@@ -120,6 +144,7 @@ describe("tex security", () => {
 
     expect(() => assertTexCompilationAllowed({
       env: {
+        TEX_ALLOW_ALL_PACKAGES: "true",
         TEX_ALLOW_RAW_DOCUMENT: "true",
         TEX_ALLOW_RESTRICTED_COMMANDS: "false",
       },
@@ -129,6 +154,7 @@ describe("tex security", () => {
 
     expect(() => assertTexCompilationAllowed({
       env: {
+        TEX_ALLOW_ALL_PACKAGES: "true",
         TEX_ALLOW_RAW_DOCUMENT: "true",
         TEX_ALLOW_RESTRICTED_COMMANDS: "true",
       },

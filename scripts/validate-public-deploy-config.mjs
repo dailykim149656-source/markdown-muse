@@ -21,6 +21,7 @@ console.log("[public-deploy] Scope profile:", config.scopeProfile);
 console.log("[public-deploy] Scope risk:", validation.scopeRisk);
 if (config.hasTexPolicy) {
   console.log("[public-deploy] TeX raw documents:", formatOptionalBoolean(config.texAllowRawDocument, config.texAllowRawDocumentRaw));
+  console.log("[public-deploy] TeX package policy:", formatOptionalBoolean(config.texAllowAllPackages, config.texAllowAllPackagesRaw));
   console.log("[public-deploy] TeX restricted commands:", formatOptionalBoolean(config.texAllowRestrictedCommands, config.texAllowRestrictedCommandsRaw));
   console.log("[public-deploy] TeX allowed packages:", config.texAllowedPackages.join(", ") || "(unset)");
 }
