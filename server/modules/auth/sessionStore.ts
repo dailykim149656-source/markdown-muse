@@ -3,19 +3,21 @@ import { parseCookieHeader, serializeClearedCookie, serializeCookie } from "../h
 import { isSecureRequest } from "../http/http";
 import { getWorkspaceRepository } from "../workspace/repository";
 
+const FORWARDED_WORKSPACE_SESSION_COOKIE = "__session";
 const LOCAL_WORKSPACE_SESSION_COOKIE = "docsy_workspace_session";
-const SECURE_WORKSPACE_SESSION_COOKIE = "__Host-docsy-workspace-session";
+const LEGACY_SECURE_WORKSPACE_SESSION_COOKIE = "__Host-docsy-workspace-session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const SESSION_IDLE_TTL_MS = 1000 * 60 * 60 * 24;
 
 const getWorkspaceSessionCookieName = (request: IncomingMessage) =>
-  isSecureRequest(request) ? SECURE_WORKSPACE_SESSION_COOKIE : LOCAL_WORKSPACE_SESSION_COOKIE;
+  isSecureRequest(request) ? FORWARDED_WORKSPACE_SESSION_COOKIE : LOCAL_WORKSPACE_SESSION_COOKIE;
 
 const getWorkspaceSessionCookieSameSite = (request: IncomingMessage) =>
   isSecureRequest(request) ? "None" : "Lax";
 
 const getWorkspaceSessionCookieNames = () => [
-  SECURE_WORKSPACE_SESSION_COOKIE,
+  FORWARDED_WORKSPACE_SESSION_COOKIE,
+  LEGACY_SECURE_WORKSPACE_SESSION_COOKIE,
   LOCAL_WORKSPACE_SESSION_COOKIE,
 ] as const;
 
@@ -36,7 +38,12 @@ export const createWorkspaceSessionCookie = (sessionId: string, request: Incomin
 
 export const clearWorkspaceSessionCookie = (request: IncomingMessage) =>
   [
-    serializeClearedCookie(SECURE_WORKSPACE_SESSION_COOKIE, {
+    serializeClearedCookie(FORWARDED_WORKSPACE_SESSION_COOKIE, {
+      path: "/",
+      sameSite: getWorkspaceSessionCookieSameSite(request),
+      secure: true,
+    }),
+    serializeClearedCookie(LEGACY_SECURE_WORKSPACE_SESSION_COOKIE, {
       path: "/",
       sameSite: getWorkspaceSessionCookieSameSite(request),
       secure: true,

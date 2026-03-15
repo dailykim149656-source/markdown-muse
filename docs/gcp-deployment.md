@@ -59,6 +59,7 @@ Firebase Hosting must rewrite unknown SPA paths such as `/editor` to
 This repository already includes that rewrite in `firebase.json`.
 The same config also rewrites `/api/**` to the Cloud Run `docsy` service, so
 single-domain custom-domain deploys do not need a separate `api` subdomain.
+Firebase Hosting only forwards the `__session` cookie to rewritten backends, so deployed Google Workspace auth sessions must use `__session` rather than custom secure cookie names.
 
 ### 5. Cache guidance
 

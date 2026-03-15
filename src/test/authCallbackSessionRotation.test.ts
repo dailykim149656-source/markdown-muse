@@ -54,7 +54,7 @@ describe("auth callback session rotation", () => {
     pruneExpiredMock.mockReset();
 
     createWorkspaceSessionMock.mockResolvedValue({ sessionId: "new-session" });
-    createWorkspaceSessionCookieMock.mockReturnValue("__Host-docsy-workspace-session=new-session");
+    createWorkspaceSessionCookieMock.mockReturnValue("__session=new-session");
     getWorkspaceSessionIdMock.mockReturnValue("old-session");
     getWorkspaceSessionMock.mockResolvedValue(null);
     consumeAuthStateMock.mockResolvedValue({
@@ -80,7 +80,7 @@ describe("auth callback session rotation", () => {
     expect(upsertConnectionMock).toHaveBeenCalled();
     expect(deleteWorkspaceSessionByIdMock).toHaveBeenCalledWith("old-session");
     expect(createWorkspaceSessionMock).toHaveBeenCalledWith("google:user-sub");
-    expect(response?.headers?.["Set-Cookie"]).toBe("__Host-docsy-workspace-session=new-session");
+    expect(response?.headers?.["Set-Cookie"]).toBe("__session=new-session");
     expect(String(response?.headers?.Location)).toContain("/editor?workspaceAuth=connected");
     expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining("[WorkspaceAuth] callback connected"));
     infoSpy.mockRestore();
@@ -92,7 +92,7 @@ describe("auth callback session rotation", () => {
 
     const response = await handleAuthRoute({
       headers: {
-        cookie: "__Host-docsy-workspace-session=missing-session",
+        cookie: "__session=missing-session",
         host: "api.docsy.dev",
       },
       method: "GET",
