@@ -173,4 +173,44 @@ describe("workspace repository hardening", () => {
     expect(rewrittenState).not.toContain('"content":');
     expect(rewrittenState).not.toContain('"docsJson":');
   });
+
+  it("stores shared documents and prunes expired records", async () => {
+    tempDirectoryPath = await mkdtemp(path.join(tmpdir(), "docsy-shared-state-"));
+    process.env.WORKSPACE_STATE_PATH = path.join(tempDirectoryPath, "workspace-state.json");
+    process.env.WORKSPACE_REPOSITORY_BACKEND = "file";
+    process.env.VITEST = "true";
+
+    const repository = getWorkspaceRepository();
+
+    await repository.upsertSharedDocument({
+      compressedPayload: "compressed-payload",
+      compression: "deflate-raw-base64url",
+      createdAt: 100,
+      expiresAt: 200,
+      shareId: "share-live",
+      updatedAt: 100,
+    });
+    await repository.upsertSharedDocument({
+      compressedPayload: "expired-payload",
+      compression: "deflate-raw-base64url",
+      createdAt: 50,
+      expiresAt: 60,
+      shareId: "share-expired",
+      updatedAt: 50,
+    });
+
+    expect(await repository.getSharedDocument("share-live")).toEqual({
+      compressedPayload: "compressed-payload",
+      compression: "deflate-raw-base64url",
+      createdAt: 100,
+      expiresAt: 200,
+      shareId: "share-live",
+      updatedAt: 100,
+    });
+
+    await repository.pruneExpired(100);
+
+    expect(await repository.getSharedDocument("share-expired")).toBeNull();
+    expect(await repository.getSharedDocument("share-live")).not.toBeNull();
+  });
 });

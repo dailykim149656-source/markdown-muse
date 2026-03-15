@@ -61,10 +61,20 @@ export interface WorkspaceAuthStateRecord {
   state: string;
 }
 
+export interface SharedDocumentRecord {
+  compressedPayload: string;
+  compression: "deflate-raw-base64url";
+  createdAt: number;
+  expiresAt: number;
+  shareId: string;
+  updatedAt: number;
+}
+
 interface WorkspaceRepositoryState {
   authStates: Record<string, WorkspaceAuthStateRecord>;
   connections: Record<string, WorkspaceConnectionRecord>;
   importedDocuments: Record<string, WorkspaceImportedDocumentRecord>;
+  sharedDocuments: Record<string, SharedDocumentRecord>;
   sessions: Record<string, WorkspaceSessionRecord>;
   version: 1;
 }
@@ -75,6 +85,7 @@ export interface WorkspaceRepository {
   deleteSession(sessionId: string): Promise<void>;
   getConnection(connectionId: string): Promise<WorkspaceConnectionRecord | null>;
   getImportedDocument(documentId: string): Promise<WorkspaceImportedDocumentRecord | null>;
+  getSharedDocument(shareId: string): Promise<SharedDocumentRecord | null>;
   getSession(sessionId: string): Promise<{ connection: WorkspaceConnectionRecord | null; session: WorkspaceSessionRecord } | null>;
   listImportedDocuments(connectionId: string): Promise<WorkspaceImportedDocumentRecord[]>;
   pruneExpired(now?: number): Promise<void>;
@@ -86,12 +97,14 @@ export interface WorkspaceRepository {
   ): Promise<{ connection: WorkspaceConnectionRecord | null; session: WorkspaceSessionRecord } | null>;
   upsertConnection(record: WorkspaceConnectionRecord): Promise<void>;
   upsertImportedDocument(record: WorkspaceImportedDocumentRecord): Promise<void>;
+  upsertSharedDocument(record: SharedDocumentRecord): Promise<void>;
 }
 
 const DEFAULT_REPOSITORY_STATE: WorkspaceRepositoryState = {
   authStates: {},
   connections: {},
   importedDocuments: {},
+  sharedDocuments: {},
   sessions: {},
   version: 1,
 };
@@ -223,6 +236,27 @@ const sanitizeImportedDocumentRecord = (
   };
 };
 
+const sanitizeSharedDocumentRecord = (
+  record: Partial<SharedDocumentRecord> | null | undefined,
+): SharedDocumentRecord | null => {
+  if (
+    !record?.shareId
+    || typeof record.compressedPayload !== "string"
+    || record.compression !== "deflate-raw-base64url"
+  ) {
+    return null;
+  }
+
+  return {
+    compressedPayload: record.compressedPayload,
+    compression: "deflate-raw-base64url",
+    createdAt: typeof record.createdAt === "number" ? record.createdAt : Date.now(),
+    expiresAt: typeof record.expiresAt === "number" ? record.expiresAt : Date.now(),
+    shareId: record.shareId,
+    updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : Date.now(),
+  };
+};
+
 export const resolveWorkspaceRepositoryFilePath = (
   env = process.env,
   cwd = process.cwd(),
@@ -289,6 +323,11 @@ const readRepositoryState = async (): Promise<WorkspaceRepositoryState> => {
           .map(([documentId, record]) => [documentId, sanitizeImportedDocumentRecord(record)])
           .filter((entry): entry is [string, WorkspaceImportedDocumentRecord] => Boolean(entry[1])),
       ),
+      sharedDocuments: Object.fromEntries(
+        Object.entries(parsed.sharedDocuments || {})
+          .map(([shareId, record]) => [shareId, sanitizeSharedDocumentRecord(record)])
+          .filter((entry): entry is [string, SharedDocumentRecord] => Boolean(entry[1])),
+      ),
       sessions: Object.fromEntries(
         Object.entries(parsed.sessions || {})
           .map(([sessionId, record]) => [sessionId, sanitizeWorkspaceSessionRecord(record)])
@@ -332,6 +371,13 @@ class FileWorkspaceRepository implements WorkspaceRepository {
         for (const [sessionId, session] of Object.entries(state.sessions)) {
           if (session.expiresAt <= now) {
             delete state.sessions[sessionId];
+            changed = true;
+          }
+        }
+
+        for (const [shareId, sharedDocument] of Object.entries(state.sharedDocuments)) {
+          if (sharedDocument.expiresAt <= now) {
+            delete state.sharedDocuments[shareId];
             changed = true;
           }
         }
@@ -479,6 +525,13 @@ class FileWorkspaceRepository implements WorkspaceRepository {
     });
   }
 
+  async getSharedDocument(shareId: string) {
+    return this.enqueue(async () => {
+      const state = await readRepositoryState();
+      return state.sharedDocuments[shareId] || null;
+    });
+  }
+
   async listImportedDocuments(connectionId: string) {
     return this.enqueue(async () => {
       const state = await readRepositoryState();
@@ -486,6 +539,20 @@ class FileWorkspaceRepository implements WorkspaceRepository {
         Object.values(state.importedDocuments)
           .filter((document) => document.connectionId === connectionId),
       );
+    });
+  }
+
+  async upsertSharedDocument(record: SharedDocumentRecord) {
+    return this.enqueue(async () => {
+      const state = await readRepositoryState();
+      const sanitizedRecord = sanitizeSharedDocumentRecord(record);
+
+      if (!sanitizedRecord) {
+        throw new Error(`Shared document record is invalid for shareId=${record.shareId}`);
+      }
+
+      state.sharedDocuments[sanitizedRecord.shareId] = sanitizedRecord;
+      await writeRepositoryState(state);
     });
   }
 }
@@ -517,15 +584,20 @@ class FirestoreWorkspaceRepository implements WorkspaceRepository {
     return this.getRootDocumentRef().collection("importedDocuments");
   }
 
+  private getSharedDocumentsCollection() {
+    return this.getRootDocumentRef().collection("sharedDocuments");
+  }
+
   async pruneExpired(now = Date.now()) {
-    const [expiredAuthStates, expiredSessions] = await Promise.all([
+    const [expiredAuthStates, expiredSessions, expiredSharedDocuments] = await Promise.all([
       this.getAuthStatesCollection().where("expiresAt", "<=", now).get(),
       this.getSessionsCollection().where("expiresAt", "<=", now).get(),
+      this.getSharedDocumentsCollection().where("expiresAt", "<=", now).get(),
     ]);
     const batch = this.firestore.batch();
     let writeCount = 0;
 
-    for (const snapshot of [...expiredAuthStates.docs, ...expiredSessions.docs]) {
+    for (const snapshot of [...expiredAuthStates.docs, ...expiredSessions.docs, ...expiredSharedDocuments.docs]) {
       batch.delete(snapshot.ref);
       writeCount += 1;
     }
@@ -686,6 +758,16 @@ class FirestoreWorkspaceRepository implements WorkspaceRepository {
     return sanitizeImportedDocumentRecord(snapshot.data() as Partial<WorkspaceImportedDocumentRecord>);
   }
 
+  async getSharedDocument(shareId: string) {
+    const snapshot = await this.getSharedDocumentsCollection().doc(shareId).get();
+
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return sanitizeSharedDocumentRecord(snapshot.data() as Partial<SharedDocumentRecord>);
+  }
+
   async listImportedDocuments(connectionId: string) {
     const snapshot = await this.getImportedDocumentsCollection()
       .where("connectionId", "==", connectionId)
@@ -696,6 +778,16 @@ class FirestoreWorkspaceRepository implements WorkspaceRepository {
         .map((documentSnapshot) => sanitizeImportedDocumentRecord(documentSnapshot.data() as Partial<WorkspaceImportedDocumentRecord>))
         .filter((record): record is WorkspaceImportedDocumentRecord => Boolean(record)),
     );
+  }
+
+  async upsertSharedDocument(record: SharedDocumentRecord) {
+    const sanitizedRecord = sanitizeSharedDocumentRecord(record);
+
+    if (!sanitizedRecord) {
+      throw new Error(`Shared document record is invalid for shareId=${record.shareId}`);
+    }
+
+    await this.getSharedDocumentsCollection().doc(sanitizedRecord.shareId).set(stripUndefinedDeep(sanitizedRecord));
   }
 }
 

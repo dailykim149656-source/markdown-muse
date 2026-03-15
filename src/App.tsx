@@ -37,6 +37,7 @@ const App = () => (
               <Route path="/privacy" element={<Privacy />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/editor" element={<Index />} />
+              <Route path="/s/:shareId" element={<Index />} />
               <Route path="/editor/graph" element={<WorkspaceGraph />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

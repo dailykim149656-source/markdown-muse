@@ -52,7 +52,7 @@ const decodeBase64Url = (payload: string) => {
   return new TextDecoder().decode(bytes);
 };
 
-export const buildDocSharePayload = (document: DocumentData) => {
+export const buildShareableDocsyPayload = (document: DocumentData) => {
   const file = buildDocsyFileFromDocumentData(document);
   const { tiptap: _ignoredTiptap, ...shareableFile } = file;
   const sourceSnapshots = {
@@ -60,10 +60,14 @@ export const buildDocSharePayload = (document: DocumentData) => {
     [document.mode]: document.content,
   };
 
-  return encodeBase64Url(serializeDocsyFile({
+  return serializeDocsyFile({
     ...shareableFile,
     sourceSnapshots,
-  }));
+  });
+};
+
+export const buildDocSharePayload = (document: DocumentData) => {
+  return encodeBase64Url(buildShareableDocsyPayload(document));
 };
 
 export const buildDocShareHash = (document: DocumentData) => {
@@ -88,13 +92,8 @@ export const buildDocShareLink = (document: DocumentData, locationHref: string) 
   return url.toString();
 };
 
-export const parseSharedDocumentFromHash = (hash: string): CreateDocumentOptions | null => {
-  if (!hash.startsWith(DOC_SHARE_HASH_PREFIX)) {
-    return null;
-  }
-
-  const payload = hash.slice(DOC_SHARE_HASH_PREFIX.length);
-  const decoded = decodeBase64Url(payload);
+export const parseSharedDocumentFromSerializedPayload = (payload: string): CreateDocumentOptions => {
+  const decoded = payload.trim();
   const parsed = parseDocsyFile(decoded);
   const document = buildDocumentDataFromDocsyFile(parsed);
   const primaryContent = parsed.sourceSnapshots?.[document.mode] || document.content;
@@ -110,4 +109,14 @@ export const parseSharedDocumentFromHash = (hash: string): CreateDocumentOptions
     },
     name,
   };
+};
+
+export const parseSharedDocumentFromHash = (hash: string): CreateDocumentOptions | null => {
+  if (!hash.startsWith(DOC_SHARE_HASH_PREFIX)) {
+    return null;
+  }
+
+  const payload = hash.slice(DOC_SHARE_HASH_PREFIX.length);
+  const decoded = decodeBase64Url(payload);
+  return parseSharedDocumentFromSerializedPayload(decoded);
 };

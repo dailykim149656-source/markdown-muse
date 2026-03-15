@@ -20,8 +20,9 @@ import {
   resolveImportedDocumentOptions,
 } from "@/lib/io/documentIoShared";
 import { importLatexToDocsy } from "@/lib/latex/importLatexToDocsy";
-import { DOC_SHARE_MAX_PAYLOAD_LENGTH } from "@/lib/share/shareConstants";
+import { createDocumentShare, getShareCreateErrorCode } from "@/lib/share/shareClient";
 import type { DocumentPatchSet } from "@/types/documentPatch";
+import type { ShareLinkInfo } from "@/types/share";
 import type { SourceFileReference } from "@/types/documentAst";
 
 export {
@@ -64,11 +65,6 @@ export type ImportValidationResult = ImportValidationSuccess | ImportValidationF
 
 export type ClipboardExportFormat = "html" | "json" | "markdown" | "yaml";
 
-export interface ShareLinkInfo {
-  available: boolean;
-  link: string | null;
-}
-
 const loadDocsyFileFormat = () => import("@/lib/docsy/fileFormat");
 const loadDocShare = () => import("@/lib/share/docShare");
 const loadPatchSetGuard = () => import("@/lib/patches/isDocumentPatchSet");
@@ -96,6 +92,14 @@ const createIdleImportState = (): DocumentImportState => ({
   progress: null,
   status: "idle",
 });
+
+const EMPTY_SHARE_LINK_INFO: ShareLinkInfo = {
+  available: false,
+  errorCode: null,
+  expiresAt: null,
+  link: null,
+  shareId: null,
+};
 
 const hasSupportedImportExtension = (fileName: string) =>
   SUPPORTED_IMPORT_EXTENSIONS.some((extension) => fileName.toLowerCase().endsWith(extension));
@@ -273,15 +277,26 @@ export const buildClipboardExportContent = async ({
 
 export const buildShareLinkInfo = async (
   document: DocumentData,
-  locationHref: string,
 ): Promise<ShareLinkInfo> => {
-  const { buildDocShareLink } = await loadDocShare();
-  const link = buildDocShareLink(document, locationHref);
+  try {
+    const { buildShareableDocsyPayload } = await loadDocShare();
+    const response = await createDocumentShare({
+      payload: buildShareableDocsyPayload(document),
+    });
 
-  return {
-    available: Boolean(link),
-    link,
-  };
+    return {
+      available: true,
+      errorCode: null,
+      expiresAt: response.expiresAt,
+      link: response.link,
+      shareId: response.shareId,
+    };
+  } catch (error) {
+    return {
+      ...EMPTY_SHARE_LINK_INFO,
+      errorCode: getShareCreateErrorCode(error),
+    };
+  }
 };
 
 export const useDocumentIO = ({
@@ -299,7 +314,7 @@ export const useDocumentIO = ({
   const { locale, t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importState, setImportState] = useState<DocumentImportState>(createIdleImportState);
-  const [shareLinkInfo, setShareLinkInfo] = useState<ShareLinkInfo>({ available: false, link: null });
+  const [shareLinkInfo, setShareLinkInfo] = useState<ShareLinkInfo>(EMPTY_SHARE_LINK_INFO);
 
   const buildSourceFileReference = useCallback((
     fileName: string,
@@ -313,7 +328,7 @@ export const useDocumentIO = ({
   }), []);
 
   useEffect(() => {
-    setShareLinkInfo({ available: false, link: null });
+    setShareLinkInfo(EMPTY_SHARE_LINK_INFO);
   }, [activeDoc.content, activeDoc.id, activeDoc.mode, activeDoc.updatedAt]);
 
   const downloadFile = useCallback((content: string, ext: string, type: string) => {
@@ -354,17 +369,32 @@ export const useDocumentIO = ({
   }, [activeDoc, copyToClipboard, getRenderableMarkdown, onVersionSnapshot, renderableEditorHtml, renderableMarkdown, t]);
 
   const prepareShareLink = useCallback(async () => {
-    const locationHref = typeof window !== "undefined" ? window.location.href : "http://localhost/editor";
-    const info = await buildShareLinkInfo(activeDoc, locationHref);
+    if (shareLinkInfo.available && shareLinkInfo.link) {
+      return shareLinkInfo;
+    }
+
+    const info = await buildShareLinkInfo(activeDoc);
     setShareLinkInfo(info);
     return info;
-  }, [activeDoc]);
+  }, [activeDoc, shareLinkInfo]);
+
+  const getShareErrorMessage = useCallback((info: ShareLinkInfo) => {
+    switch (info.errorCode) {
+      case "payload_too_large":
+        return t("hooks.io.shareTooLarge");
+      case "server_unavailable":
+        return t("hooks.io.shareServerUnavailable");
+      default:
+        return t("hooks.io.shareCreateFailed");
+    }
+  }, [t]);
 
   const handleCopyShareLink = useCallback(async () => {
-    const { link: shareLink } = await prepareShareLink();
+    const nextShareLinkInfo = await prepareShareLink();
+    const shareLink = nextShareLinkInfo.link;
 
     if (!shareLink) {
-      toast.error(t("hooks.io.shareTooLarge", { size: DOC_SHARE_MAX_PAYLOAD_LENGTH }));
+      toast.error(getShareErrorMessage(nextShareLinkInfo));
       return;
     }
 
@@ -375,7 +405,7 @@ export const useDocumentIO = ({
     } catch {
       toast.error(t("hooks.io.shareCopyFailed"));
     }
-  }, [onVersionSnapshot, prepareShareLink, t]);
+  }, [getShareErrorMessage, onVersionSnapshot, prepareShareLink, t]);
 
   const handleSaveMd = useCallback(async () => {
     const markdownContent = activeDoc.mode === "markdown"

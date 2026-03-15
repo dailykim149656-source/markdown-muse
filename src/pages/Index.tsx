@@ -2,7 +2,7 @@ import type { JSONContent } from "@tiptap/core";
 import { Suspense, lazy, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { AiAssistantRuntimeState } from "@/components/editor/AiAssistantRuntime";
 import type { DocumentIORuntimeState } from "@/components/editor/DocumentIORuntime";
 import type { DocumentSupportRuntimeState } from "@/components/editor/DocumentSupportRuntime";
@@ -353,6 +353,8 @@ const templateRequiresAdvancedBlocks = (mode: EditorMode, content: string) => {
 const Index = () => {
   const { locale, t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { shareId } = useParams<{ shareId?: string }>();
   const isE2E = searchParams.get("e2e") === "1";
   const [activeEditor, setActiveEditor] = useState<TiptapEditor | null>(null);
   const [pendingImpactSuggestions, setPendingImpactSuggestions] = useState<PendingImpactSuggestionEntry[]>([]);
@@ -560,7 +562,13 @@ const Index = () => {
     progress: null,
     status: "idle" as const,
   };
-  const shareLinkInfo = ioRuntimeState?.shareLinkInfo ?? { available: false, link: null };
+  const shareLinkInfo = ioRuntimeState?.shareLinkInfo ?? {
+    available: false,
+    errorCode: null,
+    expiresAt: null,
+    link: null,
+    shareId: null,
+  };
   const handleCopyHtml = useCallback(() => {
     if (ioRuntimeState) {
       void ioRuntimeState.handleCopyHtml();
@@ -1925,6 +1933,47 @@ const Index = () => {
   }, [createDocument, t]);
 
   useEffect(() => {
+    const openSharedDocumentFromServerLink = async () => {
+      if (!shareId || typeof window === "undefined") {
+        return;
+      }
+
+      try {
+        const { parseSharedDocumentFromSerializedPayload } = await import("@/lib/share/docShare");
+        const { resolveDocumentShare } = await import("@/lib/share/shareClient");
+        const response = await resolveDocumentShare(shareId);
+        const sharedDocument = parseSharedDocumentFromSerializedPayload(response.payload);
+
+        createDocument(sharedDocument);
+        navigate({
+          pathname: "/editor",
+          search: window.location.search,
+        }, { replace: true });
+        toast.success(t("hooks.io.sharedDocumentLoaded"));
+      } catch (error) {
+        navigate({
+          pathname: "/editor",
+          search: window.location.search,
+        }, { replace: true });
+
+        const { getShareResolveErrorCode } = await import("@/lib/share/shareClient");
+        const errorCode = getShareResolveErrorCode(error);
+        const messageKey = errorCode === "expired"
+          ? "hooks.io.sharedDocumentExpired"
+          : errorCode === "not_found"
+            ? "hooks.io.sharedDocumentMissing"
+            : errorCode === "server_unavailable"
+              ? "hooks.io.shareServerUnavailable"
+              : "hooks.io.sharedDocumentFailed";
+
+        toast.error(t(messageKey));
+      }
+    };
+
+    void openSharedDocumentFromServerLink();
+  }, [createDocument, navigate, shareId, t]);
+
+  useEffect(() => {
     if (autoSaveState.status !== "saved" || !autoSaveState.lastSavedAt) {
       return;
     }
@@ -2448,6 +2497,7 @@ const Index = () => {
         onFileChange={handleFileChange}
         patchReviewDialogProps={patchReviewDialogProps}
         shareLinkDialogProps={{
+          errorCode: shareLinkInfo.errorCode,
           link: shareLinkInfo.link,
           onCopy: () => {
             void handleCopyShareLink();

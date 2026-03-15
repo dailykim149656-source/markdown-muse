@@ -1,2 +1,4 @@
 export const DOC_SHARE_HASH_PREFIX = "#share=";
 export const DOC_SHARE_MAX_PAYLOAD_LENGTH = 3500;
+export const DOC_SHARE_DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export const DOC_SHARE_MAX_STORED_PAYLOAD_LENGTH = 700_000;

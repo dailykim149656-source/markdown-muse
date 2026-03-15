@@ -14,6 +14,8 @@ describe("rateLimit", () => {
     expect(resolveRateLimitPolicy({ method: "POST", pathname: "/api/ai/agent/turn" })?.bucket).toBe("ai-agent-turn");
     expect(resolveRateLimitPolicy({ method: "GET", pathname: "/api/auth/session" })?.bucket).toBe("auth-session");
     expect(resolveRateLimitPolicy({ method: "POST", pathname: "/api/workspace/export" })?.bucket).toBe("workspace-write");
+    expect(resolveRateLimitPolicy({ method: "POST", pathname: "/api/share" })?.bucket).toBe("share-create");
+    expect(resolveRateLimitPolicy({ method: "GET", pathname: "/api/share/abc123" })?.bucket).toBe("share-read");
   });
 
   it("limits requests per bucket and keeps buckets independent", () => {

@@ -11,8 +11,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useI18n } from "@/i18n/useI18n";
+import type { ShareLinkErrorCode } from "@/types/share";
 
 interface ShareLinkDialogProps {
+  errorCode?: ShareLinkErrorCode | null;
   link: string | null;
   onCopy: () => void;
   onOpenChange: (open: boolean) => void;
@@ -20,6 +22,7 @@ interface ShareLinkDialogProps {
 }
 
 const ShareLinkDialog = ({
+  errorCode = null,
   link,
   onCopy,
   onOpenChange,
@@ -27,6 +30,23 @@ const ShareLinkDialog = ({
 }: ShareLinkDialogProps) => {
   const { t } = useI18n();
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  const unavailableMessage = (() => {
+    switch (errorCode) {
+      case "payload_too_large":
+        return t("shareDialog.useDocsy");
+      case "server_unavailable":
+        return t("shareDialog.serverUnavailable");
+      case "expired":
+        return t("shareDialog.expired");
+      case "not_found":
+        return t("shareDialog.notFound");
+      case "create_failed":
+        return t("shareDialog.createFailed");
+      default:
+        return t("shareDialog.unavailable");
+    }
+  })();
 
   useEffect(() => {
     let cancelled = false;
@@ -39,9 +59,9 @@ const ShareLinkDialog = ({
 
       try {
         const dataUrl = await QRCode.toDataURL(link, {
-          errorCorrectionLevel: "M",
-          margin: 1,
-          width: 220,
+          errorCorrectionLevel: "H",
+          margin: 4,
+          width: 320,
         });
 
         if (!cancelled) {
@@ -70,7 +90,7 @@ const ShareLinkDialog = ({
             {t("shareDialog.title")}
           </DialogTitle>
           <DialogDescription>
-            {link ? t("shareDialog.description") : t("shareDialog.unavailable")}
+            {link ? t("shareDialog.description") : unavailableMessage}
           </DialogDescription>
         </DialogHeader>
 
@@ -96,11 +116,11 @@ const ShareLinkDialog = ({
                 {qrDataUrl ? (
                   <img
                     alt={t("shareDialog.qrAlt")}
-                    className="h-52 w-52 rounded-md border border-border/60 bg-white p-2"
+                    className="h-80 w-80 max-w-full rounded-md border border-border/60 bg-white p-3"
                     src={qrDataUrl}
                   />
                 ) : (
-                  <div className="flex h-52 w-52 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
+                  <div className="flex h-80 w-80 max-w-full items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
                     {t("shareDialog.qrLoading")}
                   </div>
                 )}
@@ -109,7 +129,7 @@ const ShareLinkDialog = ({
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-            {t("shareDialog.useDocsy")}
+            {unavailableMessage}
           </div>
         )}
       </DialogContent>

@@ -60,6 +60,7 @@ import {
   getRequestClientId,
   resolveRateLimitPolicy,
 } from "./modules/http/rateLimit";
+import { handleShareRoute } from "./modules/share/routes";
 import { handleTexAutoFix } from "./modules/tex/autoFix";
 import {
   exportTexPdf,
@@ -893,6 +894,13 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && requestUrl.pathname === "/api/security/csp-report") {
       await handleCspReport(request, requestId);
       writeHttpResponse(response, empty(204, request.headers.origin));
+      return;
+    }
+
+    const shareRouteResult = await handleShareRoute(request);
+    if (shareRouteResult) {
+      console.log(`[AI Server] [${requestId}] Share route matched`);
+      writeHttpResponse(response, shareRouteResult);
       return;
     }
 

@@ -1,11 +1,19 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Index from "@/pages/Index";
+import { buildShareableDocsyPayload } from "@/lib/share/docShare";
 
-const { mockReadUserProfilePreference, mockWriteUserProfilePreference } = vi.hoisted(() => ({
+const {
+  mockCreateDocument,
+  mockReadUserProfilePreference,
+  mockResolveDocumentShare,
+  mockWriteUserProfilePreference,
+} = vi.hoisted(() => ({
+  mockCreateDocument: vi.fn(),
   mockReadUserProfilePreference: vi.fn(() => "advanced" as const),
+  mockResolveDocumentShare: vi.fn(),
   mockWriteUserProfilePreference: vi.fn(),
 }));
 
@@ -57,7 +65,7 @@ vi.mock("@/hooks/useDocumentManager", () => ({
     autoSaveState: { error: null, lastSavedAt: null, status: "saved" },
     bumpEditorKey: vi.fn(),
     closeDocument: vi.fn(),
-    createDocument: vi.fn(),
+    createDocument: mockCreateDocument,
     deleteDocument: vi.fn(),
     documents: [mockActiveDoc],
     editorKey: 0,
@@ -70,6 +78,26 @@ vi.mock("@/hooks/useDocumentManager", () => ({
     updateDocument: vi.fn(),
   }),
 }));
+
+vi.mock("@/lib/share/shareClient", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/share/shareClient")>("@/lib/share/shareClient");
+
+  return {
+    ...actual,
+    getShareResolveErrorCode: (error: unknown) => {
+      if (error instanceof Error && error.message === "expired") {
+        return "expired";
+      }
+
+      if (error instanceof Error && error.message === "not_found") {
+        return "not_found";
+      }
+
+      return "create_failed";
+    },
+    resolveDocumentShare: (...args: Parameters<typeof mockResolveDocumentShare>) => mockResolveDocumentShare(...args),
+  };
+});
 
 vi.mock("@/hooks/useEditorUiState", async () => {
   const React = await import("react");
@@ -312,11 +340,23 @@ vi.mock("@/components/editor/ResetDocumentsDialog", () => ({
   default: () => null,
 }));
 
+const RoutedIndex = () => {
+  const location = useLocation();
+
+  return (
+    <>
+      <div data-testid="location-path">{location.pathname}</div>
+      <Index />
+    </>
+  );
+};
+
 const renderIndex = (initialEntry = "/editor") =>
   render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
-        <Route element={<Index />} path="/editor" />
+        <Route element={<RoutedIndex />} path="/editor" />
+        <Route element={<RoutedIndex />} path="/s/:shareId" />
       </Routes>
     </MemoryRouter>,
   );
@@ -324,6 +364,7 @@ const renderIndex = (initialEntry = "/editor") =>
 describe("Index runtime activation", () => {
   beforeEach(() => {
     delete (window as Window & { __docsyE2E?: unknown }).__docsyE2E;
+    mockCreateDocument.mockReset();
     mockActiveDoc.content = "# Draft";
     mockActiveDoc.mode = "markdown";
     mockActiveDoc.sourceSnapshots = {
@@ -332,7 +373,9 @@ describe("Index runtime activation", () => {
     mockActiveDoc.tiptapJson = null;
     mockActiveDoc.workspaceBinding = undefined;
     mockReadUserProfilePreference.mockReturnValue("advanced");
+    mockResolveDocumentShare.mockReset();
     mockWriteUserProfilePreference.mockReset();
+    window.history.replaceState(null, "", "/editor");
   });
 
   afterEach(() => {
@@ -491,5 +534,36 @@ describe("Index runtime activation", () => {
     await waitFor(() => {
       expect(screen.getByTestId("document-support-runtime")).toBeInTheDocument();
     });
+  });
+
+  it("loads a server-backed shared document from /s/:shareId and normalizes the URL", async () => {
+    mockResolveDocumentShare.mockResolvedValueOnce({
+      expiresAt: Date.now() + 60_000,
+      payload: buildShareableDocsyPayload({
+        ...mockActiveDoc,
+        content: "# Shared copy",
+        id: "shared-source",
+        name: "Shared source",
+        sourceSnapshots: {
+          markdown: "# Shared copy",
+        },
+      }),
+      shareId: "abc123share",
+    });
+
+    renderIndex("/s/abc123share");
+
+    await waitFor(() => {
+      expect(mockResolveDocumentShare).toHaveBeenCalledWith("abc123share");
+    });
+
+    await waitFor(() => {
+      expect(mockCreateDocument).toHaveBeenCalledWith(expect.objectContaining({
+        content: "# Shared copy",
+        name: "Shared source (Shared)",
+      }));
+    });
+
+    expect(screen.getByTestId("location-path")).toHaveTextContent("/editor");
   });
 });

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildShareableDocsyPayload,
   buildDocShareHash,
   DOC_SHARE_HASH_PREFIX,
+  parseSharedDocumentFromSerializedPayload,
   parseSharedDocumentFromHash,
 } from "@/lib/share/docShare";
 import { buildDocsyFileFromDocumentData, serializeDocsyFile } from "@/lib/docsy/fileFormat";
@@ -58,6 +60,15 @@ describe("docShare", () => {
     expect(parsed?.name).toContain("(Shared)");
     expect(parsed?.content).toContain("# Hello");
     expect(parsed?.metadata?.tags).toContain("shared");
+  });
+
+  it("serializes a share-safe payload and restores it as a temporary document", () => {
+    const payload = buildShareableDocsyPayload(createDocument("# Shared\n\nServer payload"));
+    const parsed = parseSharedDocumentFromSerializedPayload(payload);
+
+    expect(parsed.name).toContain("(Shared)");
+    expect(parsed.content).toContain("# Shared");
+    expect(parsed.metadata?.tags).toContain("shared");
   });
 
   it("ignores embedded tiptap payloads and rebuilds from the shared AST", () => {

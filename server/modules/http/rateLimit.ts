@@ -24,6 +24,7 @@ const EXACT_POLICIES: Record<string, RateLimitPolicy> = {
   "POST /api/ai/propose-action": { bucket: "ai-propose-action", limit: 20, windowMs: 60_000 },
   "POST /api/ai/summarize": { bucket: "ai-summarize", limit: 20, windowMs: 60_000 },
   "POST /api/ai/tex/fix": { bucket: "ai-tex-fix", limit: 10, windowMs: 60_000 },
+  "POST /api/share": { bucket: "share-create", limit: 20, windowMs: 60_000 },
   "POST /api/security/csp-report": { bucket: "csp-report", limit: 60, windowMs: 60_000 },
   "GET /api/tex/health": { bucket: "tex-health", limit: 120, windowMs: 60_000 },
   "POST /api/tex/export-pdf": { bucket: "tex-export-pdf", limit: 10, windowMs: 60_000 },
@@ -32,6 +33,7 @@ const EXACT_POLICIES: Record<string, RateLimitPolicy> = {
 };
 
 const PREFIX_POLICIES: Array<{ policy: RateLimitPolicy; prefix: string; methods?: string[] }> = [
+  { methods: ["GET"], policy: { bucket: "share-read", limit: 60, windowMs: 60_000 }, prefix: "/api/share/" },
   { methods: ["GET"], policy: { bucket: "workspace-read", limit: 60, windowMs: 60_000 }, prefix: "/api/workspace/" },
   { methods: ["POST"], policy: { bucket: "workspace-write", limit: 20, windowMs: 60_000 }, prefix: "/api/workspace/" },
   { methods: ["POST"], policy: { bucket: "workspace-patches", limit: 20, windowMs: 60_000 }, prefix: "/api/patches/" },
