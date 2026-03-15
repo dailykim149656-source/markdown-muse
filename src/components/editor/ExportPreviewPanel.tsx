@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { htmlToAsciidoc } from "@/components/editor/utils/htmlToAsciidoc";
+import { htmlTokenClassMap, tokenizeHtml, type HtmlTokenKind } from "@/components/editor/utils/htmlHighlight";
 import { htmlToRst } from "@/components/editor/utils/htmlToRst";
 import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
@@ -40,6 +41,12 @@ interface ExportPreviewPanelProps {
 
 type InspectorTab = "engine" | "preview" | "validation";
 
+interface HighlightLineSegment {
+  key: string;
+  kind: HtmlTokenKind;
+  text: string;
+}
+
 const FORMAT_LABELS: Record<PreviewFormat, string> = {
   asciidoc: "AsciiDoc",
   html: "HTML",
@@ -68,6 +75,30 @@ const getDefaultFormat = (mode: EditorMode): PreviewFormat => {
   }
 
   return "markdown";
+};
+
+const splitHtmlTokensByLine = (source: string) => {
+  const lines: HighlightLineSegment[][] = [[]];
+
+  tokenizeHtml(source).forEach((token, tokenIndex) => {
+    const parts = token.text.split("\n");
+
+    parts.forEach((part, partIndex) => {
+      if (part.length > 0) {
+        lines[lines.length - 1].push({
+          key: `${token.start}-${token.end}-${tokenIndex}-${partIndex}`,
+          kind: token.kind,
+          text: part,
+        });
+      }
+
+      if (partIndex < parts.length - 1) {
+        lines.push([]);
+      }
+    });
+  });
+
+  return lines;
 };
 
 const ExportPreviewPanel = ({
@@ -124,6 +155,11 @@ const ExportPreviewPanel = ({
         return editorMarkdown;
     }
   }, [editorHtml, editorLatex, editorMarkdown, editorMode, format, rawContent]);
+
+  const htmlPreviewLines = useMemo(
+    () => (format === "html" ? splitHtmlTokensByLine(content) : []),
+    [content, format],
+  );
 
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(content);
@@ -283,7 +319,7 @@ const ExportPreviewPanel = ({
       {activeTab === "preview" ? (
         <ScrollArea className="h-full">
           <div className="p-4 font-mono text-xs leading-6 text-foreground">
-            {content.split("\n").map((line, index) => (
+            {(format === "html" ? htmlPreviewLines : content.split("\n")).map((line, index) => (
               <div
                 key={`preview-line-${index}`}
                 ref={(node) => {
@@ -297,7 +333,18 @@ const ExportPreviewPanel = ({
                   </span>
                 )}
                 <span className={`${highlightedLine === index + 1 ? "rounded bg-primary/10 px-1" : ""} ${wrapLines ? "whitespace-pre-wrap break-words py-0.5" : "overflow-x-auto whitespace-pre py-0.5"}`}>
-                  {line || " "}
+                  {format === "html"
+                    ? ((line as HighlightLineSegment[]).length > 0
+                      ? (line as HighlightLineSegment[]).map((segment) => (
+                        <span
+                          key={segment.key}
+                          className={segment.kind === "plain" ? undefined : htmlTokenClassMap[segment.kind as Exclude<HtmlTokenKind, "plain">]}
+                        >
+                          {segment.text}
+                        </span>
+                      ))
+                      : " ")
+                    : ((line as string) || " ")}
                 </span>
               </div>
             ))}

@@ -77,5 +77,6 @@ describe("auth callback session rotation", () => {
     expect(deleteWorkspaceSessionByIdMock).toHaveBeenCalledWith("old-session");
     expect(createWorkspaceSessionMock).toHaveBeenCalledWith("google:user-sub");
     expect(response?.headers?.["Set-Cookie"]).toBe("__Host-docsy-workspace-session=new-session");
+    expect(String(response?.headers?.Location)).toContain("/editor?workspaceAuth=connected");
   });
 });

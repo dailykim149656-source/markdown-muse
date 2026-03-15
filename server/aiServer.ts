@@ -31,6 +31,7 @@ import {
 } from "./modules/gemini/client";
 import {
   readPublicDeploymentConfig,
+  shouldBlockServerStartupForPublicDeployment,
   validatePublicDeploymentConfig,
 } from "./modules/config/publicDeploymentConfig.js";
 import { getGoogleOAuthRuntimeSummary } from "./modules/auth/googleOAuth";
@@ -102,6 +103,7 @@ console.log(`[AI Server] Configuration: PORT=${PORT}, MAX_CHUNKS=${MAX_CHUNKS}, 
 
 const publicDeploymentConfig = readPublicDeploymentConfig(process.env);
 const publicDeploymentValidation = validatePublicDeploymentConfig(publicDeploymentConfig);
+const googleOAuthRuntimeSummary = getGoogleOAuthRuntimeSummary();
 
 for (const note of publicDeploymentValidation.notes) {
   console.info(`[AI Server] Public deploy note: ${note}`);
@@ -111,17 +113,20 @@ for (const warning of publicDeploymentValidation.warnings) {
   console.warn(`[AI Server] Public deploy warning: ${warning}`);
 }
 
-if (publicDeploymentValidation.errors.length > 0 && (
-  publicDeploymentConfig.oauthEnabled
-  || publicDeploymentConfig.publishingStatus === "production"
-)) {
+if (publicDeploymentValidation.errors.length > 0) {
+  for (const error of publicDeploymentValidation.errors) {
+    console.error(`[AI Server] Public deploy error: ${error}`);
+  }
+}
+
+if (shouldBlockServerStartupForPublicDeployment(publicDeploymentConfig, publicDeploymentValidation)) {
   throw new Error(
     `Public deployment configuration is invalid: ${publicDeploymentValidation.errors.join(" | ")}`,
   );
 }
 
 console.log(
-  `[AI Server] Google OAuth deployment status=${publicDeploymentConfig.publishingStatus} scopeProfile=${publicDeploymentConfig.scopeProfile} scopeRisk=${publicDeploymentValidation.scopeRisk}`,
+  `[AI Server] Google OAuth deployment status=${googleOAuthRuntimeSummary.publishingStatus} scopeProfile=${googleOAuthRuntimeSummary.scopeProfile} scopeRisk=${googleOAuthRuntimeSummary.scopeRisk} frontendOrigin=${googleOAuthRuntimeSummary.frontendOrigin || "(unset)"} redirectOrigin=${googleOAuthRuntimeSummary.redirectOrigin || "(unset)"} allowedOrigins=${publicDeploymentConfig.allowedOrigins.join(",") || "(none)"}`,
 );
 
 const resolveAiLocale = (value: string | undefined): Locale => (value === "ko" ? "ko" : "en");
@@ -848,7 +853,10 @@ const server = createServer(async (request, response) => {
         allowedOrigins: ALLOWED_ORIGINS,
         configured: isGeminiConfigured(),
         fallbackModel: getGeminiFallbackModel(),
+        frontendOrigin: googleOAuthSummary.frontendOrigin,
         googleOAuthPublishingStatus: googleOAuthSummary.publishingStatus,
+        googleOAuthRedirectOrigin: googleOAuthSummary.redirectOrigin,
+        googleOAuthRedirectUri: googleOAuthSummary.redirectUri,
         googleWorkspaceScopeProfile: googleOAuthSummary.scopeProfile,
         googleWorkspaceScopeRisk: googleOAuthSummary.scopeRisk,
         model: getGeminiModel(),

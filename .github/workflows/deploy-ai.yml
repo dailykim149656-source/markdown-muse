@@ -133,6 +133,7 @@ jobs:
           if [ -z "${GOOGLE_OAUTH_REDIRECT_URI}" ]; then
             GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_GOOGLE_OAUTH_REDIRECT_URI}"
           fi
+          GOOGLE_OAUTH_REDIRECT_URI="$(node scripts/normalize-google-oauth-redirect-uri.mjs "${GOOGLE_OAUTH_REDIRECT_URI}" "${WORKSPACE_FRONTEND_ORIGIN}")"
 
           GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
           if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then

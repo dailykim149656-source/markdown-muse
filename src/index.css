@@ -296,6 +296,75 @@
   color: hsl(0 0% 55%);
 }
 
+.html-highlight-pre {
+  @apply bg-transparent text-foreground;
+  font-family: 'Fira Code', 'JetBrains Mono', 'D2 Coding', monospace;
+}
+
+.html-textarea {
+  font-family: 'Fira Code', 'JetBrains Mono', 'D2 Coding', monospace;
+}
+
+.html-textarea::selection {
+  background: hsl(var(--primary) / 0.22);
+}
+
+.html-source-comment {
+  color: hsl(0 0% 50%);
+  font-style: italic;
+}
+
+.html-source-doctype {
+  color: hsl(280 70% 55%);
+  font-weight: 600;
+}
+
+.html-source-tag-bracket {
+  color: hsl(var(--muted-foreground));
+}
+
+.html-source-tag-name {
+  color: hsl(350 70% 50%);
+  font-weight: 600;
+}
+
+.html-source-attr-name {
+  color: hsl(35 80% 50%);
+}
+
+.html-source-attr-value {
+  color: hsl(145 60% 40%);
+}
+
+.html-source-entity {
+  color: hsl(200 80% 50%);
+  font-weight: 600;
+}
+
+.dark .html-source-comment {
+  color: hsl(0 0% 55%);
+}
+
+.dark .html-source-doctype {
+  color: hsl(280 80% 72%);
+}
+
+.dark .html-source-tag-name {
+  color: hsl(350 80% 65%);
+}
+
+.dark .html-source-attr-name {
+  color: hsl(35 80% 65%);
+}
+
+.dark .html-source-attr-value {
+  color: hsl(145 60% 62%);
+}
+
+.dark .html-source-entity {
+  color: hsl(200 80% 65%);
+}
+
 .structured-data-highlight-pre {
   @apply bg-transparent text-foreground;
   font-family: 'Fira Code', 'JetBrains Mono', 'D2 Coding', monospace;

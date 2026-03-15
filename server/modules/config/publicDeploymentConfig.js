@@ -1,6 +1,7 @@
 const LOCALHOST_HOSTNAMES = new Set(["127.0.0.1", "0.0.0.0", "localhost"]);
 const MANAGED_GOOGLE_HOST_SUFFIXES = [".firebaseapp.com", ".run.app", ".web.app"];
 const DISCOURAGED_DYNAMIC_DNS_SUFFIXES = [".duckdns.org"];
+export const GOOGLE_OAUTH_CALLBACK_PATH = "/api/auth/google/callback";
 
 const RESTRICTED_DRIVE_SCOPES = new Set([
   "https://www.googleapis.com/auth/drive",
@@ -86,6 +87,50 @@ export const parseConfiguredAllowedOrigins = (value) => (value || "")
   .map((part) => normalizeConfiguredOrigin(part))
   .filter((part) => part.length > 0);
 
+const resolveUrlAgainstOrigin = (value, origin) => {
+  if (!origin || origin === "*") {
+    return value;
+  }
+
+  try {
+    return new URL(value, `${origin}/`).toString();
+  } catch {
+    return value;
+  }
+};
+
+export const normalizeConfiguredGoogleOAuthRedirectUri = (value, frontendOrigin = "") => {
+  const trimmed = value?.trim() || "";
+
+  if (!trimmed) {
+    return "";
+  }
+
+  const normalizedFrontendOrigin = normalizeConfiguredOrigin(frontendOrigin);
+
+  if (trimmed === "/") {
+    return resolveUrlAgainstOrigin(GOOGLE_OAUTH_CALLBACK_PATH, normalizedFrontendOrigin);
+  }
+
+  try {
+    const url = new URL(trimmed);
+
+    if (!url.search && !url.hash) {
+      if (url.pathname === "/") {
+        return `${url.origin}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+      }
+
+      if (url.pathname === GOOGLE_OAUTH_CALLBACK_PATH) {
+        return `${url.origin}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+      }
+    }
+
+    return trimmed;
+  } catch {
+    return resolveUrlAgainstOrigin(trimmed, normalizedFrontendOrigin);
+  }
+};
+
 const isLocalhostHost = (hostname) => LOCALHOST_HOSTNAMES.has(hostname.trim().toLowerCase());
 
 const usesManagedGoogleHost = (hostname) => MANAGED_GOOGLE_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
@@ -158,13 +203,30 @@ const pushDynamicDnsMessage = ({ bucket, fieldName, hostname, publishingStatus }
   bucket.push(message);
 };
 
+const readUrlOrigin = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return "";
+  }
+};
+
 export const readPublicDeploymentConfig = (env = process.env) => {
   const publishingStatus = normalizeGoogleOAuthPublishingStatus(env.GOOGLE_OAUTH_PUBLISHING_STATUS);
   const configuredAllowedOrigins = env.AI_ALLOWED_ORIGIN?.trim() || "*";
   const allowedOrigins = parseConfiguredAllowedOrigins(configuredAllowedOrigins);
+  const browserApiBaseUrl = normalizeConfiguredOrigin(env.VITE_AI_API_BASE_URL);
   const frontendOrigin = normalizeConfiguredOrigin(env.WORKSPACE_FRONTEND_ORIGIN);
   const googleClientId = env.GOOGLE_CLIENT_ID?.trim() || "";
-  const redirectUri = env.GOOGLE_OAUTH_REDIRECT_URI?.trim() || "";
+  const redirectUri = normalizeConfiguredGoogleOAuthRedirectUri(
+    env.GOOGLE_OAUTH_REDIRECT_URI,
+    frontendOrigin,
+  );
+  const redirectOrigin = readUrlOrigin(redirectUri);
   const explicitScopes = splitList(env.GOOGLE_WORKSPACE_SCOPES);
   const scopeProfile = normalizeGoogleWorkspaceScopeProfile(env.GOOGLE_WORKSPACE_SCOPE_PROFILE);
   const requestedScopes = explicitScopes.length > 0
@@ -186,13 +248,16 @@ export const readPublicDeploymentConfig = (env = process.env) => {
 
   return {
     allowedOrigins,
+    browserApiBaseUrl,
     configuredAllowedOrigins,
     explicitScopeProfile: env.GOOGLE_WORKSPACE_SCOPE_PROFILE?.trim() || "",
     explicitScopes,
     frontendOrigin,
     googleClientId,
+    hasBrowserApiBaseUrl: Boolean(env.VITE_AI_API_BASE_URL?.trim()),
     oauthEnabled: Boolean(googleClientId || redirectUri || frontendOrigin),
     publishingStatus,
+    redirectOrigin,
     redirectUri,
     requestedScopes,
     scopeProfile,
@@ -259,9 +324,11 @@ export const validatePublicDeploymentConfig = (config) => {
     validateOriginOnlyUrl(allowedOriginUrl, "AI_ALLOWED_ORIGIN", errors);
   }
 
+  const browserApiUrl = parseUrl(config.browserApiBaseUrl, "VITE_AI_API_BASE_URL", errors);
   const frontendUrl = parseUrl(config.frontendOrigin, "WORKSPACE_FRONTEND_ORIGIN", errors);
   const redirectUrl = parseUrl(config.redirectUri, "GOOGLE_OAUTH_REDIRECT_URI", errors);
 
+  validateOriginOnlyUrl(browserApiUrl, "VITE_AI_API_BASE_URL", errors);
   validateOriginOnlyUrl(frontendUrl, "WORKSPACE_FRONTEND_ORIGIN", errors);
 
   if (config.oauthEnabled) {
@@ -337,8 +404,8 @@ export const validatePublicDeploymentConfig = (config) => {
       }
     }
 
-    if (redirectUrl.pathname !== "/api/auth/google/callback") {
-      errors.push(`GOOGLE_OAUTH_REDIRECT_URI must end with /api/auth/google/callback. Received "${redirectUrl.pathname}".`);
+    if (redirectUrl.pathname !== GOOGLE_OAUTH_CALLBACK_PATH) {
+      errors.push(`GOOGLE_OAUTH_REDIRECT_URI must end with ${GOOGLE_OAUTH_CALLBACK_PATH}. Received "${redirectUrl.pathname}".`);
     }
 
     if (usesManagedGoogleHost(hostname)) {
@@ -360,8 +427,56 @@ export const validatePublicDeploymentConfig = (config) => {
     }
   }
 
+  if (config.hasBrowserApiBaseUrl && browserApiUrl) {
+    const hostname = browserApiUrl.hostname.toLowerCase();
+
+    if (config.publishingStatus === "production") {
+      if (browserApiUrl.protocol !== "https:") {
+        errors.push("VITE_AI_API_BASE_URL must use https in production.");
+      }
+
+      if (isLocalhostHost(hostname)) {
+        errors.push("VITE_AI_API_BASE_URL must not point to localhost in production.");
+      }
+    }
+
+    if (usesManagedGoogleHost(hostname)) {
+      const message = `VITE_AI_API_BASE_URL uses managed Google host "${hostname}". Use the verified frontend custom domain for browser API calls instead of "${config.browserApiBaseUrl}".`;
+      if (config.publishingStatus === "production") {
+        errors.push(message);
+      } else {
+        warnings.push(message);
+      }
+    }
+
+    if (usesDiscouragedDynamicDnsHost(hostname)) {
+      pushDynamicDnsMessage({
+        bucket: warnings,
+        fieldName: "VITE_AI_API_BASE_URL",
+        hostname,
+        publishingStatus: config.publishingStatus,
+      });
+    }
+  }
+
   if (config.frontendOrigin && !config.allowedOrigins.includes("*") && !config.allowedOrigins.includes(config.frontendOrigin)) {
     errors.push("AI_ALLOWED_ORIGIN must include WORKSPACE_FRONTEND_ORIGIN so browser credentials can be sent correctly.");
+  }
+
+  if (frontendUrl && redirectUrl) {
+    if (frontendUrl.origin === redirectUrl.origin) {
+      notes.push("GOOGLE_OAUTH_REDIRECT_URI matches WORKSPACE_FRONTEND_ORIGIN for the recommended same-origin Hosting rewrite deployment.");
+    } else {
+      warnings.push("GOOGLE_OAUTH_REDIRECT_URI does not share the WORKSPACE_FRONTEND_ORIGIN origin. This repo recommends a single custom frontend domain that proxies /api/** to Cloud Run.");
+    }
+  }
+
+  if (config.hasBrowserApiBaseUrl && browserApiUrl && frontendUrl) {
+    if (browserApiUrl.origin === frontendUrl.origin) {
+      notes.push("VITE_AI_API_BASE_URL matches WORKSPACE_FRONTEND_ORIGIN for same-origin browser API calls.");
+    } else {
+      warnings.push("VITE_AI_API_BASE_URL does not match WORKSPACE_FRONTEND_ORIGIN. This repo recommends same-origin browser API calls through Firebase Hosting rewrites.");
+    }
   }
 
   if (config.explicitScopes.length > 0) {
@@ -391,3 +506,9 @@ export const validatePublicDeploymentConfig = (config) => {
     warnings,
   };
 };
+
+export const shouldBlockServerStartupForPublicDeployment = (config, validation) =>
+  validation.errors.length > 0 && (
+    config.oauthEnabled
+    || config.publishingStatus === "production"
+  );

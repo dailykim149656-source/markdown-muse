@@ -2,6 +2,7 @@ import type { JSONContent } from "@tiptap/core";
 import { EditorContent, type Editor, useEditor } from "@tiptap/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import EditorToolbar from "./EditorToolbar";
+import HtmlHighlightEditor from "./HtmlHighlightEditor";
 import {
   htmlHasAdvancedContent,
   htmlHasDocumentContent,
@@ -297,7 +298,16 @@ const HtmlEditor = ({
             onSwap={() => setSourceLeft(v => !v)}
             onClose={() => setShowPanel(false)}
             placeholder="Edit raw HTML source. Use tab for indentation and Shift+Tab to outdent."
-          />
+          >
+            <HtmlHighlightEditor
+              value={htmlSource}
+              onChange={handleSourceChange}
+              onKeyDown={handleSourceKeyDown}
+              onKeyDownCapture={handleSourceKeyDown}
+              textareaRef={sourceTextareaRef}
+              placeholder="Edit raw HTML source. Use tab for indentation and Shift+Tab to outdent."
+            />
+          </SourcePanel>
         }
       />
     </div>

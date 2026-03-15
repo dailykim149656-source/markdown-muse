@@ -297,6 +297,7 @@ jobs:
           if [ -z "${GOOGLE_OAUTH_REDIRECT_URI}" ]; then
             GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_GOOGLE_OAUTH_REDIRECT_URI}"
           fi
+          GOOGLE_OAUTH_REDIRECT_URI="$(node scripts/normalize-google-oauth-redirect-uri.mjs "${GOOGLE_OAUTH_REDIRECT_URI}" "${WORKSPACE_FRONTEND_ORIGIN}")"
 
           GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
           if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then
@@ -605,6 +606,7 @@ jobs:
           if [ -z "${GOOGLE_OAUTH_REDIRECT_URI}" ]; then
             GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_GOOGLE_OAUTH_REDIRECT_URI}"
           fi
+          GOOGLE_OAUTH_REDIRECT_URI="$(node scripts/normalize-google-oauth-redirect-uri.mjs "${GOOGLE_OAUTH_REDIRECT_URI}" "${FRONTEND_ORIGIN}")"
 
           export AI_ALLOWED_ORIGIN="${FRONTEND_ORIGIN}"
           export GOOGLE_CLIENT_ID="${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
@@ -628,6 +630,7 @@ jobs:
           echo "  routing_mode: ${ROUTING_MODE}"
           echo "  oauth_redirect_uri: ${GOOGLE_OAUTH_REDIRECT_URI}"
 
+          export VITE_AI_API_BASE_URL="${AI_API_BASE_URL}"
           node scripts/validate-public-deploy-config.mjs
 
           echo "Building frontend with VITE_AI_API_BASE_URL=${AI_API_BASE_URL}"

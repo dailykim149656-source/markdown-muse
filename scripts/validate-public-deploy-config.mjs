@@ -15,7 +15,9 @@ const formatOptionalBoolean = (value, rawValue) => {
 
 console.log("[public-deploy] OAuth publishing status:", config.publishingStatus);
 console.log("[public-deploy] Allowed origins:", config.allowedOrigins.join(", ") || "(none)");
+console.log("[public-deploy] Browser API base URL:", config.browserApiBaseUrl || "(unset)");
 console.log("[public-deploy] Frontend origin:", config.frontendOrigin || "(unset)");
+console.log("[public-deploy] Redirect origin:", config.redirectOrigin || "(unset)");
 console.log("[public-deploy] Redirect URI:", config.redirectUri || "(unset)");
 console.log("[public-deploy] Scope profile:", config.scopeProfile);
 console.log("[public-deploy] Scope risk:", validation.scopeRisk);

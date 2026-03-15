@@ -26,7 +26,10 @@ export const buildInternalAiHealthPayload = ({
   allowedOrigins,
   configured,
   fallbackModel,
+  frontendOrigin,
   googleOAuthPublishingStatus,
+  googleOAuthRedirectOrigin,
+  googleOAuthRedirectUri,
   googleWorkspaceScopeProfile,
   googleWorkspaceScopeRisk,
   model,
@@ -34,7 +37,10 @@ export const buildInternalAiHealthPayload = ({
   allowedOrigins: string[];
   configured: boolean;
   fallbackModel: string | null;
+  frontendOrigin: string | null;
   googleOAuthPublishingStatus: "production" | "testing";
+  googleOAuthRedirectOrigin: string | null;
+  googleOAuthRedirectUri: string | null;
   googleWorkspaceScopeProfile: "custom" | "reduced" | "restricted";
   googleWorkspaceScopeRisk: "basic" | "restricted" | "sensitive";
   model: string;
@@ -42,7 +48,10 @@ export const buildInternalAiHealthPayload = ({
   allowedOrigins,
   configured,
   fallbackModel,
+  frontendOrigin,
   googleOAuthPublishingStatus,
+  googleOAuthRedirectOrigin,
+  googleOAuthRedirectUri,
   googleWorkspaceScopeProfile,
   googleWorkspaceScopeRisk,
   model,

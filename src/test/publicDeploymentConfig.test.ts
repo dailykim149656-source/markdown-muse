@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   GOOGLE_WORKSPACE_SCOPE_PROFILES,
   readPublicDeploymentConfig,
+  shouldBlockServerStartupForPublicDeployment,
   validatePublicDeploymentConfig,
 } from "../../server/modules/config/publicDeploymentConfig.js";
 
@@ -76,6 +77,80 @@ describe("publicDeploymentConfig", () => {
     expect(config.allowedOrigins).toEqual(["https://app.docsy.dev"]);
     expect(config.frontendOrigin).toBe("https://app.docsy.dev");
     expect(validation.errors).toEqual([]);
+  });
+
+  it("normalizes origin-only redirect URIs to the callback endpoint", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://app.docsy.dev/",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(config.redirectUri).toBe("https://app.docsy.dev/api/auth/google/callback");
+    expect(validation.errors).toEqual([]);
+  });
+
+  it("normalizes root redirect URI shorthands against the frontend origin", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "/",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(config.redirectUri).toBe("https://app.docsy.dev/api/auth/google/callback");
+    expect(validation.errors).toEqual([]);
+  });
+
+  it("rejects browser API base URLs that include an /api path", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://app.docsy.dev/api/auth/google/callback",
+      VITE_AI_API_BASE_URL: "https://app.docsy.dev/api",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(validation.errors.some((error) => error.includes("VITE_AI_API_BASE_URL must be an origin without path"))).toBe(true);
+  });
+
+  it("notes when redirect URI and browser API base URL match the frontend origin", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://app.docsy.dev/api/auth/google/callback",
+      VITE_AI_API_BASE_URL: "https://app.docsy.dev",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(validation.errors).toEqual([]);
+    expect(validation.notes.some((note) => note.includes("GOOGLE_OAUTH_REDIRECT_URI matches WORKSPACE_FRONTEND_ORIGIN"))).toBe(true);
+    expect(validation.notes.some((note) => note.includes("VITE_AI_API_BASE_URL matches WORKSPACE_FRONTEND_ORIGIN"))).toBe(true);
+  });
+
+  it("warns when browser API calls are configured cross-origin", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://app.docsy.dev",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://api.docsy.dev/api/auth/google/callback",
+      VITE_AI_API_BASE_URL: "https://api.docsy.dev",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(validation.errors).toEqual([]);
+    expect(validation.warnings.some((warning) => warning.includes("GOOGLE_OAUTH_REDIRECT_URI does not share"))).toBe(true);
+    expect(validation.warnings.some((warning) => warning.includes("VITE_AI_API_BASE_URL does not match"))).toBe(true);
   });
 
   it("rejects allowed origins that are not origin-only URLs", () => {
@@ -174,5 +249,28 @@ describe("publicDeploymentConfig", () => {
     expect(validation.errors).toEqual([]);
     expect(validation.notes.some((note) => note.includes("TeX package policy is allow-all"))).toBe(true);
     expect(validation.notes.some((note) => note.includes("allowlist enforcement is disabled"))).toBe(true);
+  });
+
+  it("blocks server startup when OAuth deployment config is invalid", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "*",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://app.docsy.dev/api/auth/google/callback",
+      WORKSPACE_FRONTEND_ORIGIN: "https://app.docsy.dev",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(shouldBlockServerStartupForPublicDeployment(config, validation)).toBe(true);
+  });
+
+  it("does not block startup when public OAuth is disabled in local development", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "http://localhost:8080",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+    });
+    const validation = validatePublicDeploymentConfig(config);
+
+    expect(shouldBlockServerStartupForPublicDeployment(config, validation)).toBe(false);
   });
 });

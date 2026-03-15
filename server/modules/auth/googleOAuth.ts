@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { HttpError } from "../http/http";
 import {
   classifyGoogleWorkspaceScopeRisk,
+  normalizeConfiguredGoogleOAuthRedirectUri,
   GOOGLE_WORKSPACE_SCOPE_PROFILES,
   normalizeGoogleOAuthPublishingStatus,
   normalizeGoogleWorkspaceScopeProfile,
@@ -22,17 +23,46 @@ interface GoogleOAuthConfig {
   scopeProfile: "reduced" | "restricted";
 }
 
-const readGoogleOAuthConfig = (): GoogleOAuthConfig => {
-  const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || "";
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || "";
-  const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI?.trim() || "";
-  const publishingStatus = normalizeGoogleOAuthPublishingStatus(process.env.GOOGLE_OAUTH_PUBLISHING_STATUS);
+const readConfiguredScopes = () => {
   const scopeProfile = normalizeGoogleWorkspaceScopeProfile(process.env.GOOGLE_WORKSPACE_SCOPE_PROFILE);
   const configuredScopes = process.env.GOOGLE_WORKSPACE_SCOPES?.trim() || "";
   const scopes = (configuredScopes || GOOGLE_WORKSPACE_SCOPE_PROFILES[scopeProfile].join(" "))
     .split(/\s+/)
     .map((scope) => scope.trim())
     .filter((scope) => scope.length > 0);
+
+  return {
+    configuredScopes,
+    scopeProfile,
+    scopes,
+  };
+};
+
+const readFrontendOrigin = () => process.env.WORKSPACE_FRONTEND_ORIGIN?.trim().replace(/\/$/, "") || "";
+
+const readRedirectUri = () => normalizeConfiguredGoogleOAuthRedirectUri(
+  process.env.GOOGLE_OAUTH_REDIRECT_URI,
+  process.env.WORKSPACE_FRONTEND_ORIGIN,
+);
+
+const readRedirectOrigin = (redirectUri: string) => {
+  if (!redirectUri) {
+    return "";
+  }
+
+  try {
+    return new URL(redirectUri).origin;
+  } catch {
+    return "";
+  }
+};
+
+const readGoogleOAuthConfig = (): GoogleOAuthConfig => {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || "";
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || "";
+  const redirectUri = readRedirectUri();
+  const publishingStatus = normalizeGoogleOAuthPublishingStatus(process.env.GOOGLE_OAUTH_PUBLISHING_STATUS);
+  const { scopeProfile, scopes } = readConfiguredScopes();
 
   if (!clientId || !clientSecret || !redirectUri) {
     throw new HttpError(500, "Google OAuth is not configured on the server.");
@@ -49,15 +79,16 @@ const readGoogleOAuthConfig = (): GoogleOAuthConfig => {
 };
 
 export const getGoogleOAuthRuntimeSummary = () => {
-  const configuredScopes = process.env.GOOGLE_WORKSPACE_SCOPES?.trim() || "";
-  const scopeProfile = normalizeGoogleWorkspaceScopeProfile(process.env.GOOGLE_WORKSPACE_SCOPE_PROFILE);
-  const scopes = (configuredScopes || GOOGLE_WORKSPACE_SCOPE_PROFILES[scopeProfile].join(" "))
-    .split(/\s+/)
-    .map((scope) => scope.trim())
-    .filter((scope) => scope.length > 0);
+  const frontendOrigin = readFrontendOrigin();
+  const redirectUri = readRedirectUri();
+  const redirectOrigin = readRedirectOrigin(redirectUri);
+  const { configuredScopes, scopeProfile, scopes } = readConfiguredScopes();
 
   return {
+    frontendOrigin: frontendOrigin || null,
     publishingStatus: normalizeGoogleOAuthPublishingStatus(process.env.GOOGLE_OAUTH_PUBLISHING_STATUS),
+    redirectOrigin: redirectOrigin || null,
+    redirectUri: redirectUri || null,
     scopeProfile: configuredScopes ? "custom" : scopeProfile,
     scopeRisk: classifyGoogleWorkspaceScopeRisk(scopes),
   };
