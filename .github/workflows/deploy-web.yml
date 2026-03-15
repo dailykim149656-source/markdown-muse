@@ -145,6 +145,32 @@ jobs:
       - name: Install Firebase CLI
         run: npm install --global firebase-tools@15.10.0
 
+      - name: Verify Firebase Hosting project access
+        run: |
+          set -euo pipefail
+          FIREBASE_PROJECT_ID="${{ secrets.GCP_FIREBASE_PROJECT_ID }}"
+          if [ -z "${FIREBASE_PROJECT_ID}" ]; then
+            FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          fi
+
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          RESPONSE="$(curl -sS -w '\n%{http_code}' \
+            -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+            "https://firebasehosting.googleapis.com/v1beta1/projects/${FIREBASE_PROJECT_ID}/sites")"
+          HTTP_STATUS="$(printf '%s\n' "${RESPONSE}" | tail -n 1)"
+          RESPONSE_BODY="$(printf '%s\n' "${RESPONSE}" | sed '$d')"
+
+          if [ "${HTTP_STATUS}" != "200" ]; then
+            ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
+            echo "Unable to access Firebase Hosting project ${FIREBASE_PROJECT_ID}."
+            echo "Check that GCP_FIREBASE_PROJECT_ID points to a Firebase-enabled project and that FIREBASE_SERVICE_ACCOUNT_URBAN_DDS can access it."
+            echo "Active deploy principal: ${ACTIVE_ACCOUNT}"
+            echo "${RESPONSE_BODY}"
+            exit 1
+          fi
+
+          echo "Firebase Hosting project access verified for ${FIREBASE_PROJECT_ID}."
+
       - name: Deploy to Firebase Hosting
         run: |
           set -euo pipefail
