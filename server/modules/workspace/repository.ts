@@ -719,13 +719,13 @@ class FirestoreWorkspaceRepository implements WorkspaceRepository {
         updatedAt: now,
       };
 
-      transaction.set(sessionRef, stripUndefinedDeep(updatedSession));
-
       const connectionRef = this.getConnectionsCollection().doc(updatedSession.connectionId);
       const connectionSnapshot = await transaction.get(connectionRef);
       const connection = connectionSnapshot.exists
         ? sanitizeWorkspaceConnectionRecord(connectionSnapshot.data() as Partial<WorkspaceConnectionRecord>)
         : null;
+
+      transaction.set(sessionRef, stripUndefinedDeep(updatedSession));
 
       return {
         connection,
