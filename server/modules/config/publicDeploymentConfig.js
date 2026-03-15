@@ -203,6 +203,11 @@ const pushDynamicDnsMessage = ({ bucket, fieldName, hostname, publishingStatus }
   bucket.push(message);
 };
 
+const normalizeWorkspaceRepositoryBackend = (value) => {
+  const normalized = value?.trim().toLowerCase() || "";
+  return normalized === "file" || normalized === "firestore" ? normalized : "";
+};
+
 const readUrlOrigin = (value) => {
   if (!value) {
     return "";
@@ -222,6 +227,7 @@ export const readPublicDeploymentConfig = (env = process.env) => {
   const browserApiBaseUrl = normalizeConfiguredOrigin(env.VITE_AI_API_BASE_URL);
   const frontendOrigin = normalizeConfiguredOrigin(env.WORKSPACE_FRONTEND_ORIGIN);
   const googleClientId = env.GOOGLE_CLIENT_ID?.trim() || "";
+  const workspaceRepositoryBackend = normalizeWorkspaceRepositoryBackend(env.WORKSPACE_REPOSITORY_BACKEND);
   const redirectUri = normalizeConfiguredGoogleOAuthRedirectUri(
     env.GOOGLE_OAUTH_REDIRECT_URI,
     frontendOrigin,
@@ -254,6 +260,7 @@ export const readPublicDeploymentConfig = (env = process.env) => {
     explicitScopes,
     frontendOrigin,
     googleClientId,
+    hasExplicitWorkspaceRepositoryBackend: Boolean(workspaceRepositoryBackend),
     hasBrowserApiBaseUrl: Boolean(env.VITE_AI_API_BASE_URL?.trim()),
     oauthEnabled: Boolean(googleClientId || redirectUri || frontendOrigin),
     publishingStatus,
@@ -269,6 +276,7 @@ export const readPublicDeploymentConfig = (env = process.env) => {
     texAllowRawDocumentRaw,
     texAllowRestrictedCommands,
     texAllowRestrictedCommandsRaw,
+    workspaceRepositoryBackend,
   };
 };
 
@@ -461,6 +469,14 @@ export const validatePublicDeploymentConfig = (config) => {
 
   if (config.frontendOrigin && !config.allowedOrigins.includes("*") && !config.allowedOrigins.includes(config.frontendOrigin)) {
     errors.push("AI_ALLOWED_ORIGIN must include WORKSPACE_FRONTEND_ORIGIN so browser credentials can be sent correctly.");
+  }
+
+  if (hasNonLocalDeploymentTarget && config.oauthEnabled) {
+    if (config.workspaceRepositoryBackend === "file") {
+      errors.push("WORKSPACE_REPOSITORY_BACKEND=file is not supported for deployed Google Workspace OAuth. Cloud Run instances do not share local filesystem state; use Firestore instead.");
+    } else {
+      notes.push("Deployed Google Workspace state should use the Firestore repository backend. Enable firestore.googleapis.com and create a Firestore database in the target GCP project before rollout.");
+    }
   }
 
   if (frontendUrl && redirectUrl) {

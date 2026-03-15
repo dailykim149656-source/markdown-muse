@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   assertSafeWorkspaceRepositoryPath,
   getWorkspaceRepository,
+  resetWorkspaceRepositoryForTests,
+  resolveWorkspaceRepositoryBackend,
   resolveWorkspaceRepositoryFilePath,
 } from "../../server/modules/workspace/repository";
 
@@ -15,6 +17,7 @@ const ORIGINAL_ENV = {
   NODE_ENV: process.env.NODE_ENV,
   VITEST: process.env.VITEST,
   WORKSPACE_DB_PATH: process.env.WORKSPACE_DB_PATH,
+  WORKSPACE_REPOSITORY_BACKEND: process.env.WORKSPACE_REPOSITORY_BACKEND,
   WORKSPACE_STATE_PATH: process.env.WORKSPACE_STATE_PATH,
 };
 
@@ -27,12 +30,15 @@ afterEach(async () => {
   process.env.NODE_ENV = ORIGINAL_ENV.NODE_ENV;
   process.env.VITEST = ORIGINAL_ENV.VITEST;
   process.env.WORKSPACE_DB_PATH = ORIGINAL_ENV.WORKSPACE_DB_PATH;
+  process.env.WORKSPACE_REPOSITORY_BACKEND = ORIGINAL_ENV.WORKSPACE_REPOSITORY_BACKEND;
   process.env.WORKSPACE_STATE_PATH = ORIGINAL_ENV.WORKSPACE_STATE_PATH;
 
   if (tempDirectoryPath) {
     await rm(tempDirectoryPath, { force: true, recursive: true });
     tempDirectoryPath = null;
   }
+
+  resetWorkspaceRepositoryForTests();
 });
 
 describe("workspace repository hardening", () => {
@@ -53,6 +59,18 @@ describe("workspace repository hardening", () => {
     expect(cloudRunPath).toBe(path.resolve("F:\\Docsy-document_editor\\markdown-muse", "/tmp/docsy-workspace-state.json"));
   });
 
+  it("defaults to firestore on Cloud Run and file locally", () => {
+    expect(resolveWorkspaceRepositoryBackend({
+      K_SERVICE: "",
+      WORKSPACE_REPOSITORY_BACKEND: "",
+    } as NodeJS.ProcessEnv)).toBe("file");
+
+    expect(resolveWorkspaceRepositoryBackend({
+      K_SERVICE: "docsy",
+      WORKSPACE_REPOSITORY_BACKEND: "",
+    } as NodeJS.ProcessEnv)).toBe("firestore");
+  });
+
   it("rejects repo-local workspace state paths outside tests", () => {
     expect(() =>
       assertSafeWorkspaceRepositoryPath(
@@ -69,6 +87,7 @@ describe("workspace repository hardening", () => {
     tempDirectoryPath = await mkdtemp(path.join(tmpdir(), "docsy-workspace-state-"));
     const repositoryPath = path.join(tempDirectoryPath, "workspace-state.json");
     process.env.WORKSPACE_STATE_PATH = repositoryPath;
+    process.env.WORKSPACE_REPOSITORY_BACKEND = "file";
     process.env.VITEST = "true";
 
     await writeFile(repositoryPath, JSON.stringify({

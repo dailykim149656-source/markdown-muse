@@ -72,6 +72,7 @@ import { handleWorkspaceRoute } from "./modules/workspace/routes";
 import {
   loadDriveReferenceDocuments,
 } from "./modules/workspace/searchDriveDocuments";
+import { resolveWorkspaceRepositoryBackend } from "./modules/workspace/repository";
 import type {
   AutosaveDiffSummaryRequest,
   AutosaveDiffSummaryResponse,
@@ -128,6 +129,7 @@ if (shouldBlockServerStartupForPublicDeployment(publicDeploymentConfig, publicDe
 console.log(
   `[AI Server] Google OAuth deployment status=${googleOAuthRuntimeSummary.publishingStatus} scopeProfile=${googleOAuthRuntimeSummary.scopeProfile} scopeRisk=${googleOAuthRuntimeSummary.scopeRisk} frontendOrigin=${googleOAuthRuntimeSummary.frontendOrigin || "(unset)"} redirectOrigin=${googleOAuthRuntimeSummary.redirectOrigin || "(unset)"} allowedOrigins=${publicDeploymentConfig.allowedOrigins.join(",") || "(none)"}`,
 );
+console.log(`[AI Server] Workspace repository backend=${resolveWorkspaceRepositoryBackend()}`);
 
 const resolveAiLocale = (value: string | undefined): Locale => (value === "ko" ? "ko" : "en");
 

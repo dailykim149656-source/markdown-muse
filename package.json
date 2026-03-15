@@ -21,6 +21,7 @@
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit"
   },
   "dependencies": {
+    "@google-cloud/firestore": "^8.3.0",
     "@google/genai": "^1.44.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",

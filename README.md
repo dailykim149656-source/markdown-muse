@@ -170,6 +170,7 @@ Google OAuth production guard:
 
 - set `GOOGLE_OAUTH_PUBLISHING_STATUS=testing|production`
 - set `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted|reduced`
+- deployed Google Workspace state now defaults to Firestore on Cloud Run so OAuth/session state is shared across instances
 - run `npm run check:public-deploy` before public deploys to validate custom-domain and OAuth settings
 
 ## Main scripts

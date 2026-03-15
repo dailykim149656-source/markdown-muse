@@ -19,6 +19,7 @@ console.log("[public-deploy] Browser API base URL:", config.browserApiBaseUrl ||
 console.log("[public-deploy] Frontend origin:", config.frontendOrigin || "(unset)");
 console.log("[public-deploy] Redirect origin:", config.redirectOrigin || "(unset)");
 console.log("[public-deploy] Redirect URI:", config.redirectUri || "(unset)");
+console.log("[public-deploy] Workspace repository backend:", config.workspaceRepositoryBackend || "(auto)");
 console.log("[public-deploy] Scope profile:", config.scopeProfile);
 console.log("[public-deploy] Scope risk:", validation.scopeRisk);
 if (config.hasTexPolicy) {

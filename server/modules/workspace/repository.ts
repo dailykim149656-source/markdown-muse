@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { Firestore } from "@google-cloud/firestore";
 
 export interface GoogleWorkspaceTokens {
   accessToken?: string;
@@ -68,6 +69,25 @@ interface WorkspaceRepositoryState {
   version: 1;
 }
 
+export interface WorkspaceRepository {
+  consumeAuthState(stateId: string): Promise<WorkspaceAuthStateRecord | null>;
+  createSession(connectionId: string, absoluteTtlMs: number, idleTtlMs: number): Promise<WorkspaceSessionRecord>;
+  deleteSession(sessionId: string): Promise<void>;
+  getConnection(connectionId: string): Promise<WorkspaceConnectionRecord | null>;
+  getImportedDocument(documentId: string): Promise<WorkspaceImportedDocumentRecord | null>;
+  getSession(sessionId: string): Promise<{ connection: WorkspaceConnectionRecord | null; session: WorkspaceSessionRecord } | null>;
+  listImportedDocuments(connectionId: string): Promise<WorkspaceImportedDocumentRecord[]>;
+  pruneExpired(now?: number): Promise<void>;
+  saveAuthState(record: WorkspaceAuthStateRecord): Promise<void>;
+  touchSession(
+    sessionId: string,
+    absoluteTtlMs: number,
+    idleTtlMs: number,
+  ): Promise<{ connection: WorkspaceConnectionRecord | null; session: WorkspaceSessionRecord } | null>;
+  upsertConnection(record: WorkspaceConnectionRecord): Promise<void>;
+  upsertImportedDocument(record: WorkspaceImportedDocumentRecord): Promise<void>;
+}
+
 const DEFAULT_REPOSITORY_STATE: WorkspaceRepositoryState = {
   authStates: {},
   connections: {},
@@ -78,6 +98,8 @@ const DEFAULT_REPOSITORY_STATE: WorkspaceRepositoryState = {
 
 const DEFAULT_CLOUD_RUN_STATE_PATH = path.posix.join("/tmp", "docsy-workspace-state.json");
 const DEFAULT_LOCAL_STATE_PATH = path.join(homedir(), ".docsy", "workspace-state.json");
+const DEFAULT_FIRESTORE_ROOT_COLLECTION = "docsyWorkspace";
+const DEFAULT_FIRESTORE_ROOT_DOCUMENT = "state";
 
 const isCloudRunEnvironment = (env = process.env) =>
   Boolean(env.K_SERVICE || env.K_REVISION || env.CLOUD_RUN_JOB);
@@ -94,38 +116,8 @@ const isPathInsideDirectory = (candidatePath: string, directoryPath: string) => 
 const getDefaultRepositoryFilePath = (env = process.env) =>
   isCloudRunEnvironment(env) ? DEFAULT_CLOUD_RUN_STATE_PATH : DEFAULT_LOCAL_STATE_PATH;
 
-export const resolveWorkspaceRepositoryFilePath = (
-  env = process.env,
-  cwd = process.cwd(),
-) =>
-  path.resolve(
-    cwd,
-    env.WORKSPACE_STATE_PATH
-      || env.WORKSPACE_DB_PATH
-      || getDefaultRepositoryFilePath(env),
-  );
-
-export const assertSafeWorkspaceRepositoryPath = (
-  repositoryPath: string,
-  env = process.env,
-  cwd = process.cwd(),
-) => {
-  if (isTestEnvironment(env)) {
-    return;
-  }
-
-  if (isPathInsideDirectory(repositoryPath, cwd)) {
-    throw new Error(
-      `Workspace state must be stored outside the repository. Configure WORKSPACE_STATE_PATH to a home or temp location. Current path: ${repositoryPath}`,
-    );
-  }
-};
-
-const getRepositoryFilePath = () => {
-  const repositoryPath = resolveWorkspaceRepositoryFilePath();
-  assertSafeWorkspaceRepositoryPath(repositoryPath);
-  return repositoryPath;
-};
+const sortImportedDocuments = (documents: WorkspaceImportedDocumentRecord[]) =>
+  documents.sort((left, right) => right.updatedAt - left.updatedAt || left.fileName.localeCompare(right.fileName));
 
 const sanitizeWorkspaceTokens = (tokens: Partial<GoogleWorkspaceTokens> | null | undefined): GoogleWorkspaceTokens => ({
   expiryDate: typeof tokens?.expiryDate === "number" ? tokens.expiryDate : undefined,
@@ -158,6 +150,37 @@ const sanitizeWorkspaceConnectionRecord = (
   };
 };
 
+const sanitizeWorkspaceSessionRecord = (
+  record: Partial<WorkspaceSessionRecord> | null | undefined,
+): WorkspaceSessionRecord | null => {
+  if (!record?.sessionId || !record.connectionId) {
+    return null;
+  }
+
+  return {
+    connectionId: record.connectionId,
+    createdAt: typeof record.createdAt === "number" ? record.createdAt : Date.now(),
+    expiresAt: typeof record.expiresAt === "number" ? record.expiresAt : Date.now(),
+    sessionId: record.sessionId,
+    updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : Date.now(),
+  };
+};
+
+const sanitizeWorkspaceAuthStateRecord = (
+  record: Partial<WorkspaceAuthStateRecord> | null | undefined,
+): WorkspaceAuthStateRecord | null => {
+  if (!record?.state || typeof record.returnTo !== "string") {
+    return null;
+  }
+
+  return {
+    createdAt: typeof record.createdAt === "number" ? record.createdAt : Date.now(),
+    expiresAt: typeof record.expiresAt === "number" ? record.expiresAt : Date.now(),
+    returnTo: record.returnTo,
+    state: record.state,
+  };
+};
+
 const sanitizeImportedDocumentRecord = (
   record: Partial<WorkspaceImportedDocumentRecord> | null | undefined,
 ): WorkspaceImportedDocumentRecord | null => {
@@ -182,6 +205,49 @@ const sanitizeImportedDocumentRecord = (
   };
 };
 
+export const resolveWorkspaceRepositoryFilePath = (
+  env = process.env,
+  cwd = process.cwd(),
+) =>
+  path.resolve(
+    cwd,
+    env.WORKSPACE_STATE_PATH
+      || env.WORKSPACE_DB_PATH
+      || getDefaultRepositoryFilePath(env),
+  );
+
+export const assertSafeWorkspaceRepositoryPath = (
+  repositoryPath: string,
+  env = process.env,
+  cwd = process.cwd(),
+) => {
+  if (isTestEnvironment(env)) {
+    return;
+  }
+
+  if (isPathInsideDirectory(repositoryPath, cwd)) {
+    throw new Error(
+      `Workspace state must be stored outside the repository. Configure WORKSPACE_STATE_PATH to a home or temp location. Current path: ${repositoryPath}`,
+    );
+  }
+};
+
+export const resolveWorkspaceRepositoryBackend = (env = process.env) => {
+  const configured = env.WORKSPACE_REPOSITORY_BACKEND?.trim().toLowerCase();
+
+  if (configured === "file" || configured === "firestore") {
+    return configured;
+  }
+
+  return isCloudRunEnvironment(env) ? "firestore" : "file";
+};
+
+const getRepositoryFilePath = () => {
+  const repositoryPath = resolveWorkspaceRepositoryFilePath();
+  assertSafeWorkspaceRepositoryPath(repositoryPath);
+  return repositoryPath;
+};
+
 const readRepositoryState = async (): Promise<WorkspaceRepositoryState> => {
   const repositoryPath = getRepositoryFilePath();
 
@@ -190,7 +256,11 @@ const readRepositoryState = async (): Promise<WorkspaceRepositoryState> => {
     const parsed = JSON.parse(raw) as Partial<WorkspaceRepositoryState>;
 
     return {
-      authStates: parsed.authStates || {},
+      authStates: Object.fromEntries(
+        Object.entries(parsed.authStates || {})
+          .map(([stateId, record]) => [stateId, sanitizeWorkspaceAuthStateRecord(record)])
+          .filter((entry): entry is [string, WorkspaceAuthStateRecord] => Boolean(entry[1])),
+      ),
       connections: Object.fromEntries(
         Object.entries(parsed.connections || {})
           .map(([connectionId, record]) => [connectionId, sanitizeWorkspaceConnectionRecord(record)])
@@ -201,7 +271,11 @@ const readRepositoryState = async (): Promise<WorkspaceRepositoryState> => {
           .map(([documentId, record]) => [documentId, sanitizeImportedDocumentRecord(record)])
           .filter((entry): entry is [string, WorkspaceImportedDocumentRecord] => Boolean(entry[1])),
       ),
-      sessions: parsed.sessions || {},
+      sessions: Object.fromEntries(
+        Object.entries(parsed.sessions || {})
+          .map(([sessionId, record]) => [sessionId, sanitizeWorkspaceSessionRecord(record)])
+          .filter((entry): entry is [string, WorkspaceSessionRecord] => Boolean(entry[1])),
+      ),
       version: 1,
     };
   } catch {
@@ -215,7 +289,7 @@ const writeRepositoryState = async (state: WorkspaceRepositoryState) => {
   await writeFile(repositoryPath, JSON.stringify(state, null, 2), "utf8");
 };
 
-class FileWorkspaceRepository {
+class FileWorkspaceRepository implements WorkspaceRepository {
   private queue = Promise.resolve();
 
   private enqueue<T>(operation: () => Promise<T>) {
@@ -248,8 +322,6 @@ class FileWorkspaceRepository {
           await writeRepositoryState(state);
         }
       } catch (error) {
-        // In read-only environments like Cloud Run with local filesystem,
-        // we might not be able to write state. We ignore this during background pruning.
         console.warn("Failed to prune expired repository state:", error instanceof Error ? error.message : String(error));
       }
     });
@@ -392,19 +464,244 @@ class FileWorkspaceRepository {
   async listImportedDocuments(connectionId: string) {
     return this.enqueue(async () => {
       const state = await readRepositoryState();
-      return Object.values(state.importedDocuments)
-        .filter((document) => document.connectionId === connectionId)
-        .sort((left, right) => right.updatedAt - left.updatedAt || left.fileName.localeCompare(right.fileName));
+      return sortImportedDocuments(
+        Object.values(state.importedDocuments)
+          .filter((document) => document.connectionId === connectionId),
+      );
     });
   }
 }
 
-let repositoryInstance: FileWorkspaceRepository | null = null;
+class FirestoreWorkspaceRepository implements WorkspaceRepository {
+  constructor(
+    private readonly firestore: Firestore,
+    private readonly rootCollection: string,
+    private readonly rootDocument: string,
+  ) {}
 
-export const getWorkspaceRepository = () => {
+  private getRootDocumentRef() {
+    return this.firestore.collection(this.rootCollection).doc(this.rootDocument);
+  }
+
+  private getAuthStatesCollection() {
+    return this.getRootDocumentRef().collection("authStates");
+  }
+
+  private getConnectionsCollection() {
+    return this.getRootDocumentRef().collection("connections");
+  }
+
+  private getSessionsCollection() {
+    return this.getRootDocumentRef().collection("sessions");
+  }
+
+  private getImportedDocumentsCollection() {
+    return this.getRootDocumentRef().collection("importedDocuments");
+  }
+
+  async pruneExpired(now = Date.now()) {
+    const [expiredAuthStates, expiredSessions] = await Promise.all([
+      this.getAuthStatesCollection().where("expiresAt", "<=", now).get(),
+      this.getSessionsCollection().where("expiresAt", "<=", now).get(),
+    ]);
+    const batch = this.firestore.batch();
+    let writeCount = 0;
+
+    for (const snapshot of [...expiredAuthStates.docs, ...expiredSessions.docs]) {
+      batch.delete(snapshot.ref);
+      writeCount += 1;
+    }
+
+    if (writeCount > 0) {
+      await batch.commit();
+    }
+  }
+
+  async saveAuthState(record: WorkspaceAuthStateRecord) {
+    const sanitizedRecord = sanitizeWorkspaceAuthStateRecord(record);
+
+    if (!sanitizedRecord) {
+      throw new Error(`Workspace auth state record is invalid for state=${record.state}`);
+    }
+
+    await this.getAuthStatesCollection().doc(sanitizedRecord.state).set(sanitizedRecord);
+  }
+
+  async consumeAuthState(stateId: string) {
+    return this.firestore.runTransaction(async (transaction) => {
+      const recordRef = this.getAuthStatesCollection().doc(stateId);
+      const snapshot = await transaction.get(recordRef);
+
+      if (!snapshot.exists) {
+        return null;
+      }
+
+      const record = sanitizeWorkspaceAuthStateRecord(snapshot.data() as Partial<WorkspaceAuthStateRecord>);
+
+      if (!record) {
+        transaction.delete(recordRef);
+        return null;
+      }
+
+      transaction.delete(recordRef);
+      return record;
+    });
+  }
+
+  async upsertConnection(record: WorkspaceConnectionRecord) {
+    const sanitizedRecord = sanitizeWorkspaceConnectionRecord(record);
+
+    if (!sanitizedRecord) {
+      throw new Error(`Workspace connection record is invalid for connectionId=${record.connectionId}`);
+    }
+
+    await this.getConnectionsCollection().doc(sanitizedRecord.connectionId).set(sanitizedRecord);
+  }
+
+  async getConnection(connectionId: string) {
+    const snapshot = await this.getConnectionsCollection().doc(connectionId).get();
+
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return sanitizeWorkspaceConnectionRecord(snapshot.data() as Partial<WorkspaceConnectionRecord>);
+  }
+
+  async createSession(connectionId: string, absoluteTtlMs: number, idleTtlMs: number) {
+    const now = Date.now();
+    const session: WorkspaceSessionRecord = {
+      connectionId,
+      createdAt: now,
+      expiresAt: now + Math.min(absoluteTtlMs, idleTtlMs),
+      sessionId: randomUUID(),
+      updatedAt: now,
+    };
+
+    await this.getSessionsCollection().doc(session.sessionId).set(session);
+    return session;
+  }
+
+  async getSession(sessionId: string) {
+    const sessionSnapshot = await this.getSessionsCollection().doc(sessionId).get();
+
+    if (!sessionSnapshot.exists) {
+      return null;
+    }
+
+    const session = sanitizeWorkspaceSessionRecord(sessionSnapshot.data() as Partial<WorkspaceSessionRecord>);
+
+    if (!session) {
+      await sessionSnapshot.ref.delete();
+      return null;
+    }
+
+    const connection = await this.getConnection(session.connectionId);
+
+    return {
+      connection,
+      session,
+    };
+  }
+
+  async touchSession(sessionId: string, absoluteTtlMs: number, idleTtlMs: number) {
+    return this.firestore.runTransaction(async (transaction) => {
+      const sessionRef = this.getSessionsCollection().doc(sessionId);
+      const sessionSnapshot = await transaction.get(sessionRef);
+
+      if (!sessionSnapshot.exists) {
+        return null;
+      }
+
+      const session = sanitizeWorkspaceSessionRecord(sessionSnapshot.data() as Partial<WorkspaceSessionRecord>);
+
+      if (!session) {
+        transaction.delete(sessionRef);
+        return null;
+      }
+
+      const now = Date.now();
+      const absoluteExpiryAt = session.createdAt + absoluteTtlMs;
+      const idleExpiryAt = now + idleTtlMs;
+      const updatedSession: WorkspaceSessionRecord = {
+        ...session,
+        expiresAt: Math.min(absoluteExpiryAt, idleExpiryAt),
+        updatedAt: now,
+      };
+
+      transaction.set(sessionRef, updatedSession);
+
+      const connectionRef = this.getConnectionsCollection().doc(updatedSession.connectionId);
+      const connectionSnapshot = await transaction.get(connectionRef);
+      const connection = connectionSnapshot.exists
+        ? sanitizeWorkspaceConnectionRecord(connectionSnapshot.data() as Partial<WorkspaceConnectionRecord>)
+        : null;
+
+      return {
+        connection,
+        session: updatedSession,
+      };
+    });
+  }
+
+  async deleteSession(sessionId: string) {
+    await this.getSessionsCollection().doc(sessionId).delete();
+  }
+
+  async upsertImportedDocument(record: WorkspaceImportedDocumentRecord) {
+    const sanitizedRecord = sanitizeImportedDocumentRecord(record);
+
+    if (!sanitizedRecord) {
+      throw new Error(`Imported workspace document record is invalid for documentId=${record.documentId}`);
+    }
+
+    await this.getImportedDocumentsCollection().doc(sanitizedRecord.documentId).set(sanitizedRecord);
+  }
+
+  async getImportedDocument(documentId: string) {
+    const snapshot = await this.getImportedDocumentsCollection().doc(documentId).get();
+
+    if (!snapshot.exists) {
+      return null;
+    }
+
+    return sanitizeImportedDocumentRecord(snapshot.data() as Partial<WorkspaceImportedDocumentRecord>);
+  }
+
+  async listImportedDocuments(connectionId: string) {
+    const snapshot = await this.getImportedDocumentsCollection()
+      .where("connectionId", "==", connectionId)
+      .get();
+
+    return sortImportedDocuments(
+      snapshot.docs
+        .map((documentSnapshot) => sanitizeImportedDocumentRecord(documentSnapshot.data() as Partial<WorkspaceImportedDocumentRecord>))
+        .filter((record): record is WorkspaceImportedDocumentRecord => Boolean(record)),
+    );
+  }
+}
+
+const createFirestoreRepository = (env = process.env) => {
+  const projectId = env.GOOGLE_CLOUD_PROJECT?.trim() || undefined;
+  const rootCollection = env.WORKSPACE_FIRESTORE_ROOT_COLLECTION?.trim() || DEFAULT_FIRESTORE_ROOT_COLLECTION;
+  const rootDocument = env.WORKSPACE_FIRESTORE_ROOT_DOCUMENT?.trim() || DEFAULT_FIRESTORE_ROOT_DOCUMENT;
+  const firestore = projectId ? new Firestore({ projectId }) : new Firestore();
+
+  return new FirestoreWorkspaceRepository(firestore, rootCollection, rootDocument);
+};
+
+let repositoryInstance: WorkspaceRepository | null = null;
+
+export const getWorkspaceRepository = (): WorkspaceRepository => {
   if (!repositoryInstance) {
-    repositoryInstance = new FileWorkspaceRepository();
+    repositoryInstance = resolveWorkspaceRepositoryBackend() === "firestore"
+      ? createFirestoreRepository()
+      : new FileWorkspaceRepository();
   }
 
   return repositoryInstance;
+};
+
+export const resetWorkspaceRepositoryForTests = () => {
+  repositoryInstance = null;
 };

@@ -100,6 +100,7 @@ gcloud builds submit \
 - `GOOGLE_OAUTH_REDIRECT_URI`
 - `GOOGLE_OAUTH_PUBLISHING_STATUS`
 - `GOOGLE_WORKSPACE_SCOPE_PROFILE`
+- Cloud Firestore enabled in the target project for shared Google Workspace state
 
 Recommended values:
 
@@ -112,6 +113,7 @@ Recommended values:
 - `GOOGLE_OAUTH_REDIRECT_URI=https://app.YOUR_DOMAIN/api/auth/google/callback`
 - `GOOGLE_OAUTH_PUBLISHING_STATUS=testing`
 - `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted`
+- Cloud Firestore enabled with a database created in the same project
 - `TEX_ALLOW_ALL_PACKAGES=true`
 - `TEX_ALLOW_RAW_DOCUMENT=true`
 - `TEX_ALLOW_RESTRICTED_COMMANDS=false`
@@ -150,6 +152,8 @@ Run the public-deploy validator before switching the OAuth app to production:
 ```bash
 npm run check:public-deploy
 ```
+
+Google Workspace OAuth state must be shared across Cloud Run instances. This repo now defaults to the Firestore repository backend on Cloud Run. Before rollout, enable Firestore and create a database in the deploy project.
 
 ### 4. GitHub Actions deployment (recommended)
 
