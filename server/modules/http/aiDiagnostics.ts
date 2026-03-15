@@ -33,6 +33,13 @@ export const buildInternalAiHealthPayload = ({
   googleWorkspaceScopeProfile,
   googleWorkspaceScopeRisk,
   model,
+  runtimeRevision,
+  runtimeService,
+  workspaceAuthSuccessCriterion,
+  workspaceRepositoryBackend,
+  workspaceSessionCookieAcceptedNames,
+  workspaceSessionCookieSecureName,
+  workspaceSessionCookieSecureSameSite,
 }: {
   allowedOrigins: string[];
   configured: boolean;
@@ -44,6 +51,13 @@ export const buildInternalAiHealthPayload = ({
   googleWorkspaceScopeProfile: "custom" | "reduced" | "restricted";
   googleWorkspaceScopeRisk: "basic" | "restricted" | "sensitive";
   model: string;
+  runtimeRevision: string | null;
+  runtimeService: string | null;
+  workspaceAuthSuccessCriterion: string;
+  workspaceRepositoryBackend: "file" | "firestore";
+  workspaceSessionCookieAcceptedNames: readonly string[];
+  workspaceSessionCookieSecureName: string;
+  workspaceSessionCookieSecureSameSite: "Lax" | "None" | "Strict";
 }) => ({
   allowedOrigins,
   configured,
@@ -56,6 +70,13 @@ export const buildInternalAiHealthPayload = ({
   googleWorkspaceScopeRisk,
   model,
   ok: true,
+  runtimeRevision,
+  runtimeService,
+  workspaceAuthSuccessCriterion,
+  workspaceRepositoryBackend,
+  workspaceSessionCookieAcceptedNames,
+  workspaceSessionCookieSecureName,
+  workspaceSessionCookieSecureSameSite,
 });
 
 export const isAuthorizedDiagnosticsRequest = (request: IncomingMessage, env = process.env) => {
