@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const createWorkspaceSessionMock = vi.fn();
 const createWorkspaceSessionCookieMock = vi.fn();
 const deleteWorkspaceSessionByIdMock = vi.fn();
+const getWorkspaceSessionMock = vi.fn();
 const getWorkspaceSessionIdMock = vi.fn();
 const upsertConnectionMock = vi.fn();
 const consumeAuthStateMock = vi.fn();
@@ -28,7 +29,7 @@ vi.mock("../../server/modules/auth/sessionStore", () => ({
   createWorkspaceSessionCookie: (...args: Parameters<typeof createWorkspaceSessionCookieMock>) => createWorkspaceSessionCookieMock(...args),
   deleteWorkspaceSession: vi.fn(),
   deleteWorkspaceSessionById: (...args: Parameters<typeof deleteWorkspaceSessionByIdMock>) => deleteWorkspaceSessionByIdMock(...args),
-  getWorkspaceSession: vi.fn(),
+  getWorkspaceSession: (...args: Parameters<typeof getWorkspaceSessionMock>) => getWorkspaceSessionMock(...args),
   getWorkspaceSessionId: (...args: Parameters<typeof getWorkspaceSessionIdMock>) => getWorkspaceSessionIdMock(...args),
 }));
 
@@ -46,6 +47,7 @@ describe("auth callback session rotation", () => {
     createWorkspaceSessionMock.mockReset();
     createWorkspaceSessionCookieMock.mockReset();
     deleteWorkspaceSessionByIdMock.mockReset();
+    getWorkspaceSessionMock.mockReset();
     getWorkspaceSessionIdMock.mockReset();
     upsertConnectionMock.mockReset();
     consumeAuthStateMock.mockReset();
@@ -54,6 +56,7 @@ describe("auth callback session rotation", () => {
     createWorkspaceSessionMock.mockResolvedValue({ sessionId: "new-session" });
     createWorkspaceSessionCookieMock.mockReturnValue("__Host-docsy-workspace-session=new-session");
     getWorkspaceSessionIdMock.mockReturnValue("old-session");
+    getWorkspaceSessionMock.mockResolvedValue(null);
     consumeAuthStateMock.mockResolvedValue({
       expiresAt: Date.now() + 60_000,
       returnTo: "/editor",
@@ -62,6 +65,7 @@ describe("auth callback session rotation", () => {
   });
 
   it("replaces an existing session during OAuth callback", async () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
     const { handleAuthRoute } = await import("../../server/modules/auth/routes");
 
     const response = await handleAuthRoute({
@@ -78,5 +82,29 @@ describe("auth callback session rotation", () => {
     expect(createWorkspaceSessionMock).toHaveBeenCalledWith("google:user-sub");
     expect(response?.headers?.["Set-Cookie"]).toBe("__Host-docsy-workspace-session=new-session");
     expect(String(response?.headers?.Location)).toContain("/editor?workspaceAuth=connected");
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining("[WorkspaceAuth] callback connected"));
+    infoSpy.mockRestore();
+  });
+
+  it("logs disconnected session lookups explicitly", async () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const { handleAuthRoute } = await import("../../server/modules/auth/routes");
+
+    const response = await handleAuthRoute({
+      headers: {
+        cookie: "__Host-docsy-workspace-session=missing-session",
+        host: "api.docsy.dev",
+      },
+      method: "GET",
+      url: "/api/auth/session",
+    } as never);
+
+    expect(JSON.parse(String(response?.body))).toEqual({
+      connected: false,
+      provider: null,
+      user: null,
+    });
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining("[WorkspaceAuth] session lookup connected=false"));
+    infoSpy.mockRestore();
   });
 });

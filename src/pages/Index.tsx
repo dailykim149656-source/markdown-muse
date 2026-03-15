@@ -411,6 +411,7 @@ const Index = () => {
     updateActiveDoc,
   } = useDocumentManager();
   const lastCapturedAutoSaveAtRef = useRef<number | null>(null);
+  const pendingWorkspaceAuthRedirectRef = useRef<string | null>(null);
   const {
     closeFindReplace,
     closePreview,
@@ -1621,8 +1622,14 @@ const Index = () => {
   useEffect(() => {
     const authResult = searchParams.get("workspaceAuth");
     const authError = searchParams.get("workspaceAuthError");
+    const authMarker = authResult
+      ? `result:${authResult}`
+      : authError
+        ? `error:${authError}`
+        : null;
 
-    if (!authResult && !authError) {
+    if (!authMarker) {
+      pendingWorkspaceAuthRedirectRef.current = null;
       return;
     }
 
@@ -1631,15 +1638,52 @@ const Index = () => {
       return;
     }
 
-    if (authResult === "connected") {
-      toast.success(t("hooks.workspace.connected"));
-      void workspaceRuntimeState.refetchAuth();
-    } else if (authError) {
-      toast.error(resolveWorkspaceAuthErrorMessage(authError));
-      setWorkspaceConnectionOpen(true);
+    if (pendingWorkspaceAuthRedirectRef.current === authMarker) {
+      return;
     }
 
-    clearWorkspaceAuthParams();
+    pendingWorkspaceAuthRedirectRef.current = authMarker;
+    let cancelled = false;
+
+    const finalizeWorkspaceAuthRedirect = async () => {
+      try {
+        if (authResult === "connected") {
+          const refetchResult = await workspaceRuntimeState.refetchAuth();
+
+          if (cancelled) {
+            return;
+          }
+
+          if (refetchResult.data?.connected) {
+            toast.success(t("hooks.workspace.connected"));
+          } else {
+            toast.error(t("hooks.workspace.authErrors.oauth_callback_failed"));
+            setWorkspaceConnectionOpen(true);
+          }
+        } else if (authError) {
+          toast.error(resolveWorkspaceAuthErrorMessage(authError));
+          setWorkspaceConnectionOpen(true);
+        }
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        toast.error(t("hooks.workspace.authErrors.oauth_callback_failed"));
+        setWorkspaceConnectionOpen(true);
+      } finally {
+        if (!cancelled) {
+          clearWorkspaceAuthParams();
+          pendingWorkspaceAuthRedirectRef.current = null;
+        }
+      }
+    };
+
+    void finalizeWorkspaceAuthRedirect();
+
+    return () => {
+      cancelled = true;
+    };
   }, [clearWorkspaceAuthParams, resolveWorkspaceAuthErrorMessage, searchParams, t, workspaceRuntimeState]);
 
   useEffect(() => {

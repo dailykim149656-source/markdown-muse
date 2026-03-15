@@ -7,14 +7,77 @@ import { buildShareableDocsyPayload } from "@/lib/share/docShare";
 
 const {
   mockCreateDocument,
+  mockToastDismiss,
+  mockToastError,
+  mockToastSuccess,
   mockReadUserProfilePreference,
   mockResolveDocumentShare,
+  mockWorkspaceRuntimeRefetchAuth,
+  mockWorkspaceRuntimeStateFactory,
   mockWriteUserProfilePreference,
 } = vi.hoisted(() => ({
   mockCreateDocument: vi.fn(),
+  mockToastDismiss: vi.fn(),
+  mockToastError: vi.fn(),
+  mockToastSuccess: vi.fn(),
   mockReadUserProfilePreference: vi.fn(() => "advanced" as const),
   mockResolveDocumentShare: vi.fn(),
+  mockWorkspaceRuntimeRefetchAuth: vi.fn().mockResolvedValue({
+    data: {
+      connected: true,
+      provider: "google_drive",
+      user: null,
+    },
+  }),
+  mockWorkspaceRuntimeStateFactory: vi.fn(() => ({
+    aiSummaryAvailable: true,
+    apiHealth: { configured: true },
+    authError: null,
+    changesError: null,
+    connected: false,
+    connectivityDiagnostic: null,
+    disconnect: vi.fn(),
+    error: null,
+    exportDocument: vi.fn(),
+    exportError: null,
+    files: [],
+    filesError: null,
+    importFile: vi.fn(),
+    isAuthLoading: false,
+    isConnecting: false,
+    isDisconnecting: false,
+    isExporting: false,
+    isImporting: false,
+    isFilesLoading: false,
+    isRefreshingDocument: false,
+    isRefreshingFiles: false,
+    isRescanning: false,
+    isSyncing: false,
+    lastRescannedAt: null,
+    openGoogleConnect: vi.fn(),
+    query: "",
+    refetchAuth: mockWorkspaceRuntimeRefetchAuth,
+    refetchFiles: vi.fn(),
+    refreshDocument: vi.fn(),
+    remoteChangedSources: [],
+    rescan: vi.fn(),
+    session: {
+      connected: false,
+      provider: null,
+      user: null,
+    },
+    setQuery: vi.fn(),
+    syncDocument: vi.fn(),
+  })),
   mockWriteUserProfilePreference: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: {
+    dismiss: (...args: Parameters<typeof mockToastDismiss>) => mockToastDismiss(...args),
+    error: (...args: Parameters<typeof mockToastError>) => mockToastError(...args),
+    success: (...args: Parameters<typeof mockToastSuccess>) => mockToastSuccess(...args),
+  },
 }));
 
 const mockActiveDoc = {
@@ -329,7 +392,15 @@ vi.mock("@/components/editor/PreviewRuntime", () => ({
 }));
 
 vi.mock("@/components/editor/WorkspaceRuntime", () => ({
-  default: () => <div data-testid="workspace-runtime" />,
+  default: (props: { onStateChange: (state: unknown) => void }) => {
+    const React = require("react") as typeof import("react");
+    React.useEffect(() => {
+      props.onStateChange(mockWorkspaceRuntimeStateFactory());
+      return () => props.onStateChange(null);
+    }, [props.onStateChange]);
+
+    return <div data-testid="workspace-runtime" />;
+  },
 }));
 
 vi.mock("@/components/editor/DocumentIORuntime", () => ({
@@ -365,6 +436,9 @@ describe("Index runtime activation", () => {
   beforeEach(() => {
     delete (window as Window & { __docsyE2E?: unknown }).__docsyE2E;
     mockCreateDocument.mockReset();
+    mockToastDismiss.mockReset();
+    mockToastError.mockReset();
+    mockToastSuccess.mockReset();
     mockActiveDoc.content = "# Draft";
     mockActiveDoc.mode = "markdown";
     mockActiveDoc.sourceSnapshots = {
@@ -374,6 +448,55 @@ describe("Index runtime activation", () => {
     mockActiveDoc.workspaceBinding = undefined;
     mockReadUserProfilePreference.mockReturnValue("advanced");
     mockResolveDocumentShare.mockReset();
+    mockWorkspaceRuntimeRefetchAuth.mockReset();
+    mockWorkspaceRuntimeRefetchAuth.mockResolvedValue({
+      data: {
+        connected: true,
+        provider: "google_drive",
+        user: null,
+      },
+    });
+    mockWorkspaceRuntimeStateFactory.mockReset();
+    mockWorkspaceRuntimeStateFactory.mockImplementation(() => ({
+      aiSummaryAvailable: true,
+      apiHealth: { configured: true },
+      authError: null,
+      changesError: null,
+      connected: false,
+      connectivityDiagnostic: null,
+      disconnect: vi.fn(),
+      error: null,
+      exportDocument: vi.fn(),
+      exportError: null,
+      files: [],
+      filesError: null,
+      importFile: vi.fn(),
+      isAuthLoading: false,
+      isConnecting: false,
+      isDisconnecting: false,
+      isExporting: false,
+      isImporting: false,
+      isFilesLoading: false,
+      isRefreshingDocument: false,
+      isRefreshingFiles: false,
+      isRescanning: false,
+      isSyncing: false,
+      lastRescannedAt: null,
+      openGoogleConnect: vi.fn(),
+      query: "",
+      refetchAuth: mockWorkspaceRuntimeRefetchAuth,
+      refetchFiles: vi.fn(),
+      refreshDocument: vi.fn(),
+      remoteChangedSources: [],
+      rescan: vi.fn(),
+      session: {
+        connected: false,
+        provider: null,
+        user: null,
+      },
+      setQuery: vi.fn(),
+      syncDocument: vi.fn(),
+    }));
     mockWriteUserProfilePreference.mockReset();
     window.history.replaceState(null, "", "/editor");
   });
@@ -565,5 +688,50 @@ describe("Index runtime activation", () => {
     });
 
     expect(screen.getByTestId("location-path")).toHaveTextContent("/editor");
+  });
+
+  it("shows workspace success only after auth refetch confirms a connected session", async () => {
+    renderIndex("/editor?workspaceAuth=connected");
+
+    await waitFor(() => {
+      expect(mockWorkspaceRuntimeRefetchAuth).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockToastSuccess).toHaveBeenCalledWith("hooks.workspace.connected");
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it("does not show workspace success when auth refetch reports a disconnected session", async () => {
+    mockWorkspaceRuntimeRefetchAuth.mockResolvedValueOnce({
+      data: {
+        connected: false,
+        provider: null,
+        user: null,
+      },
+    });
+
+    renderIndex("/editor?workspaceAuth=connected");
+
+    await waitFor(() => {
+      expect(mockWorkspaceRuntimeRefetchAuth).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith("hooks.workspace.authErrors.oauth_callback_failed");
+    expect(screen.getByText("Google Workspace")).toBeInTheDocument();
+  });
+
+  it("does not show workspace success when auth refetch throws", async () => {
+    mockWorkspaceRuntimeRefetchAuth.mockRejectedValueOnce(new Error("session lookup failed"));
+
+    renderIndex("/editor?workspaceAuth=connected");
+
+    await waitFor(() => {
+      expect(mockWorkspaceRuntimeRefetchAuth).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+    expect(mockToastError).toHaveBeenCalledWith("hooks.workspace.authErrors.oauth_callback_failed");
+    expect(screen.getByText("Google Workspace")).toBeInTheDocument();
   });
 });

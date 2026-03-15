@@ -25,6 +25,7 @@ import {
   redirect,
   type HttpResponse,
 } from "../http/http";
+import { sanitizeLogMessage } from "../http/aiDiagnostics";
 import { getWorkspaceRepository } from "../workspace/repository";
 
 interface ConnectRequestBody {
@@ -218,6 +219,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
       }
 
       const session = await createWorkspaceSession(connectionId);
+      console.info(`[WorkspaceAuth] callback connected connectionId=${connectionId} sessionId=${session.sessionId}`);
 
       return redirect(
         buildRedirectLocation(authState.returnTo, { workspaceAuth: "connected" }, resolveFrontendOrigin(requestOrigin)),
@@ -228,10 +230,13 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
         },
       );
     } catch (error) {
+      const normalizedErrorCode = normalizeAuthErrorCode(error);
+      const message = error instanceof Error ? sanitizeLogMessage(error.message) : "unknown_error";
+      console.warn(`[WorkspaceAuth] callback failed code=${normalizedErrorCode} message=${message}`);
       return redirect(
         buildRedirectLocation(
           authState.returnTo,
-          { workspaceAuthError: normalizeAuthErrorCode(error) },
+          { workspaceAuthError: normalizedErrorCode },
           resolveFrontendOrigin(requestOrigin),
         ),
         302,
@@ -242,8 +247,10 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
 
   if (request.method === "GET" && requestUrl.pathname === "/api/auth/session") {
     const sessionState = await getWorkspaceSession(request);
+    const sessionId = getWorkspaceSessionId(request);
 
     if (!sessionState?.session || !sessionState.connection) {
+      console.info(`[WorkspaceAuth] session lookup connected=false sessionId=${sessionId || "none"}`);
       return json({
         connected: false,
         provider: null,
@@ -251,6 +258,9 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
       }, 200, requestOrigin);
     }
 
+    console.info(
+      `[WorkspaceAuth] session lookup connected=true sessionId=${sessionState.session.sessionId} connectionId=${sessionState.connection.connectionId}`,
+    );
     return json({
       connected: true,
       provider: sessionState.connection.provider,
