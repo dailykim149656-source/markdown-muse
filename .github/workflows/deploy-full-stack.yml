@@ -627,6 +627,7 @@ jobs:
           if [ -z "${FIREBASE_PROJECT_ID}" ]; then
             FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           fi
+          FRONTEND_BUILD_ID="${GITHUB_SHA:-local-dev}"
 
           echo "Deployment summary:"
           echo "  firebase_project: ${FIREBASE_PROJECT_ID}"
@@ -634,12 +635,13 @@ jobs:
           echo "  frontend_origin: ${FRONTEND_ORIGIN}"
           echo "  routing_mode: ${ROUTING_MODE}"
           echo "  oauth_redirect_uri: ${GOOGLE_OAUTH_REDIRECT_URI}"
+          echo "  frontend_build_id: ${FRONTEND_BUILD_ID}"
 
           export VITE_AI_API_BASE_URL="${AI_API_BASE_URL}"
           node scripts/validate-public-deploy-config.mjs
 
           echo "Building frontend with VITE_AI_API_BASE_URL=${AI_API_BASE_URL}"
-          printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\n" "${AI_API_BASE_URL}" > .env.web.local
+          printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\nVITE_APP_BUILD_ID=%s\n" "${AI_API_BASE_URL}" "${FRONTEND_BUILD_ID}" > .env.web.local
 
           npm ci
           npm run build:web

@@ -36,7 +36,13 @@ import {
 } from "./modules/config/publicDeploymentConfig.js";
 import { getGoogleOAuthRuntimeSummary } from "./modules/auth/googleOAuth";
 import { handleAuthRoute } from "./modules/auth/routes";
-import { getWorkspaceSession } from "./modules/auth/sessionStore";
+import {
+  FORWARDED_WORKSPACE_SESSION_COOKIE,
+  getWorkspaceSession,
+  getWorkspaceSessionCookieNames,
+  getWorkspaceSessionCookieSameSite,
+  WORKSPACE_AUTH_SUCCESS_CRITERION,
+} from "./modules/auth/sessionStore";
 import {
   ALLOWED_ORIGINS,
   binary,
@@ -130,7 +136,9 @@ if (shouldBlockServerStartupForPublicDeployment(publicDeploymentConfig, publicDe
 console.log(
   `[AI Server] Google OAuth deployment status=${googleOAuthRuntimeSummary.publishingStatus} scopeProfile=${googleOAuthRuntimeSummary.scopeProfile} scopeRisk=${googleOAuthRuntimeSummary.scopeRisk} frontendOrigin=${googleOAuthRuntimeSummary.frontendOrigin || "(unset)"} redirectOrigin=${googleOAuthRuntimeSummary.redirectOrigin || "(unset)"} allowedOrigins=${publicDeploymentConfig.allowedOrigins.join(",") || "(none)"}`,
 );
-console.log(`[AI Server] Workspace repository backend=${resolveWorkspaceRepositoryBackend()}`);
+console.log(
+  `[AI Server] Workspace repository backend=${resolveWorkspaceRepositoryBackend()} revision=${process.env.K_REVISION || "(unset)"} service=${process.env.K_SERVICE || "(unset)"} secureCookie=${FORWARDED_WORKSPACE_SESSION_COOKIE} secureSameSite=${getWorkspaceSessionCookieSameSite({ headers: { "x-forwarded-proto": "https" } } as never)}`,
+);
 
 const resolveAiLocale = (value: string | undefined): Locale => (value === "ko" ? "ko" : "en");
 
@@ -863,6 +871,13 @@ const server = createServer(async (request, response) => {
         googleWorkspaceScopeProfile: googleOAuthSummary.scopeProfile,
         googleWorkspaceScopeRisk: googleOAuthSummary.scopeRisk,
         model: getGeminiModel(),
+        runtimeRevision: process.env.K_REVISION?.trim() || null,
+        runtimeService: process.env.K_SERVICE?.trim() || null,
+        workspaceAuthSuccessCriterion: WORKSPACE_AUTH_SUCCESS_CRITERION,
+        workspaceRepositoryBackend: resolveWorkspaceRepositoryBackend(),
+        workspaceSessionCookieAcceptedNames: getWorkspaceSessionCookieNames(),
+        workspaceSessionCookieSecureName: FORWARDED_WORKSPACE_SESSION_COOKIE,
+        workspaceSessionCookieSecureSameSite: getWorkspaceSessionCookieSameSite({ headers: { "x-forwarded-proto": "https" } } as never),
       }), 200, request.headers.origin));
       return;
     }

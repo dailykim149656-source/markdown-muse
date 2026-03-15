@@ -13,12 +13,14 @@ import {
   createWorkspaceSessionCookie,
   deleteWorkspaceSession,
   deleteWorkspaceSessionById,
+  getPresentWorkspaceSessionCookieNames,
   getWorkspaceSession,
   getWorkspaceSessionId,
 } from "./sessionStore";
 import {
   HttpError,
   getRequestUrl,
+  isSecureRequest,
   json,
   ALLOWED_ORIGINS,
   parseOptionalRequestBody,
@@ -26,7 +28,7 @@ import {
   type HttpResponse,
 } from "../http/http";
 import { sanitizeLogMessage } from "../http/aiDiagnostics";
-import { getWorkspaceRepository } from "../workspace/repository";
+import { getWorkspaceRepository, resolveWorkspaceRepositoryBackend } from "../workspace/repository";
 
 interface ConnectRequestBody {
   returnTo?: string;
@@ -160,6 +162,9 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
       returnTo,
       state,
     });
+    console.info(
+      `[WorkspaceAuth] connect state=${state} returnTo=${returnTo} frontendOrigin=${resolveFrontendOrigin(requestOrigin)} backend=${resolveWorkspaceRepositoryBackend()}`,
+    );
 
     return json({
       authUrl: buildGoogleAuthUrl(state),
@@ -190,6 +195,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
     }
 
     const authState = await repository.consumeAuthState(stateId);
+    console.info(`[WorkspaceAuth] callback state=${stateId} hasCode=${code ? "yes" : "no"} authError=${authError || "none"}`);
 
     if (!authState || authState.expiresAt <= Date.now()) {
       return redirect(
@@ -219,7 +225,9 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
       }
 
       const session = await createWorkspaceSession(connectionId);
-      console.info(`[WorkspaceAuth] callback connected connectionId=${connectionId} sessionId=${session.sessionId}`);
+      console.info(
+        `[WorkspaceAuth] callback connected state=${stateId} connectionId=${connectionId} sessionId=${session.sessionId} cookieName=${isSecureRequest(request) ? "secure" : "local"} backend=${resolveWorkspaceRepositoryBackend()}`,
+      );
 
       return redirect(
         buildRedirectLocation(authState.returnTo, { workspaceAuth: "connected" }, resolveFrontendOrigin(requestOrigin)),
@@ -232,7 +240,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
     } catch (error) {
       const normalizedErrorCode = normalizeAuthErrorCode(error);
       const message = error instanceof Error ? sanitizeLogMessage(error.message) : "unknown_error";
-      console.warn(`[WorkspaceAuth] callback failed code=${normalizedErrorCode} message=${message}`);
+      console.warn(`[WorkspaceAuth] callback failed state=${stateId} code=${normalizedErrorCode} message=${message}`);
       return redirect(
         buildRedirectLocation(
           authState.returnTo,
@@ -248,9 +256,13 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
   if (request.method === "GET" && requestUrl.pathname === "/api/auth/session") {
     const sessionState = await getWorkspaceSession(request);
     const sessionId = getWorkspaceSessionId(request);
+    const presentCookieNames = getPresentWorkspaceSessionCookieNames(request);
+    const repositoryBackend = resolveWorkspaceRepositoryBackend();
 
     if (!sessionState?.session || !sessionState.connection) {
-      console.info(`[WorkspaceAuth] session lookup connected=false sessionId=${sessionId || "none"}`);
+      console.info(
+        `[WorkspaceAuth] session lookup connected=false sessionId=${sessionId || "none"} cookieNames=${presentCookieNames.join(",") || "none"} backend=${repositoryBackend}`,
+      );
       return json({
         connected: false,
         provider: null,
@@ -259,7 +271,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
     }
 
     console.info(
-      `[WorkspaceAuth] session lookup connected=true sessionId=${sessionState.session.sessionId} connectionId=${sessionState.connection.connectionId}`,
+      `[WorkspaceAuth] session lookup connected=true sessionId=${sessionState.session.sessionId} connectionId=${sessionState.connection.connectionId} cookieNames=${presentCookieNames.join(",") || "none"} backend=${repositoryBackend}`,
     );
     return json({
       connected: true,

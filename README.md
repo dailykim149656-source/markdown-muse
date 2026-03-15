@@ -172,6 +172,7 @@ Google OAuth production guard:
 - set `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted|reduced`
 - deployed Google Workspace state now defaults to Firestore on Cloud Run so OAuth/session state is shared across instances
 - Firebase Hosting rewrites only forward the `__session` cookie to Cloud Run, so hosted workspace auth must use that cookie name in deployed HTTPS environments
+- the current deployed auth contract is documented in [docs/current-workspace-auth-contract-2026-03-16.md](docs/current-workspace-auth-contract-2026-03-16.md)
 - run `npm run check:public-deploy` before public deploys to validate custom-domain and OAuth settings
 
 ## Main scripts

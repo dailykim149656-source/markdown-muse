@@ -9,6 +9,7 @@ Scope: Real-account Google Workspace export, import, save, rescan, refresh, sync
 - `docs/release-closeout-checklist-2026-03-11.md`
 - `docs/release-closeout-results-template-2026-03-12.md`
 - `docs/remaining-work-execution-plan-2026-03-11.md`
+- `docs/current-workspace-auth-contract-2026-03-16.md`
 - `server/modules/workspace/routes.ts`
 - `server/modules/workspace/googleDocsMapper.ts`
 
@@ -50,6 +51,11 @@ Required environment assumptions:
 - auth routes are reachable
 - workspace routes are reachable
 - the browser can receive auth cookies from the workspace server
+- hosted Firebase deployments must use the `__session` cookie contract
+
+Recommended live check helper:
+
+- `scripts/check-google-workspace-auth-smoke.ps1`
 
 ## Suggested test documents
 
@@ -109,6 +115,11 @@ Expected result:
 - connection dialog shows `Connected`
 - connected user identity is visible
 - `Drive Import` becomes available
+- logs show:
+  - `GET /api/auth/google/callback?...`
+  - `callback connected ...`
+  - `GET /api/auth/session`
+  - `session lookup connected=true ...`
 
 Record:
 

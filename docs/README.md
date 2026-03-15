@@ -149,6 +149,7 @@ Read these if you are validating release readiness or operational review state:
 
 - [Hackathon Architecture](architecture-hackathon-2026-03-11.md)
 - [Cloud Run Deploy Runbook](cloud-run-deploy-runbook-2026-03-11.md)
+- [Current Workspace Auth Contract](current-workspace-auth-contract-2026-03-16.md)
 - [Security Status](security-status-2026-03-14.md)
 - [Google Workspace Live Validation Runbook](google-workspace-live-validation-runbook-2026-03-12.md)
 - [Google Docs Sync Support Matrix](google-docs-sync-support-matrix-2026-03-12.md)
@@ -164,6 +165,7 @@ Read these if you are validating release readiness or operational review state:
 - [Tech Stack Overview (Korean)](tech-stack-overview-ko-2026-03-11.md)
 - [Web Performance Optimization Summary](session-summary-2026-03-10-web-performance-optimization.md)
 - [GCP Deployment Guide](gcp-deployment.md)
+- [Current Workspace Auth Contract](current-workspace-auth-contract-2026-03-16.md)
 - [GCP, Firebase, and Google OAuth Hardening](session-summary-2026-03-13-gcp-firebase-google-oauth-hardening.md)
 - [Vertex AI Migration for Gemini Runtime](session-summary-2026-03-13-vertex-ai-migration.md)
 - [Google OAuth Testing Mode Plan](google-oauth-testing-mode-plan-2026-03-13.md)
