@@ -4,6 +4,7 @@ import { fixTexCompileError } from "@/lib/ai/texAutoFixClient";
 
 describe("ai client", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -79,5 +80,52 @@ describe("ai client", () => {
     expect(fetchSpy).toHaveBeenCalledWith("/api/ai/tex/fix", expect.objectContaining({
       method: "POST",
     }));
+  });
+
+  it("retries local AI requests while the dev server is still starting", async () => {
+    vi.useFakeTimers();
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        requestId: "req-2",
+        summary: "Server became ready.",
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        status: 200,
+      }));
+
+    const request = summarizeAutosaveDiff({
+      comparison: {
+        counts: {
+          added: 1,
+          changed: 0,
+          inconsistent: 0,
+          removed: 0,
+        },
+        deltas: [{
+          afterExcerpt: "Enable audit logging.",
+          kind: "added",
+          summary: "Section \"Audit\" exists only in the target document.",
+          title: "Audit",
+        }],
+      },
+      document: {
+        documentId: "doc-1",
+        fileName: "Runbook",
+        mode: "markdown",
+      },
+      locale: "en",
+    });
+
+    await vi.runAllTimersAsync();
+
+    await expect(request).resolves.toEqual({
+      requestId: "req-2",
+      summary: "Server became ready.",
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });

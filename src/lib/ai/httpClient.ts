@@ -1,3 +1,5 @@
+import { retryLocalDevelopmentRequest } from "@/lib/network/localDevelopmentRetry";
+
 interface RequestOptions {
   signal?: AbortSignal;
 }
@@ -89,14 +91,14 @@ export const postJson = async <TResponse, TRequest>(
   let response: Response;
 
   try {
-    response = await fetch(requestUrl, {
+    response = await retryLocalDevelopmentRequest(baseUrl, () => fetch(requestUrl, {
       body: JSON.stringify(body),
       headers: {
         "Content-Type": "application/json",
       },
       method: "POST",
       signal: options?.signal,
-    });
+    }), options?.signal);
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -118,10 +120,10 @@ export const getJson = async <TResponse>(path: string, options?: RequestOptions)
   let response: Response;
 
   try {
-    response = await fetch(requestUrl, {
+    response = await retryLocalDevelopmentRequest(baseUrl, () => fetch(requestUrl, {
       method: "GET",
       signal: options?.signal,
-    });
+    }), options?.signal);
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -147,14 +149,14 @@ export const postBinary = async <TRequest>(
   let response: Response;
 
   try {
-    response = await fetch(requestUrl, {
+    response = await retryLocalDevelopmentRequest(baseUrl, () => fetch(requestUrl, {
       body: JSON.stringify(body),
       headers: {
         "Content-Type": "application/json",
       },
       method: "POST",
       signal: options?.signal,
-    });
+    }), options?.signal);
   } catch (error) {
     if (isAbortError(error)) {
       throw error;

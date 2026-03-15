@@ -54,6 +54,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          DEFAULT_FRONTEND_ORIGIN="https://docsy.cyou"
+          DEFAULT_GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_FRONTEND_ORIGIN}/api/auth/google/callback"
+
           require_secret() {
             local name="$1"
             local value="$2"
@@ -66,6 +69,9 @@ jobs:
           FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
           if [ -z "${FRONTEND_ORIGIN}" ]; then
             FRONTEND_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          fi
+          if [ -z "${FRONTEND_ORIGIN}" ]; then
+            FRONTEND_ORIGIN="${DEFAULT_FRONTEND_ORIGIN}"
           fi
 
           AI_API_BASE_URL="${{ secrets.GCP_WEB_VITE_AI_API_BASE_URL }}"
@@ -102,16 +108,20 @@ jobs:
             ROUTING_MODE="same-origin-hosting-rewrite"
           fi
 
+          GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          if [ -z "${GOOGLE_OAUTH_REDIRECT_URI}" ]; then
+            GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_GOOGLE_OAUTH_REDIRECT_URI}"
+          fi
+
           export AI_ALLOWED_ORIGIN="${FRONTEND_ORIGIN}"
           export GOOGLE_CLIENT_ID="${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
           export GOOGLE_OAUTH_PUBLISHING_STATUS
-          export GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          export GOOGLE_OAUTH_REDIRECT_URI
           export GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
           export GOOGLE_WORKSPACE_SCOPE_PROFILE
           export WORKSPACE_FRONTEND_ORIGIN="${FRONTEND_ORIGIN}"
 
           require_secret "GCP_GOOGLE_CLIENT_ID" "${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
-          require_secret "GCP_GOOGLE_OAUTH_REDIRECT_URI" "${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
 
           FIREBASE_PROJECT_ID="${{ secrets.GCP_FIREBASE_PROJECT_ID }}"
           if [ -z "${FIREBASE_PROJECT_ID}" ]; then
@@ -123,7 +133,7 @@ jobs:
           echo "  browser_api_base_url: ${AI_API_BASE_URL}"
           echo "  frontend_origin: ${FRONTEND_ORIGIN}"
           echo "  routing_mode: ${ROUTING_MODE}"
-          echo "  oauth_redirect_uri: ${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          echo "  oauth_redirect_uri: ${GOOGLE_OAUTH_REDIRECT_URI}"
 
           node scripts/validate-public-deploy-config.mjs
 

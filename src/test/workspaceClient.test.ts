@@ -7,6 +7,7 @@ import {
 
 describe("workspace client", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -59,5 +60,35 @@ describe("workspace client", () => {
       name: "WorkspaceApiError",
       statusCode: 404,
     } satisfies Partial<WorkspaceApiError>);
+  });
+
+  it("retries the local workspace health check while the AI server finishes booting", async () => {
+    vi.useFakeTimers();
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        configured: true,
+        fallbackModel: "gemini-2.5-flash",
+        model: "gemini-3.1-flash-lite-preview",
+        ok: true,
+      }), {
+        headers: {
+          "Content-Type": "application/json",
+        },
+        status: 200,
+      }));
+
+    const request = checkWorkspaceApiHealth();
+
+    await vi.runAllTimersAsync();
+
+    await expect(request).resolves.toEqual({
+      configured: true,
+      fallbackModel: "gemini-2.5-flash",
+      model: "gemini-3.1-flash-lite-preview",
+      ok: true,
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });

@@ -11,6 +11,7 @@ import type {
   WorkspaceImportRequest,
   WorkspaceImportResponse,
 } from "@/types/workspace";
+import { retryLocalDevelopmentRequest } from "@/lib/network/localDevelopmentRetry";
 
 export class WorkspaceApiError extends Error {
   statusCode: number;
@@ -126,14 +127,14 @@ const requestJson = async <TResponse>(
   let response: Response;
 
   try {
-    response = await fetch(requestUrl, {
+    response = await retryLocalDevelopmentRequest(baseUrl, () => fetch(requestUrl, {
       credentials: "include",
       ...init,
       headers: {
         "Content-Type": "application/json",
         ...(init?.headers || {}),
       },
-    });
+    }), init?.signal);
   } catch (error) {
     const detail = error instanceof Error && error.message ? ` (${error.message})` : "";
     throw new WorkspaceApiError(`Unable to reach the workspace server at ${requestUrl}.${detail}`, 0);

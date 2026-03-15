@@ -60,6 +60,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          DEFAULT_FRONTEND_ORIGIN="https://docsy.cyou"
+          DEFAULT_GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_FRONTEND_ORIGIN}/api/auth/google/callback"
+
           require_secret() {
             local name="$1"
             local value="$2"
@@ -104,9 +107,7 @@ jobs:
           }
 
           require_secret "GCP_PROJECT_ID" "${{ secrets.GCP_PROJECT_ID }}"
-          require_secret "GCP_AI_ALLOWED_ORIGIN" "${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
           require_secret "GCP_GOOGLE_CLIENT_ID" "${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
-          require_secret "GCP_GOOGLE_OAUTH_REDIRECT_URI" "${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
 
           TEX_SERVICE_BASE_URL="${{ secrets.GCP_TEX_SERVICE_BASE_URL }}"
           if [ -z "${TEX_SERVICE_BASE_URL}" ]; then
@@ -120,8 +121,7 @@ jobs:
 
           ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
           if [ -z "${ALLOWED_ORIGIN}" ]; then
-            echo "GCP_AI_ALLOWED_ORIGIN is required."
-            exit 1
+            ALLOWED_ORIGIN="${DEFAULT_FRONTEND_ORIGIN}"
           fi
 
           WORKSPACE_FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
@@ -130,6 +130,10 @@ jobs:
           fi
 
           GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          if [ -z "${GOOGLE_OAUTH_REDIRECT_URI}" ]; then
+            GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_GOOGLE_OAUTH_REDIRECT_URI}"
+          fi
+
           GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
           if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then
             GOOGLE_OAUTH_PUBLISHING_STATUS="testing"
