@@ -5,7 +5,7 @@ import {
 } from "../../server/modules/auth/sessionStore";
 
 describe("sessionStore", () => {
-  it("uses a __Host- cookie on secure requests", () => {
+  it("uses a __Host- cookie with SameSite=None on secure requests", () => {
     const cookie = createWorkspaceSessionCookie("session-1", {
       headers: {
         "x-forwarded-proto": "https",
@@ -15,6 +15,17 @@ describe("sessionStore", () => {
     expect(cookie).toContain("__Host-docsy-workspace-session=");
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("Secure");
+    expect(cookie).toContain("SameSite=None");
+  });
+
+  it("uses a local cookie with SameSite=Lax on non-secure requests", () => {
+    const cookie = createWorkspaceSessionCookie("session-1", {
+      headers: {
+        "x-forwarded-proto": "http",
+      },
+    } as never);
+
+    expect(cookie).toContain("docsy_workspace_session=");
     expect(cookie).toContain("SameSite=Lax");
   });
 
@@ -27,6 +38,8 @@ describe("sessionStore", () => {
 
     expect(clearedCookies).toHaveLength(2);
     expect(clearedCookies[0]).toContain("__Host-docsy-workspace-session=");
+    expect(clearedCookies[0]).toContain("SameSite=None");
     expect(clearedCookies[1]).toContain("docsy_workspace_session=");
+    expect(clearedCookies[1]).toContain("SameSite=Lax");
   });
 });

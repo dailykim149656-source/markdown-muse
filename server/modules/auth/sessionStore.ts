@@ -11,6 +11,9 @@ const SESSION_IDLE_TTL_MS = 1000 * 60 * 60 * 24;
 const getWorkspaceSessionCookieName = (request: IncomingMessage) =>
   isSecureRequest(request) ? SECURE_WORKSPACE_SESSION_COOKIE : LOCAL_WORKSPACE_SESSION_COOKIE;
 
+const getWorkspaceSessionCookieSameSite = (request: IncomingMessage) =>
+  isSecureRequest(request) ? "None" : "Lax";
+
 const getWorkspaceSessionCookieNames = () => [
   SECURE_WORKSPACE_SESSION_COOKIE,
   LOCAL_WORKSPACE_SESSION_COOKIE,
@@ -27,7 +30,7 @@ export const createWorkspaceSessionCookie = (sessionId: string, request: Incomin
     httpOnly: true,
     maxAge: Math.floor(SESSION_TTL_MS / 1000),
     path: "/",
-    sameSite: "Lax",
+    sameSite: getWorkspaceSessionCookieSameSite(request),
     secure: isSecureRequest(request),
   });
 
@@ -35,7 +38,7 @@ export const clearWorkspaceSessionCookie = (request: IncomingMessage) =>
   [
     serializeClearedCookie(SECURE_WORKSPACE_SESSION_COOKIE, {
       path: "/",
-      sameSite: "Lax",
+      sameSite: getWorkspaceSessionCookieSameSite(request),
       secure: true,
     }),
     serializeClearedCookie(LOCAL_WORKSPACE_SESSION_COOKIE, {
