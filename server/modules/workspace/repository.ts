@@ -119,6 +119,24 @@ const getDefaultRepositoryFilePath = (env = process.env) =>
 const sortImportedDocuments = (documents: WorkspaceImportedDocumentRecord[]) =>
   documents.sort((left, right) => right.updatedAt - left.updatedAt || left.fileName.localeCompare(right.fileName));
 
+export const stripUndefinedDeep = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => stripUndefinedDeep(entry))
+      .filter((entry) => entry !== undefined);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .map(([key, entry]) => [key, stripUndefinedDeep(entry)])
+        .filter(([, entry]) => entry !== undefined),
+    );
+  }
+
+  return value === undefined ? undefined : value;
+};
+
 const sanitizeWorkspaceTokens = (tokens: Partial<GoogleWorkspaceTokens> | null | undefined): GoogleWorkspaceTokens => ({
   expiryDate: typeof tokens?.expiryDate === "number" ? tokens.expiryDate : undefined,
   refreshToken: typeof tokens?.refreshToken === "string" ? tokens.refreshToken : undefined,
@@ -524,7 +542,7 @@ class FirestoreWorkspaceRepository implements WorkspaceRepository {
       throw new Error(`Workspace auth state record is invalid for state=${record.state}`);
     }
 
-    await this.getAuthStatesCollection().doc(sanitizedRecord.state).set(sanitizedRecord);
+    await this.getAuthStatesCollection().doc(sanitizedRecord.state).set(stripUndefinedDeep(sanitizedRecord));
   }
 
   async consumeAuthState(stateId: string) {
@@ -555,7 +573,7 @@ class FirestoreWorkspaceRepository implements WorkspaceRepository {
       throw new Error(`Workspace connection record is invalid for connectionId=${record.connectionId}`);
     }
 
-    await this.getConnectionsCollection().doc(sanitizedRecord.connectionId).set(sanitizedRecord);
+    await this.getConnectionsCollection().doc(sanitizedRecord.connectionId).set(stripUndefinedDeep(sanitizedRecord));
   }
 
   async getConnection(connectionId: string) {
@@ -578,7 +596,7 @@ class FirestoreWorkspaceRepository implements WorkspaceRepository {
       updatedAt: now,
     };
 
-    await this.getSessionsCollection().doc(session.sessionId).set(session);
+    await this.getSessionsCollection().doc(session.sessionId).set(stripUndefinedDeep(session));
     return session;
   }
 
@@ -629,7 +647,7 @@ class FirestoreWorkspaceRepository implements WorkspaceRepository {
         updatedAt: now,
       };
 
-      transaction.set(sessionRef, updatedSession);
+      transaction.set(sessionRef, stripUndefinedDeep(updatedSession));
 
       const connectionRef = this.getConnectionsCollection().doc(updatedSession.connectionId);
       const connectionSnapshot = await transaction.get(connectionRef);
@@ -655,7 +673,7 @@ class FirestoreWorkspaceRepository implements WorkspaceRepository {
       throw new Error(`Imported workspace document record is invalid for documentId=${record.documentId}`);
     }
 
-    await this.getImportedDocumentsCollection().doc(sanitizedRecord.documentId).set(sanitizedRecord);
+    await this.getImportedDocumentsCollection().doc(sanitizedRecord.documentId).set(stripUndefinedDeep(sanitizedRecord));
   }
 
   async getImportedDocument(documentId: string) {
@@ -685,7 +703,9 @@ const createFirestoreRepository = (env = process.env) => {
   const projectId = env.GOOGLE_CLOUD_PROJECT?.trim() || undefined;
   const rootCollection = env.WORKSPACE_FIRESTORE_ROOT_COLLECTION?.trim() || DEFAULT_FIRESTORE_ROOT_COLLECTION;
   const rootDocument = env.WORKSPACE_FIRESTORE_ROOT_DOCUMENT?.trim() || DEFAULT_FIRESTORE_ROOT_DOCUMENT;
-  const firestore = projectId ? new Firestore({ projectId }) : new Firestore();
+  const firestore = projectId
+    ? new Firestore({ ignoreUndefinedProperties: true, projectId })
+    : new Firestore({ ignoreUndefinedProperties: true });
 
   return new FirestoreWorkspaceRepository(firestore, rootCollection, rootDocument);
 };

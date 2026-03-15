@@ -8,6 +8,7 @@ import {
   resetWorkspaceRepositoryForTests,
   resolveWorkspaceRepositoryBackend,
   resolveWorkspaceRepositoryFilePath,
+  stripUndefinedDeep,
 } from "../../server/modules/workspace/repository";
 
 const ORIGINAL_ENV = {
@@ -69,6 +70,24 @@ describe("workspace repository hardening", () => {
       K_SERVICE: "docsy",
       WORKSPACE_REPOSITORY_BACKEND: "",
     } as NodeJS.ProcessEnv)).toBe("firestore");
+  });
+
+  it("removes nested undefined fields before Firestore writes", () => {
+    expect(stripUndefinedDeep({
+      a: 1,
+      b: undefined,
+      c: {
+        d: "value",
+        e: undefined,
+      },
+      f: [1, undefined, { g: undefined, h: "kept" }],
+    })).toEqual({
+      a: 1,
+      c: {
+        d: "value",
+      },
+      f: [1, { h: "kept" }],
+    });
   });
 
   it("rejects repo-local workspace state paths outside tests", () => {
