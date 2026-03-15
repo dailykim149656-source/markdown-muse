@@ -7,6 +7,7 @@ import type {
   TableCellNode,
   TableNode,
 } from "@/types/documentAst";
+import { buildResumeSupportBlock, hasResumeLatexCommands } from "@/lib/latex/resumeSupport";
 
 export interface AstLatexRenderOptions {
   author?: string;
@@ -436,6 +437,64 @@ const renderBlockNode = (node: BlockNode, context: RenderContext, depth = 0): st
         "\\end{admonitionbox}",
       ].join("\n");
     }
+    case "opaque_latex_block":
+      if (hasResumeLatexCommands(node.rawLatex)) {
+        context.usedFeatures.add("resume");
+      }
+      return node.rawLatex;
+    case "resume_header": {
+      context.usedFeatures.add("resume");
+      const leftPrimary = node.primaryLinkUrl
+        ? `\\textbf{\\href{${escapeLatexUrl(node.primaryLinkUrl)}}{\\Large ${escapeLatex(node.name)}}}`
+        : `\\textbf{\\Large ${escapeLatex(node.name)}}`;
+      const leftSecondary = node.secondaryLinkUrl
+        ? `\\href{${escapeLatexUrl(node.secondaryLinkUrl)}}{${escapeLatex(node.secondaryLinkLabel || node.secondaryLinkUrl)}}`
+        : "{}";
+      const rightPrimary = escapeLatex(node.rightPrimary || "");
+      const rightSecondary = node.email
+        ? `Email : \\href{mailto:${escapeLatexUrl(node.email)}}{${escapeLatex(node.email)}}`
+        : "";
+      const rightTertiary = escapeLatex(node.tertiaryRight || (node.phone ? `Mobile : ${node.phone}` : ""));
+      return [
+        "\\begin{tabular*}{\\textwidth}{l@{\\extracolsep{\\fill}}r}",
+        `  ${leftPrimary} & ${rightPrimary} \\\\`,
+        `  ${leftSecondary} & ${rightSecondary} \\\\`,
+        `  {} & ${rightTertiary}`,
+        "\\end{tabular*}",
+      ].join("\n");
+    }
+    case "resume_summary":
+      context.usedFeatures.add("resume");
+      return `\\resumeSummary{${escapeLatex(node.summary).replace(/\n+/g, " \\\\\n")}}`;
+    case "resume_entry": {
+      context.usedFeatures.add("resume");
+      const details = node.details.length
+        ? `\n\\resumeItemListStart\n${node.details.map((detail) => `  \\resumeItem{${escapeLatex(detail)}}`).join("\n")}\n\\resumeItemListEnd`
+        : "";
+      switch (node.commandName) {
+        case "resumeEmployment":
+          return `\\resumeEmploymentListStart\n\\resumeEmployment{${escapeLatex(node.title)}}{${escapeLatex(node.trailingText || "")}}{${escapeLatex(node.subtitle || "")}}{${escapeLatex(node.tertiaryText || "")}}${details}\n\\resumeEmploymentListEnd`;
+        case "resumeCommunity":
+          return `\\resumeSubHeadingListStart\n\\resumeCommunity{${escapeLatex(node.title)}}{${escapeLatex(node.trailingText || "")}}{${escapeLatex(node.subtitle || "")}}${details}\n\\resumeSubHeadingListEnd`;
+        case "resumeSubheading":
+          return `\\resumeSubHeadingListStart\n\\resumeSubheading{${escapeLatex(node.title)}}{${escapeLatex(node.trailingText || "")}}{${escapeLatex(node.subtitle || "")}}{${escapeLatex(node.tertiaryText || "")}}${details}\n\\resumeSubHeadingListEnd`;
+        case "resumeProject":
+          return `\\resumeSubHeadingListStart\n\\resumeProject{${escapeLatex(node.title)}}{${escapeLatex(node.description || "")}}${details}\n\\resumeSubHeadingListEnd`;
+        case "resumeResearch":
+          return `\\resumeSubHeadingListStart\n\\resumeResearch{${escapeLatex(node.title)}}{${escapeLatex(node.trailingText || "")}}{${escapeLatex(node.subtitle || "")}}{${escapeLatex(node.description || "")}}{${escapeLatex(node.tertiaryText || "")}}${details}\n\\resumeSubHeadingListEnd`;
+        case "resumeTalk":
+          return `\\resumeSubHeadingListStart\n\\resumeTalk{${escapeLatex(node.title)}}{${escapeLatex(node.trailingText || "")}}${details}\n\\resumeSubHeadingListEnd`;
+        default:
+          return "";
+      }
+    }
+    case "resume_skill_row":
+      context.usedFeatures.add("resume");
+      return `\\resumeSubHeadingListStart\n\\resumeSkills{${escapeLatex(node.rawText)}}\n\\resumeSubHeadingListEnd`;
+    case "latex_title_block":
+      return "\\maketitle";
+    case "latex_abstract":
+      return `\\begin{abstract}\n${escapeLatex(node.content)}\n\\end{abstract}`;
     case "table_of_contents":
       return "\\tableofcontents";
     case "footnote_item":
@@ -495,6 +554,10 @@ const buildPreamble = (context: RenderContext) => {
     packages.push("\\usepackage{enumitem}");
   }
 
+  if (context.usedFeatures.has("resume")) {
+    packages.push("\\usepackage{enumitem}");
+  }
+
   if (context.usedFeatures.has("admonition")) {
     packages.push("\\usepackage[most]{tcolorbox}");
   }
@@ -549,6 +612,9 @@ const buildPreamble = (context: RenderContext) => {
     ].join("\n")
     : "";
   const fontEnginePreamble = buildFontEnginePreamble(context.usedFeatures);
+  const resumeSupport = context.usedFeatures.has("resume")
+    ? buildResumeSupportBlock()
+    : "";
 
   return [
     fontEnginePreamble,
@@ -558,6 +624,7 @@ const buildPreamble = (context: RenderContext) => {
     admonitionConfig,
     docsyFontSizeConfig,
     docsyFontFamilyConfig,
+    resumeSupport,
     ...(
       context.options.includeMetadata === true
         ? [

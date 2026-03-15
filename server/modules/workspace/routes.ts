@@ -1,6 +1,7 @@
 import type { IncomingMessage } from "node:http";
 import { assertWorkspaceSession } from "../auth/routes";
 import { ensureGoogleAccessToken } from "../auth/googleOAuth";
+import { parseConfiguredAllowedOrigins } from "../config/publicDeploymentConfig.js";
 import { HttpError, getRequestUrl, json, parseOptionalRequestBody, type HttpResponse } from "../http/http";
 import { getWorkspaceRepository } from "./repository";
 import {
@@ -10,10 +11,11 @@ import {
   listGoogleDocsFiles,
   listGoogleDriveChanges,
 } from "./googleDriveClient";
-import { batchUpdateGoogleDocument, getGoogleDocument } from "./googleDocsClient";
+import { batchUpdateGoogleDocument, createGoogleDocument, getGoogleDocument } from "./googleDocsClient";
 import {
   buildGoogleDocsBatchUpdateFromMarkdown,
   buildImportedGoogleDocument,
+  buildWorkspaceBinding,
   getRevisionIdFromGoogleDocument,
 } from "./googleDocsMapper";
 
@@ -24,7 +26,14 @@ interface WorkspaceFilesQuery {
 }
 
 interface WorkspaceImportRequest {
+  documentId?: string;
   fileId?: string;
+}
+
+interface WorkspaceExportRequest {
+  documentId?: string;
+  markdown?: string;
+  title?: string;
 }
 
 interface WorkspaceApplyRequest {
@@ -43,6 +52,59 @@ interface WorkspaceRemoteChangePayload {
   name: string;
   revisionId?: string;
 }
+
+const isLocalAbsoluteOrigin = (value: string) => {
+  try {
+    const url = new URL(value);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+};
+
+const requiresExplicitFrontendOrigin = () =>
+  Boolean(
+    process.env.K_SERVICE
+    || process.env.NODE_ENV === "production"
+    || parseConfiguredAllowedOrigins(process.env.AI_ALLOWED_ORIGIN || "")
+      .some((origin) => origin !== "*" && !isLocalAbsoluteOrigin(origin)),
+  );
+
+const resolveTrustedFrontendOrigin = () => {
+  const configured = process.env.WORKSPACE_FRONTEND_ORIGIN?.trim();
+
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  if (requiresExplicitFrontendOrigin()) {
+    throw new HttpError(500, "WORKSPACE_FRONTEND_ORIGIN must be configured for this deployment.");
+  }
+
+  return "http://localhost:8080";
+};
+
+const assertTrustedPostOrigin = (request: IncomingMessage) => {
+  if (request.method !== "POST") {
+    return;
+  }
+
+  const requestOrigin = typeof request.headers.origin === "string"
+    ? request.headers.origin.trim().replace(/\/$/, "")
+    : "";
+
+  if (!requestOrigin) {
+    if (requiresExplicitFrontendOrigin()) {
+      throw new HttpError(403, "Origin header is required.");
+    }
+
+    return;
+  }
+
+  if (requestOrigin !== resolveTrustedFrontendOrigin()) {
+    throw new HttpError(403, "Origin is not allowed.");
+  }
+};
 
 const buildRemoteChangePayload = ({
   detectedAt,
@@ -251,8 +313,10 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/workspace/import") {
+    assertTrustedPostOrigin(request);
     const { accessToken, connection } = await getAuthorizedConnection(request);
     const body = await parseOptionalRequestBody<WorkspaceImportRequest>(request);
+    const documentId = body?.documentId?.trim();
     const fileId = body?.fileId?.trim();
 
     if (!fileId) {
@@ -267,6 +331,7 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
     const docsRevisionId = getRevisionIdFromGoogleDocument(docsJson);
     const importedAt = Date.now();
     const document = buildImportedGoogleDocument({
+      documentId: documentId || undefined,
       docsRevisionId,
       exportedHtml,
       file,
@@ -275,10 +340,8 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
 
     await repository.upsertImportedDocument({
       connectionId: connection.connectionId,
-      content: document.content || "",
       createdAt: importedAt,
-      docsJson: docsJson || undefined,
-      documentId: document.id || fileId,
+      documentId: document.id || documentId || fileId,
       driveModifiedTime: file.modifiedTime,
       fileId: file.fileId,
       fileName: file.name,
@@ -294,7 +357,73 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
     return json({ document }, 200, requestOrigin);
   }
 
+  if (request.method === "POST" && requestUrl.pathname === "/api/workspace/export") {
+    assertTrustedPostOrigin(request);
+    const { accessToken, connection } = await getAuthorizedConnection(request);
+    const body = await parseOptionalRequestBody<WorkspaceExportRequest>(request);
+    const documentId = body?.documentId?.trim();
+    const markdown = typeof body?.markdown === "string" ? body.markdown : null;
+    const title = body?.title?.trim() || "Untitled";
+
+    if (!documentId) {
+      throw new HttpError(400, "documentId is required.");
+    }
+
+    if (markdown === null) {
+      throw new HttpError(400, "markdown is required.");
+    }
+
+    const existingImportedDocument = await repository.getImportedDocument(documentId);
+    const createdDocument = await createGoogleDocument(accessToken, title);
+    const fileId = (createdDocument as { documentId?: string })?.documentId?.trim();
+
+    if (!fileId) {
+      throw new HttpError(502, "Google Docs create did not return a documentId.");
+    }
+
+    const createdRevisionId = getRevisionIdFromGoogleDocument(createdDocument);
+    const { requests, warnings } = buildGoogleDocsBatchUpdateFromMarkdown(createdDocument, markdown);
+
+    await batchUpdateGoogleDocument(accessToken, fileId, requests, createdRevisionId);
+
+    const [file, updatedDocument] = await Promise.all([
+      getGoogleDriveFileMetadata(accessToken, fileId),
+      getGoogleDocument(accessToken, fileId).catch(() => null),
+    ]);
+    const exportedAt = Date.now();
+    const revisionId = getRevisionIdFromGoogleDocument(updatedDocument) || createdRevisionId || file.revisionId;
+    const workspaceBinding = buildWorkspaceBinding(file, exportedAt, {
+      lastSyncedAt: exportedAt,
+      revisionId,
+      syncStatus: "synced",
+      syncWarnings: warnings.length > 0 ? warnings : undefined,
+    });
+
+    await repository.upsertImportedDocument({
+      connectionId: connection.connectionId,
+      createdAt: existingImportedDocument?.createdAt || exportedAt,
+      documentId,
+      driveModifiedTime: file.modifiedTime,
+      fileId: file.fileId,
+      fileName: file.name,
+      latestRemoteModifiedTime: undefined,
+      latestRemoteRevisionId: undefined,
+      lastRescannedAt: existingImportedDocument?.lastRescannedAt,
+      mimeType: file.mimeType,
+      remoteChangeDetectedAt: undefined,
+      revisionId,
+      updatedAt: exportedAt,
+    });
+
+    return json({
+      ok: true,
+      warnings,
+      workspaceBinding,
+    }, 200, requestOrigin);
+  }
+
   if (request.method === "POST" && requestUrl.pathname === "/api/workspace/rescan") {
+    assertTrustedPostOrigin(request);
     const { accessToken, connection } = await getAuthorizedConnection(request);
     const importedDocuments = await repository.listImportedDocuments(connection.connectionId);
     const rescannedAt = Date.now();
@@ -335,17 +464,18 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/patches/apply") {
+    assertTrustedPostOrigin(request);
     const { accessToken, connection } = await getAuthorizedConnection(request);
     const body = await parseOptionalRequestBody<WorkspaceApplyRequest>(request);
     const fileId = body?.fileId?.trim();
     const documentId = body?.documentId?.trim();
-    const markdown = body?.markdown || "";
+    const markdown = typeof body?.markdown === "string" ? body.markdown : null;
 
     if (!fileId || !documentId) {
       throw new HttpError(400, "documentId and fileId are required.");
     }
 
-    if (!markdown.trim()) {
+    if (markdown === null) {
       throw new HttpError(400, "markdown is required.");
     }
 
@@ -378,8 +508,6 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
 
     await repository.upsertImportedDocument({
       ...importedDocument,
-      content: markdown,
-      docsJson: updatedDocument || importedDocument.docsJson,
       driveModifiedTime: updatedFile.modifiedTime,
       latestRemoteModifiedTime: undefined,
       latestRemoteRevisionId: undefined,

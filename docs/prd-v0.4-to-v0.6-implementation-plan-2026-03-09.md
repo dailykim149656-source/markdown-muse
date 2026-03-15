@@ -1,5 +1,14 @@
 # PRD v0.4 to v0.6 Implementation Plan
 
+## Historical Note
+
+This document is a historical implementation plan from 2026-03-09.
+
+For the current repository-state view, use:
+
+- `docs/prd-status-check-2026-03-11.md`
+- `docs/remaining-work-execution-plan-2026-03-11.md`
+
 ## 기준 문서
 
 - `PRD/markdown_muse_prd_v0.4_to_v0.6.docx`

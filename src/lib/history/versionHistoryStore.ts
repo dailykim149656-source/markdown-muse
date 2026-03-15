@@ -202,6 +202,12 @@ export const appendDocumentVersionSnapshot = async (
   }
 };
 
+export const upsertDocumentVersionSnapshot = async (
+  snapshot: DocumentVersionSnapshot,
+  limitPerDocument = 5,
+) =>
+  appendDocumentVersionSnapshot(snapshot, limitPerDocument);
+
 export const clearDocumentVersionSnapshots = async (documentId?: string) => {
   const database = await openDatabase();
 

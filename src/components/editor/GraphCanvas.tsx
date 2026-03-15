@@ -5,6 +5,7 @@ import { Slider } from "@/components/ui/slider";
 import { useI18n } from "@/i18n/useI18n";
 import {
   buildGraphNodeLayout,
+  type GraphLayoutMode,
   GRAPH_CANVAS_CENTER_X,
   GRAPH_CANVAS_CENTER_Y,
   GRAPH_CANVAS_HEIGHT,
@@ -23,6 +24,7 @@ import type {
   KnowledgeGraphNavigationTarget,
   KnowledgeGraphNode,
 } from "@/lib/knowledge/workspaceInsights";
+import type { WorkspaceScale } from "@/lib/knowledge/workspaceScale";
 
 const CANVAS_WIDTH = GRAPH_CANVAS_WIDTH;
 const CANVAS_HEIGHT = GRAPH_CANVAS_HEIGHT;
@@ -49,10 +51,12 @@ type HoverTarget =
 
 interface GraphCanvasProps {
   edges: KnowledgeGraphEdge[];
+  layoutMode?: GraphLayoutMode;
   nodes: KnowledgeGraphNode[];
   onOpenDocument: (target: KnowledgeGraphNavigationTarget) => void;
   onSelectNode: (nodeId: string) => void;
   selectedNodeId: string | null;
+  workspaceScale?: WorkspaceScale;
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -172,13 +176,15 @@ const LegendEdgeSwatch = ({
 
 const GraphCanvas = ({
   edges,
+  layoutMode = "selected",
   nodes,
   onOpenDocument,
   onSelectNode,
   selectedNodeId,
+  workspaceScale = "small",
 }: GraphCanvasProps) => {
   const { t } = useI18n();
-  const [canvasHeight, setCanvasHeight] = useState(CANVAS_HEIGHT_PRESETS.default);
+  const [canvasHeight, setCanvasHeight] = useState<number>(CANVAS_HEIGHT_PRESETS.default);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
@@ -186,10 +192,12 @@ const GraphCanvas = ({
   const [isMinimapDragging, setIsMinimapDragging] = useState(false);
   const [hoverTarget, setHoverTarget] = useState<HoverTarget>(null);
   const minimapDraggingRef = useRef(false);
+  const layoutSelectedNodeId = layoutMode === "selected" ? selectedNodeId : null;
+  const simplifyLargeVisuals = workspaceScale === "large";
 
   const positions = useMemo(
-    () => buildGraphNodeLayout({ edges, nodes, selectedNodeId }),
-    [edges, nodes, selectedNodeId],
+    () => buildGraphNodeLayout({ edges, layoutMode, nodes, selectedNodeId: layoutSelectedNodeId }),
+    [edges, layoutMode, layoutSelectedNodeId, nodes],
   );
   const nodeById = useMemo(
     () => new Map(nodes.map((node) => [node.id, node])),
@@ -515,6 +523,7 @@ const GraphCanvas = ({
               const colors = getNodeColors(node);
               const radius = getNodeRadius(node, selectedNodeId);
               const isSelected = node.id === selectedNodeId;
+              const shouldRenderLabel = !simplifyLargeVisuals || isSelected || node.issueSeverity === "warning";
               const labelY = position.y + radius + 16;
 
               return (
@@ -566,16 +575,18 @@ const GraphCanvas = ({
                       </text>
                     </>
                   )}
-                  <text
-                    fill={colors.text}
-                    fontSize={node.kind === "document" ? "11" : "10"}
-                    fontWeight={isSelected ? "700" : "600"}
-                    textAnchor={position.textAnchor}
-                    x={position.labelX}
-                    y={position.labelY}
-                  >
-                    {node.label.length > 22 ? `${node.label.slice(0, 21)}...` : node.label}
-                  </text>
+                  {shouldRenderLabel && (
+                    <text
+                      fill={colors.text}
+                      fontSize={node.kind === "document" ? "11" : "10"}
+                      fontWeight={isSelected ? "700" : "600"}
+                      textAnchor={position.textAnchor}
+                      x={position.labelX}
+                      y={position.labelY}
+                    >
+                      {node.label.length > 22 ? `${node.label.slice(0, 21)}...` : node.label}
+                    </text>
+                  )}
                 </g>
               );
             })}
@@ -722,7 +733,7 @@ const GraphCanvas = ({
             viewBox={`0 0 ${MINIMAP_WIDTH} ${MINIMAP_HEIGHT}`}
             width={MINIMAP_WIDTH}
           >
-            {edges.map((edge) => {
+            {!simplifyLargeVisuals && edges.map((edge) => {
               const source = positions.get(edge.sourceId);
               const target = positions.get(edge.targetId);
 

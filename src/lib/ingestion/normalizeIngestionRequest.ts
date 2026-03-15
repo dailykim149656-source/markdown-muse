@@ -23,6 +23,14 @@ const RST_FIELD_PATTERN = /^:([\w-]+):\s*(.*?)\s*$/;
 const RST_LABEL_PATTERN = /^\.\.\s+_([^:]+):\s*$/;
 const RST_IMAGE_PATTERN = /^\.\.\s+(?:image|figure)::\s+(.+?)\s*$/;
 const MAX_CHUNK_LENGTH = 1200;
+const HTML_ENTITY_MAP: Record<string, string> = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  lt: "<",
+  nbsp: " ",
+  quot: "\"",
+};
 const RST_ADORNMENT_CHARACTERS = new Set([
   "=",
   "-",
@@ -146,7 +154,48 @@ const stripMarkdown = (value: string) =>
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
+const decodeHtmlEntities = (value: string) =>
+  value.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (_match, entity) => {
+    const normalizedEntity = String(entity);
+
+    if (normalizedEntity.startsWith("#x") || normalizedEntity.startsWith("#X")) {
+      const codePoint = Number.parseInt(normalizedEntity.slice(2), 16);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : "";
+    }
+
+    if (normalizedEntity.startsWith("#")) {
+      const codePoint = Number.parseInt(normalizedEntity.slice(1), 10);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : "";
+    }
+
+    return HTML_ENTITY_MAP[normalizedEntity.toLowerCase()] || "";
+  });
+
+const stripHtmlTags = (value: string) =>
+  decodeHtmlEntities(
+    value
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+
+const extractHtmlBody = (value: string) => {
+  const bodyMatch = value.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  return bodyMatch?.[1] || value;
+};
+
+const getHtmlAttribute = (tag: string, attribute: string) => {
+  const pattern = new RegExp(`${attribute}\\s*=\\s*["']([^"']*)["']`, "i");
+  return tag.match(pattern)?.[1];
+};
+
 const stripHtml = (value: string) => {
+  if (typeof DOMParser === "undefined") {
+    return stripHtmlTags(extractHtmlBody(value)).replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  }
+
   const parser = new DOMParser();
   const doc = parser.parseFromString(value, "text/html");
   return (doc.body.textContent || "").replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -415,6 +464,55 @@ const extractMarkdownImages = (request: IngestionRequest, sections: IngestionSec
 };
 
 const extractHtmlImages = (request: IngestionRequest, sections: IngestionSection[]) => {
+  if (typeof DOMParser === "undefined") {
+    const body = extractHtmlBody(request.rawContent);
+    const drafts: ImageDraft[] = [];
+    const pathStack: string[] = [];
+    const tokenPattern = /<h([1-3])[^>]*>([\s\S]*?)<\/h\1>|<figure\b[^>]*>[\s\S]*?<\/figure>|<img\b[^>]*>/gi;
+
+    for (const match of body.matchAll(tokenPattern)) {
+      const token = match[0];
+      const headingLevel = match[1];
+      const headingContent = match[2];
+
+      if (headingLevel && headingContent) {
+        const level = Number.parseInt(headingLevel, 10);
+        const title = stripHtmlTags(headingContent);
+
+        if (title) {
+          pathStack.splice(level - 1);
+          pathStack[level - 1] = title;
+        }
+        continue;
+      }
+
+      const figureTag = token.startsWith("<figure");
+      const imageTag = figureTag ? token.match(/<img\b[^>]*>/i)?.[0] : token;
+
+      if (!imageTag) {
+        continue;
+      }
+
+      const caption = figureTag ? stripHtmlTags(token.match(/<figcaption[^>]*>([\s\S]*?)<\/figcaption>/i)?.[1] || "") : undefined;
+      const src = getHtmlAttribute(imageTag, "src") || "";
+
+      if (!src.trim()) {
+        continue;
+      }
+
+      drafts.push({
+        alt: getHtmlAttribute(imageTag, "alt") || undefined,
+        caption: caption || undefined,
+        path: pathStack.length > 0 ? [...pathStack] : undefined,
+        src,
+        surroundingText: stripHtmlTags(token),
+        title: getHtmlAttribute(imageTag, "title") || undefined,
+      });
+    }
+
+    return toImages(drafts, sections);
+  }
+
   const parser = new DOMParser();
   const doc = parser.parseFromString(request.rawContent, "text/html");
   const pathStack: string[] = [];
@@ -754,6 +852,53 @@ const extractMarkdown = (request: IngestionRequest) => {
 };
 
 const extractHtml = (request: IngestionRequest) => {
+  if (typeof DOMParser === "undefined") {
+    const body = extractHtmlBody(request.rawContent);
+    const title = stripHtmlTags(request.rawContent.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "");
+    const rawAuthor = request.rawContent.match(/<meta[^>]+name=["']author["'][^>]+content=["']([^"']*)["']/i)?.[1];
+    const rawKeywords = request.rawContent.match(/<meta[^>]+name=["']keywords["'][^>]+content=["']([^"']*)["']/i)?.[1];
+    const authors = rawAuthor ? normalizeAuthors(decodeHtmlEntities(rawAuthor)) : undefined;
+    const tags = rawKeywords ? normalizeTags(decodeHtmlEntities(rawKeywords)) : undefined;
+    const labels = Object.fromEntries(
+      Array.from(body.matchAll(/\sid=["']([^"']+)["']/gi))
+        .map((match) => [match[1], match[1]])
+        .filter(([id]) => Boolean(id)),
+    );
+    const sectionDrafts: SectionDraft[] = [];
+    const pathStack: string[] = [];
+    const headingMatches = Array.from(body.matchAll(/<h([1-3])[^>]*>([\s\S]*?)<\/h\1>/gi));
+
+    for (let index = 0; index < headingMatches.length; index += 1) {
+      const match = headingMatches[index];
+      const nextMatch = headingMatches[index + 1];
+      const level = Number.parseInt(match[1], 10);
+      const sectionTitle = stripHtmlTags(match[2]);
+      const startIndex = (match.index || 0) + match[0].length;
+      const endIndex = nextMatch?.index || body.length;
+      const text = stripHtml(body.slice(startIndex, endIndex));
+
+      pathStack.splice(level - 1);
+      pathStack[level - 1] = sectionTitle;
+      sectionDrafts.push({
+        level,
+        path: [...pathStack],
+        text,
+        title: sectionTitle,
+      });
+    }
+
+    return {
+      metadata: {
+        authors,
+        labels: Object.keys(labels).length > 0 ? labels : undefined,
+        tags,
+        title: title || sectionDrafts[0]?.title || undefined,
+      } satisfies IngestionMetadata,
+      plainText: stripHtml(body),
+      sections: sectionDrafts.map(toSection),
+    };
+  }
+
   const parser = new DOMParser();
   const doc = parser.parseFromString(request.rawContent, "text/html");
   const body = doc.body;

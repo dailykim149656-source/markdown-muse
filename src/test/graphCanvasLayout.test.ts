@@ -88,6 +88,7 @@ describe("graphCanvasLayout", () => {
   it("places the selected node in the center and offsets labels by angle", () => {
     const positions = buildGraphNodeLayout({
       edges,
+      layoutMode: "selected",
       nodes,
       selectedNodeId: "doc:alpha",
     });
@@ -101,5 +102,23 @@ describe("graphCanvasLayout", () => {
       y: GRAPH_CANVAS_HEIGHT / 2,
     }));
     expect(neighbor?.labelX).not.toBe(neighbor?.x);
+  });
+
+  it("keeps stable-layout positions unchanged when the selected node changes", () => {
+    const alphaSelected = buildGraphNodeLayout({
+      edges,
+      layoutMode: "stable",
+      nodes,
+      selectedNodeId: "doc:alpha",
+    });
+    const betaSelected = buildGraphNodeLayout({
+      edges,
+      layoutMode: "stable",
+      nodes,
+      selectedNodeId: "doc:beta",
+    });
+
+    expect(alphaSelected.get("doc:alpha")).toEqual(betaSelected.get("doc:alpha"));
+    expect(alphaSelected.get("doc:beta")).toEqual(betaSelected.get("doc:beta"));
   });
 });

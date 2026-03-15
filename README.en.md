@@ -26,6 +26,10 @@ This repository is being prepared for a Gemini hackathon submission that demonst
 - a path to multimodal reasoning with editor screenshots
 - a practical document maintenance use case
 
+## Google Workspace note for judges
+
+Google Workspace sign-in is currently running in Google OAuth testing mode for the hackathon build. If you would like to test Google login directly, please share the Google account email you plan to use so it can be added to the OAuth test-user allowlist. Core editor and AI workflows remain available without Google login.
+
 ## Demo scenario
 
 1. Open multiple technical documents.
@@ -50,6 +54,7 @@ public/    static assets
 - multi-document editing with tabs and sidebar workflows
 - Markdown, LaTeX, HTML, JSON, and YAML editing
 - document AST generation and structured patch support
+- Google Workspace connection, Google Docs import/export, and bound-document save
 - AI-assisted summaries, section generation, TOC suggestions, and update proposals
 - patch review dialog instead of direct document mutation
 - local knowledge indexing and related document workflows
@@ -143,6 +148,7 @@ Health endpoint:
 - [Hackathon PRD](PRD/docsy_prd.md)
 - [Final submission package](docs/final-submission-package-2026-03-11.md)
 - [Hackathon implementation session summary](docs/session-summary-2026-03-11-hackathon-implementation.md)
+- [Google Docs export session summary](docs/session-summary-2026-03-12-google-docs-export-and-google-dropdown.md)
 - [Docs index](docs/README.md)
 - [PRD index](PRD/README.md)
 - [GCP deployment guide](docs/gcp-deployment.md)

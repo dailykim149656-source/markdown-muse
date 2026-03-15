@@ -1,0 +1,66 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/ingress-status: all
+    run.googleapis.com/maxScale: '20'
+    run.googleapis.com/urls: '["https://docsy-tex-399359781191.asia-northeast3.run.app","https://docsy-tex-mc32v24cyq-du.a.run.app"]'
+  labels:
+    cloud.googleapis.com/location: asia-northeast3
+    run.googleapis.com/satisfiesPzs: 'true'
+  name: docsy-tex
+  namespace: '399359781191'
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '20'
+        run.googleapis.com/client-name: gcloud
+        run.googleapis.com/client-version: 560.0.0
+        run.googleapis.com/startup-cpu-boost: 'true'
+      labels:
+        client.knative.dev/nonce: pendkdwehh
+        run.googleapis.com/startupProbeType: Default
+    spec:
+      containerConcurrency: 80
+      containers:
+      - env:
+        - name: TEX_SERVICE_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: latest
+              name: tex-service-auth-token
+        - name: TEX_COMPILE_TIMEOUT_MS
+          value: '15000'
+        - name: TEX_MAX_SOURCE_BYTES
+          value: '300000'
+        - name: TEX_MAX_REQUEST_BYTES
+          value: '400000'
+        - name: TEX_MAX_CONCURRENCY
+          value: '2'
+        - name: TEX_ALLOW_RAW_DOCUMENT
+          value: 'false'
+        - name: TEX_ALLOW_RESTRICTED_COMMANDS
+          value: 'false'
+        - name: TEX_ALLOWED_PACKAGES
+          value: amsmath,amssymb,amsthm,array,booktabs,enumitem,fancyhdr,fontspec,geometry,graphicx,hyperref,longtable,makecell,mathtools,multirow,setspace,tabularx,titlesec,xcolor,xeCJK
+        image: asia-northeast3-docker.pkg.dev/urban-dds/docsy/docsy-tex:latest
+        ports:
+        - containerPort: 8081
+          name: http1
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+        startupProbe:
+          failureThreshold: 1
+          periodSeconds: 240
+          tcpSocket:
+            port: 8081
+          timeoutSeconds: 240
+      serviceAccountName: 399359781191-compute@developer.gserviceaccount.com
+      timeoutSeconds: 300
+  traffic:
+  - latestRevision: true
+    percent: 100

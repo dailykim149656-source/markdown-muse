@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDocumentOptionsFromKnowledgeRecord,
+  buildKnowledgeDocumentFingerprint,
   buildKnowledgeRecordFromDocument,
   coerceKnowledgeRecord,
   reconcileKnowledgeRecords,
@@ -43,6 +44,31 @@ describe("knowledgeIndex", () => {
       title: "Incident Runbook",
     }));
     expect(record?.sourceFile.sourceId).toBe("source-doc-1");
+  });
+
+  it("builds a lightweight summary-stage record for heavy documents", () => {
+    const heavyContent = [
+      "# Heavy Runbook",
+      "",
+      ...Array.from({ length: 800 }, (_, index) => `## Section ${index + 1}\n\nBody ${index + 1}`),
+      "",
+      "![Diagram](diagram.png)",
+    ].join("\n\n");
+    const record = buildKnowledgeRecordFromDocument(createMarkdownDocument({
+      content: heavyContent,
+      id: "heavy-doc",
+      sourceSnapshots: {
+        markdown: heavyContent,
+      },
+      updatedAt: 10,
+    }), {
+      stage: "summary",
+    });
+
+    expect(record).not.toBeNull();
+    expect(record?.normalizedDocument.sections[0]?.title).toBe("Heavy Runbook");
+    expect(record?.normalizedDocument.sections.length).toBeLessThan(60);
+    expect(record?.normalizedDocument.images[0]?.src).toBe("diagram.png");
   });
 
   it("searches indexed records by chunk text", () => {
@@ -183,6 +209,15 @@ describe("knowledgeIndex", () => {
 
     expect(reconciled[0].indexStatus).toBe("stale");
     expect(reconciled[0].staleReasons).toContain("source_changed");
+  });
+
+  it("builds a stable fingerprint from document update metadata", () => {
+    const original = createMarkdownDocument();
+    const updated = createMarkdownDocument({
+      updatedAt: 9,
+    });
+
+    expect(buildKnowledgeDocumentFingerprint(original)).not.toBe(buildKnowledgeDocumentFingerprint(updated));
   });
 
   it("searches indexed records by image metadata", () => {

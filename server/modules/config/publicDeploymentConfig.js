@@ -1,0 +1,393 @@
+const LOCALHOST_HOSTNAMES = new Set(["127.0.0.1", "0.0.0.0", "localhost"]);
+const MANAGED_GOOGLE_HOST_SUFFIXES = [".firebaseapp.com", ".run.app", ".web.app"];
+const DISCOURAGED_DYNAMIC_DNS_SUFFIXES = [".duckdns.org"];
+
+const RESTRICTED_DRIVE_SCOPES = new Set([
+  "https://www.googleapis.com/auth/drive",
+  "https://www.googleapis.com/auth/drive.apps.readonly",
+  "https://www.googleapis.com/auth/drive.meet.readonly",
+  "https://www.googleapis.com/auth/drive.metadata",
+  "https://www.googleapis.com/auth/drive.metadata.readonly",
+  "https://www.googleapis.com/auth/drive.photos.readonly",
+  "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/drive.scripts",
+]);
+
+const SENSITIVE_WORKSPACE_SCOPES = new Set([
+  "https://www.googleapis.com/auth/documents",
+  "https://www.googleapis.com/auth/drive.appdata",
+  "https://www.googleapis.com/auth/drive.file",
+]);
+
+export const GOOGLE_WORKSPACE_SCOPE_PROFILES = Object.freeze({
+  reduced: Object.freeze([
+    "openid",
+    "email",
+    "profile",
+    "https://www.googleapis.com/auth/drive.file",
+    "https://www.googleapis.com/auth/documents",
+  ]),
+  restricted: Object.freeze([
+    "openid",
+    "email",
+    "profile",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive.metadata.readonly",
+    "https://www.googleapis.com/auth/documents",
+  ]),
+});
+
+const splitList = (value) => (value || "")
+  .split(",")
+  .flatMap((part) => part.split(/\s+/))
+  .map((part) => part.trim())
+  .filter((part) => part.length > 0);
+
+const parseOptionalBooleanFlag = (value) => {
+  const trimmed = value?.trim().toLowerCase() || "";
+
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed === "true") {
+    return true;
+  }
+
+  if (trimmed === "false") {
+    return false;
+  }
+
+  return "invalid";
+};
+
+export const normalizeConfiguredOrigin = (value) => {
+  const trimmed = value?.trim() || "";
+
+  if (!trimmed || trimmed === "*") {
+    return trimmed;
+  }
+
+  try {
+    const url = new URL(trimmed);
+
+    if (url.pathname === "/" && !url.search && !url.hash) {
+      return url.origin;
+    }
+  } catch {
+    return trimmed;
+  }
+
+  return trimmed;
+};
+
+export const parseConfiguredAllowedOrigins = (value) => (value || "")
+  .split(",")
+  .map((part) => normalizeConfiguredOrigin(part))
+  .filter((part) => part.length > 0);
+
+const isLocalhostHost = (hostname) => LOCALHOST_HOSTNAMES.has(hostname.trim().toLowerCase());
+
+const usesManagedGoogleHost = (hostname) => MANAGED_GOOGLE_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
+
+const usesDiscouragedDynamicDnsHost = (hostname) =>
+  DISCOURAGED_DYNAMIC_DNS_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
+
+export const normalizeGoogleOAuthPublishingStatus = (value) =>
+  value?.trim().toLowerCase() === "production" ? "production" : "testing";
+
+export const normalizeGoogleWorkspaceScopeProfile = (value) =>
+  value?.trim().toLowerCase() === "reduced" ? "reduced" : "restricted";
+
+export const classifyGoogleWorkspaceScopeRisk = (scopes) => {
+  if (scopes.some((scope) => RESTRICTED_DRIVE_SCOPES.has(scope))) {
+    return "restricted";
+  }
+
+  if (scopes.some((scope) => SENSITIVE_WORKSPACE_SCOPES.has(scope))) {
+    return "sensitive";
+  }
+
+  return "basic";
+};
+
+const parseUrl = (value, fieldName, errors) => {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return new URL(value);
+  } catch {
+    errors.push(`${fieldName} must be an absolute URL. Received "${value}".`);
+    return null;
+  }
+};
+
+const validateOriginOnlyUrl = (url, fieldName, errors) => {
+  if (!url) {
+    return;
+  }
+
+  if (url.pathname !== "/" || url.search || url.hash) {
+    errors.push(`${fieldName} must be an origin without path, query, or hash. Received "${url.toString()}".`);
+  }
+};
+
+const isNonLocalAbsoluteOrigin = (value) => {
+  if (!value || value === "*") {
+    return false;
+  }
+
+  try {
+    const url = new URL(value);
+    return !isLocalhostHost(url.hostname);
+  } catch {
+    return true;
+  }
+};
+
+const pushDynamicDnsMessage = ({ bucket, fieldName, hostname, publishingStatus }) => {
+  const message = `${fieldName} uses dynamic DNS host "${hostname}". DuckDNS can work for testing, but it is not recommended for external production branding review.`;
+
+  if (publishingStatus === "production") {
+    bucket.push(message);
+    return;
+  }
+
+  bucket.push(message);
+};
+
+export const readPublicDeploymentConfig = (env = process.env) => {
+  const publishingStatus = normalizeGoogleOAuthPublishingStatus(env.GOOGLE_OAUTH_PUBLISHING_STATUS);
+  const configuredAllowedOrigins = env.AI_ALLOWED_ORIGIN?.trim() || "*";
+  const allowedOrigins = parseConfiguredAllowedOrigins(configuredAllowedOrigins);
+  const frontendOrigin = normalizeConfiguredOrigin(env.WORKSPACE_FRONTEND_ORIGIN);
+  const googleClientId = env.GOOGLE_CLIENT_ID?.trim() || "";
+  const redirectUri = env.GOOGLE_OAUTH_REDIRECT_URI?.trim() || "";
+  const explicitScopes = splitList(env.GOOGLE_WORKSPACE_SCOPES);
+  const scopeProfile = normalizeGoogleWorkspaceScopeProfile(env.GOOGLE_WORKSPACE_SCOPE_PROFILE);
+  const requestedScopes = explicitScopes.length > 0
+    ? explicitScopes
+    : [...GOOGLE_WORKSPACE_SCOPE_PROFILES[scopeProfile]];
+  const texAllowRawDocumentRaw = env.TEX_ALLOW_RAW_DOCUMENT?.trim() || "";
+  const texAllowAllPackagesRaw = env.TEX_ALLOW_ALL_PACKAGES?.trim() || "";
+  const texAllowRestrictedCommandsRaw = env.TEX_ALLOW_RESTRICTED_COMMANDS?.trim() || "";
+  const texAllowedPackages = splitList(env.TEX_ALLOWED_PACKAGES);
+  const texAllowRawDocument = parseOptionalBooleanFlag(texAllowRawDocumentRaw);
+  const texAllowAllPackages = parseOptionalBooleanFlag(texAllowAllPackagesRaw);
+  const texAllowRestrictedCommands = parseOptionalBooleanFlag(texAllowRestrictedCommandsRaw);
+  const hasTexPolicy = Boolean(
+    texAllowRawDocumentRaw
+    || texAllowAllPackagesRaw
+    || texAllowRestrictedCommandsRaw
+    || texAllowedPackages.length > 0,
+  );
+
+  return {
+    allowedOrigins,
+    configuredAllowedOrigins,
+    explicitScopeProfile: env.GOOGLE_WORKSPACE_SCOPE_PROFILE?.trim() || "",
+    explicitScopes,
+    frontendOrigin,
+    googleClientId,
+    oauthEnabled: Boolean(googleClientId || redirectUri || frontendOrigin),
+    publishingStatus,
+    redirectUri,
+    requestedScopes,
+    scopeProfile,
+    hasTexPolicy,
+    texAllowedPackages,
+    texAllowAllPackages,
+    texAllowAllPackagesRaw,
+    texAllowRawDocument,
+    texAllowRawDocumentRaw,
+    texAllowRestrictedCommands,
+    texAllowRestrictedCommandsRaw,
+  };
+};
+
+export const validatePublicDeploymentConfig = (config) => {
+  const errors = [];
+  const warnings = [];
+  const notes = [];
+
+  if (config.texAllowRawDocument === "invalid") {
+    errors.push(`TEX_ALLOW_RAW_DOCUMENT must be "true" or "false". Received "${config.texAllowRawDocumentRaw}".`);
+  }
+
+  if (config.texAllowAllPackages === "invalid") {
+    errors.push(`TEX_ALLOW_ALL_PACKAGES must be "true" or "false". Received "${config.texAllowAllPackagesRaw}".`);
+  }
+
+  if (config.texAllowRestrictedCommands === "invalid") {
+    errors.push(`TEX_ALLOW_RESTRICTED_COMMANDS must be "true" or "false". Received "${config.texAllowRestrictedCommandsRaw}".`);
+  }
+
+  if (config.hasTexPolicy) {
+    notes.push(`TeX raw document compilation is ${config.texAllowRawDocument === true ? "enabled" : config.texAllowRawDocument === false ? "disabled" : "unset"}.`);
+    notes.push(`TeX package policy is ${config.texAllowAllPackages === true ? "allow-all" : config.texAllowAllPackages === false ? "allowlist" : "unset"}.`);
+    notes.push(`TeX restricted command policy is ${config.texAllowRestrictedCommands === true ? "enabled" : config.texAllowRestrictedCommands === false ? "blocked" : "unset"}.`);
+
+    if (config.texAllowAllPackages === true) {
+      notes.push("TeX package allowlist enforcement is disabled for this deployment.");
+    } else if (config.texAllowedPackages.length > 0) {
+      notes.push(`TeX allowed package count: ${config.texAllowedPackages.length}.`);
+    } else {
+      warnings.push("TEX_ALLOWED_PACKAGES is unset. Deployments should pin the TeX package allowlist explicitly.");
+    }
+
+    if (config.texAllowRawDocument === false) {
+      errors.push("TEX_ALLOW_RAW_DOCUMENT must be true for the repo's public/demo LaTeX deployments. Leaving it false causes the runtime error: \"Raw LaTeX document compilation is disabled for this deployment. Submit document body content instead of a full preamble/document wrapper.\"");
+    }
+
+    if (config.texAllowAllPackages !== true) {
+      errors.push("TEX_ALLOW_ALL_PACKAGES must be true for the repo's public/demo LaTeX deployments. Leaving it false keeps package allowlist rejections active for raw user-authored LaTeX.");
+    }
+
+    if (config.texAllowRestrictedCommands === true) {
+      warnings.push("TEX_ALLOW_RESTRICTED_COMMANDS=true enables dangerous file and process primitives. Keep it false for public/demo deployments.");
+    }
+  }
+
+  for (const allowedOrigin of config.allowedOrigins) {
+    if (allowedOrigin === "*") {
+      continue;
+    }
+
+    const allowedOriginUrl = parseUrl(allowedOrigin, "AI_ALLOWED_ORIGIN", errors);
+    validateOriginOnlyUrl(allowedOriginUrl, "AI_ALLOWED_ORIGIN", errors);
+  }
+
+  const frontendUrl = parseUrl(config.frontendOrigin, "WORKSPACE_FRONTEND_ORIGIN", errors);
+  const redirectUrl = parseUrl(config.redirectUri, "GOOGLE_OAUTH_REDIRECT_URI", errors);
+
+  validateOriginOnlyUrl(frontendUrl, "WORKSPACE_FRONTEND_ORIGIN", errors);
+
+  if (config.oauthEnabled) {
+    if (!config.googleClientId) {
+      errors.push("GOOGLE_CLIENT_ID must be set when Google OAuth is enabled.");
+    }
+
+    if (!config.frontendOrigin) {
+      errors.push("WORKSPACE_FRONTEND_ORIGIN must be set when Google OAuth is enabled.");
+    }
+
+    if (!config.redirectUri) {
+      errors.push("GOOGLE_OAUTH_REDIRECT_URI must be set when Google OAuth is enabled.");
+    }
+  } else {
+    notes.push("Google OAuth is disabled because GOOGLE_CLIENT_ID, WORKSPACE_FRONTEND_ORIGIN, and GOOGLE_OAUTH_REDIRECT_URI are all empty.");
+  }
+
+  const hasNonLocalDeploymentTarget = (
+    (frontendUrl && !isLocalhostHost(frontendUrl.hostname.toLowerCase()))
+    || (redirectUrl && !isLocalhostHost(redirectUrl.hostname.toLowerCase()))
+    || config.allowedOrigins.some((origin) => isNonLocalAbsoluteOrigin(origin))
+  );
+
+  if (config.allowedOrigins.includes("*") && hasNonLocalDeploymentTarget) {
+    errors.push("AI_ALLOWED_ORIGIN must not contain \"*\" outside local development.");
+  } else if (config.publishingStatus === "production" && config.allowedOrigins.includes("*")) {
+    errors.push("AI_ALLOWED_ORIGIN must not contain \"*\" when GOOGLE_OAUTH_PUBLISHING_STATUS=production.");
+  }
+
+  if (frontendUrl) {
+    const hostname = frontendUrl.hostname.toLowerCase();
+
+    if (config.publishingStatus === "production") {
+      if (frontendUrl.protocol !== "https:") {
+        errors.push("WORKSPACE_FRONTEND_ORIGIN must use https in production.");
+      }
+
+      if (isLocalhostHost(hostname)) {
+        errors.push("WORKSPACE_FRONTEND_ORIGIN must not point to localhost in production.");
+      }
+    }
+
+    if (usesManagedGoogleHost(hostname)) {
+      const message = `WORKSPACE_FRONTEND_ORIGIN uses managed Google host "${hostname}". Use a verified custom domain instead of "${config.frontendOrigin}".`;
+      if (config.publishingStatus === "production") {
+        errors.push(message);
+      } else {
+        warnings.push(message);
+      }
+    }
+
+    if (usesDiscouragedDynamicDnsHost(hostname)) {
+      pushDynamicDnsMessage({
+        bucket: warnings,
+        fieldName: "WORKSPACE_FRONTEND_ORIGIN",
+        hostname,
+        publishingStatus: config.publishingStatus,
+      });
+    }
+  }
+
+  if (redirectUrl) {
+    const hostname = redirectUrl.hostname.toLowerCase();
+
+    if (config.publishingStatus === "production") {
+      if (redirectUrl.protocol !== "https:") {
+        errors.push("GOOGLE_OAUTH_REDIRECT_URI must use https in production.");
+      }
+
+      if (isLocalhostHost(hostname)) {
+        errors.push("GOOGLE_OAUTH_REDIRECT_URI must not point to localhost in production.");
+      }
+    }
+
+    if (redirectUrl.pathname !== "/api/auth/google/callback") {
+      errors.push(`GOOGLE_OAUTH_REDIRECT_URI must end with /api/auth/google/callback. Received "${redirectUrl.pathname}".`);
+    }
+
+    if (usesManagedGoogleHost(hostname)) {
+      const message = `GOOGLE_OAUTH_REDIRECT_URI uses managed Google host "${hostname}". Use a verified custom API domain instead of "${config.redirectUri}".`;
+      if (config.publishingStatus === "production") {
+        errors.push(message);
+      } else {
+        warnings.push(message);
+      }
+    }
+
+    if (usesDiscouragedDynamicDnsHost(hostname)) {
+      pushDynamicDnsMessage({
+        bucket: warnings,
+        fieldName: "GOOGLE_OAUTH_REDIRECT_URI",
+        hostname,
+        publishingStatus: config.publishingStatus,
+      });
+    }
+  }
+
+  if (config.frontendOrigin && !config.allowedOrigins.includes("*") && !config.allowedOrigins.includes(config.frontendOrigin)) {
+    errors.push("AI_ALLOWED_ORIGIN must include WORKSPACE_FRONTEND_ORIGIN so browser credentials can be sent correctly.");
+  }
+
+  if (config.explicitScopes.length > 0) {
+    notes.push("GOOGLE_WORKSPACE_SCOPES is set explicitly and overrides GOOGLE_WORKSPACE_SCOPE_PROFILE.");
+  } else {
+    notes.push(`Using GOOGLE_WORKSPACE_SCOPE_PROFILE=${config.scopeProfile}.`);
+  }
+
+  const scopeRisk = classifyGoogleWorkspaceScopeRisk(config.requestedScopes);
+
+  if (scopeRisk === "restricted") {
+    warnings.push("Requested Google Workspace scopes still include broad Drive permissions. External production release will require restricted-scope verification and likely a security assessment.");
+  } else if (scopeRisk === "sensitive") {
+    warnings.push("Requested Google Workspace scopes require Google OAuth app verification before external production rollout.");
+  } else {
+    notes.push("Requested Google Workspace scopes stay on the lowest verification path configured in this repo.");
+  }
+
+  if (config.scopeProfile === "reduced") {
+    notes.push("Reduced scope profile is intended for drive.file-centered workflows. Existing broad Drive search flows should be revisited before enabling it widely.");
+  }
+
+  return {
+    errors,
+    notes,
+    scopeRisk,
+    warnings,
+  };
+};

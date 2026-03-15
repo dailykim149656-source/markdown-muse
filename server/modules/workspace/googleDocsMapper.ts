@@ -496,23 +496,28 @@ const buildGoogleDocsSyncRequests = (currentDocument: unknown, markdown: string)
 export const buildWorkspaceBinding = (
   file: WorkspaceDriveFile,
   importedAt: number,
+  options: Partial<Pick<WorkspaceBinding, "lastSyncedAt" | "revisionId" | "syncStatus" | "syncWarnings">> = {},
 ): WorkspaceBinding => ({
   documentKind: "google_docs",
   driveModifiedTime: file.modifiedTime,
   fileId: file.fileId,
   importedAt,
+  lastSyncedAt: options.lastSyncedAt,
   mimeType: file.mimeType,
   provider: "google_drive",
-  revisionId: file.revisionId,
-  syncStatus: "imported",
+  revisionId: options.revisionId ?? file.revisionId,
+  syncStatus: options.syncStatus ?? "imported",
+  syncWarnings: options.syncWarnings,
 });
 
 export const buildImportedGoogleDocument = ({
+  documentId,
   docsRevisionId,
   exportedHtml,
   file,
   importedAt,
 }: {
+  documentId?: string;
   docsRevisionId?: string;
   exportedHtml: string;
   file: WorkspaceDriveFile;
@@ -523,7 +528,7 @@ export const buildImportedGoogleDocument = ({
   return {
     content,
     createdAt: importedAt,
-    id: createWorkspaceDocumentId(file.fileId),
+    id: documentId || createWorkspaceDocumentId(file.fileId),
     metadata: {
       sourceFiles: [{
         fileName: file.name,
@@ -540,10 +545,10 @@ export const buildImportedGoogleDocument = ({
     },
     storageKind: "docsy",
     updatedAt: importedAt,
-    workspaceBinding: {
-      ...buildWorkspaceBinding(file, importedAt),
+    workspaceBinding: buildWorkspaceBinding(file, importedAt, {
       revisionId: docsRevisionId || file.revisionId,
-    },
+      syncStatus: "imported",
+    }),
   };
 };
 

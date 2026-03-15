@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useI18n } from "@/i18n/useI18n";
+import { markDocumentVersionHistoryInitialized } from "@/lib/history/versionHistoryActions";
 import type {
   DocumentData,
   DocumentVersionSnapshot,
@@ -10,6 +11,7 @@ import type {
 
 interface UseVersionHistoryOptions {
   activeDoc: DocumentData;
+  aiSummaryAvailable?: boolean;
   bumpEditorKey: () => void;
   enabled?: boolean;
   updateActiveDoc: (patch: Partial<DocumentData>) => void;
@@ -43,16 +45,22 @@ const createSnapshotContentHash = (document: DocumentData) =>
 
 export const useVersionHistory = ({
   activeDoc,
+  aiSummaryAvailable = false,
   bumpEditorKey,
   enabled = true,
   updateActiveDoc,
 }: UseVersionHistoryOptions) => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [versionSnapshots, setVersionSnapshots] = useState<DocumentVersionSnapshot[]>([]);
   const [versionHistoryReady, setVersionHistoryReady] = useState(false);
   const [versionHistorySyncing, setVersionHistorySyncing] = useState(false);
   const [versionHistoryRestoring, setVersionHistoryRestoring] = useState(false);
+  const activeDocumentIdRef = useRef(activeDoc.id);
   const initializedDocumentIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    activeDocumentIdRef.current = activeDoc.id;
+  }, [activeDoc.id]);
 
   useEffect(() => {
     if (!enabled) {
@@ -76,6 +84,7 @@ export const useVersionHistory = ({
         if (!cancelled) {
           setVersionSnapshots(snapshots);
           initializedDocumentIdsRef.current.add(activeDoc.id);
+          markDocumentVersionHistoryInitialized(activeDoc.id);
         }
       } finally {
         if (!cancelled) {
@@ -111,12 +120,12 @@ export const useVersionHistory = ({
     const { appendDocumentVersionSnapshot } = await loadVersionHistoryStore();
     const nextSnapshots = await appendDocumentVersionSnapshot(snapshot, MAX_VERSION_SNAPSHOTS);
 
-    if (document.id === activeDoc.id) {
+    if (document.id === activeDocumentIdRef.current) {
       setVersionSnapshots(nextSnapshots);
     }
 
     return snapshot;
-  }, [activeDoc.id]);
+  }, []);
 
   const captureAutoSaveSnapshot = useCallback(async (document: DocumentData) => {
     if (!enabled) {
@@ -128,8 +137,51 @@ export const useVersionHistory = ({
       return;
     }
 
-    await createVersionSnapshot(document, "autosave");
-  }, [createVersionSnapshot, enabled]);
+    const previousAutoSaveSnapshot = versionSnapshots.find((entry) => entry.trigger === "autosave") || null;
+    const snapshot = await createVersionSnapshot(document, "autosave");
+
+    void (async () => {
+      try {
+        const [
+          { buildAutosaveDiffSummaryRequest },
+          { summarizeAutosaveDiff },
+          { upsertDocumentVersionSnapshot },
+        ] = await Promise.all([
+          import("@/lib/history/autosaveDiffSummary"),
+          import("@/lib/ai/autosaveSummaryClient"),
+          loadVersionHistoryStore(),
+        ]);
+        const request = buildAutosaveDiffSummaryRequest({
+          currentSnapshot: snapshot,
+          locale,
+          previousSnapshot: previousAutoSaveSnapshot,
+        });
+
+        if (!request) {
+          return;
+        }
+
+        // Health is only a hint; still attempt when a real diff exists so stale
+        // or cross-origin health signals do not suppress autosave summaries.
+        const result = await summarizeAutosaveDiff(request);
+        const summarizedSnapshot = {
+          ...snapshot,
+          metadata: {
+            ...(snapshot.metadata || {}),
+            summary: result.summary,
+            summaryGeneratedAt: Date.now(),
+          },
+        } satisfies DocumentVersionSnapshot;
+        const nextSnapshots = await upsertDocumentVersionSnapshot(summarizedSnapshot, MAX_VERSION_SNAPSHOTS);
+
+        if (document.id === activeDocumentIdRef.current) {
+          setVersionSnapshots(nextSnapshots);
+        }
+      } catch {
+        // Leave the fallback summary in place when AI summary generation fails.
+      }
+    })();
+  }, [aiSummaryAvailable, createVersionSnapshot, enabled, locale, versionSnapshots]);
 
   const restoreVersionSnapshot = useCallback(async (snapshotId: string) => {
     const snapshot = versionSnapshots.find((entry) => entry.snapshotId === snapshotId);

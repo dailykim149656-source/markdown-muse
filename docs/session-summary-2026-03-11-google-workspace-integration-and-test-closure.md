@@ -6,6 +6,11 @@ This session moved the repository from a local-only Docsy workflow into a
 review-first Google Workspace integration baseline, then closed the related
 test regressions.
 
+Follow-up note:
+
+- a later session on 2026-03-12 added `Export to Google Docs`, a consolidated Google header dropdown, and additional export/save documentation
+- see `docs/session-summary-2026-03-12-google-docs-export-and-google-dropdown.md`
+
 The work covered:
 
 - implementation planning for `PRD/docsy_workspace_prd_phase1_2.md`

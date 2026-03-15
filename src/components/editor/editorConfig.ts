@@ -1,13 +1,14 @@
+import type { Extensions } from "@tiptap/core";
 import { useEffect, useMemo, useState } from "react";
 import { createCoreEditorExtensions, editorPropsDefault } from "./editorConfigBase";
 
-export const createEditorExtensions = (placeholder: string) =>
+export const createEditorExtensions = (placeholder?: string | null) =>
   createCoreEditorExtensions(placeholder);
 
-let createDocumentExtensionsFactory: (() => unknown[]) | null = null;
-let createAdvancedExtensionsFactory: (() => unknown[]) | null = null;
-let documentExtensionsFactoryPromise: Promise<(() => unknown[])> | null = null;
-let advancedExtensionsFactoryPromise: Promise<(() => unknown[])> | null = null;
+let createDocumentExtensionsFactory: (() => Extensions) | null = null;
+let documentExtensionsFactoryPromise: Promise<(() => Extensions)> | null = null;
+let createAdvancedExtensionsFactory: (() => Extensions) | null = null;
+let advancedExtensionsFactoryPromise: Promise<(() => Extensions)> | null = null;
 
 const loadDocumentExtensionsFactory = async () => {
   if (createDocumentExtensionsFactory) {
@@ -42,16 +43,16 @@ const loadAdvancedExtensionsFactory = async () => {
 };
 
 export const useEditorExtensions = (
-  placeholder: string,
+  placeholder: string | null | undefined,
   documentFeaturesEnabled: boolean,
   advancedBlocksEnabled: boolean,
-) => {
-  const coreExtensions = useMemo(() => createCoreEditorExtensions(placeholder), [placeholder]);
-  const [documentExtensions, setDocumentExtensions] = useState<unknown[]>(() =>
+  ) => {
+  const coreExtensions = useMemo<Extensions>(() => createCoreEditorExtensions(placeholder), [placeholder]);
+  const [documentExtensions, setDocumentExtensions] = useState<Extensions>(() =>
     documentFeaturesEnabled && createDocumentExtensionsFactory
       ? createDocumentExtensionsFactory()
       : []);
-  const [advancedExtensions, setAdvancedExtensions] = useState<unknown[]>(() =>
+  const [advancedExtensions, setAdvancedExtensions] = useState<Extensions>(() =>
     advancedBlocksEnabled && createAdvancedExtensionsFactory
       ? createAdvancedExtensionsFactory()
       : []);
@@ -106,7 +107,7 @@ export const useEditorExtensions = (
     };
   }, [advancedBlocksEnabled]);
 
-  const extensions = useMemo(() => [
+  const extensions = useMemo<Extensions>(() => [
     ...coreExtensions,
     ...(documentFeaturesEnabled ? documentExtensions : []),
     ...(advancedBlocksEnabled ? advancedExtensions : []),

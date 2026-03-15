@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDocumentManager } from "@/hooks/useDocumentManager";
 import { useKnowledgeBase } from "@/hooks/useKnowledgeBase";
 import { setPendingEditorFocusTarget } from "@/lib/editor/editorFocusTarget";
+import { buildKnowledgeRecordFromDocument, type KnowledgeDocumentRecord } from "@/lib/knowledge/knowledgeIndex";
+import { buildKnowledgeWorkspaceInsights } from "@/lib/knowledge/workspaceInsights";
 
 const GraphExplorerSurface = lazy(() =>
   import("@/components/editor/GraphExplorerDialog").then((module) => ({
@@ -28,15 +30,15 @@ const WorkspaceGraph = () => {
     const issuePriority = searchParams.get("issuePriority");
 
     return {
-      context,
+      context: context as "change" | "consistency" | "impact",
       issueId: searchParams.get("issueId") || undefined,
       issueKind: issueKind === "changed_section" || issueKind === "conflicting_procedure" || issueKind === "missing_section"
-        ? issueKind
+        ? (issueKind as "changed_section" | "conflicting_procedure" | "missing_section")
         : undefined,
       issuePriority: issuePriority === "high"
         || issuePriority === "medium"
         || issuePriority === "low"
-        ? issuePriority
+        ? (issuePriority as "high" | "medium" | "low")
         : undefined,
       issueReason: searchParams.get("issueReason") || undefined,
       sourceNodeId: searchParams.get("source"),
@@ -55,13 +57,24 @@ const WorkspaceGraph = () => {
     documents,
     selectDocument,
   });
+  const fallbackInsights = useMemo(() => buildKnowledgeWorkspaceInsights(
+    documents
+      .map((document) => buildKnowledgeRecordFromDocument(document))
+      .filter((record): record is KnowledgeDocumentRecord => Boolean(record)),
+  ), [documents]);
+  const effectiveInsights = useMemo(
+    () => knowledgeInsights.summary.documentNodeCount > 0 || fallbackInsights.summary.documentNodeCount === 0
+      ? knowledgeInsights
+      : fallbackInsights,
+    [fallbackInsights, knowledgeInsights],
+  );
 
   return (
     <Suspense fallback={null}>
       <GraphExplorerSurface
         activeDocumentId={activeDocId}
         contextChain={contextChain}
-        insights={knowledgeInsights}
+        insights={effectiveInsights}
         onOpenChange={(open) => {
           if (!open) {
             navigate("/editor");

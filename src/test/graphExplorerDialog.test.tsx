@@ -66,9 +66,9 @@ const insightsFixture: KnowledgeWorkspaceInsights = {
   ],
   summary: {
     documentNodeCount: 3,
-    edgeCount: 1,
+    edgeCount: 2,
     imageNodeCount: 0,
-    issueCount: 0,
+    issueCount: 1,
     referenceEdgeCount: 1,
     sectionNodeCount: 0,
     similarEdgeCount: 0,
@@ -82,7 +82,13 @@ const renderDialog = (overrides: Record<string, unknown> = {}) =>
       value={{
         locale: "en",
         setLocale: vi.fn(),
-        t: (key) => key,
+        t: (key, params) => {
+          if (!params) {
+            return key;
+          }
+
+          return `${key}:${JSON.stringify(params)}`;
+        },
       }}
     >
       <GraphExplorerDialog
@@ -94,6 +100,12 @@ const renderDialog = (overrides: Record<string, unknown> = {}) =>
       />
     </I18nContext.Provider>,
   );
+
+const openMenu = (name: string) => {
+  const trigger = screen.getByRole("button", { name });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+};
 
 describe("GraphExplorerDialog", () => {
   it("focuses on the selected node neighborhood and resets the view", async () => {
@@ -139,7 +151,13 @@ describe("GraphExplorerDialog", () => {
         value={{
           locale: "en",
           setLocale: vi.fn(),
-          t: (key) => key,
+          t: (key, params) => {
+            if (!params) {
+              return key;
+            }
+
+            return `${key}:${JSON.stringify(params)}`;
+          },
         }}
       >
         <GraphExplorerDialog
@@ -161,16 +179,18 @@ describe("GraphExplorerDialog", () => {
 
     expect(screen.getByText("knowledge.graphScaleLarge")).toBeInTheDocument();
     expect(screen.getByText("knowledge.graphScaleHintLarge")).toBeInTheDocument();
+    expect(screen.getByText('knowledge.graphValidatedRangeValue:{"edges":900,"nodes":480}')).toBeInTheDocument();
   });
 
-  it("supports an issues graph mode", async () => {
+  it("supports an issues graph mode through the view dropdown", async () => {
     renderDialog();
 
     await waitFor(() => {
       expect(screen.getAllByText("Gamma Doc").length).toBeGreaterThan(0);
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "knowledge.graphModeIssues" }));
+    openMenu("knowledge.graphViewMenuAria");
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "knowledge.graphModeIssues" }));
 
     await waitFor(() => {
       expect(screen.queryByText("Gamma Doc")).not.toBeInTheDocument();
@@ -178,5 +198,46 @@ describe("GraphExplorerDialog", () => {
 
     expect(screen.getAllByText("Alpha Doc").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Beta Doc").length).toBeGreaterThan(0);
+  });
+
+  it("keeps edge and issue filters combined inside the relations dropdown", async () => {
+    renderDialog();
+
+    await waitFor(() => {
+      expect(screen.getByText("Alpha Doc has an unresolved reference to Beta Doc.")).toBeInTheDocument();
+      expect(screen.getByText("Alpha references Beta.")).toBeInTheDocument();
+    });
+
+    openMenu("knowledge.graphRelationsMenuAria");
+    expect(screen.getByRole("menuitemradio", { name: "knowledge.graphFilterReferences" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: "knowledge.issueReference" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "knowledge.graphFilterReferences" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Alpha Doc has an unresolved reference to Beta Doc.")).not.toBeInTheDocument();
+      expect(screen.getByText("Alpha references Beta.")).toBeInTheDocument();
+    });
+
+    openMenu("knowledge.graphRelationsMenuAria");
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "knowledge.issueReference" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Alpha Doc has an unresolved reference to Beta Doc.")).not.toBeInTheDocument();
+      expect(screen.getByText("Alpha references Beta.")).toBeInTheDocument();
+      expect(screen.getByText("knowledge.graphFilterReferences / knowledge.issueReference")).toBeInTheDocument();
+    });
+  });
+
+  it("filters the explorer graph through the search input", async () => {
+    renderDialog();
+
+    fireEvent.change(screen.getByPlaceholderText("knowledge.graphSearchPlaceholder"), {
+      target: { value: "Gamma" },
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Gamma Doc").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Beta Doc")).not.toBeInTheDocument();
+    });
   });
 });

@@ -206,10 +206,10 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
   };
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[260px_minmax(0,1fr)]">
-      <div className="space-y-4">
-        <div className="rounded-lg border border-border p-3">
-          <div className="flex flex-wrap gap-2 text-xs">
+    <div className="grid h-full min-h-0 gap-4 overflow-hidden xl:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)]" data-testid="patch-review-panel">
+      <div className="flex h-full min-h-0 flex-col gap-4">
+        <div className="min-w-0 rounded-lg border border-border p-3">
+          <div className="flex flex-wrap items-start gap-2 text-xs leading-5">
             <Badge variant="outline">{t("patchReview.pendingStatus", { count: statusCounts.pending })}</Badge>
             <Badge variant="default">{t("patchReview.acceptedStatus", { count: statusCounts.accepted })}</Badge>
             <Badge variant="secondary">{t("patchReview.editedStatus", { count: statusCounts.edited })}</Badge>
@@ -219,7 +219,7 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
             </Badge>
           </div>
           <Button
-            className="mt-3 h-7 text-xs"
+            className="mt-3 h-auto min-h-7 whitespace-normal text-left text-xs"
             disabled={missingProvenanceCount === 0}
             onClick={() => setShowProvenanceGapsOnly((current) => !current)}
             size="sm"
@@ -230,10 +230,10 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
           </Button>
         </div>
 
-        <div className="rounded-lg border border-border">
-          <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="text-sm font-medium">{t("patchReview.patchCount", { count: filteredPatches.length })}</span>
-            <div className="flex items-center gap-1">
+        <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-border">
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+            <span className="min-w-0 flex-1 text-sm font-medium">{t("patchReview.patchCount", { count: filteredPatches.length })}</span>
+            <div className="flex shrink-0 items-center gap-1">
               <Button className="h-7 w-7 p-0" onClick={() => moveSelection("prev")} size="sm" title={t("patchReview.previous")} variant="ghost">
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -242,7 +242,10 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
               </Button>
             </div>
           </div>
-          <ScrollArea className="h-[520px]">
+          <ScrollArea
+            className="max-h-[28svh] flex-1 min-h-0 xl:max-h-none"
+            data-testid="patch-review-list-scroll"
+          >
             <div className="space-y-1 p-2">
               {filteredPatches.map((patch, index) => (
                 <button
@@ -255,15 +258,15 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
                   onClick={() => setSelectedPatchId(patch.patchId)}
                   type="button"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">{index + 1}. {patch.title}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">{patch.operation}</div>
+                  <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="break-words font-medium leading-5">{index + 1}. {patch.title}</div>
+                      <div className="mt-1 break-all text-xs text-muted-foreground">{patch.operation}</div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge variant={getStatusVariant(patch.status)}>{t(`patchReview.status.${patch.status}`)}</Badge>
+                    <div className="flex shrink-0 flex-wrap items-center gap-1 sm:max-w-[10rem] sm:justify-end">
+                      <Badge className="max-w-full break-words" variant={getStatusVariant(patch.status)}>{t(`patchReview.status.${patch.status}`)}</Badge>
                       {(patch.sources || []).length === 0 && (
-                        <Badge variant="outline">{t("patchReview.provenanceGapBadge")}</Badge>
+                        <Badge className="max-w-full break-words" variant="outline">{t("patchReview.provenanceGapBadge")}</Badge>
                       )}
                     </div>
                   </div>
@@ -274,60 +277,104 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
         </div>
       </div>
 
-      <div className="space-y-4 rounded-lg border border-border p-4">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-semibold">{selectedPatch.title}</h3>
-            <Badge variant={getStatusVariant(selectedPatch.status)}>{t(`patchReview.status.${selectedPatch.status}`)}</Badge>
-            <Badge variant="outline">{t(`patchReview.operations.${selectedPatch.operation}`)}</Badge>
-            {selectedPatchMissingProvenance && (
-              <Badge variant="outline">{t("patchReview.provenanceGapBadge")}</Badge>
-            )}
+      <div className="min-w-0 flex h-full min-h-0 flex-col rounded-lg border border-border p-4" data-testid="patch-review-detail-panel">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-1 pr-1" data-testid="patch-review-detail-scroll">
+          <div className="space-y-2" data-testid="patch-review-detail-header">
+            <div className="grid gap-2">
+              <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-start lg:justify-between" data-testid="patch-review-title-row">
+                <h3 className="min-w-0 flex-1 break-words text-base font-semibold leading-5" data-testid="patch-review-title">
+                  {selectedPatch.title}
+                </h3>
+                <div className="flex min-w-0 flex-wrap items-center gap-2 lg:max-w-[22rem] lg:justify-end" data-testid="patch-review-status-badges">
+                  <Badge className="max-w-full break-words" variant={getStatusVariant(selectedPatch.status)}>{t(`patchReview.status.${selectedPatch.status}`)}</Badge>
+                  <Badge className="max-w-full break-words" variant="outline">{t(`patchReview.operations.${selectedPatch.operation}`)}</Badge>
+                  {selectedPatchMissingProvenance && (
+                    <Badge className="max-w-full break-words" variant="outline">{t("patchReview.provenanceGapBadge")}</Badge>
+                  )}
+                </div>
+              </div>
+            </div>
+            <p className="text-sm leading-6 text-muted-foreground">
+              {selectedPatch.summary || selectedPatch.reason || patchSet.description || t("patchReview.descriptionFallback")}
+            </p>
+            <div className="grid gap-1.5 text-xs leading-5 text-muted-foreground sm:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))]">
+              <span className="min-w-0 break-words">{t("patchReview.author", { author: selectedPatch.author })}</span>
+              {typeof selectedPatch.confidence === "number" && (
+                <span className="min-w-0 break-words">{t("patchReview.confidence", { value: Math.round(selectedPatch.confidence * 100) })}</span>
+              )}
+              <span className="min-w-0 break-words">
+                {t("patchReview.target", { target: selectedPatch.target.targetType === "node"
+                  ? t("patchReview.targetNode", { nodeId: selectedPatch.target.nodeId })
+                  : selectedPatch.target.targetType === "attribute"
+                    ? t("patchReview.targetAttribute", { nodeId: selectedPatch.target.nodeId, path: selectedPatch.target.attributePath })
+                    : selectedPatch.target.targetType === "document_text"
+                      ? t("patchReview.targetDocumentText", {
+                        end: selectedPatch.target.endOffset,
+                        start: selectedPatch.target.startOffset,
+                      })
+                    : selectedPatch.target.targetType === "text_range"
+                      ? t("patchReview.targetTextRange", {
+                        nodeId: selectedPatch.target.nodeId,
+                        start: selectedPatch.target.startOffset,
+                        end: selectedPatch.target.endOffset,
+                      })
+                      : t("patchReview.targetStructuredPath", { path: selectedPatch.target.path }) })}
+              </span>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {selectedPatch.summary || selectedPatch.reason || patchSet.description || t("patchReview.descriptionFallback")}
-          </p>
-          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            <span>{t("patchReview.author", { author: selectedPatch.author })}</span>
-            {typeof selectedPatch.confidence === "number" && (
-              <span>{t("patchReview.confidence", { value: Math.round(selectedPatch.confidence * 100) })}</span>
-            )}
-            <span>{t("patchReview.target", { target: selectedPatch.target.targetType === "node"
-              ? t("patchReview.targetNode", { nodeId: selectedPatch.target.nodeId })
-              : selectedPatch.target.targetType === "attribute"
-                ? t("patchReview.targetAttribute", { nodeId: selectedPatch.target.nodeId, path: selectedPatch.target.attributePath })
-                : selectedPatch.target.targetType === "text_range"
-                  ? t("patchReview.targetTextRange", {
-                    nodeId: selectedPatch.target.nodeId,
-                    start: selectedPatch.target.startOffset,
-                    end: selectedPatch.target.endOffset,
-                  })
-                  : t("patchReview.targetStructuredPath", { path: selectedPatch.target.path }) })}</span>
-          </div>
-        </div>
 
-        <div className="grid gap-4 xl:grid-cols-2">
-          <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/10">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 bg-background/80 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{t("patchReview.original")}</Badge>
-                <span className="text-xs text-muted-foreground">{countLines(originalText)}L</span>
-                <span className="text-xs text-muted-foreground">{countCharacters(originalText)}C</span>
+          <div className="grid gap-4 xl:grid-cols-2" data-testid="patch-review-preview-grid">
+            <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/10">
+              <div className="flex min-w-0 flex-col gap-2 border-b border-border/70 bg-background/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="patch-review-original-header">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <Badge className="max-w-full break-words" variant="outline">{t("patchReview.original")}</Badge>
+                  <span className="text-xs text-muted-foreground">{countLines(originalText)}L</span>
+                  <span className="text-xs text-muted-foreground">{countCharacters(originalText)}C</span>
+                </div>
+                <Badge className="max-w-full break-words" variant="outline">{t(`patchReview.operations.${selectedPatch.operation}`)}</Badge>
               </div>
-              <Badge variant="outline">{t(`patchReview.operations.${selectedPatch.operation}`)}</Badge>
+              <div className="max-h-[35svh] min-h-[10rem] overflow-auto bg-background px-4 py-3 text-sm text-muted-foreground whitespace-pre-wrap">
+                {originalText}
+              </div>
             </div>
-            <div className="min-h-[14rem] bg-background px-4 py-3 text-sm whitespace-pre-wrap text-muted-foreground">
-              {originalText}
+            <div className="overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/5">
+              <div className="flex min-w-0 flex-col gap-2 border-b border-emerald-500/20 bg-background/80 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="patch-review-suggested-header">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <Badge className="max-w-full break-words bg-emerald-600 text-white hover:bg-emerald-600" variant="secondary">{t("patchReview.suggested")}</Badge>
+                  <span className="text-xs text-muted-foreground">{countLines(suggestedText)}L</span>
+                  <span className="text-xs text-muted-foreground">{countCharacters(suggestedText)}C</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
+                  {diffSummary.removed > 0 && (
+                    <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+                      -{diffSummary.removed}
+                    </span>
+                  )}
+                  {diffSummary.added > 0 && (
+                    <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
+                      +{diffSummary.added}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <Textarea
+                className="max-h-[35svh] min-h-[10rem] resize-y overflow-y-auto border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0"
+                data-testid="patch-review-suggested-textarea"
+                disabled={!isEditable}
+                onChange={(event) => setEditedText(event.target.value)}
+                rows={8}
+                value={editedText}
+              />
+              {!isEditable && (
+                <p className="px-4 pb-3 text-xs text-muted-foreground">{t("patchReview.nonEditable")}</p>
+              )}
             </div>
           </div>
-          <div className="overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/5">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-500/20 bg-background/80 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <Badge className="bg-emerald-600 text-white hover:bg-emerald-600" variant="secondary">{t("patchReview.suggested")}</Badge>
-                <span className="text-xs text-muted-foreground">{countLines(suggestedText)}L</span>
-                <span className="text-xs text-muted-foreground">{countCharacters(suggestedText)}C</span>
-              </div>
-              <div className="flex items-center gap-1.5">
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-medium">{t("patchReview.diffPreview")}</p>
+              <div className="flex flex-wrap items-center gap-1.5">
                 {diffSummary.removed > 0 && (
                   <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
                     -{diffSummary.removed}
@@ -338,98 +385,72 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
                     +{diffSummary.added}
                   </span>
                 )}
+                {diffSummary.unchanged > 0 && (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                    ={diffSummary.unchanged}
+                  </span>
+                )}
               </div>
             </div>
-            <Textarea
-              disabled={!isEditable}
-              onChange={(event) => setEditedText(event.target.value)}
-              rows={10}
-              value={editedText}
-              className="min-h-[14rem] resize-y border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0"
-            />
-            {!isEditable && (
-              <p className="px-4 pb-3 text-xs text-muted-foreground">{t("patchReview.nonEditable")}</p>
+            <ScrollArea className="max-h-[28svh] rounded-md border border-input bg-background">
+              <div className="space-y-1 p-3 font-mono text-xs">
+                {diffRows.map((row, index) => (
+                  <div
+                    key={`${row.kind}-${index}`}
+                    className={
+                      row.kind === "added"
+                        ? "rounded bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-300"
+                        : row.kind === "removed"
+                          ? "rounded bg-destructive/10 px-2 py-1 text-destructive"
+                          : "rounded px-2 py-1 text-muted-foreground"
+                    }
+                  >
+                    <span className="mr-2 inline-block w-4">
+                      {row.kind === "added" ? "+" : row.kind === "removed" ? "-" : " "}
+                    </span>
+                    <span className="break-all">{row.value || " "}</span>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">{t("patchReview.sourceDetails")}</p>
+            {selectedPatchMissingProvenance && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                <div className="flex items-center gap-2 font-medium">
+                  <TriangleAlert className="h-3.5 w-3.5" />
+                  {t("patchReview.provenanceGapTitle")}
+                </div>
+                <p className="mt-1 leading-5">
+                  {t("patchReview.provenanceGapDescription")}
+                </p>
+              </div>
+            )}
+            {selectedPatch.sources && selectedPatch.sources.length > 0 ? (
+              <ScrollArea className="max-h-[24svh] rounded-md border border-border bg-muted/20">
+                <div className="grid gap-2 p-3 md:grid-cols-2">
+                  {selectedPatch.sources.map((source, index) => (
+                    <div key={`${selectedPatch.patchId}-source-${index}`} className="min-w-0 rounded-md border border-border bg-background/70 px-3 py-2 text-xs text-muted-foreground">
+                      <div className="break-all">{t("patchReview.sourceId", { sourceId: source.sourceId })}</div>
+                      {source.chunkId ? <div className="break-all">{t("patchReview.chunkId", { chunkId: source.chunkId })}</div> : null}
+                      {source.sectionId ? <div className="break-all">{t("patchReview.sectionId", { sectionId: source.sectionId })}</div> : null}
+                      {source.excerpt ? <div className="mt-1 break-words whitespace-pre-wrap text-foreground">{source.excerpt}</div> : null}
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            ) : (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Link2 className="h-3.5 w-3.5" />
+                {t("patchReview.noSources")}
+              </p>
             )}
           </div>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium">{t("patchReview.diffPreview")}</p>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {diffSummary.removed > 0 && (
-                <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
-                  -{diffSummary.removed}
-                </span>
-              )}
-              {diffSummary.added > 0 && (
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                  +{diffSummary.added}
-                </span>
-              )}
-              {diffSummary.unchanged > 0 && (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  ={diffSummary.unchanged}
-                </span>
-              )}
-            </div>
-          </div>
-          <ScrollArea className="max-h-56 rounded-md border border-input bg-background">
-            <div className="space-y-1 p-3 font-mono text-xs">
-              {diffRows.map((row, index) => (
-                <div
-                  key={`${row.kind}-${index}`}
-                  className={
-                    row.kind === "added"
-                      ? "rounded bg-emerald-500/10 px-2 py-1 text-emerald-700 dark:text-emerald-300"
-                      : row.kind === "removed"
-                        ? "rounded bg-destructive/10 px-2 py-1 text-destructive"
-                        : "rounded px-2 py-1 text-muted-foreground"
-                  }
-                >
-                  <span className="mr-2 inline-block w-4">
-                    {row.kind === "added" ? "+" : row.kind === "removed" ? "-" : " "}
-                  </span>
-                  <span>{row.value || " "}</span>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm font-medium">{t("patchReview.sourceDetails")}</p>
-          {selectedPatchMissingProvenance && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-              <div className="flex items-center gap-2 font-medium">
-                <TriangleAlert className="h-3.5 w-3.5" />
-                {t("patchReview.provenanceGapTitle")}
-              </div>
-              <p className="mt-1 leading-5">
-                {t("patchReview.provenanceGapDescription")}
-              </p>
-            </div>
-          )}
-          {selectedPatch.sources && selectedPatch.sources.length > 0 ? (
-            <div className="grid gap-2 xl:grid-cols-2">
-              {selectedPatch.sources.map((source, index) => (
-                <div key={`${selectedPatch.patchId}-source-${index}`} className="rounded-md border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                  <div>{t("patchReview.sourceId", { sourceId: source.sourceId })}</div>
-                  {source.chunkId ? <div>{t("patchReview.chunkId", { chunkId: source.chunkId })}</div> : null}
-                  {source.sectionId ? <div>{t("patchReview.sectionId", { sectionId: source.sectionId })}</div> : null}
-                  {source.excerpt ? <div className="mt-1 whitespace-pre-wrap text-foreground">{source.excerpt}</div> : null}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Link2 className="h-3.5 w-3.5" />
-              {t("patchReview.noSources")}
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="mt-4 flex shrink-0 flex-wrap justify-end gap-2 border-t border-border/70 bg-background pt-4" data-testid="patch-review-footer">
           <Button onClick={() => onReject?.(selectedPatch)} type="button" variant="outline">
             {t("patchReview.reject")}
           </Button>

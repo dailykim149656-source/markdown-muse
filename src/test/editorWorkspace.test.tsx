@@ -57,6 +57,7 @@ const renderWorkspace = (overrides: Record<string, unknown> = {}) => {
       onOpenShare: vi.fn(),
       onOpenShortcuts: vi.fn(),
       onPrint: vi.fn(),
+      onUserProfileChange: vi.fn(),
       onSaveAdoc: vi.fn(),
       onSaveDocsy: vi.fn(),
       onSaveHtml: vi.fn(),
@@ -75,6 +76,7 @@ const renderWorkspace = (overrides: Record<string, unknown> = {}) => {
       previewOpen: false,
       showStructuredModeAction: false,
       textStats: { charCount: 10, lines: 1, paragraphs: 1, readingTimeMin: 1, wordCount: 2 },
+      userProfile: "advanced",
     },
     onFileChange: vi.fn(),
     patchReviewDialogProps: {
@@ -120,6 +122,11 @@ const renderWorkspace = (overrides: Record<string, unknown> = {}) => {
         updatedAt: 1,
       },
       activeDocId: "doc-1",
+      capabilities: {
+        canAccessHistory: true,
+        canAccessKnowledge: true,
+        canAccessStructuredModes: true,
+      },
       createDocument: vi.fn(),
       documents: [
         {

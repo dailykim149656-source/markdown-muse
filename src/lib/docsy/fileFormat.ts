@@ -300,7 +300,8 @@ export const buildDocumentDataFromDocsyFile = (file: DocsyFileEnvelope): CreateD
     name: document.name,
     sourceSnapshots: richTextSnapshots,
     storageKind: "docsy",
-    tiptapJson: file.tiptap ?? hydrateAstToTiptap(document.ast),
+    // Shared or imported .docsy payloads must always rehydrate from the validated AST.
+    tiptapJson: hydrateAstToTiptap(document.ast),
     updatedAt: document.updatedAt,
   };
 };

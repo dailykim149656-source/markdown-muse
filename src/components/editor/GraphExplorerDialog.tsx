@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import GraphFilterMenus from "@/components/editor/GraphFilterMenus";
 import GraphCanvas from "@/components/editor/GraphCanvas";
 import {
   Dialog,
@@ -26,6 +27,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
+import {
+  VALIDATED_REVIEW_MAX_EDGES,
+  VALIDATED_REVIEW_MAX_NODES,
+  resolveWorkspaceScale,
+} from "@/lib/knowledge/workspaceScale";
 import type {
   KnowledgeGraphEdge,
   KnowledgeGraphNavigationTarget,
@@ -34,6 +40,11 @@ import type {
   KnowledgeWorkspaceInsights,
 } from "@/lib/knowledge/workspaceInsights";
 import {
+  buildGraphConnectionSummary,
+  createPreparedGraphView,
+  filterPreparedGraphByQuery,
+} from "@/components/editor/graphViewModel";
+import {
   type EdgeFilter,
   type GraphMode,
   type IssueFilter,
@@ -41,14 +52,9 @@ import {
   applyGraphMode,
   applyIssueFilter,
   edgeBadgeVariant,
-  edgeFilterKey,
-  edgeGroupOrder,
   edgeKindLabelKey,
-  graphModeKey,
-  issueFilterKey,
   issueKindLabelKey,
   nodeFilterKey,
-  nodeKindOrder,
   toGraphNavigationTarget,
 } from "@/components/editor/workspaceGraphUtils";
 import { deriveSemanticOverlay } from "@/components/editor/workspaceSemanticOverlay";
@@ -89,17 +95,6 @@ interface GraphExplorerDialogProps {
   selectedNodeId?: string | null;
   variant?: GraphExplorerVariant;
 }
-
-const sortNodes = (left: KnowledgeGraphNode, right: KnowledgeGraphNode) =>
-  nodeKindOrder[left.kind] - nodeKindOrder[right.kind]
-  || Number(right.issueSeverity === "warning") - Number(left.issueSeverity === "warning")
-  || (right.issueCount || 0) - (left.issueCount || 0)
-  || left.label.localeCompare(right.label);
-
-const sortEdges = (left: KnowledgeGraphEdge, right: KnowledgeGraphEdge) =>
-  edgeGroupOrder[left.group] - edgeGroupOrder[right.group]
-  || right.weight - left.weight
-  || left.description.localeCompare(right.description);
 
 const semanticKindLabelKey = (kind: "depends_on" | "conflicts_with") => {
   switch (kind) {
@@ -157,22 +152,6 @@ const chainSuggestionLabelKey = (context: GraphContextKind) => {
   }
 };
 
-const getWorkspaceScale = (insights: KnowledgeWorkspaceInsights) => {
-  const nodeCount = insights.summary.documentNodeCount
-    + insights.summary.sectionNodeCount
-    + insights.summary.imageNodeCount;
-
-  if (nodeCount <= 120 && insights.summary.edgeCount <= 180) {
-    return "small";
-  }
-
-  if (nodeCount <= 480 && insights.summary.edgeCount <= 900) {
-    return "medium";
-  }
-
-  return "large";
-};
-
 const GraphExplorerDialog = ({
   activeDocumentId,
   contextChain = null,
@@ -195,70 +174,22 @@ const GraphExplorerDialog = ({
   const [issuesOnly, setIssuesOnly] = useState(false);
   const [semanticOverlayEnabled, setSemanticOverlayEnabled] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
-  const workspaceScale = useMemo(() => getWorkspaceScale(insights), [insights]);
-
-  const nodeById = useMemo(
-    () => new Map(insights.nodes.map((node) => [node.id, node])),
-    [insights.nodes],
+  const deferredQuery = useDeferredValue(query);
+  const workspaceScale = useMemo(() => resolveWorkspaceScale(
+    insights.summary.documentNodeCount + insights.summary.sectionNodeCount + insights.summary.imageNodeCount,
+    insights.summary.edgeCount,
+  ), [insights.summary.documentNodeCount, insights.summary.edgeCount, insights.summary.imageNodeCount, insights.summary.sectionNodeCount]);
+  const preparedGraph = useMemo(() => createPreparedGraphView({
+    edgeFilter,
+    insights,
+    issuesOnly,
+    nodeFilter,
+  }), [edgeFilter, insights, issuesOnly, nodeFilter]);
+  const nodeById = preparedGraph.nodeById;
+  const filteredGraph = useMemo(
+    () => filterPreparedGraphByQuery(preparedGraph, deferredQuery),
+    [deferredQuery, preparedGraph],
   );
-
-  const baseNodes = useMemo(
-    () => insights.nodes
-      .filter((node) => (nodeFilter === "all" || node.kind === nodeFilter) && (!issuesOnly || (node.issueCount || 0) > 0))
-      .sort(sortNodes),
-    [insights.nodes, issuesOnly, nodeFilter],
-  );
-
-  const filteredGraph = useMemo(() => {
-    const baseNodeIds = new Set(baseNodes.map((node) => node.id));
-    const baseEdges = insights.edges
-      .filter((edge) =>
-        (edgeFilter === "all" || edge.group === edgeFilter)
-        && baseNodeIds.has(edge.sourceId)
-        && baseNodeIds.has(edge.targetId))
-      .sort(sortEdges);
-    const normalizedQuery = query.trim().toLowerCase();
-
-    if (!normalizedQuery) {
-      return {
-        edges: baseEdges,
-        nodes: baseNodes,
-      };
-    }
-
-    const directlyMatchedNodeIds = new Set(
-      baseNodes
-        .filter((node) => node.label.toLowerCase().includes(normalizedQuery))
-        .map((node) => node.id),
-    );
-    const matchedNodeIds = new Set(directlyMatchedNodeIds);
-    const matchedEdgeIds = new Set<string>();
-
-    for (const edge of baseEdges) {
-      const sourceLabel = nodeById.get(edge.sourceId)?.label || "";
-      const targetLabel = nodeById.get(edge.targetId)?.label || "";
-      const edgeMatches = [
-        edge.description,
-        sourceLabel,
-        targetLabel,
-      ].join(" ").toLowerCase().includes(normalizedQuery);
-
-      if (
-        edgeMatches
-        || directlyMatchedNodeIds.has(edge.sourceId)
-        || directlyMatchedNodeIds.has(edge.targetId)
-      ) {
-        matchedEdgeIds.add(edge.id);
-        matchedNodeIds.add(edge.sourceId);
-        matchedNodeIds.add(edge.targetId);
-      }
-    }
-
-    return {
-      edges: baseEdges.filter((edge) => matchedEdgeIds.has(edge.id)),
-      nodes: baseNodes.filter((node) => matchedNodeIds.has(node.id)),
-    };
-  }, [baseNodes, edgeFilter, insights.edges, nodeById, query]);
 
   const issueFilteredGraph = useMemo(
     () => applyIssueFilter({
@@ -276,6 +207,10 @@ const GraphExplorerDialog = ({
       mode: graphMode,
     }),
     [activeDocumentId, graphMode, issueFilteredGraph],
+  );
+  const modeGraphConnectionSummary = useMemo(
+    () => buildGraphConnectionSummary(modeGraph.edges),
+    [modeGraph.edges],
   );
 
   useEffect(() => {
@@ -312,8 +247,7 @@ const GraphExplorerDialog = ({
       return modeGraph;
     }
 
-    const focusedEdges = modeGraph.edges.filter((edge) =>
-      edge.sourceId === selectedNodeId || edge.targetId === selectedNodeId);
+    const focusedEdges = modeGraphConnectionSummary.adjacencyByNodeId.get(selectedNodeId) || [];
     const visibleNodeIds = new Set<string>([selectedNodeId]);
 
     for (const edge of focusedEdges) {
@@ -325,30 +259,21 @@ const GraphExplorerDialog = ({
       edges: focusedEdges,
       nodes: modeGraph.nodes.filter((node) => visibleNodeIds.has(node.id)),
     };
-  }, [focusMode, modeGraph, selectedNodeId]);
+  }, [focusMode, modeGraph, modeGraphConnectionSummary.adjacencyByNodeId, selectedNodeId]);
 
   const selectedNode = displayedGraph.nodes.find((node) => node.id === selectedNodeId)
     || modeGraph.nodes.find((node) => node.id === selectedNodeId)
     || null;
-
-  const connectionSummary = useMemo(() => {
-    const incoming = new Map<string, number>();
-    const outgoing = new Map<string, number>();
-
-    for (const edge of displayedGraph.edges) {
-      outgoing.set(edge.sourceId, (outgoing.get(edge.sourceId) || 0) + 1);
-      incoming.set(edge.targetId, (incoming.get(edge.targetId) || 0) + 1);
-    }
-
-    return { incoming, outgoing };
-  }, [displayedGraph.edges]);
+  const connectionSummary = useMemo(
+    () => buildGraphConnectionSummary(displayedGraph.edges),
+    [displayedGraph.edges],
+  );
 
   const selectedNodeEdges = useMemo(
     () => selectedNode
-      ? displayedGraph.edges.filter((edge) =>
-        edge.sourceId === selectedNode.id || edge.targetId === selectedNode.id)
+      ? connectionSummary.adjacencyByNodeId.get(selectedNode.id) || []
       : [],
-    [displayedGraph.edges, selectedNode],
+    [connectionSummary.adjacencyByNodeId, selectedNode],
   );
 
   const selectedNodeIssues = useMemo(
@@ -378,6 +303,7 @@ const GraphExplorerDialog = ({
   const selectedNodeOutgoing = selectedNode
     ? connectionSummary.outgoing.get(selectedNode.id) || 0
     : 0;
+  const graphCanvasLayoutMode = workspaceScale === "large" && !focusMode ? "stable" : "selected";
   const sourceChainNode = contextChain?.sourceNodeId
     ? nodeById.get(contextChain.sourceNodeId) || null
     : null;
@@ -501,6 +427,12 @@ const GraphExplorerDialog = ({
                     {t(workspaceScale === "medium" ? "knowledge.graphScaleHintMedium" : "knowledge.graphScaleHintLarge")}
                   </span>
                 </div>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                  {t("knowledge.graphValidatedRangeValue", {
+                    edges: VALIDATED_REVIEW_MAX_EDGES,
+                    nodes: VALIDATED_REVIEW_MAX_NODES,
+                  })}
+                </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
                     className="h-7 text-[11px]"
@@ -575,8 +507,8 @@ const GraphExplorerDialog = ({
       </div>
 
       <div className="border-b px-6 py-4">
-          <div className="flex flex-col gap-3">
-            <div className="relative">
+        <div className="flex flex-col gap-3">
+          <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
@@ -584,101 +516,52 @@ const GraphExplorerDialog = ({
               placeholder={t("knowledge.graphSearchPlaceholder")}
               value={query}
             />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(["full", "document", "issues"] as GraphMode[]).map((value) => (
-                <Button
-                  className="h-7 px-2 text-[11px]"
-                  key={`dialog-graph-mode-${value}`}
-                  onClick={() => setGraphMode(value)}
-                  size="sm"
-                  type="button"
-                  variant={graphMode === value ? "secondary" : "ghost"}
-                >
-                  {t(graphModeKey(value))}
-                </Button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(["all", "unresolved_reference", "duplicate_document", "missing_section", "conflicting_procedure", "outdated_source", "stale_index", "image_missing_description"] as IssueFilter[]).map((value) => (
-                <Button
-                  className="h-7 px-2 text-[11px]"
-                  key={`dialog-issue-filter-${value}`}
-                  onClick={() => setIssueFilter(value)}
-                  size="sm"
-                  type="button"
-                  variant={issueFilter === value ? "secondary" : "ghost"}
-                >
-                  {t(issueFilterKey(value))}
-                </Button>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(["all", "document", "section", "image"] as NodeFilter[]).map((value) => (
-              <Button
-                className="h-7 px-2 text-[11px]"
-                key={`dialog-node-filter-${value}`}
-                onClick={() => setNodeFilter(value)}
-                size="sm"
-                type="button"
-                variant={nodeFilter === value ? "secondary" : "ghost"}
-              >
-                {t(nodeFilterKey(value))}
-              </Button>
-            ))}
-            <Button
-              className="h-7 px-2 text-[11px]"
-              onClick={() => setIssuesOnly((current) => !current)}
-              size="sm"
-              type="button"
-              variant={issuesOnly ? "secondary" : "ghost"}
-            >
-              {t("knowledge.graphIssuesOnly")}
-            </Button>
-            <Button
-              className="h-7 gap-1 px-2 text-[11px]"
-              disabled={!selectedNode}
-              onClick={() => setFocusMode((current) => !current)}
-              size="sm"
-              type="button"
-              variant={focusMode ? "secondary" : "ghost"}
-            >
-              <LocateFixed className="h-3.5 w-3.5" />
-              {t(focusMode ? "knowledge.graphFocusActive" : "knowledge.graphFocusSelection")}
-            </Button>
-            <Button
-              className="h-7 px-2 text-[11px]"
-              onClick={() => setSemanticOverlayEnabled((current) => !current)}
-              size="sm"
-              type="button"
-              variant={semanticOverlayEnabled ? "secondary" : "ghost"}
-            >
-              {t("knowledge.graphSemanticToggle")}
-            </Button>
-            <Button
-              className="h-7 gap-1 px-2 text-[11px]"
-              onClick={resetView}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              {t("knowledge.graphResetView")}
-            </Button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {(["all", "containment", "reference", "similarity", "issue"] as EdgeFilter[]).map((value) => (
+          <div className="flex flex-col gap-2">
+            <GraphFilterMenus
+              edgeFilter={edgeFilter}
+              graphMode={graphMode}
+              issueFilter={issueFilter}
+              issuesOnly={issuesOnly}
+              nodeFilter={nodeFilter}
+              onEdgeFilterChange={setEdgeFilter}
+              onGraphModeChange={setGraphMode}
+              onIssueFilterChange={setIssueFilter}
+              onIssuesOnlyChange={setIssuesOnly}
+              onNodeFilterChange={setNodeFilter}
+            />
+            <div className="flex flex-wrap gap-2">
               <Button
-                className="h-7 px-2 text-[11px]"
-                key={`dialog-edge-filter-${value}`}
-                onClick={() => setEdgeFilter(value)}
+                className="h-7 gap-1 px-2 text-[11px]"
+                disabled={!selectedNode}
+                onClick={() => setFocusMode((current) => !current)}
                 size="sm"
                 type="button"
-                variant={edgeFilter === value ? "secondary" : "ghost"}
+                variant={focusMode ? "secondary" : "ghost"}
               >
-                {t(edgeFilterKey(value))}
+                <LocateFixed className="h-3.5 w-3.5" />
+                {t(focusMode ? "knowledge.graphFocusActive" : "knowledge.graphFocusSelection")}
               </Button>
-            ))}
+              <Button
+                className="h-7 px-2 text-[11px]"
+                onClick={() => setSemanticOverlayEnabled((current) => !current)}
+                size="sm"
+                type="button"
+                variant={semanticOverlayEnabled ? "secondary" : "ghost"}
+              >
+                {t("knowledge.graphSemanticToggle")}
+              </Button>
+              <Button
+                className="h-7 gap-1 px-2 text-[11px]"
+                onClick={resetView}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {t("knowledge.graphResetView")}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -764,10 +647,12 @@ const GraphExplorerDialog = ({
               <div className="space-y-4">
                 <GraphCanvas
                   edges={displayedGraph.edges}
+                  layoutMode={graphCanvasLayoutMode}
                   nodes={displayedGraph.nodes}
                   onOpenDocument={handleOpenDocument}
                   onSelectNode={setSelectedNodeId}
                   selectedNodeId={selectedNodeId}
+                  workspaceScale={workspaceScale}
                 />
 
                 <div

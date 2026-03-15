@@ -1,0 +1,159 @@
+name: Deploy Web Frontend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-web.yml"
+      - ".github/workflows/deploy-full-stack.yml"
+      - "scripts/validate-public-deploy-config.mjs"
+      - "src/**"
+      - "!src/test/**"
+      - "public/**"
+      - "index.html"
+      - "vite.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "postcss.config.*"
+      - "tailwind.config.*"
+      - "components.json"
+      - "firebase.json"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-web-main
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-web:
+    name: Deploy web profile frontend to Firebase Hosting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Authenticate to Firebase Hosting
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_URBAN_DDS }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build web profile frontend
+        run: |
+          set -euo pipefail
+
+          require_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "${value}" ]; then
+              echo "${name} is required."
+              exit 1
+            fi
+          }
+
+          FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
+          if [ -z "${FRONTEND_ORIGIN}" ]; then
+            FRONTEND_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          fi
+
+          AI_API_BASE_URL="${{ secrets.GCP_WEB_VITE_AI_API_BASE_URL }}"
+          if [ -z "${AI_API_BASE_URL}" ]; then
+            AI_API_BASE_URL="${FRONTEND_ORIGIN}"
+          fi
+
+          if [ -z "${AI_API_BASE_URL}" ]; then
+            echo "Set GCP_WEB_VITE_AI_API_BASE_URL or configure GCP_WORKSPACE_FRONTEND_ORIGIN/GCP_AI_ALLOWED_ORIGIN for same-origin Hosting deploys."
+            exit 1
+          fi
+
+          case "${AI_API_BASE_URL}" in
+            http://*|https://*)
+              ;;
+            *)
+              echo "GCP_WEB_VITE_AI_API_BASE_URL must be an absolute http(s) URL. Current value: ${AI_API_BASE_URL}"
+              exit 1
+              ;;
+          esac
+
+          GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
+          if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then
+            GOOGLE_OAUTH_PUBLISHING_STATUS="testing"
+          fi
+
+          GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
+          if [ -z "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" ]; then
+            GOOGLE_WORKSPACE_SCOPE_PROFILE="restricted"
+          fi
+
+          ROUTING_MODE="split-origin"
+          if [ -n "${FRONTEND_ORIGIN}" ] && [ "${AI_API_BASE_URL}" = "${FRONTEND_ORIGIN}" ]; then
+            ROUTING_MODE="same-origin-hosting-rewrite"
+          fi
+
+          export AI_ALLOWED_ORIGIN="${FRONTEND_ORIGIN}"
+          export GOOGLE_CLIENT_ID="${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
+          export GOOGLE_OAUTH_PUBLISHING_STATUS
+          export GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          export GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
+          export GOOGLE_WORKSPACE_SCOPE_PROFILE
+          export WORKSPACE_FRONTEND_ORIGIN="${FRONTEND_ORIGIN}"
+
+          require_secret "GCP_GOOGLE_CLIENT_ID" "${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
+          require_secret "GCP_GOOGLE_OAUTH_REDIRECT_URI" "${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+
+          FIREBASE_PROJECT_ID="${{ secrets.GCP_FIREBASE_PROJECT_ID }}"
+          if [ -z "${FIREBASE_PROJECT_ID}" ]; then
+            FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          fi
+
+          echo "Deployment summary:"
+          echo "  firebase_project: ${FIREBASE_PROJECT_ID}"
+          echo "  browser_api_base_url: ${AI_API_BASE_URL}"
+          echo "  frontend_origin: ${FRONTEND_ORIGIN}"
+          echo "  routing_mode: ${ROUTING_MODE}"
+          echo "  oauth_redirect_uri: ${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+
+          node scripts/validate-public-deploy-config.mjs
+
+          echo "Building frontend with VITE_AI_API_BASE_URL=${AI_API_BASE_URL}"
+          printf "VITE_APP_PROFILE=web\nVITE_AI_API_BASE_URL=%s\n" "${AI_API_BASE_URL}" > .env.web.local
+
+          npm ci
+          npm run build:web
+
+      - name: Verify frontend file
+        run: |
+          set -euo pipefail
+          if [ ! -f "dist/index.html" ]; then
+            echo "dist/index.html not found after build."
+            exit 1
+          fi
+          echo "Frontend build artifact verified."
+
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools@15.10.0
+
+      - name: Deploy to Firebase Hosting
+        run: |
+          set -euo pipefail
+          FIREBASE_PROJECT_ID="${{ secrets.GCP_FIREBASE_PROJECT_ID }}"
+          if [ -z "${FIREBASE_PROJECT_ID}" ]; then
+            FIREBASE_PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          fi
+          echo "Deploying frontend to Firebase project: ${FIREBASE_PROJECT_ID}"
+          firebase deploy \
+            --only hosting \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --non-interactive

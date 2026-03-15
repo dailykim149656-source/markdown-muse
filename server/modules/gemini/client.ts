@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview";
+const VERTEX_AI_FLAG = "true";
 
 export interface GeminiInlineImage {
   dataBase64: string;
@@ -17,19 +18,33 @@ interface MultimodalStructuredJsonRequest extends StructuredJsonRequest {
   images?: GeminiInlineImage[];
 }
 
-const getApiKey = () => process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+const isVertexAiEnabled = () =>
+  process.env.GOOGLE_GENAI_USE_VERTEXAI?.trim().toLowerCase() === VERTEX_AI_FLAG;
+
+const getVertexProject = () => process.env.GOOGLE_CLOUD_PROJECT?.trim() || "";
+const getVertexLocation = () =>
+  process.env.GOOGLE_CLOUD_LOCATION?.trim()
+  || process.env.VERTEX_AI_LOCATION?.trim()
+  || "";
+
+export const isGeminiConfigured = () =>
+  isVertexAiEnabled() && getVertexProject().length > 0 && getVertexLocation().length > 0;
 
 let cachedClient: GoogleGenAI | null = null;
 
 const getClient = () => {
-  const apiKey = getApiKey();
-
-  if (!apiKey) {
-    throw new Error("Gemini API key is not configured. Set GEMINI_API_KEY or GOOGLE_API_KEY.");
+  if (!isGeminiConfigured()) {
+    throw new Error(
+      "Vertex AI is not configured. Set GOOGLE_GENAI_USE_VERTEXAI=true, GOOGLE_CLOUD_PROJECT, and GOOGLE_CLOUD_LOCATION.",
+    );
   }
 
   if (!cachedClient) {
-    cachedClient = new GoogleGenAI({ apiKey });
+    cachedClient = new GoogleGenAI({
+      location: getVertexLocation(),
+      project: getVertexProject(),
+      vertexai: true,
+    });
   }
 
   return cachedClient;
@@ -62,7 +77,107 @@ const createJsonConfig = (responseSchema: object) => ({
   responseSchema,
 });
 
-const resolveModel = (model?: string) => model || DEFAULT_MODEL;
+const resolveModel = (model?: string) => model?.trim() || DEFAULT_MODEL;
+const resolveFallbackModel = (primaryModel: string) => {
+  const configuredFallback = process.env.GEMINI_FALLBACK_MODEL?.trim();
+
+  if (!configuredFallback || configuredFallback === primaryModel) {
+    return null;
+  }
+
+  return configuredFallback;
+};
+
+const getErrorStatusCode = (error: unknown) => {
+  if (typeof error !== "object" || error === null) {
+    return undefined;
+  }
+
+  if ("status" in error) {
+    return Number((error as { status?: unknown }).status);
+  }
+
+  if ("code" in error) {
+    const code = Number((error as { code?: unknown }).code);
+    return Number.isNaN(code) ? undefined : code;
+  }
+
+  return undefined;
+};
+
+const classifyFallbackReason = (error: unknown) => {
+  const statusCode = getErrorStatusCode(error);
+  const normalizedMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
+
+  const isQuotaError = statusCode === 429
+    || normalizedMessage.includes("resource_exhausted")
+    || normalizedMessage.includes("quota")
+    || normalizedMessage.includes("rate limit");
+
+  if (isQuotaError) {
+    return "quota_or_rate_limit";
+  }
+
+  const isModelError = statusCode === 404
+    || normalizedMessage.includes("unexpected model name format")
+    || normalizedMessage.includes("unsupported model")
+    || normalizedMessage.includes("publisher model")
+    || normalizedMessage.includes("model not found")
+    || normalizedMessage.includes("not found")
+    || (normalizedMessage.includes("invalid_argument") && normalizedMessage.includes("model"))
+    || (statusCode === 400 && normalizedMessage.includes("model"));
+
+  if (isModelError) {
+    return "model_unavailable";
+  }
+
+  return null;
+};
+
+const requestContentWithFallback = async ({
+  config,
+  contents,
+  model,
+}: {
+  config: ReturnType<typeof createJsonConfig>;
+  contents: string | ReturnType<typeof buildMultimodalContents>;
+  model?: string;
+}) => {
+  const client = getClient();
+  const primaryModel = resolveModel(model);
+  const fallbackModel = resolveFallbackModel(primaryModel);
+
+  console.info(`[Gemini] generateContent primary=${primaryModel}`);
+
+  try {
+    return await client.models.generateContent({
+      config,
+      contents,
+      model: primaryModel,
+    });
+  } catch (error) {
+    const fallbackReason = classifyFallbackReason(error);
+
+    if (!fallbackModel || !fallbackReason) {
+      throw error;
+    }
+
+    console.warn(`[Gemini] primary model failed (${fallbackReason}); retrying with fallback=${fallbackModel}`);
+
+    try {
+      const response = await client.models.generateContent({
+        config,
+        contents,
+        model: fallbackModel,
+      });
+      console.info(`[Gemini] fallback model succeeded fallback=${fallbackModel}`);
+      return response;
+    } catch (fallbackError) {
+      console.error(`[Gemini] fallback model failed fallback=${fallbackModel}`);
+      throw fallbackError;
+    }
+  }
+};
 
 const buildMultimodalContents = (prompt: string, images: GeminiInlineImage[]) => [{
   parts: [
@@ -80,16 +195,17 @@ const buildMultimodalContents = (prompt: string, images: GeminiInlineImage[]) =>
 export const schemaType = Type;
 
 export const getGeminiModel = (model?: string) => resolveModel(model);
+export const getGeminiFallbackModel = (model?: string) => resolveFallbackModel(resolveModel(model));
 
 export const generateStructuredJson = async <TResponse>({
   model,
   prompt,
   responseSchema,
 }: StructuredJsonRequest): Promise<TResponse> => {
-  const response = await getClient().models.generateContent({
-    contents: prompt,
-    model: resolveModel(model),
+  const response = await requestContentWithFallback({
     config: createJsonConfig(responseSchema),
+    contents: prompt,
+    model,
   });
 
   return parseStructuredJson<TResponse>(await readResponseText(response));
@@ -105,10 +221,10 @@ export const generateMultimodalStructuredJson = async <TResponse>({
     return generateStructuredJson<TResponse>({ model, prompt, responseSchema });
   }
 
-  const response = await getClient().models.generateContent({
-    contents: buildMultimodalContents(prompt, images),
-    model: resolveModel(model),
+  const response = await requestContentWithFallback({
     config: createJsonConfig(responseSchema),
+    contents: buildMultimodalContents(prompt, images),
+    model,
   });
 
   return parseStructuredJson<TResponse>(await readResponseText(response));

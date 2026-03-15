@@ -41,7 +41,7 @@ const MathRender = ({
         const html = katex.renderToString(latex, {
           displayMode,
           throwOnError: false,
-          trust: true,
+          trust: false,
           strict: false,
         });
 

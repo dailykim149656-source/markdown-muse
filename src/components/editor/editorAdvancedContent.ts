@@ -12,6 +12,13 @@ const DOCUMENT_TIPTAP_NODE_TYPES = new Set([
   "footnoteRef",
   "horizontalRule",
   "image",
+  "opaqueLatexBlock",
+  "latexAbstract",
+  "latexTitleBlock",
+  "resumeEntry",
+  "resumeHeader",
+  "resumeSkillRow",
+  "resumeSummary",
   "table",
   "tableCell",
   "tableHeader",
@@ -27,6 +34,13 @@ const DOCUMENT_AST_NODE_TYPES = new Set([
   "footnote_ref",
   "horizontal_rule",
   "image",
+  "opaque_latex_block",
+  "latex_abstract",
+  "latex_title_block",
+  "resume_entry",
+  "resume_header",
+  "resume_skill_row",
+  "resume_summary",
   "table",
   "table_of_contents",
 ]);
@@ -118,7 +132,7 @@ export const htmlHasAdvancedContent = (html: string) =>
   /data-type="(?:math|math-block|mermaid)"/.test(html);
 
 export const htmlHasDocumentContent = (html: string) =>
-  /data-type="(?:admonition|cross-ref|figure-caption|footnote-item|footnote-ref|toc)"/.test(html)
+  /data-type="(?:admonition|cross-ref|figure-caption|footnote-item|footnote-ref|toc|opaque-latex-block|resume-entry|resume-header|resume-skill-row|resume-summary|latex-title-block|latex-abstract)"/.test(html)
   || /<(?:img|table|pre|hr)\b/i.test(html);
 
 export const markdownHasAdvancedContent = (markdown: string) =>

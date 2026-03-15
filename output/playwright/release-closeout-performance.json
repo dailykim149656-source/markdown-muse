@@ -1,0 +1,60 @@
+{
+  "baseUrl": "http://127.0.0.1:4177",
+  "capturedAt": "2026-03-13T15:19:23.070Z",
+  "results": [
+    {
+      "documentCount": 10,
+      "editorLoadMs": 899,
+      "graphFilterSearchMs": 132,
+      "graphRouteOpenMs": 613,
+      "knowledgeSearchMs": 877,
+      "queueCreationToReadyMs": null,
+      "tier": "small"
+    },
+    {
+      "documentCount": 40,
+      "editorLoadMs": 522,
+      "graphFilterSearchMs": 237,
+      "graphRouteOpenMs": 377,
+      "knowledgeSearchMs": 735,
+      "queueCreationToReadyMs": null,
+      "tier": "medium"
+    },
+    {
+      "documentCount": 90,
+      "editorLoadMs": 495,
+      "graphFilterSearchMs": 389,
+      "graphRouteOpenMs": 783,
+      "knowledgeSearchMs": 980,
+      "queueCreationToReadyMs": null,
+      "tier": "large"
+    },
+    {
+      "documentCount": 200,
+      "editorLoadMs": 1313,
+      "graphFilterSearchMs": 2247,
+      "graphRouteOpenMs": 2254,
+      "knowledgeSearchMs": 1578,
+      "queueCreationToReadyMs": null,
+      "tier": "workspace-200"
+    },
+    {
+      "documentCount": 1,
+      "editorLoadMs": 9727,
+      "graphFilterSearchMs": 512,
+      "graphRouteOpenMs": 1202,
+      "knowledgeSearchMs": 956,
+      "queueCreationToReadyMs": null,
+      "tier": "heavy-active"
+    },
+    {
+      "documentCount": 120,
+      "editorLoadMs": 6850,
+      "graphFilterSearchMs": 964,
+      "graphRouteOpenMs": 1426,
+      "knowledgeSearchMs": 1041,
+      "queueCreationToReadyMs": null,
+      "tier": "mixed-heavy"
+    }
+  ]
+}

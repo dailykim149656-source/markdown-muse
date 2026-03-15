@@ -53,17 +53,13 @@ export interface HistorySidebarPanelsProps {
 export interface KnowledgeSidebarPanelsProps {
   activeDoc: DocumentData;
   activeDocId: string;
-  acceptedPatchCount: number;
   createDocument: (options?: CreateDocumentOptions) => DocumentData;
   documents: DocumentData[];
   onDismissSuggestionQueueItem: (id: string) => void;
   onGenerateTocSuggestion?: () => void;
-  onOpenNextSuggestionQueueItem: () => void;
-  onOpenPatchReview: () => void;
   onRefreshWorkspaceDocument?: (documentId: string) => void;
   onRescanWorkspaceSources?: () => void;
   onOpenSuggestionQueueItem: (id: string) => void;
-  onRetryFailedSuggestionQueueItems: () => void;
   onRetrySuggestionQueueItem: (id: string) => void;
   onSelectDoc: (id: string) => void;
   onSuggestKnowledgeImpactUpdate: (
@@ -72,7 +68,6 @@ export interface KnowledgeSidebarPanelsProps {
     context?: KnowledgeSuggestionContext,
   ) => void;
   onSuggestKnowledgeUpdates: (documentId: string, context?: KnowledgeSuggestionContext) => void;
-  patchCount: number;
   workspaceChangedSources?: import("@/lib/knowledge/sourceFingerprint").SourceChangeRecord[];
   workspaceLastRescannedAt?: number | null;
   workspaceRescanning?: boolean;

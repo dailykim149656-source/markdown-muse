@@ -54,13 +54,14 @@ const decodeBase64Url = (payload: string) => {
 
 export const buildDocSharePayload = (document: DocumentData) => {
   const file = buildDocsyFileFromDocumentData(document);
+  const { tiptap: _ignoredTiptap, ...shareableFile } = file;
   const sourceSnapshots = {
-    ...(file.sourceSnapshots || {}),
+    ...(shareableFile.sourceSnapshots || {}),
     [document.mode]: document.content,
   };
 
   return encodeBase64Url(serializeDocsyFile({
-    ...file,
+    ...shareableFile,
     sourceSnapshots,
   }));
 };

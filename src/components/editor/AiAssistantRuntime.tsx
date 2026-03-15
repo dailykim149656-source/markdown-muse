@@ -3,49 +3,61 @@ import type { Editor as TiptapEditor } from "@tiptap/react";
 import type { KnowledgeSuggestionContext } from "@/components/editor/sidebarFeatureTypes";
 import { useAiAssistant } from "@/hooks/useAiAssistant";
 import type { AiBusyAction, PatchPreviewResult, TocPreviewResult } from "@/hooks/useAiAssistant";
+import { useLiveAgent } from "@/hooks/useLiveAgent";
+import type { LiveAgentRuntimeState } from "@/hooks/useLiveAgent";
 import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
 import type { SummarizeDocumentResponse } from "@/types/aiAssistant";
 import type { DocumentData } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
+import type { AgentNewDocumentDraft } from "@/types/liveAgent";
 
 export interface AiAssistantRuntimeState {
   assistantOpen: boolean;
   busyAction: AiBusyAction;
   compareCandidates: DocumentData[];
   comparePreview: PatchPreviewResult | null;
-  compareWithDocument: (targetDocumentId: string) => Promise<unknown> | unknown;
+  compareWithDocument: (targetDocumentId: string) => Promise<PatchPreviewResult>;
   extractProcedureFromActiveDocument: () => Promise<ProcedureExtractionResult | unknown> | unknown;
-  generateSectionPatch: (prompt: string) => Promise<unknown> | unknown;
-  generateTocSuggestion: () => Promise<unknown> | unknown;
-  loadTocPatch: (maxDepthOverride?: 1 | 2 | 3) => Promise<unknown> | unknown;
+  generateSectionPatch: (prompt: string) => Promise<void>;
+  generateTocSuggestion: () => Promise<TocPreviewResult>;
+  loadTocPatch: (maxDepthOverride?: 1 | 2 | 3) => Promise<DocumentPatchSet | null>;
   procedureResult: ProcedureExtractionResult | null;
   richTextAvailable: boolean;
   setAssistantOpen: (open: boolean) => void;
   suggestUpdatesFromDocument: (
     targetDocumentId: string,
     context?: KnowledgeSuggestionContext,
-  ) => Promise<unknown> | unknown;
-  summarizeActiveDocument: (objective: string) => Promise<SummarizeDocumentResponse | unknown> | unknown;
+  ) => Promise<PatchPreviewResult>;
+  summarizeActiveDocument: (objective: string) => Promise<SummarizeDocumentResponse>;
   summaryResult: SummarizeDocumentResponse | null;
   tocPreview: TocPreviewResult | null;
   updateSuggestionPreview: PatchPreviewResult | null;
+  liveAgent: LiveAgentRuntimeState;
 }
 
 interface AiAssistantRuntimeProps {
   activeDoc: DocumentData;
   activeEditor: TiptapEditor | null;
+  createDocumentDraft: (draft: AgentNewDocumentDraft) => void;
   currentRenderableMarkdown: string;
   documents: DocumentData[];
+  getFreshRenderableMarkdown: () => Promise<string>;
+  importWorkspaceDocument: (fileId: string) => Promise<void>;
   loadPatchSet: (patchSet: DocumentPatchSet) => void;
+  openWorkspaceConnection: () => void;
   onStateChange: (state: AiAssistantRuntimeState | null) => void;
 }
 
 const AiAssistantRuntime = ({
   activeDoc,
   activeEditor,
+  createDocumentDraft,
   currentRenderableMarkdown,
   documents,
+  getFreshRenderableMarkdown,
+  importWorkspaceDocument,
   loadPatchSet,
+  openWorkspaceConnection,
   onStateChange,
 }: AiAssistantRuntimeProps) => {
   const state = useAiAssistant({
@@ -53,7 +65,21 @@ const AiAssistantRuntime = ({
     activeEditor,
     currentRenderableMarkdown,
     documents,
+    getFreshRenderableMarkdown,
     loadPatchSet,
+  });
+  const liveAgent = useLiveAgent({
+    activeDoc,
+    activeEditor,
+    currentRenderableMarkdown,
+    documents,
+    getFreshRenderableMarkdown,
+    onCreateDocumentDraft: createDocumentDraft,
+    onImportDriveDocument: importWorkspaceDocument,
+    onOpenPatchReview: (patchSet) => {
+      loadPatchSet(patchSet);
+    },
+    onOpenWorkspaceConnection: openWorkspaceConnection,
   });
 
   useEffect(() => {
@@ -75,8 +101,10 @@ const AiAssistantRuntime = ({
       summaryResult: state.summaryResult,
       tocPreview: state.tocPreview,
       updateSuggestionPreview: state.updateSuggestionPreview,
+      liveAgent,
     });
   }, [
+    liveAgent,
     onStateChange,
     state.assistantOpen,
     state.busyAction,

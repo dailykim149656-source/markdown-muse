@@ -100,3 +100,31 @@ export interface ProposeEditorActionResponse {
   };
   reason: string;
 }
+
+export type AutosaveDiffSummaryDeltaKind = "added" | "removed" | "changed" | "inconsistent";
+
+export interface AutosaveDiffSummaryDelta {
+  afterExcerpt?: string;
+  beforeExcerpt?: string;
+  kind: AutosaveDiffSummaryDeltaKind;
+  summary: string;
+  title: string;
+}
+
+export interface AutosaveDiffSummaryRequest {
+  comparison: {
+    counts: Record<AutosaveDiffSummaryDeltaKind, number>;
+    deltas: AutosaveDiffSummaryDelta[];
+  };
+  document: {
+    documentId: string;
+    fileName: string;
+    mode: Exclude<EditorMode, "json" | "yaml">;
+  };
+  locale?: Locale;
+}
+
+export interface AutosaveDiffSummaryResponse {
+  requestId: string;
+  summary: string;
+}

@@ -15,22 +15,32 @@ import { htmlToTypst } from "@/components/editor/utils/htmlToTypst";
 import { latexToTypst } from "@/components/editor/utils/latexToTypst";
 import { rstToHtml } from "@/components/editor/utils/rstToHtml";
 import { GOOGLE_FONTS_URL, PRETENDARD_STYLESHEET_URL } from "@/components/editor/fonts";
+import {
+  MAX_IMPORT_FILE_SIZE_BYTES,
+  resolveImportedDocumentOptions,
+} from "@/lib/io/documentIoShared";
+import { importLatexToDocsy } from "@/lib/latex/importLatexToDocsy";
 import { DOC_SHARE_MAX_PAYLOAD_LENGTH } from "@/lib/share/shareConstants";
 import type { DocumentPatchSet } from "@/types/documentPatch";
 import type { SourceFileReference } from "@/types/documentAst";
+
+export {
+  MAX_IMPORT_FILE_SIZE_BYTES,
+  resolveImportedDocumentOptions,
+} from "@/lib/io/documentIoShared";
 
 interface UseDocumentIOOptions {
   activeDoc: DocumentData;
   createDocument: (options?: CreateDocumentOptions) => void;
   documents: DocumentData[];
+  getRenderableLatexDocument: () => Promise<string>;
+  getRenderableMarkdown: () => Promise<string>;
   onPatchSetLoad?: (patchSet: DocumentPatchSet) => void;
   onVersionSnapshot?: (metadata?: DocumentVersionSnapshotMetadata) => Promise<unknown> | unknown;
   renderableEditorHtml: string;
   renderableLatexDocument: string;
   renderableMarkdown: string;
 }
-
-export const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 export interface DocumentImportState {
   error: string | null;
@@ -58,69 +68,6 @@ export interface ShareLinkInfo {
   available: boolean;
   link: string | null;
 }
-
-const hasMeaningfulMetadata = (metadata: DocumentData["metadata"] | undefined) => {
-  if (!metadata) {
-    return false;
-  }
-
-  return Boolean(
-    metadata.title
-    || metadata.description
-    || metadata.tags?.length
-    || metadata.authors?.length
-    || metadata.sourceFiles?.length
-    || Object.keys(metadata.labels || {}).length,
-  );
-};
-
-export const isReplaceableBlankDocument = (document: Pick<
-  DocumentData,
-  "ast" | "content" | "metadata" | "mode" | "name" | "sourceSnapshots" | "tiptapJson"
->) => {
-  const primarySourceContent = document.sourceSnapshots?.[document.mode] || "";
-
-  return (document.name || "").trim() === "Untitled"
-    && document.content.trim().length === 0
-    && primarySourceContent.trim().length === 0
-    && !hasMeaningfulMetadata(document.metadata);
-};
-
-export const resolveImportedDocumentOptions = ({
-  activeDocId,
-  documents,
-  importedDocument,
-}: {
-  activeDocId: string;
-  documents: DocumentData[];
-  importedDocument: CreateDocumentOptions;
-}): CreateDocumentOptions => {
-  const matchingDocument = importedDocument.id
-    ? documents.find((document) => document.id === importedDocument.id) || null
-    : null;
-
-  if (matchingDocument) {
-    return {
-      ...importedDocument,
-      replaceDocumentId: matchingDocument.id,
-    };
-  }
-
-  if (documents.length !== 1) {
-    return importedDocument;
-  }
-
-  const activeDocument = documents.find((document) => document.id === activeDocId) || documents[0];
-
-  if (!activeDocument || !isReplaceableBlankDocument(activeDocument)) {
-    return importedDocument;
-  }
-
-  return {
-    ...importedDocument,
-    replaceDocumentId: activeDocument.id,
-  };
-};
 
 const loadDocsyFileFormat = () => import("@/lib/docsy/fileFormat");
 const loadDocShare = () => import("@/lib/share/docShare");
@@ -341,6 +288,8 @@ export const useDocumentIO = ({
   activeDoc,
   createDocument,
   documents,
+  getRenderableLatexDocument,
+  getRenderableMarkdown,
   onPatchSetLoad,
   onVersionSnapshot,
   renderableEditorHtml,
@@ -388,18 +337,21 @@ export const useDocumentIO = ({
 
   const copyExportFormat = useCallback(async (format: ClipboardExportFormat, formatLabel: string) => {
     try {
+      const nextRenderableMarkdown = format === "markdown"
+        ? await getRenderableMarkdown()
+        : renderableMarkdown;
       const content = await buildClipboardExportContent({
         activeDoc,
         format,
         renderableEditorHtml,
-        renderableMarkdown,
+        renderableMarkdown: nextRenderableMarkdown,
       });
       await copyToClipboard(content, formatLabel);
       void onVersionSnapshot?.({ exportFormat: formatLabel });
     } catch {
       toast.error(t("hooks.io.copyFailed", { format: formatLabel }));
     }
-  }, [activeDoc, copyToClipboard, onVersionSnapshot, renderableEditorHtml, renderableMarkdown, t]);
+  }, [activeDoc, copyToClipboard, getRenderableMarkdown, onVersionSnapshot, renderableEditorHtml, renderableMarkdown, t]);
 
   const prepareShareLink = useCallback(async () => {
     const locationHref = typeof window !== "undefined" ? window.location.href : "http://localhost/editor";
@@ -425,11 +377,13 @@ export const useDocumentIO = ({
     }
   }, [onVersionSnapshot, prepareShareLink, t]);
 
-  const handleSaveMd = useCallback(() => {
-    const markdownContent = activeDoc.mode === "markdown" ? activeDoc.content : renderableMarkdown;
+  const handleSaveMd = useCallback(async () => {
+    const markdownContent = activeDoc.mode === "markdown"
+      ? activeDoc.content
+      : await getRenderableMarkdown();
     downloadFile(markdownContent, ".md", "text/markdown");
     void onVersionSnapshot?.({ exportFormat: "Markdown" });
-  }, [activeDoc.content, activeDoc.mode, downloadFile, onVersionSnapshot, renderableMarkdown]);
+  }, [activeDoc.content, activeDoc.mode, downloadFile, getRenderableMarkdown, onVersionSnapshot]);
 
   const handleCopyMd = useCallback(() => {
     void copyExportFormat("markdown", "Markdown");
@@ -442,11 +396,12 @@ export const useDocumentIO = ({
     toast.success(t("toasts.savedDocsy"));
   }, [activeDoc, downloadFile, onVersionSnapshot, t]);
 
-  const handleSaveTex = useCallback(() => {
-    downloadFile(renderableLatexDocument, ".tex", "application/x-tex");
+  const handleSaveTex = useCallback(async () => {
+    const latexDocument = await getRenderableLatexDocument();
+    downloadFile(latexDocument, ".tex", "application/x-tex");
     void onVersionSnapshot?.({ exportFormat: "LaTeX" });
     toast.success(t("hooks.io.latexSaved"));
-  }, [downloadFile, onVersionSnapshot, renderableLatexDocument, t]);
+  }, [downloadFile, getRenderableLatexDocument, onVersionSnapshot, t]);
 
   const handleSaveJson = useCallback(() => {
     downloadFile(activeDoc.content, ".json", "application/json");
@@ -549,7 +504,8 @@ export const useDocumentIO = ({
     const validation = validateImportFileCandidate(file);
 
     if (!validation.ok) {
-      const message = validation.code === "unsupported_extension"
+      const validationCode = "code" in validation ? validation.code : "file_too_large";
+      const message = validationCode === "unsupported_extension"
         ? t("hooks.io.importUnsupportedType")
         : t("hooks.io.importFileTooLarge", {
           size: `${Math.round(MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024))}MB`,
@@ -612,6 +568,7 @@ export const useDocumentIO = ({
           let finalContent = content;
           let sourceFormat = "markdown";
           let sourceSnapshots: SourceSnapshots | undefined;
+          let importedLatexResult: ReturnType<typeof importLatexToDocsy> | null = null;
 
           if (lowerName.endsWith(".docsy")) {
             const { buildDocumentDataFromDocsyFile, parseDocsyFile } = await loadDocsyFileFormat();
@@ -630,6 +587,12 @@ export const useDocumentIO = ({
           if (lowerName.endsWith(".tex")) {
             mode = "latex";
             sourceFormat = "latex";
+            const importedLatex = importLatexToDocsy(content);
+            importedLatexResult = importedLatex;
+            sourceSnapshots = {
+              html: importedLatex.html,
+              latex: content,
+            };
           } else if (lowerName.endsWith(".html") || lowerName.endsWith(".htm")) {
             mode = "html";
             sourceFormat = "html";
@@ -681,6 +644,7 @@ export const useDocumentIO = ({
             importedDocument: {
             content: finalContent,
             metadata: {
+              ...(importedLatexResult ? { latexRoundtrip: importedLatexResult.metadata } : {}),
               sourceFiles: [buildSourceFileReference(file.name, sourceFormat, importedAt)],
               title: name,
             },

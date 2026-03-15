@@ -3,6 +3,7 @@ import {
   appendDocumentVersionSnapshot,
   clearDocumentVersionSnapshots,
   listDocumentVersionSnapshots,
+  upsertDocumentVersionSnapshot,
 } from "@/lib/history/versionHistoryStore";
 import type { DocumentVersionSnapshot } from "@/types/document";
 
@@ -27,6 +28,10 @@ const createSnapshot = (
     ast: null,
   },
   documentId,
+  metadata: {
+    summary: `summary ${createdAt}`,
+    summaryGeneratedAt: createdAt,
+  },
   mode: "markdown",
   snapshotId: `snapshot:${documentId}:${createdAt}:${trigger}`,
   trigger,
@@ -81,5 +86,27 @@ describe("versionHistoryStore fallback persistence", () => {
 
     expect(docOneSnapshots).toEqual([]);
     expect(docTwoSnapshots).toHaveLength(1);
+  });
+
+  it("upserts an existing snapshot without duplicating it", async () => {
+    const snapshot = createSnapshot("doc-1", 10);
+    await appendDocumentVersionSnapshot(snapshot, 5);
+
+    await upsertDocumentVersionSnapshot({
+      ...snapshot,
+      metadata: {
+        ...snapshot.metadata,
+        summary: "updated summary",
+        summaryGeneratedAt: 99,
+      },
+    }, 5);
+
+    const snapshots = await listDocumentVersionSnapshots("doc-1");
+
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]?.metadata).toEqual({
+      summary: "updated summary",
+      summaryGeneratedAt: 99,
+    });
   });
 });

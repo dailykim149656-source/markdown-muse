@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { migrateLegacyAutoSaveData, saveData } from "@/components/editor/useAutoSave";
+import { isAutoSaveWriteFailure, migrateLegacyAutoSaveData, saveData } from "@/components/editor/useAutoSave";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -41,6 +41,15 @@ describe("autosave migration", () => {
         metadata: {},
         tiptapJson: null,
         ast: null,
+        workspaceBinding: {
+          documentKind: "google_docs",
+          fileId: "file-123",
+          importedAt: 1,
+          mimeType: "application/vnd.google-apps.document",
+          provider: "google_drive",
+          syncStatus: "synced",
+          syncWarnings: ["Tables are flattened."],
+        },
       }],
       activeDocId: "doc-2",
       lastSaved: 200,
@@ -49,6 +58,7 @@ describe("autosave migration", () => {
     expect(migrated?.version).toBe(2);
     expect(migrated?.documents[0]?.storageKind).toBe("docsy");
     expect(migrated?.documents[0]?.sourceSnapshots?.json).toBe("{}");
+    expect(migrated?.documents[0]?.workspaceBinding?.syncWarnings).toEqual(["Tables are flattened."]);
   });
 
   it("deduplicates identical imported documents and removes an older blank draft", () => {
@@ -134,7 +144,7 @@ describe("autosave migration", () => {
 
     expect(result.ok).toBe(false);
 
-    if (result.ok) {
+    if (!isAutoSaveWriteFailure(result)) {
       throw new Error("Expected autosave to fail.");
     }
 

@@ -68,6 +68,7 @@ public/    static web assets
 - multi-document editor with tabs and workspace sidebar
 - Markdown, LaTeX, HTML, JSON, and YAML editing
 - document AST generation and structured patch handling
+- Google Workspace connection, Google Docs import/export, and bound-document save
 - AI-assisted summaries, section generation, TOC suggestions, and update proposals
 - patch review dialog instead of silent document mutation
 - local knowledge indexing and related document workflows
@@ -108,11 +109,20 @@ Copy-Item .env.example .env.local
 
 Set at least:
 
-- `GEMINI_API_KEY`
+- `GOOGLE_GENAI_USE_VERTEXAI=true`
+- `GOOGLE_CLOUD_PROJECT`
+- `GOOGLE_CLOUD_LOCATION`
 - `GEMINI_MODEL`
+- `GEMINI_FALLBACK_MODEL`
 - `AI_SERVER_PORT`
 - `AI_ALLOWED_ORIGIN`
 - `VITE_AI_API_BASE_URL`
+
+Authenticate locally with Application Default Credentials:
+
+```bash
+gcloud auth application-default login
+```
 
 Then run:
 
@@ -127,23 +137,40 @@ The AI service is prepared for Cloud Run.
 Runtime contract:
 
 - `PORT` is provided by Cloud Run
-- `GEMINI_API_KEY` should come from Secret Manager
-- `GEMINI_MODEL` selects the model
+- `GOOGLE_GENAI_USE_VERTEXAI=true`
+- `GOOGLE_CLOUD_PROJECT` selects the Vertex AI project
+- `GOOGLE_CLOUD_LOCATION` selects the Vertex AI region
+- `GEMINI_MODEL` selects the primary model
+- `GEMINI_FALLBACK_MODEL` selects the fallback model used for model/quota failures
 - `AI_ALLOWED_ORIGIN` controls allowed frontend origins
+- `AI_ALLOWED_ORIGIN` must be an explicit frontend origin outside local development
 
 Build and deploy pipeline:
 
 - [Dockerfile.ai](Dockerfile.ai)
 - [cloudbuild.ai.yaml](cloudbuild.ai.yaml)
 
+Cloud Run auth:
+
+- the runtime service account must have Vertex AI permissions
+- the local API key path is no longer used for Cloud Run
+
 Frontend deployment:
 
-- set `VITE_AI_API_BASE_URL` to the deployed AI service URL
+- when Firebase Hosting rewrites `/api/**` to Cloud Run, set `VITE_AI_API_BASE_URL` to the deployed frontend origin
+- if you intentionally split frontend and API domains, set `VITE_AI_API_BASE_URL` to the deployed API origin
 - if omitted in a non-localhost environment, the frontend falls back to same-origin
 
 Health check:
 
 - `GET /api/ai/health`
+- returns primary `model` and optional `fallbackModel`
+
+Google OAuth production guard:
+
+- set `GOOGLE_OAUTH_PUBLISHING_STATUS=testing|production`
+- set `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted|reduced`
+- run `npm run check:public-deploy` before public deploys to validate custom-domain and OAuth settings
 
 ## Main scripts
 
@@ -161,6 +188,10 @@ Health check:
 - [Hackathon PRD](PRD/docsy_prd.md)
 - [Final submission package](docs/final-submission-package-2026-03-11.md)
 - [Hackathon implementation session summary](docs/session-summary-2026-03-11-hackathon-implementation.md)
+- [Google Docs export session summary](docs/session-summary-2026-03-12-google-docs-export-and-google-dropdown.md)
+- [Google OAuth production migration runbook](docs/google-oauth-production-migration-2026-03-14.md)
+- [Security credential rotation runbook](docs/security-credential-rotation-runbook-2026-03-14.md)
+- [Edge and browser security runbook](docs/edge-and-browser-security-runbook-2026-03-14.md)
 - [Docs index](docs/README.md)
 - [PRD index](PRD/README.md)
 - [GCP deployment guide](docs/gcp-deployment.md)
@@ -170,6 +201,7 @@ Health check:
 - `GEMINI_API_KEY` is never exposed to the browser bundle.
 - Gemini calls are routed through the server layer.
 - The frontend sends document payloads to the AI service, while secrets stay in server environment variables.
+- Workspace state now defaults outside the repository, and `.data/` is ignored to prevent token-bearing state from being committed.
 
 ## Status
 

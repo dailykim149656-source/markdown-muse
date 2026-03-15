@@ -12,10 +12,26 @@ export type EdgeFilter = "all" | KnowledgeGraphEdgeGroup;
 export type GraphMode = "full" | "document" | "issues";
 export type IssueFilter = "all" | KnowledgeHealthIssueKind;
 
+type GraphFilterTranslate = (key: string, params?: Record<string, number | string>) => string;
+
 interface GraphView {
   edges: KnowledgeGraphEdge[];
   nodes: KnowledgeGraphNode[];
 }
+
+export const GRAPH_MODE_OPTIONS = ["full", "document", "issues"] as const satisfies readonly GraphMode[];
+export const NODE_FILTER_OPTIONS = ["all", "document", "section", "image"] as const satisfies readonly NodeFilter[];
+export const EDGE_FILTER_OPTIONS = ["all", "containment", "reference", "similarity", "issue"] as const satisfies readonly EdgeFilter[];
+export const ISSUE_FILTER_OPTIONS = [
+  "all",
+  "unresolved_reference",
+  "duplicate_document",
+  "missing_section",
+  "conflicting_procedure",
+  "outdated_source",
+  "stale_index",
+  "image_missing_description",
+] as const satisfies readonly IssueFilter[];
 
 export const nodeKindOrder: Record<KnowledgeGraphNode["kind"], number> = {
   document: 0,
@@ -126,6 +142,28 @@ export const issueKindLabelKey = (kind: KnowledgeHealthIssue["kind"]) => {
       return "knowledge.healthTitle";
   }
 };
+
+export const describeGraphFilterSummaries = ({
+  edgeFilter,
+  graphMode,
+  issueFilter,
+  issuesOnly,
+  nodeFilter,
+  t,
+}: {
+  edgeFilter: EdgeFilter;
+  graphMode: GraphMode;
+  issueFilter: IssueFilter;
+  issuesOnly: boolean;
+  nodeFilter: NodeFilter;
+  t: GraphFilterTranslate;
+}) => ({
+  relations: `${t(edgeFilterKey(edgeFilter))} / ${t(issueFilterKey(issueFilter))}`,
+  view: t(graphModeKey(graphMode)),
+  nodes: issuesOnly
+    ? `${t(nodeFilterKey(nodeFilter))} / ${t("knowledge.graphIssuesOnly")}`
+    : t(nodeFilterKey(nodeFilter)),
+});
 
 export const applyGraphMode = ({
   activeDocumentId,

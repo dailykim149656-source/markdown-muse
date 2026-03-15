@@ -1,13 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { toast } from "sonner";
-import { applyDocumentPatchSet } from "@/lib/ast/applyDocumentPatch";
-import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
-import { renderAstToHtml } from "@/lib/ast/renderAstToHtml";
-import { renderAstToLatex } from "@/lib/ast/renderAstToLatex";
-import { renderAstToMarkdown } from "@/lib/ast/renderAstToMarkdown";
-import { validateDocumentAst } from "@/lib/ast/validateDocumentAst";
 import { useI18n } from "@/i18n/useI18n";
+import { importLatexToDocsy } from "@/lib/latex/importLatexToDocsy";
 import { applyPatchDecision } from "@/lib/patches/reviewPatchSet";
 import type { DocumentData, DocumentVersionSnapshotMetadata } from "@/types/document";
 import type { DocumentPatch, DocumentPatchSet } from "@/types/documentPatch";
@@ -37,6 +32,37 @@ const getContentForMode = (mode: DocumentData["mode"], html: string, markdown: s
 
 const isStructuredPatchSet = (patchSet: DocumentPatchSet) =>
   patchSet.patches.every((patch) => patch.target.targetType === "structured_path");
+
+const isDocumentTextPatchSet = (patchSet: DocumentPatchSet) =>
+  patchSet.patches.every((patch) => patch.target.targetType === "document_text");
+
+const loadDocumentTextPatchSet = () => import("@/lib/patches/applyDocumentTextPatchSet");
+const loadRichTextPatchModules = async () => {
+  const [
+    { applyDocumentPatchSet },
+    { serializeTiptapToAst },
+    { renderAstToHtml },
+    { renderAstToLatex },
+    { renderAstToMarkdown },
+    { validateDocumentAst },
+  ] = await Promise.all([
+    import("@/lib/ast/applyDocumentPatch"),
+    import("@/lib/ast/tiptapAst"),
+    import("@/lib/ast/renderAstToHtml"),
+    import("@/lib/ast/renderAstToLatex"),
+    import("@/lib/ast/renderAstToMarkdown"),
+    import("@/lib/ast/validateDocumentAst"),
+  ]);
+
+  return {
+    applyDocumentPatchSet,
+    renderAstToHtml,
+    renderAstToLatex,
+    renderAstToMarkdown,
+    serializeTiptapToAst,
+    validateDocumentAst,
+  };
+};
 
 export const usePatchReview = ({
   activeDoc,
@@ -92,7 +118,7 @@ export const usePatchReview = ({
       toast.warning(t("hooks.patchReview.documentMismatch"));
     }
 
-    toast.success(t("hooks.patchReview.patchLoaded", { title: nextPatchSet.title }));
+      toast.success(t("hooks.patchReview.patchLoaded", { title: nextPatchSet.title }));
   }, [activeDoc.id, activeDoc.mode, t]);
 
   const handlePatchDecision = useCallback((
@@ -176,8 +202,89 @@ export const usePatchReview = ({
         try {
           const syncResult = await onWorkspaceSync?.(nextDocument);
 
-          if (syncResult?.warnings?.length) {
-            toast.warning(syncResult.warnings[0]);
+          const syncWarnings = syncResult && typeof syncResult === "object" && "warnings" in syncResult
+            ? syncResult.warnings
+            : undefined;
+
+          if (syncWarnings?.length) {
+            toast.warning(syncWarnings[0]);
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";
+          toast.warning(message);
+        }
+      }
+
+      if (result.warnings.length > 0) {
+        toast.warning(result.warnings[0] || t("hooks.patchReview.appliedWithWarnings"));
+      }
+
+      if (result.failures.length > 0) {
+        toast.warning(t("hooks.patchReview.appliedWithFailures", {
+          applied: result.appliedPatchIds.length,
+          failed: result.failures.length,
+        }));
+        return;
+      }
+
+      setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
+      setPatchReviewOpen(false);
+      toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
+      return;
+    }
+
+    if (isDocumentTextPatchSet(patchSet)) {
+      const { applyDocumentTextPatchSet } = await loadDocumentTextPatchSet();
+      const result = applyDocumentTextPatchSet(activeDoc.content, patchSet);
+
+      if (result.appliedPatchIds.length === 0 && result.failures.length === 0) {
+        toast.info(t("hooks.patchReview.nothingToApply"));
+        return;
+      }
+
+      if (result.appliedPatchIds.length > 0) {
+        const nextContent = result.value;
+        const imported = activeDoc.mode === "latex" ? importLatexToDocsy(nextContent) : null;
+        const nextHtml = imported?.html || activeDoc.sourceSnapshots?.html || "";
+        const nextDocument: DocumentData = {
+          ...activeDoc,
+          content: nextContent,
+          sourceSnapshots: {
+            ...(activeDoc.sourceSnapshots || {}),
+            ...(activeDoc.mode === "latex"
+              ? {
+                html: nextHtml,
+                latex: nextContent,
+              }
+              : {}),
+            [activeDoc.mode]: nextContent,
+          },
+          tiptapJson: null,
+          updatedAt: Date.now(),
+        };
+
+        updateActiveDoc({
+          content: nextDocument.content,
+          sourceSnapshots: nextDocument.sourceSnapshots,
+          tiptapJson: nextDocument.tiptapJson,
+          updatedAt: nextDocument.updatedAt,
+        });
+        setLiveEditorHtml(nextHtml);
+        bumpEditorKey();
+        void onVersionSnapshot?.(nextDocument, {
+          patchCount: result.appliedPatchIds.length,
+          patchSetTitle: patchSet.title,
+        });
+
+        try {
+          const syncResult = await onWorkspaceSync?.(nextDocument);
+
+          const syncWarnings = syncResult && typeof syncResult === "object" && "warnings" in syncResult
+            ? syncResult.warnings
+            : undefined;
+
+          if (syncWarnings?.length) {
+            toast.warning(syncWarnings[0]);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";
@@ -208,6 +315,14 @@ export const usePatchReview = ({
       return;
     }
 
+    const {
+      applyDocumentPatchSet,
+      renderAstToHtml,
+      renderAstToLatex,
+      renderAstToMarkdown,
+      serializeTiptapToAst,
+      validateDocumentAst,
+    } = await loadRichTextPatchModules();
     let documentAst;
 
     try {
@@ -255,7 +370,14 @@ export const usePatchReview = ({
         updatedAt: nextUpdatedAt,
       };
 
-      updateActiveDoc({ content: nextContent });
+      updateActiveDoc({
+        ast: nextDocument.ast,
+        content: nextDocument.content,
+        sourceSnapshots: nextDocument.sourceSnapshots,
+        storageKind: nextDocument.storageKind,
+        tiptapJson: nextDocument.tiptapJson,
+        updatedAt: nextDocument.updatedAt,
+      });
       setLiveEditorHtml(nextHtml);
       bumpEditorKey();
       void onVersionSnapshot?.(nextDocument, {
@@ -266,8 +388,12 @@ export const usePatchReview = ({
       try {
         const syncResult = await onWorkspaceSync?.(nextDocument);
 
-        if (syncResult?.warnings?.length) {
-          toast.warning(syncResult.warnings[0]);
+        const syncWarnings = syncResult && typeof syncResult === "object" && "warnings" in syncResult
+          ? syncResult.warnings
+          : undefined;
+
+        if (syncWarnings?.length) {
+          toast.warning(syncWarnings[0]);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";

@@ -106,8 +106,6 @@ Implemented:
 
 - patch review confidence/provenance metrics
 - provenance gap highlighting and filtering
-- operations gate panel
-- release checklist panel and checklist integration into operations gate
 - semantic rerank with term expansion
 - workspace-scale hints and performance-budget UI
 - targeted regression coverage around queue, graph, diagnostics, and rerank
@@ -139,11 +137,11 @@ Status: complete
 
 - graph chain context, diagnostics cause text, and rerank hints are visible
 
-### Operator visibility
+### Handoff visibility
 
 Status: complete
 
-- operations gate, checklist progress, summary copy, and queue metrics are available
+- queue state, patch review metrics, diagnostics panels, and delivery surfaces are available
 
 ### Validation baseline
 
@@ -170,6 +168,10 @@ These items do not block the statement that the core PRD was implemented, but th
 4. Final release documentation cleanup
 - the older plan and release docs describe some items as still pending even though they were implemented afterward
 - this document should be treated as the current state reference
+
+5. Live Google Workspace export and save validation
+- Google Workspace now includes export-to-Google-Docs and bound-document save flows
+- those paths still need real-account validation before final release sign-off
 
 ## Final assessment
 

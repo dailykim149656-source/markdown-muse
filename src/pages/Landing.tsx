@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion, useScroll, useTransform } from "framer-motion";
 import {
   ArrowRight,
@@ -20,8 +20,11 @@ import {
 } from "lucide-react";
 import docslyLogo from "@/assets/docsly-logo.png";
 import docslyLogoSmall from "@/assets/docsly-logo-small.png";
-import editorPreview from "@/assets/editor-preview.png";
-import editorPreviewSmall from "@/assets/editor-preview-small.png";
+import marketingEditorSurface from "@/assets/marketing-editor-surface.png";
+import marketingGoogleWorkspaceSurface from "@/assets/marketing-google-workspace-surface.png";
+import marketingGraphSurface from "@/assets/marketing-graph-surface.png";
+import marketingPatchReviewSurface from "@/assets/marketing-patch-review-surface.png";
+import marketingQueueSurface from "@/assets/marketing-queue-surface.png";
 import { Button } from "@/components/ui/button";
 import { getGuideContent } from "@/content/guideContent";
 import { useI18n } from "@/i18n/useI18n";
@@ -91,22 +94,82 @@ const Landing = () => {
     { description: t("landing.features.themeDesc"), icon: Moon, title: t("landing.features.themeTitle") },
   ]), [t]);
   const guideContent = useMemo(() => getGuideContent(locale), [locale]);
-
-  const formats = ["Markdown", "LaTeX", "HTML", "Typst", "RST", "AsciiDoc", "JSON", "YAML", "PDF"];
+  const currentSurfaces = useMemo(() => ([
+    {
+      description: t("landing.features.markdownDesc"),
+      image: marketingEditorSurface,
+      title: t("landing.features.markdownTitle"),
+    },
+    {
+      description: t("landing.features.htmlDesc"),
+      image: marketingGraphSurface,
+      title: t("landing.features.htmlTitle"),
+    },
+    {
+      description: t("landing.features.rstDesc"),
+      image: marketingPatchReviewSurface,
+      title: t("landing.features.rstTitle"),
+    },
+    {
+      description: t("landing.features.tableDesc"),
+      image: marketingQueueSurface,
+      title: t("landing.features.tableTitle"),
+    },
+    {
+      description: t("landing.features.templateDesc"),
+      image: marketingGoogleWorkspaceSurface,
+      title: t("landing.features.templateTitle"),
+    },
+  ]), [t]);
+  const formatGroups = useMemo(() => ([
+    {
+      formats: ["Markdown", "LaTeX", "HTML", "JSON", "YAML"],
+      key: "edit-now",
+      label: t("landing.formatGroups.editNow"),
+    },
+    {
+      formats: [".docsy", "Typst", "AsciiDoc", "RST", "PDF"],
+      key: "import-export",
+      label: t("landing.formatGroups.importExport"),
+    },
+  ]), [t]);
+  const advancedSurfaceChips = useMemo(() => ([
+    t("landing.profiles.gated.history"),
+    t("landing.profiles.gated.patchReview"),
+    t("landing.profiles.gated.ai"),
+    t("landing.profiles.gated.knowledge"),
+    t("landing.profiles.gated.structured"),
+    t("landing.profiles.gated.documentTools"),
+    t("landing.profiles.gated.advancedBlocks"),
+  ]), [t]);
+  const profileCards = useMemo(() => ([
+    {
+      description: t("landing.profiles.beginnerDescription"),
+      hint: t("landing.profiles.beginnerHint"),
+      key: "beginner",
+      title: t("landing.profiles.beginnerTitle"),
+    },
+    {
+      description: t("landing.profiles.advancedDescription"),
+      hint: t("landing.profiles.advancedHint"),
+      key: "advanced",
+      title: t("landing.profiles.advancedTitle"),
+    },
+  ]), [t]);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <motion.nav
         animate={{ opacity: 1, y: 0 }}
-        className="sticky top-0 z-50 flex items-center justify-between border-b border-border bg-background/80 px-6 py-4 backdrop-blur-xl sm:px-10"
+        className="sticky top-0 z-50 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-background/80 px-6 py-4 backdrop-blur-xl sm:flex-nowrap sm:items-center sm:px-10"
         initial={{ opacity: 0, y: -20 }}
         transition={{ duration: 0.4 }}
       >
-        <div className="flex items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <img alt={t("common.appName")} className="h-8 w-8" src={docslyLogoSmall} />
           <span className="text-lg font-bold tracking-tight">{t("common.appName")}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
           <div className="flex items-center gap-1 rounded-lg border border-border p-1">
             <Languages className="ml-1 h-4 w-4 text-muted-foreground" />
             {LOCALES.map((nextLocale) => (
@@ -216,7 +279,7 @@ const Landing = () => {
 
         <motion.div
           animate="visible"
-          className="mt-8 flex items-center gap-6 text-sm text-muted-foreground"
+          className="mt-8 flex flex-wrap items-center gap-3 text-sm text-muted-foreground"
           custom={4}
           initial="hidden"
           variants={fadeUp}
@@ -249,20 +312,56 @@ const Landing = () => {
               </div>
               <span className="ml-2 text-xs text-muted-foreground">docsy.app/editor</span>
             </div>
-            <img
-              alt={t("landing.previewAlt")}
-              className="w-full"
-              loading="lazy"
-              sizes="(max-width: 1024px) 960px, 1280px"
-              src={editorPreviewSmall}
-              srcSet={`${editorPreviewSmall} 960w, ${editorPreview} 1280w`}
-            />
+            <img alt={t("landing.previewAlt")} className="w-full" loading="lazy" src={marketingEditorSurface} />
           </motion.div>
         </div>
       </motion.section>
 
+      <section className="px-6 pb-16 sm:px-10">
+        <div className="mx-auto max-w-6xl">
+          <motion.div
+            className="mb-10 text-center"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            <span className="mb-4 inline-block rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">
+              {t("landing.surfacesBadge")}
+            </span>
+            <h2 className="mb-4 text-3xl font-bold sm:text-4xl">{t("landing.surfacesTitle")}</h2>
+            <p className="mx-auto max-w-3xl text-lg text-muted-foreground">{t("landing.surfacesDescription")}</p>
+          </motion.div>
+
+          <motion.div
+            className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3"
+            initial="hidden"
+            variants={staggerContainer}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            {currentSurfaces.map(({ description, image, title }, index) => (
+              <motion.div
+                className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm"
+                custom={index}
+                key={title}
+                variants={fadeUp}
+              >
+                <div className="aspect-[16/10] overflow-hidden border-b border-border bg-muted/20">
+                  <img alt={title} className="h-full w-full object-cover object-top" loading="lazy" src={image} />
+                </div>
+                <div className="p-5">
+                  <h3 className="text-lg font-semibold">{title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
       <section className="border-y border-border bg-muted/30 py-10">
-        <div className="mx-auto max-w-5xl px-6">
+        <div className="mx-auto max-w-6xl px-6">
           <motion.p
             className="mb-6 text-center text-sm text-muted-foreground"
             initial="hidden"
@@ -273,21 +372,98 @@ const Landing = () => {
             {t("landing.supportedFormats")}
           </motion.p>
           <motion.div
-            className="flex flex-wrap items-center justify-center gap-3"
+            className="grid gap-4 md:grid-cols-2"
             initial="hidden"
             variants={staggerContainer}
             viewport={{ once: true }}
             whileInView="visible"
           >
-            {formats.map((format, index) => (
-              <motion.span
-                key={format}
-                className="rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm"
+            {formatGroups.map(({ formats, key, label }, index) => (
+              <motion.div
+                className="rounded-2xl border border-border bg-card p-5 shadow-sm"
                 custom={index}
+                key={key}
                 variants={fadeUp}
               >
-                {format}
-              </motion.span>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  {label}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  {formats.map((format) => (
+                    <span
+                      className="rounded-full border border-border bg-background px-4 py-2 text-sm font-medium text-foreground shadow-sm"
+                      key={format}
+                    >
+                      {format}
+                    </span>
+                  ))}
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
+
+      <section className="px-6 py-20 sm:px-10">
+        <div className="mx-auto max-w-6xl">
+          <motion.div
+            className="mb-12 text-center"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            <span className="mb-4 inline-block rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+              {t("landing.profiles.badge")}
+            </span>
+            <h2 className="mb-4 text-3xl font-bold sm:text-4xl">{t("landing.profiles.title")}</h2>
+            <p className="mx-auto max-w-3xl text-lg text-muted-foreground">{t("landing.profiles.description")}</p>
+          </motion.div>
+
+          <motion.div
+            className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]"
+            initial="hidden"
+            variants={staggerContainer}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            {profileCards.map(({ description, hint, key, title }, index) => (
+              <motion.div
+                className="rounded-2xl border border-border bg-card p-6 shadow-sm"
+                custom={index}
+                key={key}
+                variants={fadeUp}
+              >
+                <div className="flex items-center gap-2">
+                  <div className="text-lg font-semibold">{title}</div>
+                  {key === "beginner" ? (
+                    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                      {t("landing.profiles.default")}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-3 text-sm leading-6 text-foreground/85">{description}</p>
+                <div className="mt-4 rounded-xl border border-border/70 bg-muted/20 px-4 py-3 text-sm leading-6 text-muted-foreground">
+                  {hint}
+                </div>
+                {key === "advanced" ? (
+                  <div className="mt-4">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      {t("landing.profiles.gatedLabel")}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {advancedSurfaceChips.map((chip) => (
+                        <span
+                          className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground"
+                          key={chip}
+                        >
+                          {chip}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </motion.div>
             ))}
           </motion.div>
         </div>
@@ -513,6 +689,10 @@ const Landing = () => {
           <span className="text-sm font-semibold">{t("common.appName")}</span>
         </div>
         <p className="text-xs text-muted-foreground">{t("landing.footer")}</p>
+        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-muted-foreground">
+          <Link className="transition-colors hover:text-foreground" to="/privacy">Privacy</Link>
+          <Link className="transition-colors hover:text-foreground" to="/terms">Terms</Link>
+        </div>
       </footer>
     </div>
   );

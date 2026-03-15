@@ -9,9 +9,11 @@ import {
   tiptapDocumentHasDocumentContent,
 } from "./editorAdvancedContent";
 import { useEditorExtensions } from "./editorConfig";
+import { rememberEditorSelection } from "./editorSelectionMemory";
 import { applyEditorSeed } from "./editorSeedSync";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
 import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
+import { isUsableTiptapDocument } from "@/lib/ast/tiptapUsability";
 
 interface HtmlEditorProps {
   advancedBlocksEnabled?: boolean;
@@ -26,6 +28,7 @@ interface HtmlEditorProps {
   onHtmlChange?: (html: string) => void;
   onEditorReady?: (editor: Editor | null) => void;
   onTiptapChange?: (document: JSONContent | null) => void;
+  seedRevision?: string;
 }
 
 const HtmlEditor = ({
@@ -41,6 +44,7 @@ const HtmlEditor = ({
   onHtmlChange,
   onEditorReady,
   onTiptapChange,
+  seedRevision = "default",
 }: HtmlEditorProps) => {
   const initialHtml = initialContent || "";
   const requiresDocumentFeatures = tiptapDocumentHasDocumentContent(initialTiptapDoc) || htmlHasDocumentContent(initialHtml);
@@ -55,16 +59,35 @@ const HtmlEditor = ({
   const seedSignatureRef = useRef<string | null>(null);
   const sourcePanelRef = useRef<HTMLDivElement | null>(null);
   const sourceTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const usableInitialTiptapDoc = isUsableTiptapDocument(initialTiptapDoc) ? initialTiptapDoc : undefined;
+  const latestEditorSeedRef = useRef<JSONContent | string>(usableInitialTiptapDoc || initialHtml);
+  const seedPayloadRef = useRef({
+    initialHtml,
+    initialTiptapDoc: usableInitialTiptapDoc,
+    revision: seedRevision,
+  });
   const { editorPropsDefault, coreExtensions, extensions, extensionsReady } = useEditorExtensions(
     "HTML WYSIWYG editor with synced source.",
     documentFeaturesEnabled,
     advancedBlocksEnabled,
   );
-  const requiresEnabledExtensions = (requiresDocumentFeatures && documentFeaturesEnabled)
-    || (requiresAdvancedBlocks && advancedBlocksEnabled);
   const shouldHoldEditor = (requiresDocumentFeatures && !documentFeaturesEnabled)
     || (requiresAdvancedBlocks && !advancedBlocksEnabled)
-    || (requiresEnabledExtensions && !extensionsReady);
+    || ((documentFeaturesEnabled || advancedBlocksEnabled) && !extensionsReady);
+
+  if (seedPayloadRef.current.revision !== seedRevision) {
+    seedPayloadRef.current = {
+      initialHtml,
+      initialTiptapDoc: usableInitialTiptapDoc,
+      revision: seedRevision,
+    };
+  }
+
+  useEffect(() => {
+    latestEditorSeedRef.current = seedPayloadRef.current.initialTiptapDoc || seedPayloadRef.current.initialHtml;
+    seedSignatureRef.current = null;
+    setHtmlSource(seedPayloadRef.current.initialHtml);
+  }, [seedRevision]);
 
   useEffect(() => {
     if (requiresDocumentFeatures && !documentFeaturesEnabled) {
@@ -82,6 +105,7 @@ const HtmlEditor = ({
     (html: string, document: JSONContent) => {
       if (syncingFromSource.current) return;
       syncingFromWysiwyg.current = true;
+      latestEditorSeedRef.current = document;
       setHtmlSource(html);
       onContentChange?.(html);
       onHtmlChange?.(html);
@@ -93,16 +117,22 @@ const HtmlEditor = ({
 
   const editor = useEditor({
     extensions: shouldHoldEditor ? coreExtensions : extensions,
-    content: shouldHoldEditor ? "" : (initialTiptapDoc || initialHtml),
-    onUpdate: ({ editor }) => handleWysiwygUpdate(editor.getHTML(), editor.getJSON()),
+    content: shouldHoldEditor ? "" : latestEditorSeedRef.current,
+    onCreate: ({ editor }) => {
+      rememberEditorSelection(editor);
+    },
+    onFocus: ({ editor }) => {
+      rememberEditorSelection(editor);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      rememberEditorSelection(editor);
+    },
+    onUpdate: ({ editor }) => {
+      rememberEditorSelection(editor);
+      handleWysiwygUpdate(editor.getHTML(), editor.getJSON());
+    },
     editorProps: editorPropsDefault,
-  });
-
-  useEffect(() => {
-    const nextHtml = initialContent || "";
-
-    setHtmlSource((current) => current === nextHtml ? current : nextHtml);
-  }, [initialContent]);
+  }, [advancedBlocksEnabled, documentFeaturesEnabled, extensionsReady, shouldHoldEditor]);
 
   useEffect(() => {
     if (!editor || shouldHoldEditor) {
@@ -111,12 +141,12 @@ const HtmlEditor = ({
 
     applyEditorSeed({
       editor,
-      nextContent: initialTiptapDoc || initialHtml,
+      nextContent: latestEditorSeedRef.current,
       onHtmlChange,
       onTiptapChange,
       seedSignatureRef,
     });
-  }, [editor, initialHtml, initialTiptapDoc, onHtmlChange, onTiptapChange, shouldHoldEditor]);
+  }, [editor, onHtmlChange, onTiptapChange, seedRevision, shouldHoldEditor]);
 
   const applySourceTabIndent = useCallback((ta: HTMLTextAreaElement, shiftKey: boolean) => {
     const start = ta.selectionStart ?? 0;
@@ -152,6 +182,7 @@ const HtmlEditor = ({
   const handleSourceChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const newHtml = e.target.value;
+      latestEditorSeedRef.current = newHtml;
       setHtmlSource(newHtml);
       onContentChange?.(newHtml);
       onHtmlChange?.(newHtml);
@@ -174,6 +205,7 @@ const HtmlEditor = ({
         if (editor.getHTML() === newHtml) return;
         syncingFromSource.current = true;
         editor.commands.setContent(newHtml, { emitUpdate: false });
+        latestEditorSeedRef.current = editor.getJSON();
         onTiptapChange?.(editor.getJSON());
         queueMicrotask(() => { syncingFromSource.current = false; });
       });

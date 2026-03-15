@@ -1,3 +1,6 @@
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 steps:
   - name: gcr.io/cloud-builders/docker
     args:
@@ -12,23 +15,63 @@ steps:
       - push
       - ${_IMAGE_URI}
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - ${_SERVICE_NAME}
-      - --image=${_IMAGE_URI}
-      - --region=${_REGION}
-      - --platform=managed
-      - --allow-unauthenticated
-      - --port=8080
-      - --set-env-vars=GEMINI_MODEL=${_GEMINI_MODEL},AI_ALLOWED_ORIGIN=${_AI_ALLOWED_ORIGIN}
-      - --update-secrets=GEMINI_API_KEY=${_GEMINI_API_KEY_SECRET}:latest
+      - -ceu
+      - |
+        cat > /workspace/ai-service-env.yaml <<EOF
+        GOOGLE_GENAI_USE_VERTEXAI: "true"
+        GOOGLE_CLOUD_PROJECT: "${PROJECT_ID}"
+        GOOGLE_CLOUD_LOCATION: "${_VERTEX_LOCATION}"
+        GEMINI_MODEL: "${_GEMINI_MODEL}"
+        GEMINI_FALLBACK_MODEL: "${_GEMINI_FALLBACK_MODEL}"
+        AI_ALLOWED_ORIGIN: "${_AI_ALLOWED_ORIGIN}"
+        AI_MAX_REQUEST_BYTES: "${_AI_MAX_REQUEST_BYTES}"
+        GOOGLE_CLIENT_ID: "${_GOOGLE_CLIENT_ID}"
+        GOOGLE_OAUTH_REDIRECT_URI: "${_GOOGLE_OAUTH_REDIRECT_URI}"
+        GOOGLE_OAUTH_PUBLISHING_STATUS: "${_GOOGLE_OAUTH_PUBLISHING_STATUS}"
+        GOOGLE_WORKSPACE_SCOPE_PROFILE: "${_GOOGLE_WORKSPACE_SCOPE_PROFILE}"
+        WORKSPACE_FRONTEND_ORIGIN: "${_WORKSPACE_FRONTEND_ORIGIN}"
+        GOOGLE_WORKSPACE_SCOPES: "${_GOOGLE_WORKSPACE_SCOPES}"
+        TEX_ALLOW_ALL_PACKAGES: "${_TEX_ALLOW_ALL_PACKAGES}"
+        TEX_ALLOW_RAW_DOCUMENT: "${_TEX_ALLOW_RAW_DOCUMENT}"
+        TEX_ALLOW_RESTRICTED_COMMANDS: "${_TEX_ALLOW_RESTRICTED_COMMANDS}"
+        TEX_ALLOWED_PACKAGES: "${_TEX_ALLOWED_PACKAGES}"
+        TEX_SERVICE_BASE_URL: "${_TEX_SERVICE_BASE_URL}"
+        EOF
+
+        gcloud run deploy "${_SERVICE_NAME}" \
+          --image="${_IMAGE_URI}" \
+          --region="${_REGION}" \
+          --platform=managed \
+          --allow-unauthenticated \
+          --port=8080 \
+          --ingress=all \
+          --service-account="${_RUN_SERVICE_ACCOUNT}" \
+          --env-vars-file=/workspace/ai-service-env.yaml \
+          --update-secrets="GOOGLE_CLIENT_SECRET=${_GOOGLE_CLIENT_SECRET_SECRET}:latest,TEX_SERVICE_AUTH_TOKEN=${_TEX_SERVICE_AUTH_TOKEN_SECRET}:latest,AI_DIAGNOSTICS_TOKEN=${_AI_DIAGNOSTICS_TOKEN_SECRET}:latest"
 substitutions:
   _REGION: asia-northeast3
-  _SERVICE_NAME: markdown-muse-ai
-  _GEMINI_MODEL: gemini-2.5-flash
-  _AI_ALLOWED_ORIGIN: "*"
-  _GEMINI_API_KEY_SECRET: gemini-api-key
+  _VERTEX_LOCATION: asia-northeast3
+  _SERVICE_NAME: docsy
+  _GEMINI_MODEL: gemini-3.1-flash-lite-preview
+  _GEMINI_FALLBACK_MODEL: gemini-2.5-flash
+  _AI_ALLOWED_ORIGIN: ""
+  _AI_MAX_REQUEST_BYTES: "2097152"
+  _GOOGLE_CLIENT_ID: ""
+  _GOOGLE_OAUTH_REDIRECT_URI: ""
+  _GOOGLE_OAUTH_PUBLISHING_STATUS: "testing"
+  _GOOGLE_WORKSPACE_SCOPE_PROFILE: "restricted"
+  _WORKSPACE_FRONTEND_ORIGIN: ""
+  _GOOGLE_WORKSPACE_SCOPES: ""
+  _TEX_ALLOW_ALL_PACKAGES: "true"
+  _TEX_ALLOW_RAW_DOCUMENT: "true"
+  _TEX_ALLOW_RESTRICTED_COMMANDS: "false"
+  _TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,latexsym,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK"
+  _AI_DIAGNOSTICS_TOKEN_SECRET: ai-diagnostics-token
+  _GOOGLE_CLIENT_SECRET_SECRET: google-client-secret
+  _TEX_SERVICE_AUTH_TOKEN_SECRET: tex-service-auth-token
+  _TEX_SERVICE_BASE_URL: ""
+  _RUN_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
 images:
   - ${_IMAGE_URI}

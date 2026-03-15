@@ -1,8 +1,9 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import {
   BrainCircuit,
   Braces,
   Check,
+  ChevronDown,
   Clock,
   FileCode,
   FileJson,
@@ -26,6 +27,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -44,6 +46,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useI18n } from "@/i18n/useI18n";
+import type { EditorUiCapabilities } from "@/lib/editor/userProfiles";
 import { getWorkspaceProviderLabel, getWorkspaceSyncLabel } from "@/lib/workspace/workspaceLabels";
 import type { DocumentData, EditorMode } from "@/types/document";
 
@@ -59,6 +62,7 @@ const SidebarPanelFallback = () => (
 interface FileSidebarProps {
   activeDoc: DocumentData;
   activeDocId: string;
+  capabilities: Pick<EditorUiCapabilities, "canAccessHistory" | "canAccessKnowledge" | "canAccessStructuredModes">;
   createDocument: KnowledgeSidebarPanelsProps["createDocument"];
   documents: DocumentData[];
   historyEnabled: boolean;
@@ -73,6 +77,7 @@ interface FileSidebarProps {
   onOpenStructuredModes?: () => void;
   onRenameDoc: (id: string, name: string) => void;
   onSelectDoc: (id: string) => void;
+  knowledgePanelResetKey?: number;
   showStructuredCreateAction?: boolean;
 }
 
@@ -109,6 +114,7 @@ const modeExtension = (mode: string) => {
 const FileSidebar = ({
   activeDoc,
   activeDocId,
+  capabilities,
   createDocument,
   documents,
   historyEnabled,
@@ -123,6 +129,7 @@ const FileSidebar = ({
   onOpenStructuredModes,
   onRenameDoc,
   onSelectDoc,
+  knowledgePanelResetKey = 0,
   showStructuredCreateAction = false,
 }: FileSidebarProps) => {
   const { t } = useI18n();
@@ -130,6 +137,15 @@ const FileSidebar = ({
   const [activeTab, setActiveTab] = useState<SidebarTab>("documents");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+
+  const showKnowledgeTab = capabilities.canAccessKnowledge;
+  const showHistoryTab = capabilities.canAccessHistory;
+
+  useEffect(() => {
+    if ((activeTab === "knowledge" && !showKnowledgeTab) || (activeTab === "history" && !showHistoryTab)) {
+      setActiveTab("documents");
+    }
+  }, [activeTab, showHistoryTab, showKnowledgeTab]);
 
   const formatDate = (timestamp: number) => {
     const documentDate = new Date(timestamp);
@@ -169,15 +185,58 @@ const FileSidebar = ({
   };
 
   const sortedDocuments = [...documents].sort((leftDocument, rightDocument) => rightDocument.updatedAt - leftDocument.updatedAt);
+  const createDocumentOptions: Array<{
+    icon: typeof FilePlus;
+    key: string;
+    mode: EditorMode;
+    onSelect?: () => void;
+  }> = [
+    {
+      icon: FilePlus,
+      key: "sidebar.newMarkdown",
+      mode: "markdown",
+    },
+    {
+      icon: FileCode,
+      key: "sidebar.newLatex",
+      mode: "latex",
+    },
+    {
+      icon: FileType,
+      key: "sidebar.newHtml",
+      mode: "html",
+    },
+    {
+      icon: FileJson,
+      key: "sidebar.newJson",
+      mode: "json",
+      onSelect: showStructuredCreateAction ? onOpenStructuredModes : undefined,
+    },
+    {
+      icon: Braces,
+      key: "sidebar.newYaml",
+      mode: "yaml",
+      onSelect: showStructuredCreateAction ? onOpenStructuredModes : undefined,
+    },
+  ];
+  const visibleCreateDocumentOptions = createDocumentOptions.filter((option) =>
+    capabilities.canAccessStructuredModes || (option.mode !== "json" && option.mode !== "yaml"));
+
+  const structuredOptionsVisible = visibleCreateDocumentOptions.some((option) =>
+    option.mode === "json" || option.mode === "yaml");
+
+  const needsStructuredSeparator = visibleCreateDocumentOptions.some((option) =>
+    option.mode === "markdown" || option.mode === "latex" || option.mode === "html")
+    && structuredOptionsVisible;
 
   const activateTab = (tab: SidebarTab) => {
     setActiveTab(tab);
 
-    if (tab === "knowledge" && !knowledgeEnabled) {
+    if (tab === "knowledge" && showKnowledgeTab && !knowledgeEnabled) {
       onActivateKnowledge();
     }
 
-    if (tab === "history" && !historyEnabled) {
+    if (tab === "history" && showHistoryTab && !historyEnabled) {
       onActivateHistory();
     }
   };
@@ -215,26 +274,30 @@ const FileSidebar = ({
             <FolderOpen className="h-3.5 w-3.5" />
             {t("sidebar.documents")}
           </Button>
-          <Button
-            className="h-7 justify-start gap-1.5 px-2 text-[11px]"
-            onClick={() => activateTab("knowledge")}
-            size="sm"
-            type="button"
-            variant={activeTab === "knowledge" ? "secondary" : "ghost"}
-          >
-            <BrainCircuit className="h-3.5 w-3.5" />
-            {t("sidebar.knowledge")}
-          </Button>
-          <Button
-            className="h-7 justify-start gap-1.5 px-2 text-[11px]"
-            onClick={() => activateTab("history")}
-            size="sm"
-            type="button"
-            variant={activeTab === "history" ? "secondary" : "ghost"}
-          >
-            <History className="h-3.5 w-3.5" />
-            {t("sidebar.history")}
-          </Button>
+          {showKnowledgeTab ? (
+            <Button
+              className="h-7 justify-start gap-1.5 px-2 text-[11px]"
+              onClick={() => activateTab("knowledge")}
+              size="sm"
+              type="button"
+              variant={activeTab === "knowledge" ? "secondary" : "ghost"}
+            >
+              <BrainCircuit className="h-3.5 w-3.5" />
+              {t("sidebar.knowledge")}
+            </Button>
+          ) : null}
+          {showHistoryTab ? (
+            <Button
+              className="h-7 justify-start gap-1.5 px-2 text-[11px]"
+              onClick={() => activateTab("history")}
+              size="sm"
+              type="button"
+              variant={activeTab === "history" ? "secondary" : "ghost"}
+            >
+              <History className="h-3.5 w-3.5" />
+              {t("sidebar.history")}
+            </Button>
+          ) : null}
         </div>
       </SidebarHeader>
 
@@ -257,9 +320,10 @@ const FileSidebar = ({
                     <SidebarMenuItem key={document.id}>
                       <SidebarMenuButton
                         asChild
-                        className={`group/item w-full ${isActive ? "bg-accent text-accent-foreground" : ""}`}
+                        className={`group/item w-full !h-auto !min-h-[4.75rem] !overflow-visible items-start py-2 ${isActive ? "bg-accent text-accent-foreground" : ""}`}
                       >
                         <div
+                          className="flex min-h-0 w-full items-start gap-2"
                           onClick={() => !isEditing && onSelectDoc(document.id)}
                           onKeyDown={(event) => {
                             if (isEditing) {
@@ -274,13 +338,13 @@ const FileSidebar = ({
                           role="button"
                           tabIndex={0}
                         >
-                          <Icon className="h-4 w-4 shrink-0" />
-                          <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                          <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                          <div className="min-w-0 flex-1 overflow-hidden group-data-[collapsible=icon]:hidden">
                             {isEditing ? (
-                              <div className="flex items-center gap-1" onClick={(event) => event.stopPropagation()}>
+                              <div className="flex min-w-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
                                 <Input
                                   autoFocus
-                                  className="h-5 px-1 text-xs"
+                                  className="h-5 w-full min-w-0 px-1 text-xs"
                                   onChange={(event) => setEditName(event.target.value)}
                                   onKeyDown={(event) => {
                                     if (event.key === "Enter") {
@@ -301,46 +365,46 @@ const FileSidebar = ({
                                 </Button>
                               </div>
                             ) : (
-                              <div className="flex items-center justify-between">
-                                <div className="min-w-0">
-                                  <div className="truncate text-xs font-medium">
+                              <div className="flex min-h-0 min-w-0 flex-col gap-1">
+                                <div className="grid min-w-0 grid-cols-[1fr_auto] items-start gap-2">
+                                  <div className="truncate text-xs font-medium leading-normal">
                                     {document.name || t("common.untitled")}
                                     <span className="ml-0.5 text-muted-foreground/60">{modeExtension(document.mode)}</span>
                                   </div>
-                                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                                    <Clock className="h-2.5 w-2.5" />
-                                    {formatDate(document.updatedAt)}
+                                  <div className="flex flex-shrink-0 items-center gap-0.5 self-start opacity-0 transition-opacity group-hover/item:opacity-100">
+                                    <button
+                                      className="rounded p-0.5 hover:bg-secondary"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        startRename(document);
+                                      }}
+                                      title={t("sidebar.rename")}
+                                      type="button"
+                                    >
+                                      <Pencil className="h-3 w-3 text-muted-foreground" />
+                                    </button>
+                                    <button
+                                      className="rounded p-0.5 hover:bg-destructive/10"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        onDeleteDoc(document.id);
+                                      }}
+                                      title={t("sidebar.delete")}
+                                      type="button"
+                                    >
+                                      <Trash2 className="h-3 w-3 text-destructive" />
+                                    </button>
                                   </div>
-                                  {workspaceProviderLabel && workspaceSyncLabel && (
-                                    <div className="mt-1 text-[10px] text-muted-foreground">
-                                      {workspaceProviderLabel} • {workspaceSyncLabel}
-                                    </div>
-                                  )}
                                 </div>
-                                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/item:opacity-100">
-                                  <button
-                                    className="rounded p-0.5 hover:bg-secondary"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      startRename(document);
-                                    }}
-                                    title={t("sidebar.rename")}
-                                    type="button"
-                                  >
-                                    <Pencil className="h-3 w-3 text-muted-foreground" />
-                                  </button>
-                                  <button
-                                    className="rounded p-0.5 hover:bg-destructive/10"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      onDeleteDoc(document.id);
-                                    }}
-                                    title={t("sidebar.delete")}
-                                    type="button"
-                                  >
-                                    <Trash2 className="h-3 w-3 text-destructive" />
-                                  </button>
+                                <div className="flex min-w-0 items-center gap-1 text-[10px] leading-snug text-muted-foreground">
+                                  <Clock className="h-2.5 w-2.5 shrink-0" />
+                                  <span>{formatDate(document.updatedAt)}</span>
                                 </div>
+                                {workspaceProviderLabel && workspaceSyncLabel ? (
+                                  <div className="break-words text-[10px] leading-snug text-muted-foreground">
+                                    {workspaceProviderLabel} ??{workspaceSyncLabel}
+                                  </div>
+                                ) : null}
                               </div>
                             )}
                           </div>
@@ -354,28 +418,24 @@ const FileSidebar = ({
           </SidebarGroup>
         )}
 
-        {knowledgeEnabled && (
+        {showKnowledgeTab && knowledgeEnabled && (
           <SidebarGroup className={activeTab === "knowledge" ? "" : "hidden"}>
             <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
             <SidebarGroupContent>
               <Suspense fallback={<SidebarPanelFallback />}>
                 <FileSidebarKnowledgePanels
+                  key={`knowledge-panels-${knowledgePanelResetKey}`}
                   activeDoc={activeDoc}
                   activeDocId={activeDocId}
-                  acceptedPatchCount={knowledgeProps.acceptedPatchCount}
                   createDocument={createDocument}
                   documents={documents}
                   onDismissSuggestionQueueItem={knowledgeProps.onDismissSuggestionQueueItem}
                   onGenerateTocSuggestion={knowledgeProps.onGenerateTocSuggestion}
-                  onOpenNextSuggestionQueueItem={knowledgeProps.onOpenNextSuggestionQueueItem}
-                  onOpenPatchReview={knowledgeProps.onOpenPatchReview}
                   onOpenSuggestionQueueItem={knowledgeProps.onOpenSuggestionQueueItem}
-                  onRetryFailedSuggestionQueueItems={knowledgeProps.onRetryFailedSuggestionQueueItems}
                   onRetrySuggestionQueueItem={knowledgeProps.onRetrySuggestionQueueItem}
                   onSelectDoc={onSelectDoc}
                   onSuggestKnowledgeImpactUpdate={knowledgeProps.onSuggestKnowledgeImpactUpdate}
                   onSuggestKnowledgeUpdates={knowledgeProps.onSuggestKnowledgeUpdates}
-                  patchCount={knowledgeProps.patchCount}
                   suggestionQueue={knowledgeProps.suggestionQueue}
                 />
               </Suspense>
@@ -383,7 +443,7 @@ const FileSidebar = ({
           </SidebarGroup>
         )}
 
-        {historyEnabled && (
+        {showHistoryTab && historyEnabled && (
           <SidebarGroup className={activeTab === "history" ? "" : "hidden"}>
             <Separator className="mb-2 group-data-[collapsible=icon]:hidden" />
             <SidebarGroupContent>
@@ -418,49 +478,51 @@ const FileSidebar = ({
               <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.templates")}</span>
             </Button>
           )}
-          <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("markdown")} size="sm" title={t("sidebar.newMarkdown")} variant="ghost">
-            <FilePlus className="h-3.5 w-3.5" />
-            <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newMarkdown")}</span>
-          </Button>
-          <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("latex")} size="sm" title={t("sidebar.newLatex")} variant="ghost">
-            <FileCode className="h-3.5 w-3.5" />
-            <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newLatex")}</span>
-          </Button>
-          <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("html")} size="sm" title={t("sidebar.newHtml")} variant="ghost">
-            <FileType className="h-3.5 w-3.5" />
-            <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newHtml")}</span>
-          </Button>
-          {showStructuredCreateAction ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" size="sm" title={t("sidebar.structuredCreate")} variant="ghost">
-                  <Braces className="h-3.5 w-3.5" />
-                  <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.structuredCreate")}</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-36">
-                <DropdownMenuItem onClick={() => { onOpenStructuredModes?.(); onNewDoc("json"); }} className="text-xs">
-                  <FileJson className="mr-2 h-3.5 w-3.5" />
-                  {t("sidebar.newJson")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { onOpenStructuredModes?.(); onNewDoc("yaml"); }} className="text-xs">
-                  <Braces className="mr-2 h-3.5 w-3.5" />
-                  {t("sidebar.newYaml")}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <>
-              <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("json")} size="sm" title={t("sidebar.newJson")} variant="ghost">
-                <FileJson className="h-3.5 w-3.5" />
-                <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newJson")}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                className="h-7 justify-between gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
+                size="sm"
+                title={t("newDocument")}
+                variant="ghost"
+              >
+                <span className="flex items-center gap-1.5">
+                  <FilePlus className="h-3.5 w-3.5" />
+                  <span className="group-data-[collapsible=icon]:hidden">{t("newDocument")}</span>
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden" />
               </Button>
-              <Button className="h-7 justify-start gap-1.5 text-xs group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0" onClick={() => onNewDoc("yaml")} size="sm" title={t("sidebar.newYaml")} variant="ghost">
-                <Braces className="h-3.5 w-3.5" />
-                <span className="group-data-[collapsible=icon]:hidden">{t("sidebar.newYaml")}</span>
-              </Button>
-            </>
-          )}
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+              {visibleCreateDocumentOptions.map((option, index) => {
+                const Icon = option.icon;
+                const isStructured = option.mode === "json" || option.mode === "yaml";
+                const showSeparator = needsStructuredSeparator && index > 0 && isStructured
+                  && visibleCreateDocumentOptions[index - 1]
+                  && visibleCreateDocumentOptions[index - 1].mode !== "json"
+                  && visibleCreateDocumentOptions[index - 1].mode !== "yaml";
+
+                return (
+                  <div key={option.mode}>
+                    {showSeparator ? <DropdownMenuSeparator /> : null}
+                    <DropdownMenuItem
+                      className="text-xs"
+                      onClick={() => {
+                        option.onSelect?.();
+                        onNewDoc(option.mode);
+                      }}
+                    >
+                      <Icon className="mr-2 h-3.5 w-3.5" />
+                      {t(option.key)}
+                      {isStructured && showStructuredCreateAction ? (
+                        <span className="ml-auto text-[10px] text-muted-foreground">JSON/YAML</span>
+                      ) : null}
+                    </DropdownMenuItem>
+                  </div>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </SidebarFooter>
     </Sidebar>
@@ -468,3 +530,4 @@ const FileSidebar = ({
 };
 
 export default FileSidebar;
+

@@ -1,0 +1,201 @@
+name: Deploy TeX Service
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/deploy-tex.yml"
+      - ".github/workflows/deploy-full-stack.yml"
+      - "Dockerfile.tex"
+      - "cloudbuild.tex.yaml"
+      - "scripts/validate-public-deploy-config.mjs"
+      - "server/texService.ts"
+      - "server/modules/config/**"
+      - "server/modules/tex/**"
+      - "src/types/tex.ts"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-tex-main
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-tex:
+    name: Deploy TeX service (Cloud Run)
+    runs-on: ubuntu-latest
+    env:
+      GCP_REGION: asia-northeast3
+      TEX_SERVICE_NAME: docsy-tex
+      ARTIFACT_REPOSITORY: docsy
+      TEX_COMPILE_TIMEOUT_MS: "15000"
+      TEX_MAX_SOURCE_BYTES: "300000"
+      TEX_MAX_REQUEST_BYTES: "400000"
+      TEX_MAX_CONCURRENCY: "2"
+      TEX_ALLOW_RAW_DOCUMENT: "true"
+      TEX_ALLOW_RESTRICTED_COMMANDS: "false"
+      TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+
+      - name: Show active GCP deploy principal
+        run: |
+          set -euo pipefail
+          ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
+          echo "Active gcloud account: ${ACTIVE_ACCOUNT}"
+
+      - name: Deploy TeX service via Cloud Build
+        id: tex
+        run: |
+          set -euo pipefail
+
+          require_secret() {
+            local name="$1"
+            local value="$2"
+            if [ -z "${value}" ]; then
+              echo "${name} is required."
+              exit 1
+            fi
+          }
+
+          ensure_secret_access() {
+            local secret_name="$1"
+            local output
+            if ! output="$(gcloud secrets versions access latest --secret="${secret_name}" --project "${PROJECT_ID}" 2>&1 >/dev/null)"; then
+              echo "Unable to access required Secret Manager secret ${secret_name}."
+              if printf '%s' "${output}" | grep -qi 'NOT_FOUND'; then
+                echo "Secret ${secret_name} was not found in project ${PROJECT_ID}."
+              elif printf '%s' "${output}" | grep -qi 'PERMISSION_DENIED'; then
+                ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
+                echo "Grant roles/secretmanager.secretAccessor on ${secret_name} to ${ACTIVE_ACCOUNT}."
+              fi
+              echo "${output}"
+              exit 1
+            fi
+          }
+
+          require_secret "GCP_PROJECT_ID" "${{ secrets.GCP_PROJECT_ID }}"
+
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+          RUN_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+          TEX_SERVICE_AUTH_TOKEN_SECRET="${{ secrets.GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME }}"
+          if [ -z "${TEX_SERVICE_AUTH_TOKEN_SECRET}" ]; then
+            TEX_SERVICE_AUTH_TOKEN_SECRET="tex-service-auth-token"
+          fi
+
+          TEX_MAX_REQUEST_BYTES="${{ secrets.GCP_TEX_MAX_REQUEST_BYTES }}"
+          if [ -z "${TEX_MAX_REQUEST_BYTES}" ]; then
+            TEX_MAX_REQUEST_BYTES="400000"
+          fi
+
+          TEX_ALLOW_ALL_PACKAGES="${{ secrets.GCP_TEX_ALLOW_ALL_PACKAGES }}"
+          if [ -z "${TEX_ALLOW_ALL_PACKAGES}" ]; then
+            TEX_ALLOW_ALL_PACKAGES="true"
+          fi
+
+          TEX_ALLOW_RAW_DOCUMENT="${{ secrets.GCP_TEX_ALLOW_RAW_DOCUMENT }}"
+          if [ -z "${TEX_ALLOW_RAW_DOCUMENT}" ]; then
+            TEX_ALLOW_RAW_DOCUMENT="true"
+          fi
+
+          TEX_ALLOW_RESTRICTED_COMMANDS="${{ secrets.GCP_TEX_ALLOW_RESTRICTED_COMMANDS }}"
+          if [ -z "${TEX_ALLOW_RESTRICTED_COMMANDS}" ]; then
+            TEX_ALLOW_RESTRICTED_COMMANDS="false"
+          fi
+
+          TEX_ALLOWED_PACKAGES="${{ secrets.GCP_TEX_ALLOWED_PACKAGES }}"
+          if [ -z "${TEX_ALLOWED_PACKAGES}" ]; then
+            TEX_ALLOWED_PACKAGES="amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,latexsym,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK"
+          fi
+
+          export TEX_MAX_REQUEST_BYTES
+          export TEX_ALLOW_ALL_PACKAGES
+          export TEX_ALLOW_RAW_DOCUMENT
+          export TEX_ALLOW_RESTRICTED_COMMANDS
+          export TEX_ALLOWED_PACKAGES
+
+          node scripts/validate-public-deploy-config.mjs
+
+          ensure_secret_access "${TEX_SERVICE_AUTH_TOKEN_SECRET}"
+
+          echo "Deployment summary:"
+          echo "  project: ${PROJECT_ID}"
+          echo "  region: ${GCP_REGION}"
+          echo "  service: ${TEX_SERVICE_NAME}"
+          echo "  tex_allow_all_packages: ${TEX_ALLOW_ALL_PACKAGES}"
+          echo "  tex_allow_raw_document: ${TEX_ALLOW_RAW_DOCUMENT}"
+          echo "  tex_allow_restricted_commands: ${TEX_ALLOW_RESTRICTED_COMMANDS}"
+          echo "  tex_allowed_packages: ${TEX_ALLOWED_PACKAGES}"
+          echo "  app_token_secret: ${TEX_SERVICE_AUTH_TOKEN_SECRET}"
+
+          IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${TEX_SERVICE_NAME}:latest"
+          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_SERVICE_NAME=%s|_TEX_COMPILE_TIMEOUT_MS=%s|_TEX_MAX_SOURCE_BYTES=%s|_TEX_MAX_REQUEST_BYTES=%s|_TEX_MAX_CONCURRENCY=%s|_TEX_ALLOW_ALL_PACKAGES=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_RUN_SERVICE_ACCOUNT=%s|_CALLER_SERVICE_ACCOUNT=%s' \
+            "$IMAGE_URI" \
+            "$GCP_REGION" \
+            "$TEX_SERVICE_NAME" \
+            "$TEX_COMPILE_TIMEOUT_MS" \
+            "$TEX_MAX_SOURCE_BYTES" \
+            "${TEX_MAX_REQUEST_BYTES}" \
+            "$TEX_MAX_CONCURRENCY" \
+            "${TEX_ALLOW_ALL_PACKAGES}" \
+            "${TEX_ALLOW_RAW_DOCUMENT}" \
+            "${TEX_ALLOW_RESTRICTED_COMMANDS}" \
+            "${TEX_ALLOWED_PACKAGES}" \
+            "$TEX_SERVICE_AUTH_TOKEN_SECRET" \
+            "$RUN_SERVICE_ACCOUNT" \
+            "$RUN_SERVICE_ACCOUNT")
+
+          gcloud builds submit \
+            --config cloudbuild.tex.yaml \
+            --substitutions="${SUBSTITUTIONS}" \
+            .
+
+          TEX_URL="$(gcloud run services describe ${TEX_SERVICE_NAME} --region ${GCP_REGION} --format='value(status.url)')"
+
+          if [ -z "${TEX_URL}" ]; then
+            echo "Cloud Run TeX service URL could not be resolved."
+            exit 1
+          fi
+
+          echo "TeX service deployed at: ${TEX_URL}"
+          echo "url=${TEX_URL}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify TeX health
+        run: |
+          set -euo pipefail
+          TOKEN_SECRET_NAME="${{ secrets.GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME }}"
+          if [ -z "${TOKEN_SECRET_NAME}" ]; then
+            TOKEN_SECRET_NAME="tex-service-auth-token"
+          fi
+
+          ID_TOKEN="$(gcloud auth print-identity-token)"
+          APP_TOKEN="$(gcloud secrets versions access latest --secret="${TOKEN_SECRET_NAME}")"
+
+          echo "Verifying health at: ${{ steps.tex.outputs.url }}/health"
+          for i in {1..10}; do
+            if curl -fsS \
+              -H "Authorization: Bearer ${ID_TOKEN}" \
+              -H "X-Docsy-Tex-Token: ${APP_TOKEN}" \
+              "${{ steps.tex.outputs.url }}/health" >/dev/null; then
+              echo "TeX health check passed!"
+              exit 0
+            fi
+            echo "TeX health check failed (attempt $i), retrying in 5 seconds..."
+            sleep 5
+          done
+
+          echo "TeX health check failed after 10 attempts."
+          exit 1

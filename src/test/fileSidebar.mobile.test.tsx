@@ -60,6 +60,11 @@ describe("FileSidebar mobile behavior", () => {
           updatedAt: 1,
         }}
         activeDocId="doc-1"
+        capabilities={{
+          canAccessHistory: true,
+          canAccessKnowledge: true,
+          canAccessStructuredModes: true,
+        }}
         createDocument={vi.fn()}
         documents={[
           {
@@ -90,17 +95,12 @@ describe("FileSidebar mobile behavior", () => {
         }}
         knowledgeEnabled={false}
         knowledgeProps={{
-          acceptedPatchCount: 0,
           onDismissSuggestionQueueItem: vi.fn(),
           onGenerateTocSuggestion: vi.fn(),
-          onOpenNextSuggestionQueueItem: vi.fn(),
-          onOpenPatchReview: vi.fn(),
           onOpenSuggestionQueueItem: vi.fn(),
-          onRetryFailedSuggestionQueueItems: vi.fn(),
           onRetrySuggestionQueueItem: vi.fn(),
           onSuggestKnowledgeImpactUpdate: vi.fn(),
           onSuggestKnowledgeUpdates: vi.fn(),
-          patchCount: 0,
           suggestionQueue: [],
         }}
         onActivateHistory={vi.fn()}

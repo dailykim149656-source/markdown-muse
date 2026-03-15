@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
+import AiAgentTab from "@/components/editor/AiAgentTab";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import type { LiveAgentRuntimeState } from "@/hooks/useLiveAgent";
 import { useI18n } from "@/i18n/useI18n";
 import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
 import type { AiBusyAction, PatchPreviewResult, TocPreviewResult } from "@/hooks/useAiAssistant";
@@ -20,9 +22,12 @@ import type { SummarizeDocumentResponse } from "@/types/aiAssistant";
 import type { DocumentData } from "@/types/document";
 
 interface AiAssistantDialogProps {
+  activeDocumentName: string;
+  aiUnavailableMessage?: string | null;
   busyAction: AiBusyAction;
   compareCandidates: DocumentData[];
   comparePreview: PatchPreviewResult | null;
+  liveAgent: LiveAgentRuntimeState;
   onCompare: (targetDocumentId: string) => Promise<unknown> | unknown;
   onExtractProcedure: () => Promise<ProcedureExtractionResult | unknown> | unknown;
   onGenerateSection: (prompt: string) => Promise<unknown> | unknown;
@@ -92,10 +97,24 @@ const PreviewSummary = ({
   );
 };
 
+const RichTextOnlyNotice = () => {
+  const { t } = useI18n();
+
+  return (
+    <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+      <p className="font-medium">{t("aiDialog.richTextOnlyTitle")}</p>
+      <p className="mt-2">{t("aiDialog.richTextOnlyDescription")}</p>
+    </div>
+  );
+};
+
 const AiAssistantDialog = ({
+  activeDocumentName,
+  aiUnavailableMessage = null,
   busyAction,
   compareCandidates,
   comparePreview,
+  liveAgent,
   onCompare,
   onExtractProcedure,
   onGenerateSection,
@@ -119,6 +138,7 @@ const AiAssistantDialog = ({
   const [tocMaxDepth, setTocMaxDepth] = useState<"1" | "2" | "3">("2");
 
   const isBusy = busyAction !== null;
+  const aiExecutionDisabled = Boolean(aiUnavailableMessage);
   const compareOptions = useMemo(
     () => compareCandidates.map((candidate) => ({ id: candidate.id, name: candidate.name })),
     [compareCandidates],
@@ -141,23 +161,33 @@ const AiAssistantDialog = ({
           <DialogDescription>{t("aiDialog.description")}</DialogDescription>
         </DialogHeader>
 
-        {!richTextAvailable ? (
-          <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            <p className="font-medium">{t("aiDialog.richTextOnlyTitle")}</p>
-            <p className="mt-2">{t("aiDialog.richTextOnlyDescription")}</p>
-          </div>
-        ) : (
-          <Tabs className="space-y-4" defaultValue="summary">
-            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 lg:grid-cols-6">
-              <TabsTrigger value="summary">{t("aiDialog.tabs.summary")}</TabsTrigger>
-              <TabsTrigger value="generate">{t("aiDialog.tabs.generate")}</TabsTrigger>
-              <TabsTrigger value="toc">{t("aiDialog.tabs.toc")}</TabsTrigger>
-              <TabsTrigger value="compare">{t("aiDialog.tabs.compare")}</TabsTrigger>
-              <TabsTrigger value="update">{t("aiDialog.tabs.update")}</TabsTrigger>
-              <TabsTrigger value="procedure">{t("aiDialog.tabs.procedure")}</TabsTrigger>
-            </TabsList>
+        <Tabs className="space-y-4" defaultValue="agent">
+          {aiUnavailableMessage && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+              {aiUnavailableMessage}
+            </div>
+          )}
 
-            <TabsContent value="summary">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 lg:grid-cols-7">
+            <TabsTrigger value="agent">Agent</TabsTrigger>
+            <TabsTrigger value="summary">{t("aiDialog.tabs.summary")}</TabsTrigger>
+            <TabsTrigger value="generate">{t("aiDialog.tabs.generate")}</TabsTrigger>
+            <TabsTrigger value="toc">{t("aiDialog.tabs.toc")}</TabsTrigger>
+            <TabsTrigger value="compare">{t("aiDialog.tabs.compare")}</TabsTrigger>
+            <TabsTrigger value="update">{t("aiDialog.tabs.update")}</TabsTrigger>
+            <TabsTrigger value="procedure">{t("aiDialog.tabs.procedure")}</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="agent">
+            <AiAgentTab
+              activeDocumentName={activeDocumentName}
+              aiUnavailableMessage={aiUnavailableMessage}
+              liveAgent={liveAgent}
+            />
+          </TabsContent>
+
+          <TabsContent value="summary">
+            {!richTextAvailable ? <RichTextOnlyNotice /> : (
               <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                 <section className="space-y-3 rounded-lg border border-border p-4">
                   <div>
@@ -174,7 +204,7 @@ const AiAssistantDialog = ({
                   />
                   <Button
                     className="w-full"
-                    disabled={isBusy || !summaryObjective.trim()}
+                    disabled={aiExecutionDisabled || isBusy || !summaryObjective.trim()}
                     onClick={() => void onSummarize(summaryObjective)}
                     type="button"
                   >
@@ -220,9 +250,11 @@ const AiAssistantDialog = ({
                   </ScrollArea>
                 </section>
               </div>
-            </TabsContent>
+            )}
+          </TabsContent>
 
-            <TabsContent value="generate">
+          <TabsContent value="generate">
+            {!richTextAvailable ? <RichTextOnlyNotice /> : (
               <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                 <section className="space-y-3 rounded-lg border border-border p-4">
                   <div>
@@ -241,7 +273,7 @@ const AiAssistantDialog = ({
                   <p className="text-xs text-muted-foreground">{t("aiDialog.generate.note")}</p>
                   <Button
                     className="w-full"
-                    disabled={isBusy || !sectionPrompt.trim()}
+                    disabled={aiExecutionDisabled || isBusy || !sectionPrompt.trim()}
                     onClick={() => void onGenerateSection(sectionPrompt)}
                     type="button"
                     variant="secondary"
@@ -256,9 +288,11 @@ const AiAssistantDialog = ({
                   <p className="mt-3">{t("aiDialog.generate.reviewDescription")}</p>
                 </section>
               </div>
-            </TabsContent>
+            )}
+          </TabsContent>
 
-            <TabsContent value="toc">
+          <TabsContent value="toc">
+            {!richTextAvailable ? <RichTextOnlyNotice /> : (
               <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
                 <section className="space-y-3 rounded-lg border border-border p-4">
                   <div>
@@ -269,7 +303,7 @@ const AiAssistantDialog = ({
                   </div>
                   <Button
                     className="w-full"
-                    disabled={isBusy}
+                    disabled={aiExecutionDisabled || isBusy}
                     onClick={() => void onGenerateToc()}
                     type="button"
                     variant="secondary"
@@ -293,7 +327,7 @@ const AiAssistantDialog = ({
                     <p className="text-xs text-muted-foreground">{t("aiDialog.toc.depthHelp")}</p>
                     <Button
                       className="w-full"
-                      disabled={!tocPreview}
+                      disabled={aiExecutionDisabled || !tocPreview}
                       onClick={() => void onLoadTocPatch(Number(tocMaxDepth) as 1 | 2 | 3)}
                       type="button"
                       variant={tocPreview?.hasLoadablePatch ? "default" : "outline"}
@@ -411,9 +445,11 @@ const AiAssistantDialog = ({
                   </ScrollArea>
                 </section>
               </div>
-            </TabsContent>
+            )}
+          </TabsContent>
 
-            <TabsContent value="compare">
+          <TabsContent value="compare">
+            {!richTextAvailable ? <RichTextOnlyNotice /> : (
               <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                 <section className="space-y-3 rounded-lg border border-border p-4">
                   <div>
@@ -439,7 +475,7 @@ const AiAssistantDialog = ({
                   ) : null}
                   <Button
                     className="w-full"
-                    disabled={isBusy || !compareTargetId}
+                    disabled={aiExecutionDisabled || isBusy || !compareTargetId}
                     onClick={() => void onCompare(compareTargetId)}
                     type="button"
                     variant="outline"
@@ -457,9 +493,11 @@ const AiAssistantDialog = ({
                   </section>
                 )}
               </div>
-            </TabsContent>
+            )}
+          </TabsContent>
 
-            <TabsContent value="update">
+          <TabsContent value="update">
+            {!richTextAvailable ? <RichTextOnlyNotice /> : (
               <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                 <section className="space-y-3 rounded-lg border border-border p-4">
                   <div>
@@ -486,7 +524,7 @@ const AiAssistantDialog = ({
                   <p className="text-xs text-muted-foreground">{t("aiDialog.update.note")}</p>
                   <Button
                     className="w-full"
-                    disabled={isBusy || !updateTargetId}
+                    disabled={aiExecutionDisabled || isBusy || !updateTargetId}
                     onClick={() => void onSuggestUpdates(updateTargetId)}
                     type="button"
                   >
@@ -503,9 +541,11 @@ const AiAssistantDialog = ({
                   </section>
                 )}
               </div>
-            </TabsContent>
+            )}
+          </TabsContent>
 
-            <TabsContent value="procedure">
+          <TabsContent value="procedure">
+            {!richTextAvailable ? <RichTextOnlyNotice /> : (
               <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
                 <section className="space-y-3 rounded-lg border border-border p-4">
                   <div>
@@ -516,7 +556,7 @@ const AiAssistantDialog = ({
                   </div>
                   <Button
                     className="w-full"
-                    disabled={isBusy}
+                    disabled={aiExecutionDisabled || isBusy}
                     onClick={() => void onExtractProcedure()}
                     type="button"
                     variant="outline"
@@ -560,7 +600,7 @@ const AiAssistantDialog = ({
                                         sourceId: attribution.ingestionId,
                                         chunkId: attribution.chunkId,
                                       })}
-                                      {attribution.sectionId ? ` · ${t("aiDialog.procedure.sectionLine", { sectionId: attribution.sectionId })}` : ""}
+                                      {attribution.sectionId ? ` 쨌 ${t("aiDialog.procedure.sectionLine", { sectionId: attribution.sectionId })}` : ""}
                                     </div>
                                   ))}
                                 </div>
@@ -575,9 +615,9 @@ const AiAssistantDialog = ({
                   </ScrollArea>
                 </section>
               </div>
-            </TabsContent>
-          </Tabs>
-        )}
+            )}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

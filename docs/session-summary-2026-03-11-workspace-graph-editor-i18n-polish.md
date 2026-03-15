@@ -100,8 +100,6 @@ What changed:
 - expanded Korean coverage further for:
   - graph
   - health / consistency
-  - operations gate
-  - release checklist
   - suggestion queue
   - change monitoring
   - templates

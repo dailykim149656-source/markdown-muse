@@ -48,6 +48,10 @@ const VersionHistoryPanel = ({
   };
 
   const renderSnapshotSummary = (snapshot: DocumentVersionSnapshot) => {
+    if (snapshot.trigger === "autosave" && snapshot.metadata?.summary?.trim()) {
+      return snapshot.metadata.summary;
+    }
+
     if (snapshot.trigger === "export") {
       return t("versionHistory.summaryExport", {
         format: snapshot.metadata?.exportFormat || snapshot.mode.toUpperCase(),

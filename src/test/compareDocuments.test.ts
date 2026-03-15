@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyDocumentPatchSet } from "@/lib/ast/applyDocumentPatch";
 import { buildComparisonPatchSet, compareDocuments } from "@/lib/ai/compareDocuments";
 import { normalizeIngestionRequest } from "@/lib/ingestion/normalizeIngestionRequest";
+import type { NormalizedIngestionDocument } from "@/lib/ingestion/contracts";
 import type { DocumentAst } from "@/types/documentAst";
 
 const createSourceAst = (): DocumentAst => ({
@@ -158,5 +159,50 @@ describe("compareDocuments", () => {
     expect(applied.failures).toEqual([]);
     expect(applied.document.blocks.some((block) => block.nodeId === "heading-4")).toBe(false);
     expect(applied.document.blocks.some((block) => block.nodeId === "cmp-005-audit-heading")).toBe(true);
+  });
+
+  it("tolerates malformed section path entries without throwing", () => {
+    const malformedSource: NormalizedIngestionDocument = {
+      chunks: [{
+        chunkId: "chunk-1",
+        order: 0,
+        sectionId: "section-1",
+        text: "Old text",
+        tokenEstimate: 2,
+      }],
+      fileName: "source.md",
+      images: [],
+      importedAt: 100,
+      ingestionId: "src-malformed",
+      metadata: {},
+      plainText: "Old text",
+      sections: [{
+        level: 1,
+        path: [undefined as unknown as string, "Audit"],
+        sectionId: "section-1",
+        text: "Old text",
+        title: "Audit",
+      }],
+      sourceFormat: "markdown",
+    };
+    const malformedTarget: NormalizedIngestionDocument = {
+      ...malformedSource,
+      chunks: [{
+        chunkId: "chunk-2",
+        order: 0,
+        sectionId: "section-1",
+        text: "New text",
+        tokenEstimate: 2,
+      }],
+      ingestionId: "tgt-malformed",
+      plainText: "New text",
+      sections: [{
+        ...malformedSource.sections[0],
+        text: "New text",
+      }],
+    };
+
+    expect(() => compareDocuments(malformedSource, malformedTarget)).not.toThrow();
+    expect(compareDocuments(malformedSource, malformedTarget).deltas).toHaveLength(1);
   });
 });

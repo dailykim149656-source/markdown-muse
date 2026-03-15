@@ -59,33 +59,35 @@ export const compareSourceSnapshots = (
   nextSnapshots: SourceSnapshotRecord[],
 ): SourceChangeRecord[] => {
   const previousByDocumentId = new Map(previousSnapshots.map((snapshot) => [snapshot.documentId, snapshot]));
+  const changes: SourceChangeRecord[] = [];
 
-  return nextSnapshots
-    .flatMap((snapshot) => {
-      const previous = previousByDocumentId.get(snapshot.documentId);
+  for (const snapshot of nextSnapshots) {
+    const previous = previousByDocumentId.get(snapshot.documentId);
 
-      if (!previous) {
-        return [{
-          changeType: "new",
-          documentId: snapshot.documentId,
-          documentName: snapshot.documentName,
-          scannedAt: snapshot.scannedAt,
-        } satisfies SourceChangeRecord];
-      }
-
-      if (previous.fingerprint === snapshot.fingerprint) {
-        return [];
-      }
-
-      return [{
-        changeType: "changed",
+    if (!previous) {
+      changes.push({
+        changeType: "new",
         documentId: snapshot.documentId,
         documentName: snapshot.documentName,
-        previousScannedAt: previous.scannedAt,
         scannedAt: snapshot.scannedAt,
-      } satisfies SourceChangeRecord];
-    })
-    .sort((left, right) =>
-      Number(left.changeType === "changed") - Number(right.changeType === "changed")
-      || left.documentName.localeCompare(right.documentName));
+      });
+      continue;
+    }
+
+    if (previous.fingerprint === snapshot.fingerprint) {
+      continue;
+    }
+
+    changes.push({
+      changeType: "changed",
+      documentId: snapshot.documentId,
+      documentName: snapshot.documentName,
+      previousScannedAt: previous.scannedAt,
+      scannedAt: snapshot.scannedAt,
+    });
+  }
+
+  return changes.sort((left, right) =>
+    Number(left.changeType === "changed") - Number(right.changeType === "changed")
+    || left.documentName.localeCompare(right.documentName));
 };

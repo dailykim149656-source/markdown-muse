@@ -24,7 +24,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
 import UnderlineExt from "@tiptap/extension-underline";
 
-export const createCoreEditorExtensions = (placeholder: string) => [
+export const createCoreEditorExtensions = (placeholder?: string | null) => [
   Document,
   Paragraph,
   Text,
@@ -39,7 +39,7 @@ export const createCoreEditorExtensions = (placeholder: string) => [
   OrderedList,
   ListItem,
   Heading.configure({ levels: [1, 2, 3] }),
-  Placeholder.configure({ placeholder }),
+  ...(placeholder ? [Placeholder.configure({ placeholder })] : []),
   UnderlineExt,
   TaskList,
   TaskItem.configure({ nested: true }),

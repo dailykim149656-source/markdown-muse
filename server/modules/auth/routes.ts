@@ -12,6 +12,7 @@ import {
   createWorkspaceSession,
   createWorkspaceSessionCookie,
   deleteWorkspaceSession,
+  deleteWorkspaceSessionById,
   getWorkspaceSession,
   getWorkspaceSessionId,
 } from "./sessionStore";
@@ -19,6 +20,7 @@ import {
   HttpError,
   getRequestUrl,
   json,
+  ALLOWED_ORIGINS,
   parseOptionalRequestBody,
   redirect,
   type HttpResponse,
@@ -30,6 +32,7 @@ interface ConnectRequestBody {
 }
 
 const AUTH_STATE_TTL_MS = 1000 * 60 * 10;
+const WORKSPACE_FRONTEND_DEFAULT_ORIGIN = "http://localhost:8080";
 
 const normalizeReturnTo = (value?: string | null) => {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -39,14 +42,100 @@ const normalizeReturnTo = (value?: string | null) => {
   return value;
 };
 
-const buildRedirectLocation = (returnTo: string, params: Record<string, string>) => {
-  const url = new URL(returnTo, "http://docsy.local");
+const isLocalAbsoluteOrigin = (value: string) => {
+  try {
+    const url = new URL(value);
+    return url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  } catch {
+    return false;
+  }
+};
+
+const requiresExplicitFrontendOrigin = () =>
+  Boolean(
+    process.env.K_SERVICE
+    || process.env.NODE_ENV === "production"
+    || ALLOWED_ORIGINS.some((origin) => origin !== "*" && !isLocalAbsoluteOrigin(origin)),
+  );
+
+export const resolveFrontendOrigin = (requestOrigin?: string) => {
+  const configured = process.env.WORKSPACE_FRONTEND_ORIGIN?.trim();
+
+  if (configured) {
+    return configured.replace(/\/$/, "");
+  }
+
+  if (requiresExplicitFrontendOrigin()) {
+    throw new HttpError(500, "WORKSPACE_FRONTEND_ORIGIN must be configured for this deployment.");
+  }
+
+  if (requestOrigin && requestOrigin !== "*" && isLocalAbsoluteOrigin(requestOrigin)) {
+    return requestOrigin.replace(/\/$/, "");
+  }
+
+  const configuredOrigin = ALLOWED_ORIGINS.find((origin) => origin !== "*" && origin.startsWith("http"));
+
+  if (configuredOrigin) {
+    return configuredOrigin.replace(/\/$/, "");
+  }
+
+  return WORKSPACE_FRONTEND_DEFAULT_ORIGIN;
+};
+
+const buildRedirectLocation = (
+  returnTo: string,
+  params: Record<string, string>,
+  requestOrigin?: string,
+) => {
+  const frontendOrigin = resolveFrontendOrigin(requestOrigin);
+  const url = new URL(returnTo, frontendOrigin);
 
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
 
-  return `${url.pathname}${url.search}${url.hash}`;
+  return url.toString();
+};
+
+export const assertTrustedPostOrigin = (request: IncomingMessage) => {
+  if (request.method !== "POST") {
+    return;
+  }
+
+  const expectedOrigin = resolveFrontendOrigin();
+  const requestOrigin = typeof request.headers.origin === "string"
+    ? request.headers.origin.trim().replace(/\/$/, "")
+    : "";
+
+  if (!requestOrigin) {
+    if (requiresExplicitFrontendOrigin()) {
+      throw new HttpError(403, "Origin header is required.");
+    }
+
+    return;
+  }
+
+  if (requestOrigin !== expectedOrigin) {
+    throw new HttpError(403, "Origin is not allowed.");
+  }
+};
+
+const normalizeAuthErrorCode = (error: unknown) => {
+  if (error instanceof HttpError) {
+    if (error.statusCode === 401) {
+      return "workspace_auth_expired";
+    }
+
+    if (error.statusCode === 403) {
+      return "workspace_auth_forbidden";
+    }
+
+    if (error.statusCode >= 500) {
+      return "workspace_provider_error";
+    }
+  }
+
+  return "oauth_callback_failed";
 };
 
 const createConnectionId = (userSub?: string) => userSub ? `google:${userSub}` : randomUUID();
@@ -59,6 +148,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
   await repository.pruneExpired();
 
   if (request.method === "POST" && requestUrl.pathname === "/api/auth/google/connect") {
+    assertTrustedPostOrigin(request);
     const body = await parseOptionalRequestBody<ConnectRequestBody>(request);
     const state = createGoogleAuthState();
     const returnTo = normalizeReturnTo(body?.returnTo);
@@ -84,7 +174,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
 
     if (authError) {
       return redirect(
-        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: authError }),
+        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: authError }, resolveFrontendOrigin(requestOrigin)),
         302,
         requestOrigin,
       );
@@ -92,7 +182,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
 
     if (!code || !stateId) {
       return redirect(
-        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: "missing_oauth_callback_parameters" }),
+        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: "missing_oauth_callback_parameters" }, resolveFrontendOrigin(requestOrigin)),
         302,
         requestOrigin,
       );
@@ -102,7 +192,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
 
     if (!authState || authState.expiresAt <= Date.now()) {
       return redirect(
-        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: "oauth_state_expired" }),
+        buildRedirectLocation(defaultReturnTo, { workspaceAuthError: "oauth_state_expired" }, resolveFrontendOrigin(requestOrigin)),
         302,
         requestOrigin,
       );
@@ -112,6 +202,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
       const tokens = await exchangeGoogleCodeForTokens(code);
       const user = await fetchGoogleUserProfile(tokens.accessToken);
       const connectionId = createConnectionId(user.sub);
+      const existingSessionId = getWorkspaceSessionId(request);
 
       await repository.upsertConnection({
         connectedAt: Date.now(),
@@ -122,10 +213,14 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
         user,
       });
 
+      if (existingSessionId) {
+        await deleteWorkspaceSessionById(existingSessionId);
+      }
+
       const session = await createWorkspaceSession(connectionId);
 
       return redirect(
-        buildRedirectLocation(authState.returnTo, { workspaceAuth: "connected" }),
+        buildRedirectLocation(authState.returnTo, { workspaceAuth: "connected" }, resolveFrontendOrigin(requestOrigin)),
         302,
         requestOrigin,
         {
@@ -133,9 +228,12 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
         },
       );
     } catch (error) {
-      const message = error instanceof Error ? error.message : "oauth_callback_failed";
       return redirect(
-        buildRedirectLocation(authState.returnTo, { workspaceAuthError: message }),
+        buildRedirectLocation(
+          authState.returnTo,
+          { workspaceAuthError: normalizeAuthErrorCode(error) },
+          resolveFrontendOrigin(requestOrigin),
+        ),
         302,
         requestOrigin,
       );
@@ -161,6 +259,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
   }
 
   if (request.method === "POST" && requestUrl.pathname === "/api/auth/google/disconnect") {
+    assertTrustedPostOrigin(request);
     const sessionState = await getWorkspaceSession(request);
 
     if (sessionState?.connection?.tokens.refreshToken) {

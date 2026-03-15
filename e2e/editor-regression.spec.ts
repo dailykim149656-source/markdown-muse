@@ -12,6 +12,18 @@ const clearAppState = async (page: Page) => {
 const getPrimaryEditor = (page: Page) =>
   page.locator(".ProseMirror").first();
 
+const selectMode = async (page: Page, mode: "HTML" | "LaTeX") => {
+  await page.getByRole("button", { name: /Markdown|LaTeX|HTML/, exact: false }).first().click();
+
+  const modeOption = page
+    .locator('[role="option"], [role="menuitemradio"], [role="menuitem"], [data-radix-collection-item]')
+    .filter({ hasText: new RegExp(`^${mode}$`) })
+    .first();
+
+  await expect(modeOption).toBeVisible();
+  await modeOption.click();
+};
+
 test.describe("editor regressions", () => {
   test.beforeEach(async ({ page }) => {
     await clearAppState(page);
@@ -40,7 +52,7 @@ test.describe("editor regressions", () => {
   }, 120000);
 
   test("html source and wysiwyg stay in sync both directions", async ({ page }) => {
-    await page.getByRole("button", { name: "HTML", exact: true }).click();
+    await selectMode(page, "HTML");
 
     const source = page.locator("textarea").first();
     await expect(source).toBeVisible();
@@ -57,5 +69,28 @@ test.describe("editor regressions", () => {
     await expect(editor).toContainText("Alpha Beta");
     await expect(source).toHaveValue(/Alpha Beta/);
     await expect(source).toHaveValue(/<h1[^>]*>Heading<\/h1>/);
+  });
+
+  test("latex wysiwyg typing stays stable and the empty-state help disappears once", async ({ page }) => {
+    await selectMode(page, "LaTeX");
+
+    await expect(page.getByText("LaTeX WYSIWYG with synced source pane.")).toBeVisible();
+
+    const editor = getPrimaryEditor(page);
+    await editor.click();
+    await page.keyboard.type("Hello");
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("World");
+    await page.keyboard.press("Backspace");
+    await page.keyboard.press("Backspace");
+    await page.keyboard.type("!");
+
+    await expect(editor).toContainText("Hello");
+    await expect(editor).toContainText("Wor!");
+    await expect(page.getByText("LaTeX WYSIWYG with synced source pane.")).toHaveCount(0);
+
+    const source = page.locator("textarea").first();
+    await expect(source).toHaveValue(/Hello/);
+    await expect(source).toHaveValue(/Wor!/);
   });
 });

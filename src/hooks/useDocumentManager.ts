@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AutoSaveData,
   AutoSaveIndicatorState,
@@ -6,11 +6,16 @@ import type {
   DocumentData,
 } from "@/types/document";
 import {
+  clearSavedData,
   createNewDocument,
+  hydrateSavedData,
+  hasMeaningfulSavedDocuments,
+  isAutoSaveWriteFailure,
   loadSavedData,
   saveData,
   useAutoSave,
 } from "@/components/editor/useAutoSave";
+import { readAutosavePointer } from "@/lib/documents/autosaveV3Store";
 
 const areValuesEqual = (left: unknown, right: unknown) => {
   if (Object.is(left, right)) {
@@ -45,11 +50,26 @@ export const useDocumentManager = () => {
   const [documents, setDocuments] = useState<DocumentData[]>(() => initialDocuments);
   const [activeDocId, setActiveDocId] = useState<string>(() => initialActiveDocId);
   const [editorKey, setEditorKey] = useState(0);
+  const [hasRestoredDocuments, setHasRestoredDocuments] = useState(() => hasMeaningfulSavedDocuments(initialSavedData));
   const [autoSaveState, setAutoSaveState] = useState<AutoSaveIndicatorState>(() => ({
     error: null,
     lastSavedAt: initialSavedData?.lastSaved ?? null,
     status: initialSavedData ? "saved" : "saving",
   }));
+  const documentsRef = useRef(initialDocuments);
+  const activeDocIdRef = useRef(initialActiveDocId);
+  const dirtyDocumentIdsRef = useRef<Set<string>>(new Set(initialDocuments.map((document) => document.id)));
+  const hasUserMutatedRef = useRef(false);
+  const lastSavedAtRef = useRef<number | null>(initialSavedData?.lastSaved ?? null);
+  const lastSavedSnapshotKeyRef = useRef<string | null>(
+    initialSavedData?.documents?.length
+      ? JSON.stringify({
+        activeDocId: initialActiveDocId,
+        documents: initialDocuments,
+        version: 2,
+      })
+      : null,
+  );
 
   const activeDoc = useMemo(
     () => documents.find((doc) => doc.id === activeDocId) || documents[0],
@@ -62,6 +82,31 @@ export const useDocumentManager = () => {
     activeDocId,
     lastSaved: autoSaveState.lastSavedAt ?? initialSavedData?.lastSaved ?? 0,
   }), [activeDocId, autoSaveState.lastSavedAt, documents, initialSavedData?.lastSaved]);
+  const shouldHydrateFromStorage = useMemo(
+    () => Boolean(initialSavedData) || Boolean(readAutosavePointer()),
+    [initialSavedData],
+  );
+
+  const markDocumentDirty = useCallback((documentId: string) => {
+    hasUserMutatedRef.current = true;
+    dirtyDocumentIdsRef.current.add(documentId);
+  }, []);
+
+  const markDocumentsDirty = useCallback((documentIds: string[]) => {
+    if (documentIds.length === 0) {
+      return;
+    }
+
+    hasUserMutatedRef.current = true;
+
+    for (const documentId of documentIds) {
+      dirtyDocumentIdsRef.current.add(documentId);
+    }
+  }, []);
+
+  const clearDirtyDocuments = useCallback(() => {
+    dirtyDocumentIdsRef.current.clear();
+  }, []);
 
   const markAutosavePending = useCallback(() => {
     setAutoSaveState((previousState) => ({
@@ -72,6 +117,7 @@ export const useDocumentManager = () => {
   }, []);
 
   useAutoSave(autoSaveData, 3000, {
+    getDirtyDocumentIds: () => Array.from(dirtyDocumentIdsRef.current),
     onError: (error) => {
       setAutoSaveState((previousState) => ({
         error,
@@ -80,6 +126,7 @@ export const useDocumentManager = () => {
       }));
     },
     onSaved: (savedAt) => {
+      clearDirtyDocuments();
       setAutoSaveState({
         error: null,
         lastSavedAt: savedAt,
@@ -97,29 +144,162 @@ export const useDocumentManager = () => {
     },
   });
 
-  const saveImmediate = useCallback(() => {
-    const result = saveData({
-      version: 2,
-      documents,
-      activeDocId,
-      lastSaved: autoSaveState.lastSavedAt ?? Date.now(),
-    });
+  useEffect(() => {
+    documentsRef.current = documents;
+  }, [documents]);
 
-    if (result.ok) {
-      setAutoSaveState({
-        error: null,
-        lastSavedAt: result.savedAt,
-        status: "saved",
-      });
+  useEffect(() => {
+    activeDocIdRef.current = activeDocId;
+  }, [activeDocId]);
+
+  useEffect(() => {
+    lastSavedAtRef.current = autoSaveState.lastSavedAt;
+  }, [autoSaveState.lastSavedAt]);
+
+  useEffect(() => {
+    if (!shouldHydrateFromStorage) {
       return;
     }
 
-    setAutoSaveState((previousState) => ({
-      error: result.error,
-      lastSavedAt: previousState.lastSavedAt,
-      status: "error",
-    }));
-  }, [activeDocId, autoSaveState.lastSavedAt, documents]);
+    let cancelled = false;
+
+    const hydrateDocuments = async () => {
+      const hydratedData = await hydrateSavedData();
+
+      if (
+        cancelled
+        || !hydratedData
+        || hasUserMutatedRef.current
+        || hydratedData.documents.length === 0
+      ) {
+        return;
+      }
+
+      const nextDocuments = hydratedData.documents;
+      const nextActiveDocId = nextDocuments.some((document) => document.id === hydratedData.activeDocId)
+        ? hydratedData.activeDocId
+        : nextDocuments[0].id;
+      const nextSnapshotKey = JSON.stringify({
+        activeDocId: nextActiveDocId,
+        documents: nextDocuments,
+        version: 2,
+      });
+
+      if (nextSnapshotKey === lastSavedSnapshotKeyRef.current) {
+        return;
+      }
+
+      documentsRef.current = nextDocuments;
+      activeDocIdRef.current = nextActiveDocId;
+      lastSavedAtRef.current = hydratedData.lastSaved;
+      lastSavedSnapshotKeyRef.current = nextSnapshotKey;
+      clearDirtyDocuments();
+      setDocuments(nextDocuments);
+      setActiveDocId(nextActiveDocId);
+      setHasRestoredDocuments(hasMeaningfulSavedDocuments(hydratedData));
+      setAutoSaveState({
+        error: null,
+        lastSavedAt: hydratedData.lastSaved,
+        status: "saved",
+      });
+      setEditorKey((key) => key + 1);
+    };
+
+    void hydrateDocuments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearDirtyDocuments, shouldHydrateFromStorage]);
+
+  const persistSnapshot = useCallback((
+    nextDocuments: DocumentData[],
+    nextActiveDocId: string,
+    lastSavedOverride?: number,
+  ) => {
+    const result = saveData({
+      version: 2,
+      documents: nextDocuments,
+      activeDocId: nextActiveDocId,
+      lastSaved: lastSavedOverride ?? autoSaveState.lastSavedAt ?? Date.now(),
+    }, {
+      dirtyDocumentIds: Array.from(dirtyDocumentIdsRef.current),
+    });
+
+    if (isAutoSaveWriteFailure(result)) {
+      const { error } = result;
+
+      setAutoSaveState((previousState) => ({
+        error,
+        lastSavedAt: previousState.lastSavedAt,
+        status: "error",
+      }));
+      return result;
+    }
+
+    clearDirtyDocuments();
+    setAutoSaveState({
+      error: null,
+      lastSavedAt: result.savedAt,
+      status: "saved",
+    });
+    lastSavedSnapshotKeyRef.current = JSON.stringify({
+      activeDocId: nextActiveDocId,
+        documents: nextDocuments,
+        version: 2,
+      });
+    return result;
+  }, [autoSaveState.lastSavedAt, clearDirtyDocuments]);
+
+  const saveImmediate = useCallback(() => {
+    persistSnapshot(documents, activeDocId);
+  }, [activeDocId, documents, persistSnapshot]);
+
+  const resetDocuments = useCallback(() => {
+    const replacementDocument = createNewDocument();
+    const nextDocuments = [replacementDocument];
+    const snapshotKey = JSON.stringify({
+      activeDocId: replacementDocument.id,
+      documents: nextDocuments,
+      version: 2 as const,
+    });
+
+    clearSavedData();
+    documentsRef.current = nextDocuments;
+    activeDocIdRef.current = replacementDocument.id;
+    dirtyDocumentIdsRef.current = new Set([replacementDocument.id]);
+    hasUserMutatedRef.current = true;
+    setDocuments(nextDocuments);
+    setActiveDocId(replacementDocument.id);
+    setEditorKey((key) => key + 1);
+
+    const result = saveData({
+      activeDocId: replacementDocument.id,
+      documents: nextDocuments,
+      lastSaved: Date.now(),
+      version: 2,
+    });
+
+    if (isAutoSaveWriteFailure(result)) {
+      const { error } = result;
+
+      lastSavedSnapshotKeyRef.current = null;
+      setAutoSaveState((previousState) => ({
+        error,
+        lastSavedAt: previousState.lastSavedAt,
+        status: "error",
+      }));
+      return;
+    }
+
+    lastSavedAtRef.current = result.savedAt;
+    lastSavedSnapshotKeyRef.current = snapshotKey;
+    setAutoSaveState({
+      error: null,
+      lastSavedAt: result.savedAt,
+      status: "saved",
+    });
+  }, []);
 
   const bumpEditorKey = useCallback(() => {
     setEditorKey((key) => key + 1);
@@ -156,6 +336,7 @@ export const useDocumentManager = () => {
         const nextWorkspaceBinding = doc.workspaceBinding && patch.content !== undefined && patch.content !== doc.content
           ? {
             ...doc.workspaceBinding,
+            syncWarnings: undefined,
             syncStatus: "dirty_local" as const,
           }
           : patch.workspaceBinding ?? doc.workspaceBinding;
@@ -168,8 +349,9 @@ export const useDocumentManager = () => {
         };
       })
     );
+    markDocumentDirty(activeDocId);
     markAutosavePending();
-  }, [activeDoc, activeDocId, markAutosavePending]);
+  }, [activeDoc, activeDocId, markAutosavePending, markDocumentDirty]);
 
   const updateDocument = useCallback((documentId: string, patch: Partial<DocumentData>) => {
     const targetDocument = documents.find((document) => document.id === documentId);
@@ -198,8 +380,9 @@ export const useDocumentManager = () => {
         };
       }),
     );
+    markDocumentDirty(documentId);
     markAutosavePending();
-  }, [documents, markAutosavePending]);
+  }, [documents, markAutosavePending, markDocumentDirty]);
 
   const handleContentChange = useCallback((content: string) => {
     const sourceSnapshots = {
@@ -232,8 +415,9 @@ export const useDocumentManager = () => {
         };
       })
     );
+    markDocumentDirty(activeDocId);
     markAutosavePending();
-  }, [activeDoc, activeDocId, markAutosavePending]);
+  }, [activeDoc, activeDocId, markAutosavePending, markDocumentDirty]);
 
   const createDocument = useCallback((options: CreateDocumentOptions = {}) => {
     const {
@@ -274,26 +458,62 @@ export const useDocumentManager = () => {
       workspaceBinding,
     };
 
-    setDocuments((previousDocuments) => {
-      if (replaceDocumentId && previousDocuments.some((document) => document.id === replaceDocumentId)) {
-        return previousDocuments.map((document) => document.id === replaceDocumentId ? newDoc : document);
-      }
+    const nextDocuments = replaceDocumentId && documents.some((document) => document.id === replaceDocumentId)
+      ? documents.map((document) => document.id === replaceDocumentId ? newDoc : document)
+      : [...documents, newDoc];
 
-      return [...previousDocuments, newDoc];
-    });
+    documentsRef.current = nextDocuments;
+    activeDocIdRef.current = newDoc.id;
+    markDocumentsDirty(nextDocuments.map((document) => document.id));
+    setDocuments(nextDocuments);
     setActiveDocId(newDoc.id);
     setEditorKey((key) => key + 1);
-    setAutoSaveState((previousState) => ({
-      error: null,
-      lastSavedAt: previousState.lastSavedAt,
-      status: "saving",
-    }));
+    persistSnapshot(nextDocuments, newDoc.id);
 
     return newDoc;
-  }, [resolveUniqueDocumentId]);
+  }, [documents, markDocumentsDirty, persistSnapshot, resolveUniqueDocumentId]);
+
+  useEffect(() => {
+    const flushSnapshot = () => {
+      const snapshot = {
+        activeDocId: activeDocIdRef.current,
+        documents: documentsRef.current,
+        version: 2 as const,
+      };
+      const snapshotKey = JSON.stringify(snapshot);
+
+      if (snapshotKey === lastSavedSnapshotKeyRef.current) {
+        return;
+      }
+
+      persistSnapshot(
+        documentsRef.current,
+        activeDocIdRef.current,
+        lastSavedAtRef.current ?? Date.now(),
+      );
+    };
+
+    const handlePageHide = () => {
+      flushSnapshot();
+    };
+
+    const handleBeforeUnload = () => {
+      flushSnapshot();
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      flushSnapshot();
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [persistSnapshot]);
 
   const selectDocument = useCallback((id: string) => {
     saveImmediate();
+    hasUserMutatedRef.current = true;
     setActiveDocId(id);
     setEditorKey((key) => key + 1);
   }, [saveImmediate]);
@@ -318,6 +538,7 @@ export const useDocumentManager = () => {
 
       return nextDocuments;
     });
+    hasUserMutatedRef.current = true;
     markAutosavePending();
   }, [activeDocId, markAutosavePending]);
 
@@ -329,6 +550,8 @@ export const useDocumentManager = () => {
       const replacementDocument = createNewDocument();
       nextActiveDocumentId = replacementDocument.id;
       shouldResetEditor = true;
+      dirtyDocumentIdsRef.current = new Set([replacementDocument.id]);
+      hasUserMutatedRef.current = true;
       setDocuments([replacementDocument]);
     } else {
       const deleteIndex = documents.findIndex((document) => document.id === id);
@@ -345,6 +568,7 @@ export const useDocumentManager = () => {
       }
 
       setDocuments(nextDocuments);
+      hasUserMutatedRef.current = true;
     }
 
     if (nextActiveDocumentId) {
@@ -362,8 +586,9 @@ export const useDocumentManager = () => {
     setDocuments((previousDocuments) =>
       previousDocuments.map((doc) => doc.id === id ? { ...doc, name, updatedAt: Date.now() } : doc)
     );
+    markDocumentDirty(id);
     markAutosavePending();
-  }, [markAutosavePending]);
+  }, [markAutosavePending, markDocumentDirty]);
 
   return {
     activeDoc,
@@ -376,8 +601,9 @@ export const useDocumentManager = () => {
     documents,
     editorKey,
     handleContentChange,
-    hasRestoredDocuments: Boolean(initialSavedData?.documents?.length),
+    hasRestoredDocuments,
     renameDocument,
+    resetDocuments,
     selectDocument,
     updateDocument,
     updateActiveDoc,

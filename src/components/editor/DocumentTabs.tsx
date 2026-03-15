@@ -1,4 +1,4 @@
-import { Plus, X } from "lucide-react";
+import { Plus, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
@@ -10,7 +10,9 @@ interface DocumentTabsProps {
   documents: DocumentData[];
   onCloseDoc: (id: string) => void;
   onNewDoc: () => void;
+  onResetDocuments?: () => void;
   onSelectDoc: (id: string) => void;
+  resetDocumentsDisabled?: boolean;
 }
 
 const modeLabel = (mode: string) => {
@@ -28,10 +30,18 @@ const modeLabel = (mode: string) => {
   }
 };
 
-const DocumentTabs = ({ activeDocId, documents, onCloseDoc, onNewDoc, onSelectDoc }: DocumentTabsProps) => {
+const DocumentTabs = ({
+  activeDocId,
+  documents,
+  onCloseDoc,
+  onNewDoc,
+  onResetDocuments,
+  onSelectDoc,
+  resetDocumentsDisabled = false,
+}: DocumentTabsProps) => {
   const { t } = useI18n();
 
-  if (documents.length <= 1) {
+  if (documents.length === 0) {
     return null;
   }
 
@@ -78,11 +88,27 @@ const DocumentTabs = ({ activeDocId, documents, onCloseDoc, onNewDoc, onSelectDo
         </div>
         <ScrollBar className="h-1" orientation="horizontal" />
       </ScrollArea>
+      {onResetDocuments && (
+        <Button
+          aria-label={t("resetDocuments.action")}
+          className="h-7 w-7 shrink-0 p-0 text-destructive hover:text-destructive sm:h-6 sm:w-6"
+          disabled={resetDocumentsDisabled}
+          onClick={onResetDocuments}
+          size="sm"
+          title={t("resetDocuments.action")}
+          type="button"
+          variant="ghost"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </Button>
+      )}
       <Button
+        aria-label={t("tabs.newDocument")}
         className="ml-1 h-7 w-7 shrink-0 p-0 sm:h-6 sm:w-6"
         onClick={onNewDoc}
         size="sm"
         title={t("tabs.newDocument")}
+        type="button"
         variant="ghost"
       >
         <Plus className="h-3.5 w-3.5" />

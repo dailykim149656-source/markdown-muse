@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { HttpError } from "../http/http";
+import {
+  classifyGoogleWorkspaceScopeRisk,
+  GOOGLE_WORKSPACE_SCOPE_PROFILES,
+  normalizeGoogleOAuthPublishingStatus,
+  normalizeGoogleWorkspaceScopeProfile,
+} from "../config/publicDeploymentConfig.js";
 import type { GoogleWorkspaceTokens, WorkspaceUserProfile } from "../workspace/repository";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -7,27 +13,23 @@ const GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 
-const DEFAULT_GOOGLE_SCOPES = [
-  "openid",
-  "email",
-  "profile",
-  "https://www.googleapis.com/auth/drive.readonly",
-  "https://www.googleapis.com/auth/drive.metadata.readonly",
-  "https://www.googleapis.com/auth/documents",
-];
-
 interface GoogleOAuthConfig {
   clientId: string;
   clientSecret: string;
+  publishingStatus: "production" | "testing";
   redirectUri: string;
   scopes: string[];
+  scopeProfile: "reduced" | "restricted";
 }
 
 const readGoogleOAuthConfig = (): GoogleOAuthConfig => {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || "";
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim() || "";
   const redirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI?.trim() || "";
-  const scopes = (process.env.GOOGLE_WORKSPACE_SCOPES || DEFAULT_GOOGLE_SCOPES.join(" "))
+  const publishingStatus = normalizeGoogleOAuthPublishingStatus(process.env.GOOGLE_OAUTH_PUBLISHING_STATUS);
+  const scopeProfile = normalizeGoogleWorkspaceScopeProfile(process.env.GOOGLE_WORKSPACE_SCOPE_PROFILE);
+  const configuredScopes = process.env.GOOGLE_WORKSPACE_SCOPES?.trim() || "";
+  const scopes = (configuredScopes || GOOGLE_WORKSPACE_SCOPE_PROFILES[scopeProfile].join(" "))
     .split(/\s+/)
     .map((scope) => scope.trim())
     .filter((scope) => scope.length > 0);
@@ -39,8 +41,25 @@ const readGoogleOAuthConfig = (): GoogleOAuthConfig => {
   return {
     clientId,
     clientSecret,
+    publishingStatus,
     redirectUri,
     scopes,
+    scopeProfile,
+  };
+};
+
+export const getGoogleOAuthRuntimeSummary = () => {
+  const configuredScopes = process.env.GOOGLE_WORKSPACE_SCOPES?.trim() || "";
+  const scopeProfile = normalizeGoogleWorkspaceScopeProfile(process.env.GOOGLE_WORKSPACE_SCOPE_PROFILE);
+  const scopes = (configuredScopes || GOOGLE_WORKSPACE_SCOPE_PROFILES[scopeProfile].join(" "))
+    .split(/\s+/)
+    .map((scope) => scope.trim())
+    .filter((scope) => scope.length > 0);
+
+  return {
+    publishingStatus: normalizeGoogleOAuthPublishingStatus(process.env.GOOGLE_OAUTH_PUBLISHING_STATUS),
+    scopeProfile: configuredScopes ? "custom" : scopeProfile,
+    scopeRisk: classifyGoogleWorkspaceScopeRisk(scopes),
   };
 };
 
@@ -117,7 +136,6 @@ export const exchangeGoogleCodeForTokens = async (code: string): Promise<GoogleW
   return {
     accessToken: payload.access_token,
     expiryDate: payload.expires_in ? Date.now() + (payload.expires_in * 1000) : undefined,
-    idToken: payload.id_token,
     refreshToken: payload.refresh_token,
     scope: payload.scope,
     tokenType: payload.token_type,
@@ -160,21 +178,25 @@ export const refreshGoogleAccessToken = async (refreshToken: string): Promise<Go
   return {
     accessToken: payload.access_token,
     expiryDate: payload.expires_in ? Date.now() + (payload.expires_in * 1000) : undefined,
-    idToken: payload.id_token,
     refreshToken,
     scope: payload.scope,
     tokenType: payload.token_type,
   };
 };
 
-export const ensureGoogleAccessToken = async (tokens: GoogleWorkspaceTokens) => {
+export const ensureGoogleAccessToken = async (
+  tokens: GoogleWorkspaceTokens,
+): Promise<{ didRefresh: boolean; tokens: GoogleWorkspaceTokens & { accessToken: string } }> => {
   const now = Date.now();
   const refreshLeewayMs = 60_000;
 
   if (tokens.accessToken && (!tokens.expiryDate || tokens.expiryDate > now + refreshLeewayMs)) {
     return {
       didRefresh: false,
-      tokens,
+      tokens: {
+        ...tokens,
+        accessToken: tokens.accessToken,
+      },
     };
   }
 
@@ -183,12 +205,18 @@ export const ensureGoogleAccessToken = async (tokens: GoogleWorkspaceTokens) => 
   }
 
   const refreshedTokens = await refreshGoogleAccessToken(tokens.refreshToken);
+  const accessToken = refreshedTokens.accessToken;
+
+  if (!accessToken) {
+    throw new HttpError(502, "Google token refresh did not return an access token.");
+  }
 
   return {
     didRefresh: true,
     tokens: {
       ...tokens,
       ...refreshedTokens,
+      accessToken,
       refreshToken: tokens.refreshToken,
     },
   };

@@ -23,6 +23,15 @@ import FindReplaceHighlight from "./extensions/FindReplaceHighlight";
 import { FootnoteItem, FootnoteRef } from "./extensions/FootnoteExtension";
 import NodeIdExtension from "./extensions/NodeIdExtension";
 import ResizableImage from "./extensions/ResizableImage";
+import {
+  LatexAbstractExtension,
+  LatexTitleBlockExtension,
+  OpaqueLatexBlockExtension,
+  ResumeEntryExtension,
+  ResumeHeaderExtension,
+  ResumeSkillRowExtension,
+  ResumeSummaryExtension,
+} from "./extensions/ResumeLatexExtensions";
 import TableOfContents from "./extensions/TableOfContents";
 
 const lowlight = createLowlight({
@@ -57,6 +66,13 @@ export const createDocumentEditorExtensions = () => [
   TableOfContents,
   FigureCaption,
   CrossReference,
+  ResumeHeaderExtension,
+  ResumeSummaryExtension,
+  ResumeEntryExtension,
+  ResumeSkillRowExtension,
+  LatexTitleBlockExtension,
+  LatexAbstractExtension,
+  OpaqueLatexBlockExtension,
   FindReplaceHighlight,
   NodeIdExtension,
 ];

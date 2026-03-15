@@ -3,6 +3,15 @@
 Version: `v0.1`  
 Date: `2026-03-09`
 
+## Historical Note
+
+This document is a historical feasibility roadmap from an earlier planning pass.
+
+For the current repository-state view, use:
+
+- `docs/prd-status-check-2026-03-11.md`
+- `docs/remaining-work-execution-plan-2026-03-11.md`
+
 ## 1. 목적
 
 이 문서는 현재 `markdown-muse` 코드베이스를 기준으로,

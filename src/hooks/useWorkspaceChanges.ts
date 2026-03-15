@@ -59,6 +59,7 @@ export const useWorkspaceChanges = ({
             ...workspaceBinding,
             driveModifiedTime: change.modifiedTime || workspaceBinding.driveModifiedTime,
             syncError: "Remote Google Doc changed. Refresh before syncing.",
+            syncWarnings: undefined,
             syncStatus: "conflict",
           },
         });
@@ -94,6 +95,7 @@ export const useWorkspaceChanges = ({
           ...workspaceBinding,
           driveModifiedTime: change.modifiedTime || workspaceBinding.driveModifiedTime,
           syncError: "Remote Google Doc changed. Refresh before syncing.",
+          syncWarnings: undefined,
           syncStatus: "conflict",
         },
       });
@@ -108,7 +110,10 @@ export const useWorkspaceChanges = ({
       return;
     }
 
-    const result = await refreshDocumentMutation.mutateAsync(fileId);
+    const result = await refreshDocumentMutation.mutateAsync({
+      documentId,
+      fileId,
+    });
     await queryClient.invalidateQueries({ queryKey: WORKSPACE_CHANGES_QUERY_KEY });
     return result;
   }, [documents, queryClient, refreshDocumentMutation]);

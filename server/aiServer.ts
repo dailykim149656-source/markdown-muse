@@ -1,4 +1,4 @@
-import { createServer } from "node:http";
+﻿import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { normalizeIngestionRequest } from "../src/lib/ingestion/normalizeIngestionRequest";
 import { keywordRetrieve } from "../src/lib/retrieval/keywordRetrieval";
@@ -9,22 +9,71 @@ import {
   type SummaryResponse,
 } from "../src/lib/ai/summaryContracts";
 import { buildActionPrompt } from "./modules/agent/buildActionPrompt";
+import { buildActiveDocumentRetrievalContext } from "./modules/agent/buildActiveDocumentRetrievalContext";
+import {
+  buildPlannerPrompt,
+  plannerNeedsFollowup,
+} from "./modules/agent/buildPlannerPrompt";
+import { executePlannedAction } from "./modules/agent/executePlannedAction";
 import { actionResponseSchema, normalizeActionResponse } from "./modules/agent/actionResponse";
 import {
+  agentPlannerResponseSchema,
+  normalizePlannerResponse,
+} from "./modules/agent/plannerResponse";
+import { normalizeAgentTurnResponse } from "./modules/agent/turnResponse";
+import {
+  getGeminiFallbackModel,
+  generateStructuredJson,
   generateMultimodalStructuredJson,
   getGeminiModel,
+  isGeminiConfigured,
   schemaType,
 } from "./modules/gemini/client";
+import {
+  readPublicDeploymentConfig,
+  validatePublicDeploymentConfig,
+} from "./modules/config/publicDeploymentConfig.js";
+import { getGoogleOAuthRuntimeSummary } from "./modules/auth/googleOAuth";
 import { handleAuthRoute } from "./modules/auth/routes";
+import { getWorkspaceSession } from "./modules/auth/sessionStore";
 import {
   ALLOWED_ORIGINS,
+  binary,
+  empty,
+  getRequestUrl,
   HttpError,
   json,
+  parseOptionalRequestBody,
   parseRequestBody,
   writeHttpResponse,
 } from "./modules/http/http";
+import {
+  buildInternalAiHealthPayload,
+  buildPublicAiHealthPayload,
+  isAuthorizedDiagnosticsRequest,
+  sanitizeLogMessage,
+} from "./modules/http/aiDiagnostics";
+import { handleListenError } from "./modules/http/handleListenError";
+import {
+  consumeRateLimit,
+  getRequestClientId,
+  resolveRateLimitPolicy,
+} from "./modules/http/rateLimit";
+import { handleTexAutoFix } from "./modules/tex/autoFix";
+import {
+  exportTexPdf,
+  getTexHealth as getTexServiceHealth,
+  previewTex as previewTexWithService,
+  validateTex as validateTexWithService,
+} from "./modules/tex/client";
+import { assertTexCompilationAllowed } from "./modules/tex/security";
 import { handleWorkspaceRoute } from "./modules/workspace/routes";
+import {
+  loadDriveReferenceDocuments,
+} from "./modules/workspace/searchDriveDocuments";
 import type {
+  AutosaveDiffSummaryRequest,
+  AutosaveDiffSummaryResponse,
   GenerateTocRequest,
   GenerateTocResponse,
   GenerateSectionRequest,
@@ -35,9 +84,45 @@ import type {
   SummarizeDocumentResponse,
 } from "../src/types/aiAssistant";
 import type { Locale } from "../src/i18n/types";
+import type { AgentStatus, AgentTurnRequest, AgentTurnResponse } from "../src/types/liveAgent";
+import type {
+  TexAutoFixRequest,
+  TexAutoFixResponse,
+  TexExportPdfRequest,
+  TexPreviewRequest,
+  TexValidateRequest,
+} from "../src/types/tex";
 
-const PORT = Number(process.env.PORT || process.env.AI_SERVER_PORT || 8787);
+console.log("[AI Server] Initializing modules...");
+process.env.AI_MAX_REQUEST_BYTES = process.env.AI_MAX_REQUEST_BYTES || "2097152";
+const PORT = Number(process.env.PORT || process.env.AI_SERVER_PORT || 8080);
 const MAX_CHUNKS = 8;
+const MAX_REQUEST_BYTES = Number(process.env.AI_MAX_REQUEST_BYTES || 2097152);
+console.log(`[AI Server] Configuration: PORT=${PORT}, MAX_CHUNKS=${MAX_CHUNKS}, MAX_REQUEST_BYTES=${MAX_REQUEST_BYTES}`);
+
+const publicDeploymentConfig = readPublicDeploymentConfig(process.env);
+const publicDeploymentValidation = validatePublicDeploymentConfig(publicDeploymentConfig);
+
+for (const note of publicDeploymentValidation.notes) {
+  console.info(`[AI Server] Public deploy note: ${note}`);
+}
+
+for (const warning of publicDeploymentValidation.warnings) {
+  console.warn(`[AI Server] Public deploy warning: ${warning}`);
+}
+
+if (publicDeploymentValidation.errors.length > 0 && (
+  publicDeploymentConfig.oauthEnabled
+  || publicDeploymentConfig.publishingStatus === "production"
+)) {
+  throw new Error(
+    `Public deployment configuration is invalid: ${publicDeploymentValidation.errors.join(" | ")}`,
+  );
+}
+
+console.log(
+  `[AI Server] Google OAuth deployment status=${publicDeploymentConfig.publishingStatus} scopeProfile=${publicDeploymentConfig.scopeProfile} scopeRisk=${publicDeploymentValidation.scopeRisk}`,
+);
 
 const resolveAiLocale = (value: string | undefined): Locale => (value === "ko" ? "ko" : "en");
 
@@ -52,7 +137,12 @@ const assertMarkdownDocument = (
 };
 
 const getRequestImages = (
-  request: SummarizeDocumentRequest | GenerateSectionRequest | GenerateTocRequest | ProposeEditorActionRequest,
+  request:
+    | AgentTurnRequest
+    | SummarizeDocumentRequest
+    | GenerateSectionRequest
+    | GenerateTocRequest
+    | ProposeEditorActionRequest,
 ) => {
   if (!request.screenshot?.dataBase64?.trim() || !request.screenshot.mimeType?.trim()) {
     return [];
@@ -77,7 +167,7 @@ const buildFallbackSummaryRequest = (
   normalizedDocument: ReturnType<typeof normalizeMarkdownDocument>,
   objective: string,
 ): SummaryRequest => ({
-  chunkInputs: normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk) => ({
+  chunkInputs: normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk: any) => ({
     chunkId: chunk.chunkId,
     ingestionId: normalizedDocument.ingestionId,
     metadata: chunk.metadata,
@@ -141,6 +231,14 @@ const summarizeResponseSchema = {
     summary: { type: schemaType.STRING },
   },
   required: ["summary", "bulletPoints", "attributions"],
+  type: schemaType.OBJECT,
+};
+
+const autosaveDiffSummaryResponseSchema = {
+  properties: {
+    summary: { type: schemaType.STRING },
+  },
+  required: ["summary"],
   type: schemaType.OBJECT,
 };
 
@@ -261,6 +359,45 @@ const handleSummarize = async (request: SummarizeDocumentRequest): Promise<Summa
   return hydratedResponse;
 };
 
+const buildAutosaveDiffSummaryPrompt = (request: AutosaveDiffSummaryRequest, locale: Locale) => `
+You are writing a concise autosave history summary for a documentation editor.
+Use only the supplied diff payload.
+Return strict JSON matching the provided schema.
+${localePromptSuffix(locale)}
+
+Rules:
+- Write exactly one sentence.
+- Be concrete about what changed.
+- Prioritize the highest-signal differences from the supplied deltas.
+- Do not mention scores, chunk ids, or internal IDs unless they are already present in the diff text.
+- Do not speculate beyond the provided payload.
+
+Document:
+${JSON.stringify(request.document, null, 2)}
+
+Comparison:
+${JSON.stringify(request.comparison, null, 2)}
+`.trim();
+
+const handleAutosaveDiffSummary = async (
+  request: AutosaveDiffSummaryRequest,
+): Promise<AutosaveDiffSummaryResponse> => {
+  if (!request.comparison?.deltas?.length) {
+    throw new HttpError(400, "Autosave diff summary requires at least one diff delta.");
+  }
+
+  const requestId = randomUUID();
+  const response = await generateStructuredJson<{ summary: string }>({
+    prompt: buildAutosaveDiffSummaryPrompt(request, resolveAiLocale(request.locale)),
+    responseSchema: autosaveDiffSummaryResponseSchema,
+  });
+
+  return {
+    requestId,
+    summary: response.summary.trim(),
+  };
+};
+
 const buildSectionPrompt = (
   request: GenerateSectionRequest,
   chunks: { chunkId: string; ingestionId: string; sectionId?: string; text: string }[],
@@ -305,7 +442,7 @@ const buildSectionGrounding = (request: GenerateSectionRequest) => {
     }));
   }
 
-  return normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk) => ({
+  return normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk: any) => ({
     chunkId: chunk.chunkId,
     ingestionId: normalizedDocument.ingestionId,
     sectionId: chunk.sectionId,
@@ -333,7 +470,7 @@ const handleGenerateSection = async (request: GenerateSectionRequest): Promise<G
 
 const buildTocGrounding = (request: GenerateTocRequest) => {
   const normalizedDocument = normalizeMarkdownDocument(request);
-  const chunks = normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk) => ({
+  const chunks = normalizedDocument.chunks.slice(0, MAX_CHUNKS).map((chunk: any) => ({
     chunkId: chunk.chunkId,
     ingestionId: normalizedDocument.ingestionId,
     sectionId: chunk.sectionId,
@@ -406,7 +543,280 @@ const handleProposeAction = async (request: ProposeEditorActionRequest): Promise
   return normalizeActionResponse(response, request);
 };
 
+const MIN_PLANNER_CONFIDENCE = 0.65;
+const SUCCESS_REPLY_ONLY_PATTERN = /\b(done|updated|applied|prepared|created|imported|reflected)\b|(?:\uBC18\uC601|\uC218\uC815|\uC801\uC6A9|\uC644\uB8CC|\uC0DD\uC131|\uC900\uBE44)/i;
+
+const findLatestUserMessage = (request: AgentTurnRequest) => {
+  const latestUserMessage = [...request.messages]
+    .reverse()
+    .find((message) => message.role === "user" && message.text.trim().length > 0)
+    ?.text
+    .trim();
+
+  if (!latestUserMessage) {
+    throw new HttpError(400, "Live agent turn requires at least one user message.");
+  }
+
+  return latestUserMessage;
+};
+
+const buildAgentStatusMessage = ({
+  kind,
+  locale,
+}: {
+  kind: AgentStatus["kind"];
+  locale?: Locale;
+}) => {
+  if (kind === "gemini_rate_limited") {
+    return locale === "ko"
+      ? "Gemini 사용 한도에 도달했습니다."
+      : "Gemini usage is currently rate-limited.";
+  }
+
+  if (kind === "gemini_misconfigured") {
+    return locale === "ko"
+      ? "Gemini 모델 설정이 올바르지 않습니다."
+      : "The Gemini model configuration is invalid.";
+  }
+
+  return locale === "ko"
+    ? "Gemini가 연결되어 있지 않습니다."
+    : "Gemini is not connected.";
+};
+
+const classifyGeminiStatus = ({
+  error,
+  locale,
+}: {
+  error: unknown;
+  locale?: Locale;
+}): AgentStatus => {
+  const statusCode = typeof error === "object" && error !== null && "status" in error
+    ? Number((error as { status?: unknown }).status)
+    : undefined;
+  const message = error instanceof Error ? error.message : String(error);
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    statusCode === 429
+    || normalizedMessage.includes("resource_exhausted")
+    || normalizedMessage.includes("quota")
+    || normalizedMessage.includes("rate limit")
+  ) {
+    return {
+      kind: "gemini_rate_limited",
+      message: buildAgentStatusMessage({ kind: "gemini_rate_limited", locale }),
+    };
+  }
+
+  if (
+    statusCode === 400
+    || normalizedMessage.includes("unexpected model name format")
+    || (normalizedMessage.includes("invalid_argument") && normalizedMessage.includes("model"))
+  ) {
+    return {
+      kind: "gemini_misconfigured",
+      message: buildAgentStatusMessage({ kind: "gemini_misconfigured", locale }),
+    };
+  }
+
+  return {
+    kind: "gemini_unavailable",
+    message: buildAgentStatusMessage({ kind: "gemini_unavailable", locale }),
+  };
+};
+
+const buildAgentStatusResponse = ({
+  locale,
+  status,
+}: {
+  locale?: Locale;
+  status: AgentStatus;
+}) => ({
+  agentStatus: status,
+  assistantText: status.message,
+  effect: {
+    type: "reply_only" as const,
+  },
+});
+
+const buildPlannerFollowupResponse = ({
+  locale,
+  planner,
+}: {
+  locale?: Locale;
+  planner: ReturnType<typeof normalizePlannerResponse>;
+}) => ({
+  assistantText: planner.missingInformation.length > 0
+    ? (locale === "ko"
+      ? `\uACC4\uC18D \uC9C4\uD589\uD558\uB824\uBA74 \uB2E4\uC74C \uC815\uBCF4\uAC00 \uB354 \uD544\uC694\uD569\uB2C8\uB2E4: ${planner.missingInformation.join(", ")}.`
+      : `I need a bit more detail before I can continue: ${planner.missingInformation.join(", ")}.`)
+    : planner.reason,
+  effect: {
+    type: "ask_followup" as const,
+  },
+});
+
+const shouldWarnOnReplyOnlySuccessText = (response: AgentTurnResponse) =>
+  response.effect.type === "reply_only"
+  && SUCCESS_REPLY_ONLY_PATTERN.test(response.assistantMessage.text);
+
+const summarizeCspReportPayload = (payload: unknown) => {
+  const reports = Array.isArray(payload) ? payload : [payload];
+  return reports
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return "invalid_report";
+      }
+
+      const report = "csp-report" in entry
+        ? (entry as { "csp-report"?: Record<string, unknown> })["csp-report"]
+        : entry as Record<string, unknown>;
+      const directive = typeof report?.["effective-directive"] === "string"
+        ? report["effective-directive"]
+        : typeof report?.["violated-directive"] === "string"
+          ? report["violated-directive"]
+          : "unknown-directive";
+      const blockedUri = typeof report?.["blocked-uri"] === "string"
+        ? sanitizeLogMessage(report["blocked-uri"])
+        : "unknown-blocked-uri";
+
+      return `${directive}:${blockedUri}`;
+    })
+    .join(" | ");
+};
+
+const handleCspReport = async (request: import("node:http").IncomingMessage, requestId: string) => {
+  try {
+    const payload = await parseOptionalRequestBody<unknown>(request, { maxBytes: 32_768 });
+    console.info(`[AI Server] [${requestId}] CSP report ${summarizeCspReportPayload(payload)}`);
+  } catch (error) {
+    const message = error instanceof Error ? sanitizeLogMessage(error.message) : "invalid_csp_report";
+    console.warn(`[AI Server] [${requestId}] CSP report parse failed: ${message}`);
+  }
+};
+
+const handleAgentTurn = async (
+  httpRequest: import("node:http").IncomingMessage,
+  request: AgentTurnRequest,
+): Promise<AgentTurnResponse> => {
+  const latestUserMessage = findLatestUserMessage(request);
+  const locale = request.locale ? resolveAiLocale(request.locale) : undefined;
+  const workspaceSession = await getWorkspaceSession(httpRequest);
+  const workspaceConnected = Boolean(workspaceSession);
+  const retrievalContext = buildActiveDocumentRetrievalContext({
+    latestUserMessage,
+    request,
+  });
+  let driveReferences: Array<{ excerpt: string; fileId: string; fileName: string }> = [];
+
+  if (workspaceConnected && request.driveReferenceFileIds.length > 0) {
+    try {
+      driveReferences = (await loadDriveReferenceDocuments(httpRequest, request.driveReferenceFileIds))
+        .map((reference) => ({
+          excerpt: reference.excerpt,
+          fileId: reference.fileId,
+          fileName: reference.fileName,
+        }));
+    } catch (error) {
+      console.warn("[LiveAgent] failed to load selected drive references before planning", error);
+      driveReferences = [];
+    }
+  }
+
+  let planner;
+
+  try {
+    const rawPlannerResponse = await generateMultimodalStructuredJson({
+      images: getRequestImages(request),
+      prompt: buildPlannerPrompt({
+        driveReferences,
+        retrievalContext,
+        request,
+        workspaceConnected,
+      }),
+      responseSchema: agentPlannerResponseSchema,
+    });
+    planner = normalizePlannerResponse(rawPlannerResponse);
+  } catch (error) {
+    return normalizeAgentTurnResponse({
+      availableImportTargets: [],
+      driveCandidates: [],
+      response: buildAgentStatusResponse({
+        locale,
+        status: classifyGeminiStatus({
+          error,
+          locale,
+        }),
+      }),
+    });
+  }
+
+  console.info(
+    `[LiveAgent] planner action=${planner.action} confidence=${planner.confidence.toFixed(2)} graphSections=${retrievalContext?.topSectionTargets.map((target) => `${target.sectionId || target.headingNodeId}:${target.score}`).join("|") || "none"} graphFields=${retrievalContext?.topFieldTargets.map((target) => `${target.fieldKey}:${target.score}`).join("|") || "none"}`,
+  );
+
+  if (plannerNeedsFollowup(planner, MIN_PLANNER_CONFIDENCE)) {
+    const followupResponse = normalizeAgentTurnResponse({
+      availableImportTargets: [],
+      driveCandidates: [],
+      response: buildPlannerFollowupResponse({
+        locale,
+        planner,
+      }),
+    });
+
+    if (shouldWarnOnReplyOnlySuccessText(followupResponse)) {
+      console.warn(`[LiveAgent] suspicious reply_only success text after planner followup: ${followupResponse.assistantMessage.text}`);
+    }
+
+    return followupResponse;
+  }
+
+  try {
+    const executionResult = await executePlannedAction({
+      driveReferences,
+      httpRequest,
+      latestUserMessage,
+      request,
+      retrievalContext,
+      workspaceConnected,
+    }, planner);
+
+    const normalizedResponse = normalizeAgentTurnResponse({
+      availableImportTargets: executionResult.availableImportTargets,
+      driveCandidates: executionResult.driveCandidates,
+      response: executionResult.rawResponse,
+    });
+
+    console.info(
+      `[LiveAgent] executor action=${executionResult.telemetry?.executorAction || planner.action} effect=${normalizedResponse.effect.type} deterministicFallback=${executionResult.telemetry?.deterministicFallbackUsed ? "yes" : "no"} driveAuthGate=${executionResult.telemetry?.driveAuthGateUsed ? "yes" : "no"} failureReason=${executionResult.telemetry?.failureReason || "none"}`,
+    );
+
+    if (shouldWarnOnReplyOnlySuccessText(normalizedResponse)) {
+      console.warn(`[LiveAgent] suspicious reply_only success text: ${normalizedResponse.assistantMessage.text}`);
+    }
+
+    return normalizedResponse;
+  } catch (error) {
+    return normalizeAgentTurnResponse({
+      availableImportTargets: [],
+      driveCandidates: [],
+      response: buildAgentStatusResponse({
+        locale,
+        status: classifyGeminiStatus({
+          error,
+          locale,
+        }),
+      }),
+    });
+  }
+};
+
 const server = createServer(async (request, response) => {
+  const requestId = randomUUID();
+  console.log(`[AI Server] [${requestId}] ${request.method} ${request.url}`);
+
   try {
     if (!request.url) {
       throw new HttpError(404, "Unknown request.");
@@ -417,66 +827,198 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    const authRouteResult = await handleAuthRoute(request);
+    const requestUrl = getRequestUrl(request);
 
+    // Health check - ABSOLUTELY FIRST
+    if (request.method === "GET" && (requestUrl.pathname === "/api/ai/health" || requestUrl.pathname === "/health")) {
+      console.log(`[AI Server] [${requestId}] Health check passed`);
+      writeHttpResponse(response, json(buildPublicAiHealthPayload({
+        configured: isGeminiConfigured(),
+      }), 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "GET" && requestUrl.pathname === "/api/internal/ai/health") {
+      if (!isAuthorizedDiagnosticsRequest(request)) {
+        throw new HttpError(404, "Route not found.");
+      }
+
+      const googleOAuthSummary = getGoogleOAuthRuntimeSummary();
+      writeHttpResponse(response, json(buildInternalAiHealthPayload({
+        allowedOrigins: ALLOWED_ORIGINS,
+        configured: isGeminiConfigured(),
+        fallbackModel: getGeminiFallbackModel(),
+        googleOAuthPublishingStatus: googleOAuthSummary.publishingStatus,
+        googleWorkspaceScopeProfile: googleOAuthSummary.scopeProfile,
+        googleWorkspaceScopeRisk: googleOAuthSummary.scopeRisk,
+        model: getGeminiModel(),
+      }), 200, request.headers.origin));
+      return;
+    }
+
+    const rateLimitPolicy = resolveRateLimitPolicy({
+      method: request.method || "GET",
+      pathname: requestUrl.pathname,
+    });
+
+    if (rateLimitPolicy) {
+      const rateLimitDecision = consumeRateLimit({
+        clientId: getRequestClientId(request),
+        policy: rateLimitPolicy,
+      });
+
+      if (!rateLimitDecision.allowed) {
+        console.warn(
+          `[AI Server] [${requestId}] rate_limited bucket=${rateLimitPolicy.bucket} path=${requestUrl.pathname}`,
+        );
+        writeHttpResponse(response, json({
+          error: "Rate limit exceeded.",
+        }, 429, request.headers.origin, {
+          "Retry-After": String(rateLimitDecision.retryAfterSeconds),
+        }));
+        return;
+      }
+    }
+
+    if (request.method === "POST" && requestUrl.pathname === "/api/security/csp-report") {
+      await handleCspReport(request, requestId);
+      writeHttpResponse(response, empty(204, request.headers.origin));
+      return;
+    }
+
+    console.log(`[AI Server] [${requestId}] Handling auth route...`);
+    const authRouteResult = await handleAuthRoute(request);
     if (authRouteResult) {
+      console.log(`[AI Server] [${requestId}] Auth route matched`);
       writeHttpResponse(response, authRouteResult);
       return;
     }
 
+    console.log(`[AI Server] [${requestId}] Handling workspace route...`);
     const workspaceRouteResult = await handleWorkspaceRoute(request);
-
     if (workspaceRouteResult) {
+      console.log(`[AI Server] [${requestId}] Workspace route matched`);
       writeHttpResponse(response, workspaceRouteResult);
       return;
     }
 
-    if (request.method === "GET" && request.url === "/api/ai/health") {
-      writeHttpResponse(response, json({
-        allowedOrigins: ALLOWED_ORIGINS,
-        configured: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
-        model: getGeminiModel(),
-        ok: true,
-      }, 200, request.headers.origin));
-      return;
-    }
-
     if (request.method === "POST" && request.url === "/api/ai/summarize") {
-      const payload = await parseRequestBody<SummarizeDocumentRequest>(request);
+      const payload = await parseRequestBody<SummarizeDocumentRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleSummarize(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
+    if (request.method === "POST" && request.url === "/api/ai/autosave-diff-summary") {
+      const payload = await parseRequestBody<AutosaveDiffSummaryRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      const result = await handleAutosaveDiffSummary(payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/ai/agent/turn") {
+      const payload = await parseRequestBody<AgentTurnRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      const result = await handleAgentTurn(request, payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
     if (request.method === "POST" && request.url === "/api/ai/generate-section") {
-      const payload = await parseRequestBody<GenerateSectionRequest>(request);
+      const payload = await parseRequestBody<GenerateSectionRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleGenerateSection(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/generate-toc") {
-      const payload = await parseRequestBody<GenerateTocRequest>(request);
+      const payload = await parseRequestBody<GenerateTocRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleGenerateToc(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/propose-action") {
-      const payload = await parseRequestBody<ProposeEditorActionRequest>(request);
+      const payload = await parseRequestBody<ProposeEditorActionRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleProposeAction(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
+    if (request.method === "POST" && request.url === "/api/ai/tex/fix") {
+      const payload = await parseRequestBody<TexAutoFixRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      const result = await handleTexAutoFix(payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "GET" && request.url === "/api/tex/health") {
+      const result = await getTexServiceHealth();
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/tex/validate") {
+      const payload = await parseRequestBody<TexValidateRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
+      const result = await validateTexWithService(payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/tex/preview") {
+      const payload = await parseRequestBody<TexPreviewRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
+      const result = await previewTexWithService(payload);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/tex/export-pdf") {
+      const payload = await parseRequestBody<TexExportPdfRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
+      const result = await exportTexPdf(payload);
+      writeHttpResponse(response, binary(result.body, result.contentType, 200, request.headers.origin, {
+        "Content-Disposition": result.contentDisposition || "attachment; filename=\"document.pdf\"",
+      }));
+      return;
+    }
+
+    console.log(`[AI Server] [${requestId}] Route not found: ${request.url}`);
     throw new HttpError(404, "Route not found.");
   } catch (error) {
     const statusCode = error instanceof HttpError ? error.statusCode : 500;
-    const message = error instanceof Error ? error.message : "Unexpected server error.";
-    writeHttpResponse(response, json({ error: message }, statusCode, request.headers.origin));
+    const rawMessage = error instanceof Error ? error.message : "Unexpected server error.";
+    const sanitizedMessage = sanitizeLogMessage(rawMessage);
+    const publicMessage = error instanceof HttpError && statusCode < 500
+      ? sanitizedMessage || "Request failed."
+      : "Unexpected server error.";
+
+    if (process.env.NODE_ENV === "production") {
+      console.error(`[AI Server] [${requestId}] Error [${statusCode}]: ${sanitizedMessage}`);
+    } else {
+      console.error(`[AI Server] [${requestId}] Error [${statusCode}]: ${sanitizedMessage}`, error);
+    }
+
+    writeHttpResponse(response, json({ error: publicMessage }, statusCode, request.headers.origin));
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Gemini AI server listening on http://localhost:${PORT}`);
+server.once("error", (error) => {
+  void handleListenError({
+    error: error as NodeJS.ErrnoException,
+    port: PORT,
+    serviceName: "AI Server",
+  }).then((exitCode) => {
+    process.exit(exitCode);
+  }).catch((listenError) => {
+    console.error("[AI Server] Failed to handle startup error.", listenError);
+    process.exit(1);
+  });
 });
+
+console.log("[AI Server] Starting listener...");
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`[AI Server] Listening on http://0.0.0.0:${PORT}`);
+});
+
+

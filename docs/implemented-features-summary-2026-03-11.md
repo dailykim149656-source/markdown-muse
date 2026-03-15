@@ -28,14 +28,14 @@ Current repository position:
 | Share and export | Implemented | `src/components/editor/ShareLinkDialog.tsx`, `src/hooks/useDocumentIO.ts` | Share links, QR, clipboard export, print, file export |
 | AI authoring and analysis | Implemented | `src/components/editor/AiAssistantDialog.tsx`, `src/components/editor/AiAssistantRuntime.tsx`, `src/hooks/useAiAssistant.ts` | Summary, section generation, compare, update suggestions, procedure extraction, TOC |
 | Patch Review | Implemented | `src/components/editor/PatchReviewDialog.tsx`, `src/components/editor/PatchReviewPanel.tsx`, `src/hooks/usePatchReview.ts` | Accept/reject/edit/apply, confidence metrics, provenance metrics, provenance-gap filtering |
+| Google Workspace docs integration | Implemented | `src/components/editor/EditorHeader.tsx`, `src/components/editor/WorkspaceImportDialog.tsx`, `src/components/editor/WorkspaceExportDialog.tsx`, `src/hooks/useWorkspaceExport.ts`, `src/hooks/useWorkspaceSync.ts`, `server/modules/workspace/routes.ts` | Connect Google, import existing Google Docs, export local rich-text docs to new Google Docs, save bound docs, rescan, refresh, conflict handling |
 | Knowledge index and retrieval | Implemented | `src/hooks/useKnowledgeBase.ts`, `src/lib/knowledge/knowledgeIndex.ts`, `src/components/editor/KnowledgeSearchPanel.tsx` | Local index, stale/fresh state, image retrieval, semantic rerank, strict keyword mode |
 | Workspace Graph | Implemented | `src/pages/WorkspaceGraph.tsx`, `src/components/editor/GraphExplorerDialog.tsx`, `src/components/editor/WorkspaceGraphPanel.tsx` | Graph route, search, filters, issues-only, source-target chain, graph handoff |
 | Diagnostics | Implemented | `src/components/editor/DocumentImpactPanel.tsx`, `src/components/editor/DocumentHealthPanel.tsx`, `src/components/editor/ConsistencyIssuesPanel.tsx`, `src/components/editor/ChangeMonitoringPanel.tsx` | Impact, health, consistency, change monitoring, priority/reason, causal explanation |
 | Suggestion Queue | Implemented | `src/components/editor/SuggestionQueuePanel.tsx`, `src/pages/Index.tsx` | Multi-document queue, retry/rerun, dedupe, graph re-entry, patch review reopen |
-| Operations and release gate | Implemented | `src/components/editor/KnowledgeOperationsPanel.tsx`, `src/components/editor/ReleaseChecklistPanel.tsx` | Queue health, provenance coverage, review progress, release checklist, summary copy |
-| Mobile and responsive behavior | Implemented | `src/components/editor/EditorToolbar.tsx`, `src/components/editor/FileSidebar.tsx`, `src/components/editor/KnowledgeOperationsPanel.tsx` | Mobile toolbar overflow handling, More access, wrap-friendly actions, mobile sidebar close flow |
+| Mobile and responsive behavior | Implemented | `src/components/editor/EditorToolbar.tsx`, `src/components/editor/FileSidebar.tsx` | Mobile toolbar overflow handling, More access, wrap-friendly actions, mobile sidebar close flow |
 | Landing and guide | Implemented | `src/pages/Landing.tsx`, `src/pages/Guide.tsx`, `src/content/guideContent.ts` | Quick start, workflow cards, feature guidance, visual tour, search, FAQ, audience filters, scenarios |
-| Validation baseline | Implemented | `src/test/guidePage.test.tsx`, `src/test/dialogSmoke.test.tsx`, `src/test/knowledgeOperationsPanel.test.tsx`, `src/test/patchReviewMetrics.test.tsx`, `src/test/suggestionQueuePanel.test.tsx`, `src/test/i18nCoverage.test.ts` | Focused regression coverage exists and production build passes |
+| Validation baseline | Implemented | `src/test/guidePage.test.tsx`, `src/test/dialogSmoke.test.tsx`, `src/test/patchReviewMetrics.test.tsx`, `src/test/suggestionQueuePanel.test.tsx`, `src/test/i18nCoverage.test.ts` | Focused regression coverage exists and production build passes |
 
 ## Format and workflow support
 
@@ -51,6 +51,7 @@ Current repository position:
 | RST import/export | Implemented | Import/export surface |
 | PDF output | Implemented | Export and print-oriented workflow |
 | `.docsy` persistence | Implemented | Richer editor-state preservation |
+| Google Docs import/export/save | Implemented | Google Workspace dropdown and bound-document workflow |
 
 ## Review-first guarantees
 
@@ -78,4 +79,4 @@ Markdown Muse should now be treated as:
 
 - a feature-rich release candidate
 - a review-first editor with cross-document maintenance flows
-- a product that already needs onboarding and operator documentation
+- a product that already needs onboarding and handoff documentation

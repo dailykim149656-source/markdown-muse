@@ -18,6 +18,7 @@ Deploy the Docsy AI service to Cloud Run using the current `cloudbuild.ai.yaml` 
 - region
 - allowed frontend origin
 - Secret Manager secret name for `GEMINI_API_KEY`
+- request-body limit for the AI API
 
 ## Assumed defaults
 
@@ -122,6 +123,9 @@ If your frontend is served from the same origin as the AI service, you can rely 
 - `GEMINI_API_KEY` is injected from Secret Manager
 - `GEMINI_MODEL` controls the active model
 - `AI_ALLOWED_ORIGIN` controls CORS
+- `AI_MAX_REQUEST_BYTES` caps inbound request size before JSON parsing
+- `AI_DIAGNOSTICS_TOKEN` protects the detailed internal health route in deployed environments
+- `AI_ALLOWED_ORIGIN` must be an explicit frontend origin outside local development
 
 ## Recommended production values
 
@@ -154,6 +158,7 @@ Check:
 
 - exact scheme and host
 - include the deployed frontend origin, not localhost
+- do not use `*` outside local development
 
 ### Image push or Artifact Registry failure
 
@@ -174,3 +179,11 @@ Before real deployment, the only values you must decide are:
 - project ID
 - frontend origin
 - Artifact Registry repository name if not using `docsy`
+
+## Credential cleanup
+
+If a workspace state file or Google OAuth token is committed to Git history,
+follow:
+
+- [Security Credential Rotation Runbook](security-credential-rotation-runbook-2026-03-14.md)
+- [Edge and Browser Security Runbook](edge-and-browser-security-runbook-2026-03-14.md)

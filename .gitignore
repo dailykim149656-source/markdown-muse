@@ -41,6 +41,7 @@ Thumbs.db
 *.sw?
 
 # Local/temporary files
+.data/
 *.local
 *.tmp
 *.temp

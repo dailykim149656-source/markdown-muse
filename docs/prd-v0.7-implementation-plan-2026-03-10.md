@@ -1,5 +1,14 @@
 # PRD v0.7 Implementation Plan
 
+## Historical Note
+
+This document is a historical implementation plan from an earlier roadmap stage.
+
+For the current repository-state view, use:
+
+- `docs/prd-status-check-2026-03-11.md`
+- `docs/remaining-work-execution-plan-2026-03-11.md`
+
 Date: 2026-03-10
 
 ## 기준

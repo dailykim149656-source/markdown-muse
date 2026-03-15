@@ -1,6 +1,8 @@
 import {
   Braces,
+  Check,
   ChevronDown,
+  Cloud,
   Copy,
   Download,
   Ellipsis,
@@ -14,8 +16,10 @@ import {
   Minimize,
   Moon,
   PanelLeft,
+  Plus,
   Printer,
   QrCode,
+  RotateCcw,
   Sparkles,
   Sun,
   Upload,
@@ -27,6 +31,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -34,6 +39,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DocumentImportState } from "@/hooks/useDocumentIO";
 import { useI18n } from "@/i18n/useI18n";
+import type { EditorUserProfile } from "@/lib/editor/userProfiles";
 import type { Locale } from "@/i18n/types";
 import { getEditorModeFamily, type EditorModeFamily } from "@/lib/editor/modeFamilies";
 import { getWorkspaceProviderLabel, getWorkspaceSyncBadgeClassName, getWorkspaceSyncLabel } from "@/lib/workspace/workspaceLabels";
@@ -79,17 +85,26 @@ interface EditorHeaderProps {
   onToggleFullscreen: () => void;
   onOpenPatchReview?: () => void;
   onOpenAiAssistant?: () => void;
+  onUserProfileChange: (profile: EditorUserProfile) => void;
+  onRequestResetDocuments?: () => void;
   onOpenShortcuts: () => void;
   patchCount?: number;
   previewOpen?: boolean;
   onTogglePreview?: () => void;
   loadFileTitle?: string;
   onOpenWorkspaceConnection?: () => void;
+  onOpenWorkspaceExport?: () => void;
   onOpenWorkspaceImport?: () => void;
+  onSaveWorkspaceDocument?: () => void;
   workspaceConnected?: boolean;
   workspaceConnectionPending?: boolean;
+  workspaceExportEnabled?: boolean;
+  workspaceExportPending?: boolean;
   workspaceImportPending?: boolean;
+  workspaceSyncPending?: boolean;
   workspaceBinding?: WorkspaceBinding;
+  resetDocumentsDisabled?: boolean;
+  userProfile: EditorUserProfile;
 }
 
 const LOCALES: Locale[] = ["ko", "en"];
@@ -133,25 +148,32 @@ const EditorHeader = ({
   onToggleFullscreen,
   onOpenPatchReview,
   onOpenAiAssistant,
+  onUserProfileChange,
+  onRequestResetDocuments,
   onOpenShortcuts,
   patchCount = 0,
   previewOpen,
   onTogglePreview,
   loadFileTitle,
   onOpenWorkspaceConnection,
+  onOpenWorkspaceExport,
   onOpenWorkspaceImport,
+  onSaveWorkspaceDocument,
   workspaceConnected = false,
   workspaceConnectionPending = false,
+  workspaceExportEnabled = true,
+  workspaceExportPending = false,
   workspaceImportPending = false,
+  workspaceSyncPending = false,
   workspaceBinding,
+  resetDocumentsDisabled = false,
+  userProfile,
 }: EditorHeaderProps) => {
   const { locale, setLocale, t } = useI18n();
   const { toggleSidebar } = useSidebar();
   const modeExt = mode === "latex" ? ".tex" : mode === "html" ? ".html" : mode === "json" ? ".json" : mode === "yaml" ? ".yaml" : ".md";
   const modeFamily = getEditorModeFamily(mode);
   const currentFamilyLabel = t(`header.modeGroups.${modeFamily}`);
-  const crossFamily = modeFamily === "richText" ? "structured" : "richText";
-  const crossFamilyLabel = t(`header.modeGroups.${crossFamily}`);
   const renderModeLabel = (editorMode: EditorMode) => (
     editorMode === "markdown"
       ? "Markdown"
@@ -200,11 +222,21 @@ const EditorHeader = ({
   const workspaceProviderLabel = getWorkspaceProviderLabel(workspaceBinding);
   const workspaceSyncLabel = getWorkspaceSyncLabel(workspaceBinding);
   const workspaceSyncTone = getWorkspaceSyncBadgeClassName(workspaceBinding);
+  const showWorkspaceExportAction = Boolean(onOpenWorkspaceExport) && !workspaceBinding;
+  const showWorkspaceSyncAction = Boolean(onSaveWorkspaceDocument) && Boolean(workspaceBinding);
+  const shouldShowCrossFamilyCreateActions = crossFamilyModes.length > 0 && Boolean(onCreateDocument);
+  const shouldShowStructuredSwitchActions = showStructuredModeAction && !shouldShowCrossFamilyCreateActions;
+  const isAdvancedProfile = userProfile === "advanced";
+  const userProfileLabel = t(`header.userProfile.${userProfile}`);
+  const nextUserProfile = isAdvancedProfile ? "beginner" : "advanced";
+  const toggleUserProfileTitle = t(
+    isAdvancedProfile ? "header.userProfile.toggleToBeginner" : "header.userProfile.toggleToAdvanced",
+  );
 
   return (
     <header className="border-b border-border bg-background">
-      <div className="flex min-h-12 items-center justify-between gap-2 px-2 sm:px-4">
-        <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
+      <div className="flex min-h-12 w-full flex-wrap items-start justify-between gap-2 px-2 py-1 sm:px-4 sm:py-1 xl:flex-nowrap xl:items-center">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:gap-2">
           <Button
             variant="ghost"
             size="sm"
@@ -214,7 +246,7 @@ const EditorHeader = ({
           >
             <PanelLeft className="h-4 w-4" />
           </Button>
-          <Link to="/" className="hidden shrink-0 items-center gap-2 transition-opacity hover:opacity-80 sm:flex">
+          <Link to="/" className="hidden min-w-0 shrink-0 items-center gap-2 transition-opacity hover:opacity-80 sm:flex">
             <img src={docslyLogoSmall} alt={t("common.appName")} className="h-6 w-6" />
             <span className="mr-1 text-sm font-bold text-foreground">{t("common.appName")}</span>
           </Link>
@@ -256,92 +288,47 @@ const EditorHeader = ({
             )}
           </div>
 
-          <div className="ml-3 hidden items-center gap-3 lg:flex">
-            <div className="flex items-center gap-2 rounded-md border border-border/60 bg-secondary/40 px-2 py-1">
-              <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                {currentFamilyLabel}
-              </span>
-              <div className="flex items-center rounded-md bg-secondary p-0.5">
-                {availableModes.map((editorMode) => (
-                  <button
-                    key={editorMode}
-                    className={`rounded-sm px-3 py-1 text-xs transition-colors ${mode === editorMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                    onClick={() => onModeChange(editorMode)}
-                    type="button"
-                  >
-                    {renderModeLabel(editorMode)}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {crossFamilyModes.length > 0 && onCreateDocument && (
-              <div className="flex items-center gap-2 rounded-md border border-dashed border-border/60 px-2 py-1">
-                <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  {crossFamilyLabel}
-                </span>
-                <div className="flex items-center gap-1">
-                  {crossFamilyModes.map((editorMode) => (
-                    <Button
-                      className="h-7 px-2 text-xs"
-                      key={`create-${editorMode}`}
-                      onClick={() => handleCrossFamilyAction(editorMode)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {t("header.newMode", { mode: renderModeLabel(editorMode) })}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          {showStructuredModeAction && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="hidden h-7 gap-1 px-2 text-xs lg:inline-flex">
-                  <Braces className="h-3.5 w-3.5" />
-                  {t("header.structuredEditor")}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-36">
-                <DropdownMenuItem onClick={() => openStructuredMode("json")} className="text-xs">
-                  JSON
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openStructuredMode("yaml")} className="text-xs">
-                  YAML
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-7 shrink-0 gap-1 px-2 text-xs lg:hidden">
-                {mode === "markdown" ? "MD" : mode === "latex" ? "TeX" : mode.toUpperCase()}
+              <Button
+                className="h-7 min-w-0 shrink-0 gap-1 px-2 text-xs"
+                size="sm"
+                title={`${currentFamilyLabel}: ${renderModeLabel(mode)}`}
+                variant="outline"
+              >
+                {modeFamily === "structured" ? <Braces className="h-3.5 w-3.5" /> : null}
+                {renderModeLabel(mode)}
                 <ChevronDown className="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-36">
+            <DropdownMenuContent align="start" className="w-44">
+              <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {currentFamilyLabel}
+              </DropdownMenuLabel>
               {availableModes.map((editorMode) => (
                 <DropdownMenuItem
                   key={editorMode}
                   onClick={() => onModeChange(editorMode)}
                   className={`text-xs ${mode === editorMode ? "bg-accent" : ""}`}
                 >
+                  {mode === editorMode ? <Check className="mr-2 h-3.5 w-3.5" /> : <span className="mr-2 h-3.5 w-3.5" />}
                   {renderModeLabel(editorMode)}
                 </DropdownMenuItem>
               ))}
-              {(crossFamilyModes.length > 0 && onCreateDocument) || showStructuredModeAction ? (
+              {shouldShowCrossFamilyCreateActions || shouldShowStructuredSwitchActions ? (
                 <>
                   <DropdownMenuSeparator />
-                  {crossFamilyModes.length > 0 && onCreateDocument ? (
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                    {t(`header.modeGroups.${modeFamily === "richText" ? "structured" : "richText"}`)}
+                  </DropdownMenuLabel>
+                  {shouldShowCrossFamilyCreateActions ? (
                     crossFamilyModes.map((editorMode) => (
                       <DropdownMenuItem
-                        key={`mobile-create-${editorMode}`}
+                        key={`create-${editorMode}`}
                         onClick={() => handleCrossFamilyAction(editorMode)}
                         className="text-xs"
                       >
+                        <Plus className="mr-2 h-3.5 w-3.5" />
                         {t("header.newMode", { mode: renderModeLabel(editorMode) })}
                       </DropdownMenuItem>
                     ))
@@ -361,7 +348,7 @@ const EditorHeader = ({
           </DropdownMenu>
         </div>
 
-        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+        <div className="flex w-full min-w-0 flex-wrap items-center justify-end gap-0.5 sm:gap-1 xl:w-auto xl:flex-nowrap">
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -408,35 +395,61 @@ const EditorHeader = ({
           </Button>
 
           {onOpenWorkspaceConnection && (
-            <Button
-              className="hidden h-8 px-2 text-xs sm:inline-flex"
-              disabled={workspaceConnectionPending}
-              onClick={onOpenWorkspaceConnection}
-              size="sm"
-              title={workspaceConnected ? "Google Workspace connected" : "Connect Google Workspace"}
-              type="button"
-              variant={workspaceConnected ? "secondary" : "outline"}
-            >
-              {workspaceConnectionPending
-                ? "Google..."
-                : workspaceConnected
-                  ? "Google Connected"
-                  : "Connect Google"}
-            </Button>
-          )}
-
-          {onOpenWorkspaceImport && workspaceConnected && (
-            <Button
-              className="hidden h-8 px-2 text-xs sm:inline-flex"
-              disabled={workspaceImportPending}
-              onClick={onOpenWorkspaceImport}
-              size="sm"
-              title="Import from Google Drive"
-              type="button"
-              variant="outline"
-            >
-              {workspaceImportPending ? "Importing..." : "Drive Import"}
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  className="h-8 gap-1 px-2"
+                  size="sm"
+                  title={workspaceConnected ? "Google Workspace connected" : "Google Workspace"}
+                  type="button"
+                  variant={workspaceConnected ? "secondary" : "outline"}
+                >
+                  <Cloud className="h-4 w-4" />
+                  <span className="hidden text-xs sm:inline">Google</span>
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                  Google Workspace
+                </DropdownMenuLabel>
+                <DropdownMenuItem disabled={workspaceConnectionPending} onClick={onOpenWorkspaceConnection}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  {workspaceConnectionPending
+                    ? "Google..."
+                    : workspaceConnected
+                      ? "Manage Connection"
+                      : "Connect Google"}
+                </DropdownMenuItem>
+                {onOpenWorkspaceImport && (
+                  <DropdownMenuItem
+                    disabled={!workspaceConnected || workspaceImportPending}
+                    onClick={() => onOpenWorkspaceImport()}
+                  >
+                    <FileDown className="mr-2 h-4 w-4" />
+                    {workspaceImportPending ? "Importing..." : "Import from Google Drive"}
+                  </DropdownMenuItem>
+                )}
+                {showWorkspaceExportAction && (
+                  <DropdownMenuItem
+                    disabled={!workspaceConnected || workspaceExportPending || !workspaceExportEnabled}
+                    onClick={() => onOpenWorkspaceExport?.()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {workspaceExportPending ? "Exporting..." : "Export to Google Docs"}
+                  </DropdownMenuItem>
+                )}
+                {showWorkspaceSyncAction && (
+                  <DropdownMenuItem
+                    disabled={!workspaceConnected || workspaceSyncPending}
+                    onClick={() => onSaveWorkspaceDocument?.()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {workspaceSyncPending ? "Saving..." : "Save to Google Docs"}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
 
           <DropdownMenu>
@@ -557,11 +570,22 @@ const EditorHeader = ({
             </Button>
           )}
 
-          {mode !== "json" && mode !== "yaml" && onOpenAiAssistant && (
+          {isAdvancedProfile && mode !== "json" && mode !== "yaml" && onOpenAiAssistant && (
             <Button variant="ghost" size="sm" onClick={onOpenAiAssistant} title={t("header.aiAssistant")} className="h-8 w-8 p-0">
               <Sparkles className="h-4 w-4" />
             </Button>
           )}
+
+          <Button
+            className="h-8 gap-1 px-2 text-xs"
+            onClick={() => onUserProfileChange(nextUserProfile)}
+            size="sm"
+            title={toggleUserProfileTitle}
+            type="button"
+            variant={isAdvancedProfile ? "secondary" : "outline"}
+          >
+            {userProfileLabel}
+          </Button>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -613,7 +637,7 @@ const EditorHeader = ({
             {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </Button>
 
-          {onOpenPatchReview && (
+          {isAdvancedProfile && onOpenPatchReview && (
             <Button className="hidden h-8 px-2 text-xs sm:inline-flex" onClick={onOpenPatchReview} size="sm" type="button" variant="ghost">
               {t("header.patchReview")}
               {patchCount > 0 ? ` (${patchCount})` : ""}
@@ -622,12 +646,18 @@ const EditorHeader = ({
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 sm:hidden" title={t("common.language.menu")}>
+              <Button
+                aria-label={t("header.moreActions")}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                title={t("header.moreActions")}
+              >
                 <Ellipsis className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              {onOpenPatchReview && (
+              {isAdvancedProfile && onOpenPatchReview && (
                 <DropdownMenuItem onClick={onOpenPatchReview}>
                   {t("header.patchReview")}
                   {patchCount > 0 ? ` (${patchCount})` : ""}
@@ -638,20 +668,6 @@ const EditorHeader = ({
               <DropdownMenuItem onClick={onToggleTheme}>
                 {isDark ? t("header.lightMode") : t("header.darkMode")}
               </DropdownMenuItem>
-              {onOpenWorkspaceConnection && (
-                <DropdownMenuItem disabled={workspaceConnectionPending} onClick={onOpenWorkspaceConnection}>
-                  {workspaceConnectionPending
-                    ? "Google..."
-                    : workspaceConnected
-                      ? "Google Connected"
-                      : "Connect Google"}
-                </DropdownMenuItem>
-              )}
-              {onOpenWorkspaceImport && workspaceConnected && (
-                <DropdownMenuItem disabled={workspaceImportPending} onClick={onOpenWorkspaceImport}>
-                  {workspaceImportPending ? "Importing..." : "Drive Import"}
-                </DropdownMenuItem>
-              )}
               <DropdownMenuSeparator />
               {LOCALES.map((nextLocale) => (
                 <DropdownMenuItem
@@ -662,6 +678,19 @@ const EditorHeader = ({
                   {t(`common.language.${nextLocale}`)}
                 </DropdownMenuItem>
               ))}
+              {onRequestResetDocuments && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className={!resetDocumentsDisabled ? "text-destructive focus:text-destructive" : undefined}
+                    disabled={resetDocumentsDisabled}
+                    onClick={() => onRequestResetDocuments()}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    {t("resetDocuments.action")}
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

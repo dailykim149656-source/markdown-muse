@@ -69,14 +69,19 @@ const bundleReportPlugin = () => ({
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  const profile = mode === "web" ? "web" : "desktop";
-
   return ({
   server: {
     host: "::",
     port: 8080,
     hmr: {
       overlay: false,
+    },
+    proxy: {
+      "/api": {
+        changeOrigin: true,
+        secure: false,
+        target: "http://localhost:8787",
+      },
     },
   },
   plugins: [react(), bundleReportPlugin(), mode === "development" && componentTagger()].filter(Boolean),
@@ -97,41 +102,16 @@ export default defineConfig(({ mode }) => {
       output: {
         manualChunks(id) {
           if (matchesSource(id, [
-            "src/components/editor/FileSidebarKnowledgePanels.tsx",
-            "src/components/editor/WorkspaceGraphPanel.tsx",
-            "src/components/editor/GraphExplorerDialog.tsx",
-            "src/hooks/useKnowledgeBase.ts",
-            "src/lib/knowledge/",
+            "src/lib/ai/autosaveSummaryClient.ts",
           ])) {
-            return "knowledge";
+            return "ai-history";
           }
 
           if (matchesSource(id, [
-            "src/components/editor/FileSidebarHistoryPanels.tsx",
-            "src/lib/history/",
-            "src/lib/analysis/formatConsistency.ts",
+            "src/lib/ai/httpClient.ts",
+            "src/lib/ai/texClient.ts",
           ])) {
-            return "history";
-          }
-
-          if (matchesSource(id, [
-            "src/hooks/useAiAssistant.ts",
-            "src/lib/ai/",
-          ])) {
-            return "ai";
-          }
-
-          if (matchesSource(id, [
-            "src/components/editor/ShareLinkDialog.tsx",
-          ])) {
-            return "share";
-          }
-
-          if (profile === "web" && matchesSource(id, [
-            "src/components/editor/TemplateDialog.tsx",
-            "src/components/editor/PatchReviewDialog.tsx",
-          ])) {
-            return "editor-aux";
+            return "ai-shared";
           }
 
           if (!id.includes("node_modules")) {

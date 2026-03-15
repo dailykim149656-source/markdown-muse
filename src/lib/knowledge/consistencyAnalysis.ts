@@ -167,14 +167,23 @@ export const buildKnowledgeConsistencyIssues = (
 
 export const buildConsistencyHealthIssues = (
   consistencyIssues: KnowledgeConsistencyIssue[],
-): KnowledgeHealthIssue[] =>
-  consistencyIssues
-    .filter((issue) => issue.kind === "missing_section" || issue.kind === "conflicting_procedure")
-    .map((issue) => ({
+): KnowledgeHealthIssue[] => {
+  const healthIssues: KnowledgeHealthIssue[] = [];
+
+  for (const issue of consistencyIssues) {
+    if (issue.kind !== "missing_section" && issue.kind !== "conflicting_procedure") {
+      continue;
+    }
+
+    healthIssues.push({
       documentId: issue.documentId,
       id: `health:${issue.id}`,
       kind: issue.kind,
       message: issue.message,
       relatedDocumentIds: [issue.documentId, issue.relatedDocumentId],
       severity: "warning",
-    }));
+    });
+  }
+
+  return healthIssues;
+};

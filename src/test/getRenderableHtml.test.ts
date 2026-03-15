@@ -22,4 +22,13 @@ describe("getRenderableHtml", () => {
 
     expect(getRenderableHtml(unsupportedDocument, "<p>fallback</p>")).toBe("<p>fallback</p>");
   });
+
+  it("falls back to existing HTML when tiptap document is structurally empty", () => {
+    const emptyDocument: JSONContent = {
+      type: "doc",
+      content: [{ type: "paragraph" }],
+    };
+
+    expect(getRenderableHtml(emptyDocument, "<p>fallback</p>")).toBe("<p>fallback</p>");
+  });
 });

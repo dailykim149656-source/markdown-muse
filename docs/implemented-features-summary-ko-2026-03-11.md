@@ -31,10 +31,9 @@
 | Workspace Graph | 구현됨 | `src/pages/WorkspaceGraph.tsx`, `src/components/editor/GraphExplorerDialog.tsx`, `src/components/editor/WorkspaceGraphPanel.tsx` | graph route, 검색, 필터, issues-only, source-target chain, graph handoff |
 | 진단 패널 | 구현됨 | `src/components/editor/DocumentImpactPanel.tsx`, `src/components/editor/DocumentHealthPanel.tsx`, `src/components/editor/ConsistencyIssuesPanel.tsx`, `src/components/editor/ChangeMonitoringPanel.tsx` | impact, health, consistency, change monitoring, 우선순위/사유/원인 설명 |
 | Suggestion Queue | 구현됨 | `src/components/editor/SuggestionQueuePanel.tsx`, `src/pages/Index.tsx` | 다문서 queue, retry/rerun, dedupe, graph re-entry, patch review reopen |
-| 운영/릴리즈 게이트 | 구현됨 | `src/components/editor/KnowledgeOperationsPanel.tsx`, `src/components/editor/ReleaseChecklistPanel.tsx` | queue health, provenance coverage, review progress, checklist, summary copy |
-| 모바일/반응형 | 구현됨 | `src/components/editor/EditorToolbar.tsx`, `src/components/editor/FileSidebar.tsx`, `src/components/editor/KnowledgeOperationsPanel.tsx` | 모바일 툴바 overflow 처리, More 접근, 줄바꿈 대응, 모바일 sidebar 닫기 |
+| 모바일/반응형 | 구현됨 | `src/components/editor/EditorToolbar.tsx`, `src/components/editor/FileSidebar.tsx` | 모바일 툴바 overflow 처리, More 접근, 줄바꿈 대응, 모바일 sidebar 닫기 |
 | 랜딩과 설명서 | 구현됨 | `src/pages/Landing.tsx`, `src/pages/Guide.tsx`, `src/content/guideContent.ts` | quick start, workflow 카드, 기능 안내, visual tour, 검색, FAQ, audience filter, 시나리오 |
-| 검증 기준선 | 구현됨 | `src/test/guidePage.test.tsx`, `src/test/dialogSmoke.test.tsx`, `src/test/knowledgeOperationsPanel.test.tsx`, `src/test/patchReviewMetrics.test.tsx`, `src/test/suggestionQueuePanel.test.tsx`, `src/test/i18nCoverage.test.ts` | 집중 회귀 테스트 존재, production build 통과 |
+| 검증 기준선 | 구현됨 | `src/test/guidePage.test.tsx`, `src/test/dialogSmoke.test.tsx`, `src/test/patchReviewMetrics.test.tsx`, `src/test/suggestionQueuePanel.test.tsx`, `src/test/i18nCoverage.test.ts` | 집중 회귀 테스트 존재, production build 통과 |
 
 ## 형식과 작업 흐름 지원
 
@@ -77,6 +76,6 @@ Markdown Muse는 현재:
 
 - 기능이 많은 release candidate
 - review-first AI 문서 편집기
-- 다문서 유지보수와 운영 표면을 갖춘 제품
+- 다문서 유지보수와 handoff 문서화가 필요한 제품
 
 으로 보는 것이 가장 정확합니다.
