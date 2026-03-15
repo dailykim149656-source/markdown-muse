@@ -10,6 +10,7 @@ vi.mock("../../server/modules/workspace/repository", () => ({
     saveAuthState: (...args: Parameters<typeof saveAuthStateMock>) => saveAuthStateMock(...args),
     upsertConnection: vi.fn(),
   }),
+  resolveWorkspaceRepositoryBackend: () => "firestore",
 }));
 
 const ORIGINAL_ENV = { ...process.env };
@@ -44,6 +45,7 @@ afterEach(() => {
 
 describe("auth connect route", () => {
   it("returns an auth URL with the exact deployed callback URI", async () => {
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => undefined);
     process.env.GOOGLE_CLIENT_ID = "client-id";
     process.env.GOOGLE_CLIENT_SECRET = "client-secret";
     process.env.GOOGLE_OAUTH_REDIRECT_URI = "/";
@@ -54,6 +56,10 @@ describe("auth connect route", () => {
 
     expect(pruneExpiredMock).toHaveBeenCalledOnce();
     expect(saveAuthStateMock).toHaveBeenCalledOnce();
+    expect(saveAuthStateMock.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      returnTo: "/editor",
+      state: expect.any(String),
+    }));
     expect(response?.statusCode).toBe(200);
 
     const payload = JSON.parse(String(response?.body)) as { authUrl: string; provider: string };
@@ -61,5 +67,7 @@ describe("auth connect route", () => {
 
     expect(payload.provider).toBe("google_drive");
     expect(authUrl.searchParams.get("redirect_uri")).toBe("https://app.docsy.dev/api/auth/google/callback");
+    expect(infoSpy).toHaveBeenCalledWith(expect.stringContaining("[WorkspaceAuth] connect state="));
+    infoSpy.mockRestore();
   });
 });

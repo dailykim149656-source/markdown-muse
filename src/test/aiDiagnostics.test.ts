@@ -48,6 +48,13 @@ describe("aiDiagnostics", () => {
       googleWorkspaceScopeProfile: "restricted",
       googleWorkspaceScopeRisk: "restricted",
       model: "gemini-3.1-flash-lite-preview",
+      runtimeRevision: "docsy-00129-gsw",
+      runtimeService: "docsy",
+      workspaceAuthSuccessCriterion: "/api/auth/session returns connected=true",
+      workspaceRepositoryBackend: "firestore",
+      workspaceSessionCookieAcceptedNames: ["__session", "__Host-docsy-workspace-session", "docsy_workspace_session"],
+      workspaceSessionCookieSecureName: "__session",
+      workspaceSessionCookieSecureSameSite: "None",
     })).toMatchObject({
       allowedOrigins: ["https://app.docsy.dev"],
       fallbackModel: "gemini-2.5-flash",
@@ -56,6 +63,12 @@ describe("aiDiagnostics", () => {
       googleOAuthRedirectUri: "https://app.docsy.dev/api/auth/google/callback",
       model: "gemini-3.1-flash-lite-preview",
       ok: true,
+      runtimeRevision: "docsy-00129-gsw",
+      runtimeService: "docsy",
+      workspaceAuthSuccessCriterion: "/api/auth/session returns connected=true",
+      workspaceRepositoryBackend: "firestore",
+      workspaceSessionCookieSecureName: "__session",
+      workspaceSessionCookieSecureSameSite: "None",
     });
   });
 });

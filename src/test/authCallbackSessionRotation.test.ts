@@ -29,6 +29,8 @@ vi.mock("../../server/modules/auth/sessionStore", () => ({
   createWorkspaceSessionCookie: (...args: Parameters<typeof createWorkspaceSessionCookieMock>) => createWorkspaceSessionCookieMock(...args),
   deleteWorkspaceSession: vi.fn(),
   deleteWorkspaceSessionById: (...args: Parameters<typeof deleteWorkspaceSessionByIdMock>) => deleteWorkspaceSessionByIdMock(...args),
+  getPresentWorkspaceSessionCookieNames: (request: { headers?: { cookie?: string } }) =>
+    request.headers?.cookie ? ["__session"] : [],
   getWorkspaceSession: (...args: Parameters<typeof getWorkspaceSessionMock>) => getWorkspaceSessionMock(...args),
   getWorkspaceSessionId: (...args: Parameters<typeof getWorkspaceSessionIdMock>) => getWorkspaceSessionIdMock(...args),
 }));
@@ -40,6 +42,7 @@ vi.mock("../../server/modules/workspace/repository", () => ({
     saveAuthState: vi.fn(),
     upsertConnection: (...args: Parameters<typeof upsertConnectionMock>) => upsertConnectionMock(...args),
   }),
+  resolveWorkspaceRepositoryBackend: () => "firestore",
 }));
 
 describe("auth callback session rotation", () => {

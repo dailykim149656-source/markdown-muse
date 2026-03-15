@@ -261,7 +261,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
 
     if (!sessionState?.session || !sessionState.connection) {
       console.info(
-        `[WorkspaceAuth] session lookup connected=false sessionId=${sessionId || "none"} cookieNames=${presentCookieNames.join(",") || "none"} backend=${repositoryBackend}`,
+        `[WorkspaceAuth] session lookup connected=false sessionId=${sessionId || "none"} cookieNames=${presentCookieNames.join(",") || "none"} backend=${repositoryBackend} repositoryLookup=${sessionId ? "miss_or_expired" : "not_attempted"}`,
       );
       return json({
         connected: false,
@@ -271,7 +271,7 @@ export const handleAuthRoute = async (request: IncomingMessage): Promise<HttpRes
     }
 
     console.info(
-      `[WorkspaceAuth] session lookup connected=true sessionId=${sessionState.session.sessionId} connectionId=${sessionState.connection.connectionId} cookieNames=${presentCookieNames.join(",") || "none"} backend=${repositoryBackend}`,
+      `[WorkspaceAuth] session lookup connected=true sessionId=${sessionState.session.sessionId} connectionId=${sessionState.connection.connectionId} cookieNames=${presentCookieNames.join(",") || "none"} backend=${repositoryBackend} repositoryLookup=hit`,
     );
     return json({
       connected: true,
