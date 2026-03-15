@@ -157,7 +157,8 @@ Cloud Run auth:
 
 Frontend deployment:
 
-- set `VITE_AI_API_BASE_URL` to the deployed AI service URL
+- when Firebase Hosting rewrites `/api/**` to Cloud Run, set `VITE_AI_API_BASE_URL` to the deployed frontend origin
+- if you intentionally split frontend and API domains, set `VITE_AI_API_BASE_URL` to the deployed API origin
 - if omitted in a non-localhost environment, the frontend falls back to same-origin
 
 Health check:

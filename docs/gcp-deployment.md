@@ -9,6 +9,13 @@ Markdown Muse is deployed to GCP in three parts:
 The desktop profile is not part of the GCP deployment path. GCP should serve the
 `web` profile only.
 
+Recommended custom-domain topology for this repo:
+
+- `https://app.YOUR_DOMAIN` serves the frontend from Firebase Hosting
+- the browser also calls `https://app.YOUR_DOMAIN/api/...`
+- Firebase Hosting rewrites `/api/**` to the Cloud Run `docsy` service
+- use a separate `api.YOUR_DOMAIN` only if you intentionally want split frontend/API domains
+
 ## Frontend
 
 ### 1. Prepare web env
@@ -18,13 +25,13 @@ Create a web deployment env file or inject the same values from CI/CD.
 Required frontend values:
 
 - `VITE_APP_PROFILE=web`
-- `VITE_AI_API_BASE_URL=https://api.YOUR_DOMAIN`
+- `VITE_AI_API_BASE_URL=https://app.YOUR_DOMAIN`
 
 Example:
 
 ```bash
 echo VITE_APP_PROFILE=web > .env.production.local
-echo VITE_AI_API_BASE_URL=https://api.YOUR_DOMAIN >> .env.production.local
+echo VITE_AI_API_BASE_URL=https://app.YOUR_DOMAIN >> .env.production.local
 ```
 
 ### 2. Build the web profile
@@ -50,6 +57,8 @@ Firebase Hosting must rewrite unknown SPA paths such as `/editor` to
 `/index.html`.
 
 This repository already includes that rewrite in `firebase.json`.
+The same config also rewrites `/api/**` to the Cloud Run `docsy` service, so
+single-domain custom-domain deploys do not need a separate `api` subdomain.
 
 ### 5. Cache guidance
 
@@ -100,7 +109,7 @@ Recommended values:
 - `AI_MAX_REQUEST_BYTES=2097152`
 - `AI_DIAGNOSTICS_TOKEN` should be provided through a Secret Manager-backed env when internal diagnostics access is needed
 - `WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN`
-- `GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
+- `GOOGLE_OAUTH_REDIRECT_URI=https://app.YOUR_DOMAIN/api/auth/google/callback`
 - `GOOGLE_OAUTH_PUBLISHING_STATUS=testing`
 - `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted`
 - `TEX_ALLOW_ALL_PACKAGES=true`
@@ -111,6 +120,9 @@ Recommended values:
 
 `AI_ALLOWED_ORIGIN` should be the exact frontend origin, not `*`. The deploy
 validator now treats wildcard CORS as invalid outside local development.
+When Firebase Hosting fronts Cloud Run through the existing `/api/**` rewrite,
+`VITE_AI_API_BASE_URL` should usually be the frontend custom domain so browser
+traffic stays same-origin.
 For external production Google OAuth, keep managed preview domains such as
 `*.web.app` and `*.run.app` out of the final config.
 LaTeX mode sends raw LaTeX to the backend. Full preambles and
@@ -127,7 +139,7 @@ gcloud run deploy markdown-muse-ai \
   --image REGION-docker.pkg.dev/PROJECT/REPO/markdown-muse-ai \
   --region REGION \
   --allow-unauthenticated \
-  --set-env-vars GEMINI_MODEL=gemini-2.5-flash,AI_SERVER_PORT=8080,AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN,WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN,GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback,GOOGLE_OAUTH_PUBLISHING_STATUS=testing,GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted,TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL
+  --set-env-vars GEMINI_MODEL=gemini-2.5-flash,AI_SERVER_PORT=8080,AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN,WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN,GOOGLE_OAUTH_REDIRECT_URI=https://app.YOUR_DOMAIN/api/auth/google/callback,GOOGLE_OAUTH_PUBLISHING_STATUS=testing,GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted,TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL
 ```
 
 Set `GEMINI_API_KEY` through Secret Manager or Cloud Run secrets rather than
@@ -157,14 +169,14 @@ Required repository secrets:
 - `GCP_PROJECT_ID`
 - `GCP_FIREBASE_PROJECT_ID` (optional override when Hosting lives in a separate production project)
 - `GCP_AI_ALLOWED_ORIGIN` (exact frontend origin)
-- `GCP_WORKSPACE_FRONTEND_ORIGIN` (exact app origin used for OAuth redirects)
-- `GCP_GOOGLE_OAUTH_REDIRECT_URI` (exact API callback URL)
+- `GCP_WORKSPACE_FRONTEND_ORIGIN` (exact frontend origin used for OAuth redirects)
+- `GCP_GOOGLE_OAUTH_REDIRECT_URI` (exact callback URL on the frontend custom domain)
 - `GCP_GOOGLE_OAUTH_PUBLISHING_STATUS` (`testing` or `production`)
 - `GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE` (`restricted` or `reduced`)
 - `GCP_AI_DIAGNOSTICS_TOKEN_SECRET_NAME` (optional, defaults to `ai-diagnostics-token`)
 - `GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME` (optional, defaults to `tex-service-auth-token`)
 - `GCP_TEX_SERVICE_BASE_URL`
-- `GCP_WEB_VITE_AI_API_BASE_URL`
+- `GCP_WEB_VITE_AI_API_BASE_URL` (optional override; defaults to `GCP_WORKSPACE_FRONTEND_ORIGIN` in the repo workflows)
 - `FIREBASE_SERVICE_ACCOUNT_URBAN_DDS`
 
 The split workflows do:
@@ -178,7 +190,7 @@ The split workflows do:
   - reads `GCP_TEX_SERVICE_BASE_URL` from secrets
 - `deploy-web.yml`
   - build and deploy only the frontend
-  - reads `GCP_WEB_VITE_AI_API_BASE_URL` from secrets
+  - uses `GCP_WEB_VITE_AI_API_BASE_URL` when set, otherwise defaults to the configured frontend origin
 - `deploy-full-stack.yml`
   - manual coordinated release workflow
   - runs TeX -> AI -> web in sequence
@@ -294,7 +306,7 @@ If any workspace state file or OAuth token is committed to Git history, follow:
 2. Confirm `GET /health` works from the TeX Cloud Run URL.
 3. Deploy the AI API with `TEX_SERVICE_BASE_URL` pointing to that TeX URL.
 4. Confirm `GET /api/ai/health` and `GET /api/tex/health` work from the AI API URL.
-5. Build the frontend with `VITE_AI_API_BASE_URL` pointing to the AI API Cloud Run URL.
+5. Build the frontend with `VITE_AI_API_BASE_URL` pointing to `https://app.YOUR_DOMAIN` so Firebase Hosting keeps browser API traffic same-origin. Use the API origin only for split-domain deployments.
 6. Deploy the frontend to Firebase Hosting.
 7. Confirm SPA rewrites for routes such as `/editor`.
 8. Turn on appropriate caching for hashed assets.
@@ -339,8 +351,8 @@ If any workspace state file or OAuth token is committed to Git history, follow:
 Verify all of the following:
 
 - `GET https://YOUR_TEX_CLOUD_RUN_URL/health` returns success
-- `GET https://api.YOUR_DOMAIN/api/ai/health` returns success
-- `GET https://api.YOUR_DOMAIN/api/tex/health` returns success
+- `GET https://app.YOUR_DOMAIN/api/ai/health` returns success
+- `GET https://app.YOUR_DOMAIN/api/tex/health` returns success
 - browser requests from the frontend origin pass CORS
 - direct navigation to `/editor` works
 - refresh on `/editor` works
@@ -376,7 +388,7 @@ Expected shape:
 - `AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
 - `TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
 - `WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN`
-- `GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
+- `GOOGLE_OAUTH_REDIRECT_URI=https://app.YOUR_DOMAIN/api/auth/google/callback`
 - `GOOGLE_OAUTH_PUBLISHING_STATUS=testing|production`
 - `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted|reduced`
 - the AI service account has `roles/run.invoker` on the TeX service
@@ -399,24 +411,24 @@ Required:
 
 Recommended:
 
-- `GCP_WEB_VITE_AI_API_BASE_URL`
+- `GCP_WEB_VITE_AI_API_BASE_URL` (set it explicitly to `https://app.YOUR_DOMAIN` or let the workflow default it from `GCP_WORKSPACE_FRONTEND_ORIGIN`)
 
 Expected shape:
 
 - `GCP_AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
 - `GCP_WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN`
-- `GCP_GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
+- `GCP_GOOGLE_OAUTH_REDIRECT_URI=https://app.YOUR_DOMAIN/api/auth/google/callback`
 - `GCP_GOOGLE_OAUTH_PUBLISHING_STATUS=testing|production`
 - `GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted|reduced`
 - `GCP_TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
-- `GCP_WEB_VITE_AI_API_BASE_URL=https://api.YOUR_DOMAIN`
+- `GCP_WEB_VITE_AI_API_BASE_URL=https://app.YOUR_DOMAIN`
 
 ### Frontend build env
 
 Required:
 
 - `VITE_APP_PROFILE=web`
-- `VITE_AI_API_BASE_URL=https://api.YOUR_DOMAIN`
+- `VITE_AI_API_BASE_URL=https://app.YOUR_DOMAIN`
 
 ## Troubleshooting
 
@@ -431,18 +443,18 @@ Symptom:
 Cause:
 
 - the frontend was built without `VITE_AI_API_BASE_URL`
-- in static hosting, `/api` points to the frontend host unless you configured a real reverse proxy
+- the frontend custom domain is not forwarding `/api/**` to Cloud Run
 - the browser receives `index.html` instead of JSON from the AI API
 
 Fix:
 
 1. Confirm the Cloud Run service is healthy:
-   - `GET https://api.YOUR_DOMAIN/api/ai/health`
+   - `GET https://app.YOUR_DOMAIN/api/ai/health`
 2. Set frontend build env:
    - `VITE_APP_PROFILE=web`
-   - `VITE_AI_API_BASE_URL=https://api.YOUR_DOMAIN`
+   - `VITE_AI_API_BASE_URL=https://app.YOUR_DOMAIN`
 3. Rebuild and redeploy the frontend
-4. If you intentionally use `/api`, configure an actual reverse proxy from the frontend host to Cloud Run
+4. Keep the Firebase Hosting `/api/**` rewrite to Cloud Run active in `firebase.json`
 
 ### Google OAuth redirect mismatch
 
@@ -454,7 +466,7 @@ Symptom:
 Fix:
 
 - Cloud Run env:
-  - `GOOGLE_OAUTH_REDIRECT_URI=https://api.YOUR_DOMAIN/api/auth/google/callback`
+  - `GOOGLE_OAUTH_REDIRECT_URI=https://app.YOUR_DOMAIN/api/auth/google/callback`
   - `WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN`
 - Google Cloud OAuth client:
   - add the exact same callback URL to `Authorized redirect URIs`

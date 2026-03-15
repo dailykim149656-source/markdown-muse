@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       force_frontend:
-        description: "Deploy frontend even if AI URL cannot be derived from Cloud Run yet"
+        description: "Deploy frontend even if the browser API base URL cannot be derived from Hosting origin secrets or Cloud Run output yet"
         default: "false"
         required: false
         type: string
@@ -543,18 +543,27 @@ jobs:
             fi
           }
 
+          FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
+          if [ -z "${FRONTEND_ORIGIN}" ]; then
+            FRONTEND_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          fi
+
           AI_API_BASE_URL="${{ secrets.GCP_WEB_VITE_AI_API_BASE_URL }}"
+          if [ -z "${AI_API_BASE_URL}" ]; then
+            AI_API_BASE_URL="${FRONTEND_ORIGIN}"
+          fi
+
           if [ -z "${AI_API_BASE_URL}" ]; then
             AI_API_BASE_URL="${{ needs.deploy-ai.outputs.ai_service_url }}"
           fi
 
           if [ -z "${AI_API_BASE_URL}" ] && [ "${{ github.event.inputs.force_frontend }}" != "true" ]; then
-            echo "AI service URL was not resolved. Set GCP_WEB_VITE_AI_API_BASE_URL or use workflow_dispatch with force_frontend=true to override."
+            echo "Browser API base URL was not resolved. Set GCP_WEB_VITE_AI_API_BASE_URL or configure GCP_WORKSPACE_FRONTEND_ORIGIN/GCP_AI_ALLOWED_ORIGIN for same-origin Hosting deploys, or use workflow_dispatch with force_frontend=true to override."
             exit 1
           fi
 
           if [ -z "${AI_API_BASE_URL}" ]; then
-            echo "VITE_AI_API_BASE_URL is empty. Refusing to build a frontend that would fall back to /api."
+            echo "VITE_AI_API_BASE_URL is empty. Refusing to build a frontend without an explicit browser API base URL."
             exit 1
           fi
 
@@ -567,11 +576,6 @@ jobs:
               ;;
           esac
 
-          FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
-          if [ -z "${FRONTEND_ORIGIN}" ]; then
-            FRONTEND_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
-          fi
-
           GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
           if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then
             GOOGLE_OAUTH_PUBLISHING_STATUS="testing"
@@ -580,6 +584,11 @@ jobs:
           GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
           if [ -z "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" ]; then
             GOOGLE_WORKSPACE_SCOPE_PROFILE="restricted"
+          fi
+
+          ROUTING_MODE="split-origin"
+          if [ -n "${FRONTEND_ORIGIN}" ] && [ "${AI_API_BASE_URL}" = "${FRONTEND_ORIGIN}" ]; then
+            ROUTING_MODE="same-origin-hosting-rewrite"
           fi
 
           export AI_ALLOWED_ORIGIN="${FRONTEND_ORIGIN}"
@@ -600,8 +609,9 @@ jobs:
 
           echo "Deployment summary:"
           echo "  firebase_project: ${FIREBASE_PROJECT_ID}"
-          echo "  effective_ai_url_source: ${AI_API_BASE_URL}"
+          echo "  browser_api_base_url: ${AI_API_BASE_URL}"
           echo "  frontend_origin: ${FRONTEND_ORIGIN}"
+          echo "  routing_mode: ${ROUTING_MODE}"
           echo "  oauth_redirect_uri: ${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
 
           node scripts/validate-public-deploy-config.mjs

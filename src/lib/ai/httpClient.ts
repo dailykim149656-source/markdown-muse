@@ -62,7 +62,7 @@ const readErrorMessage = async (response: Response) => {
 
 const readNetworkErrorMessage = (baseUrl: string, error: unknown) => {
   const detail = error instanceof Error && error.message ? ` (${error.message})` : "";
-  return `Unable to reach the AI server at ${baseUrl}. Start \`npm run ai:server\` for local development, or set \`VITE_AI_API_BASE_URL\` to your Cloud Run service URL.${detail}`;
+  return `Unable to reach the AI server at ${baseUrl}. Start \`npm run ai:server\` for local development, or set \`VITE_AI_API_BASE_URL\` to your deployed frontend or API URL.${detail}`;
 };
 
 const normalizeAiPath = (baseUrl: string, path: string) => {

@@ -4,7 +4,7 @@ Date: 2026-03-14
 
 ## Goal
 
-Move Docsy Google Workspace OAuth from testing-mode preview domains to an external-production setup that uses owned custom domains and a separate production GCP project.
+Move Docsy Google Workspace OAuth from testing-mode preview domains to an external-production setup that uses owned custom domains. The recommended production shape in this repo is a single Firebase Hosting domain that proxies `/api/**` to Cloud Run.
 
 ## Current baseline
 
@@ -16,10 +16,16 @@ Move Docsy Google Workspace OAuth from testing-mode preview domains to an extern
 ## Target topology
 
 - Frontend origin: `https://app.<your-domain>`
-- API base URL: `https://api.<your-domain>`
-- OAuth redirect URI: `https://api.<your-domain>/api/auth/google/callback`
+- API base URL: `https://app.<your-domain>`
+- OAuth redirect URI: `https://app.<your-domain>/api/auth/google/callback`
 - Privacy Policy: `https://app.<your-domain>/privacy`
 - Terms of Service: `https://app.<your-domain>/terms`
+
+Optional split-domain topology:
+
+- Frontend origin: `https://app.<your-domain>`
+- API base URL: `https://api.<your-domain>`
+- OAuth redirect URI: `https://api.<your-domain>/api/auth/google/callback`
 
 ## Repository support added in this change
 
@@ -43,8 +49,8 @@ Move Docsy Google Workspace OAuth from testing-mode preview domains to an extern
 1. Create or choose a production GCP project dedicated to the public OAuth app.
 2. Create the production OAuth client in that project.
 3. Connect `app.<your-domain>` to Firebase Hosting.
-4. Connect `api.<your-domain>` to Cloud Run custom domains.
-5. Verify both domains in Search Console before updating Google Auth Platform branding.
+4. Verify Firebase Hosting serves `https://app.<your-domain>` and keeps the `/api/**` rewrite to Cloud Run active.
+5. Verify the owned domain in Search Console before updating Google Auth Platform branding.
 6. Set Google Auth Platform branding URLs to the frontend custom domain.
 7. Add the owned domain under Authorized domains.
 8. Keep the app in `Testing` until branding URLs and redirect URI are live.
@@ -71,8 +77,8 @@ Move Docsy Google Workspace OAuth from testing-mode preview domains to an extern
 GCP_FIREBASE_PROJECT_ID=your-production-firebase-project
 GCP_AI_ALLOWED_ORIGIN=https://app.your-domain.dev
 GCP_WORKSPACE_FRONTEND_ORIGIN=https://app.your-domain.dev
-GCP_WEB_VITE_AI_API_BASE_URL=https://api.your-domain.dev
-GCP_GOOGLE_OAUTH_REDIRECT_URI=https://api.your-domain.dev/api/auth/google/callback
+GCP_WEB_VITE_AI_API_BASE_URL=https://app.your-domain.dev
+GCP_GOOGLE_OAUTH_REDIRECT_URI=https://app.your-domain.dev/api/auth/google/callback
 GCP_GOOGLE_OAUTH_PUBLISHING_STATUS=production
 GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted
 ```
@@ -100,7 +106,7 @@ GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted
 ## Validation checklist
 
 - `npm run check:public-deploy` passes with production env values.
-- `GET https://api.<your-domain>/api/ai/health` returns:
+- `GET https://app.<your-domain>/api/ai/health` returns:
   - `googleOAuthPublishingStatus=production`
   - the expected `googleWorkspaceScopeProfile`
 - Google Auth Platform branding accepts Homepage, Privacy Policy, Terms, and Authorized domains.
