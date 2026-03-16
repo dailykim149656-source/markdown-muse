@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { consumeLocalTexPreview, storeTexPreviewPdf } from "../../server/modules/tex/previewStorage";
+import { consumeLocalTexArtifact, storeTexArtifactPdf } from "../../server/modules/tex/artifactStorage";
 
 const ORIGINAL_ENV = {
   TEX_PREVIEW_BUCKET: process.env.TEX_PREVIEW_BUCKET,
@@ -31,28 +31,31 @@ afterEach(() => {
 
 describe("tex preview storage", () => {
   it("stores local previews on loopback hosts and returns a preview URL", async () => {
-    const result = await storeTexPreviewPdf({
+    const result = await storeTexArtifactPdf({
+      mode: "preview",
       pdfBuffer: Buffer.from("%PDF-1.7"),
       request: createRequest("localhost:8081"),
     });
 
-    expect(result.previewStorageBackend).toBe("local");
-    expect(result.previewUrl).toMatch(/^http:\/\/localhost:8081\/preview-assets\//);
+    expect(result.storageBackend).toBe("local");
+    expect(result.url).toMatch(/^http:\/\/localhost:8081\/artifacts\//);
 
-    const previewId = result.previewUrl?.split("/").pop();
+    const previewId = result.url?.split("/").pop();
     expect(previewId).toBeTruthy();
 
-    const preview = consumeLocalTexPreview(previewId!);
+    const preview = consumeLocalTexArtifact(previewId!);
     expect(preview.buffer.toString("utf8")).toBe("%PDF-1.7");
+    expect(preview.contentDisposition).toContain("inline");
   });
 
   it("does not expose service-local preview URLs for non-loopback hosts without GCS", async () => {
-    const result = await storeTexPreviewPdf({
+    const result = await storeTexArtifactPdf({
+      mode: "preview",
       pdfBuffer: Buffer.from("%PDF-1.7"),
       request: createRequest("docsy-tex.internal"),
     });
 
-    expect(result.previewStorageBackend).toBe("unavailable");
-    expect(result.previewUrl).toBeUndefined();
+    expect(result.storageBackend).toBe("unavailable");
+    expect(result.url).toBeUndefined();
   });
 });

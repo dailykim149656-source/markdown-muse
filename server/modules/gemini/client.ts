@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview";
+const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const VERTEX_AI_FLAG = "true";
 
 export interface GeminiInlineImage {
@@ -88,7 +88,7 @@ const resolveFallbackModel = (primaryModel: string) => {
   return configuredFallback;
 };
 
-const getErrorStatusCode = (error: unknown) => {
+export const getGeminiErrorStatusCode = (error: unknown) => {
   if (typeof error !== "object" || error === null) {
     return undefined;
   }
@@ -105,29 +105,39 @@ const getErrorStatusCode = (error: unknown) => {
   return undefined;
 };
 
-const classifyFallbackReason = (error: unknown) => {
-  const statusCode = getErrorStatusCode(error);
-  const normalizedMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
+const getGeminiErrorMessage = (error: unknown) =>
+  (error instanceof Error ? error.message : String(error)).toLowerCase();
 
-  const isQuotaError = statusCode === 429
+export const isGeminiRateLimitError = (error: unknown) => {
+  const statusCode = getGeminiErrorStatusCode(error);
+  const normalizedMessage = getGeminiErrorMessage(error);
+
+  return statusCode === 429
     || normalizedMessage.includes("resource_exhausted")
     || normalizedMessage.includes("quota")
     || normalizedMessage.includes("rate limit");
+};
 
-  if (isQuotaError) {
-    return "quota_or_rate_limit";
-  }
+export const isGeminiModelConfigurationError = (error: unknown) => {
+  const statusCode = getGeminiErrorStatusCode(error);
+  const normalizedMessage = getGeminiErrorMessage(error);
 
-  const isModelError = statusCode === 404
+  return statusCode === 404
     || normalizedMessage.includes("unexpected model name format")
     || normalizedMessage.includes("unsupported model")
     || normalizedMessage.includes("publisher model")
     || normalizedMessage.includes("model not found")
-    || normalizedMessage.includes("not found")
+    || (normalizedMessage.includes("not found") && normalizedMessage.includes("model"))
     || (normalizedMessage.includes("invalid_argument") && normalizedMessage.includes("model"))
     || (statusCode === 400 && normalizedMessage.includes("model"));
+};
 
-  if (isModelError) {
+const classifyFallbackReason = (error: unknown) => {
+  if (isGeminiRateLimitError(error)) {
+    return "quota_or_rate_limit";
+  }
+
+  if (isGeminiModelConfigurationError(error)) {
     return "model_unavailable";
   }
 

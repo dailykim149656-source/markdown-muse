@@ -60,12 +60,12 @@ substitutions:
   _REGION: asia-northeast3
   _VERTEX_LOCATION: asia-northeast3
   _SERVICE_NAME: docsy
-  _RUN_MEMORY: 1Gi
+  _RUN_MEMORY: 2Gi
   _RUN_CPU: "1"
-  _RUN_CONCURRENCY: "8"
+  _RUN_CONCURRENCY: "4"
   _RUN_MAX_INSTANCES: "20"
-  _GEMINI_MODEL: gemini-3.1-flash-lite-preview
-  _GEMINI_FALLBACK_MODEL: gemini-2.5-flash
+  _GEMINI_MODEL: gemini-2.5-flash
+  _GEMINI_FALLBACK_MODEL: gemini-2.5-flash-lite
   _AI_ALLOWED_ORIGIN: ""
   _AI_MAX_REQUEST_BYTES: "1572864"
   _GOOGLE_CLIENT_ID: ""
@@ -83,7 +83,7 @@ substitutions:
   _GOOGLE_CLIENT_SECRET_SECRET: google-client-secret
   _TEX_SERVICE_AUTH_TOKEN_SECRET: tex-service-auth-token
   _TEX_SERVICE_BASE_URL: ""
-  _NODE_OPTIONS: "--max-old-space-size=768"
+  _NODE_OPTIONS: "--max-old-space-size=1280"
   _RUN_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
 images:
   - ${_IMAGE_URI}

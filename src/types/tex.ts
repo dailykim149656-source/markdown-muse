@@ -38,6 +38,29 @@ export interface TexPreviewResponse extends TexValidateResponse {
   previewUrl?: string;
 }
 
+export type TexJobMode = "export" | "preview";
+export type TexJobStatus = "failed" | "queued" | "running" | "succeeded";
+
+export interface TexJobEnqueueResponse {
+  jobId: string;
+  mode: TexJobMode;
+  pollUrl: string;
+  status: Extract<TexJobStatus, "queued">;
+}
+
+export interface TexJobStatusResponse {
+  compileMs?: number;
+  diagnostics?: TexDiagnostic[];
+  downloadUrl?: string;
+  error?: string;
+  expiresAt?: number;
+  jobId: string;
+  logSummary?: string;
+  mode: TexJobMode;
+  previewUrl?: string;
+  status: TexJobStatus;
+}
+
 export interface TexExportPdfRequest {
   documentName?: string;
   latex: string;

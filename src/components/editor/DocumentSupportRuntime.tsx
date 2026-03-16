@@ -14,6 +14,7 @@ export interface DocumentSupportRuntimeState {
   applyReviewedPatches: () => Promise<boolean>;
   clearPatchSet: () => void;
   closePatchReview: () => void;
+  hasPendingWorkspaceSync: boolean;
   handleAcceptPatch: (patch: DocumentPatch) => void;
   handleAcceptPatches: (patchIds: string[]) => void;
   handleEditPatch: (patch: DocumentPatch, suggestedText: string) => void;
@@ -25,6 +26,7 @@ export interface DocumentSupportRuntimeState {
   patchCount: number;
   patchReviewOpen: boolean;
   patchSet: DocumentPatchSet | null;
+  retryWorkspaceSync: () => Promise<boolean>;
   restoreVersionSnapshot: (snapshotId: string) => Promise<void>;
   versionHistoryReady: boolean;
   versionHistoryRestoring: boolean;
@@ -78,6 +80,7 @@ const DocumentSupportRuntime = ({
       applyReviewedPatches: patchReview.applyReviewedPatches,
       clearPatchSet: patchReview.clearPatchSet,
       closePatchReview: patchReview.closePatchReview,
+      hasPendingWorkspaceSync: patchReview.hasPendingWorkspaceSync,
       handleAcceptPatch: patchReview.handleAcceptPatch,
       handleAcceptPatches: patchReview.handleAcceptPatches,
       handleEditPatch: patchReview.handleEditPatch,
@@ -89,6 +92,7 @@ const DocumentSupportRuntime = ({
       patchCount: patchReview.patchCount,
       patchReviewOpen: patchReview.patchReviewOpen,
       patchSet: patchReview.patchSet,
+      retryWorkspaceSync: patchReview.retryWorkspaceSync,
       restoreVersionSnapshot: versionHistory.restoreVersionSnapshot,
       versionHistoryReady: versionHistory.versionHistoryReady,
       versionHistoryRestoring: versionHistory.versionHistoryRestoring,
@@ -102,6 +106,7 @@ const DocumentSupportRuntime = ({
     patchReview.applyReviewedPatches,
     patchReview.clearPatchSet,
     patchReview.closePatchReview,
+    patchReview.hasPendingWorkspaceSync,
     patchReview.handleAcceptPatch,
     patchReview.handleAcceptPatches,
     patchReview.handleEditPatch,
@@ -113,6 +118,7 @@ const DocumentSupportRuntime = ({
     patchReview.patchCount,
     patchReview.patchReviewOpen,
     patchReview.patchSet,
+    patchReview.retryWorkspaceSync,
     versionHistory.restoreVersionSnapshot,
     versionHistory.versionHistoryReady,
     versionHistory.versionHistoryRestoring,

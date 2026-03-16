@@ -94,6 +94,6 @@ export interface PatchApplyReport {
   attemptedAt: number;
   failures: PatchApplyReportFailure[];
   phase: "rich_text" | "document_text" | "structured";
-  scope: "preflight" | "apply";
+  scope: "preflight" | "apply" | "sync";
   warnings: string[];
 }

@@ -505,7 +505,7 @@ export const buildWorkspaceBinding = (
   lastSyncedAt: options.lastSyncedAt,
   mimeType: file.mimeType,
   provider: "google_drive",
-  revisionId: options.revisionId ?? file.revisionId,
+  revisionId: options.revisionId,
   syncStatus: options.syncStatus ?? "imported",
   syncWarnings: options.syncWarnings,
 });
@@ -546,7 +546,7 @@ export const buildImportedGoogleDocument = ({
     storageKind: "docsy",
     updatedAt: importedAt,
     workspaceBinding: buildWorkspaceBinding(file, importedAt, {
-      revisionId: docsRevisionId || file.revisionId,
+      revisionId: docsRevisionId,
       syncStatus: "imported",
     }),
   };

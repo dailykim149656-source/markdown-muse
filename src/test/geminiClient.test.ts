@@ -30,8 +30,8 @@ const setGeminiEnv = () => {
   process.env.GOOGLE_GENAI_USE_VERTEXAI = "true";
   process.env.GOOGLE_CLOUD_PROJECT = "urban-dds";
   process.env.GOOGLE_CLOUD_LOCATION = "asia-northeast3";
-  process.env.GEMINI_MODEL = "gemini-3.1-flash-lite-preview";
-  process.env.GEMINI_FALLBACK_MODEL = "gemini-2.5-flash";
+  process.env.GEMINI_MODEL = "gemini-2.5-flash";
+  process.env.GEMINI_FALLBACK_MODEL = "gemini-2.5-flash-lite";
 };
 
 describe("gemini client fallback", () => {
@@ -65,11 +65,11 @@ describe("gemini client fallback", () => {
     });
 
     expect(result).toEqual({ ok: true });
-    expect(getGeminiModel()).toBe("gemini-3.1-flash-lite-preview");
-    expect(getGeminiFallbackModel()).toBe("gemini-2.5-flash");
+    expect(getGeminiModel()).toBe("gemini-2.5-flash");
+    expect(getGeminiFallbackModel()).toBe("gemini-2.5-flash-lite");
     expect(generateContentMock).toHaveBeenCalledTimes(1);
     expect(generateContentMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      model: "gemini-3.1-flash-lite-preview",
+      model: "gemini-2.5-flash",
     }));
   });
 
@@ -97,10 +97,10 @@ describe("gemini client fallback", () => {
     expect(result).toEqual({ ok: true });
     expect(generateContentMock).toHaveBeenCalledTimes(2);
     expect(generateContentMock).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      model: "gemini-3.1-flash-lite-preview",
+      model: "gemini-2.5-flash",
     }));
     expect(generateContentMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
     }));
   });
 
@@ -120,7 +120,7 @@ describe("gemini client fallback", () => {
     expect(result).toEqual({ ok: true });
     expect(generateContentMock).toHaveBeenCalledTimes(2);
     expect(generateContentMock).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
     }));
   });
 
@@ -152,5 +152,19 @@ describe("gemini client fallback", () => {
     })).rejects.toBe(fallbackError);
 
     expect(generateContentMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("classifies model-specific request failures without treating generic 400s as model misconfiguration", async () => {
+    const {
+      isGeminiModelConfigurationError,
+      isGeminiRateLimitError,
+    } = await import("../../server/modules/gemini/client");
+
+    expect(isGeminiModelConfigurationError(Object.assign(new Error("unexpected model name format"), { status: 400 })))
+      .toBe(true);
+    expect(isGeminiModelConfigurationError(Object.assign(new Error("INVALID_ARGUMENT: bad schema"), { status: 400 })))
+      .toBe(false);
+    expect(isGeminiRateLimitError(Object.assign(new Error("RESOURCE_EXHAUSTED: quota exceeded"), { status: 429 })))
+      .toBe(true);
   });
 });

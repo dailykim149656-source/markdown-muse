@@ -17,6 +17,13 @@ interface UsePatchReviewOptions {
   updateActiveDoc: (patch: Partial<DocumentData>) => void;
 }
 
+interface PendingWorkspaceSyncState {
+  appliedPatchIds: string[];
+  document: DocumentData;
+  patchSet: DocumentPatchSet;
+  phase: PatchApplyReport["phase"];
+}
+
 const getContentForMode = (mode: DocumentData["mode"], html: string, markdown: string, latex: string) => {
   switch (mode) {
     case "markdown":
@@ -67,6 +74,11 @@ const loadRichTextPatchModules = async () => {
 const getPatchTitle = (patchSet: DocumentPatchSet | null, patchId?: string) =>
   patchId ? patchSet?.patches.find((patch) => patch.patchId === patchId)?.title : undefined;
 
+const getWorkspaceSyncWarnings = (syncResult: { warnings?: string[] } | null | void) =>
+  syncResult && typeof syncResult === "object" && "warnings" in syncResult
+    ? syncResult.warnings || []
+    : [];
+
 const createApplyReport = ({
   appliedPatchIds,
   failures,
@@ -106,6 +118,7 @@ export const usePatchReview = ({
   const { t } = useI18n();
   const [patchReviewOpen, setPatchReviewOpen] = useState(false);
   const [lastApplyReport, setLastApplyReport] = useState<PatchApplyReport | null>(null);
+  const [pendingWorkspaceSync, setPendingWorkspaceSync] = useState<PendingWorkspaceSyncState | null>(null);
   const [patchSet, setPatchSet] = useState<DocumentPatchSet | null>(null);
 
   const patchCount = patchSet?.patches.length ?? 0;
@@ -118,6 +131,7 @@ export const usePatchReview = ({
     setPatchSet(null);
     setPatchReviewOpen(false);
     setLastApplyReport(null);
+    setPendingWorkspaceSync(null);
   }, [activeDoc.id]);
 
   const openPatchReview = useCallback(() => {
@@ -131,6 +145,7 @@ export const usePatchReview = ({
   const clearPatchSet = useCallback(() => {
     setPatchSet(null);
     setLastApplyReport(null);
+    setPendingWorkspaceSync(null);
   }, []);
 
   const loadPatchSet = useCallback((nextPatchSet: DocumentPatchSet) => {
@@ -145,6 +160,7 @@ export const usePatchReview = ({
     }
 
     setLastApplyReport(null);
+    setPendingWorkspaceSync(null);
     setPatchSet(nextPatchSet);
     setPatchReviewOpen(true);
 
@@ -311,6 +327,44 @@ export const usePatchReview = ({
       }));
     };
 
+    const recordSyncFailure = (
+      phase: PatchApplyReport["phase"],
+      nextDocument: DocumentData,
+      appliedPatchIds: string[],
+      message: string,
+    ) => {
+      setPatchReviewOpen(true);
+      setPendingWorkspaceSync({
+        appliedPatchIds,
+        document: nextDocument,
+        patchSet: patchSetToApply,
+        phase,
+      });
+      setLastApplyReport(createApplyReport({
+        appliedPatchIds,
+        failures: [{ message }],
+        patchSet: patchSetToApply,
+        phase,
+        scope: "sync",
+        warnings: [],
+      }));
+    };
+
+    const finalizeSuccessfulApply = (appliedPatchIds: string[], syncWarnings: string[]) => {
+      setPendingWorkspaceSync(null);
+      setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
+
+      if (syncWarnings.length > 0) {
+        setPatchReviewOpen(true);
+        toast.warning(syncWarnings[0] || t("hooks.patchReview.appliedWithWarnings"));
+        return true;
+      }
+
+      setPatchReviewOpen(false);
+      toast.success(t("hooks.patchReview.appliedSuccess", { count: appliedPatchIds.length }));
+      return true;
+    };
+
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
       if (!isStructuredPatchSet(patchSetToApply)) {
         const message = t("hooks.patchReview.structuredOnly");
@@ -361,20 +415,35 @@ export const usePatchReview = ({
           patchSetTitle: patchSetToApply.title,
         });
 
+        let syncWarnings: string[] = [];
+
         try {
           const syncResult = await onWorkspaceSync?.(nextDocument);
-
-          const syncWarnings = syncResult && typeof syncResult === "object" && "warnings" in syncResult
-            ? syncResult.warnings
-            : undefined;
-
-          if (syncWarnings?.length) {
-            toast.warning(syncWarnings[0]);
-          }
+          syncWarnings = getWorkspaceSyncWarnings(syncResult);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";
+          recordSyncFailure("structured", nextDocument, result.appliedPatchIds, message);
           toast.warning(message);
+          return false;
         }
+
+        if (result.failures.length > 0) {
+          if (result.warnings.length > 0) {
+            toast.warning(result.warnings[0] || t("hooks.patchReview.appliedWithWarnings"));
+          }
+          recordApplyFailure("structured", result);
+          toast.warning(t("hooks.patchReview.appliedWithFailures", {
+            applied: result.appliedPatchIds.length,
+            failed: result.failures.length,
+          }));
+          return false;
+        }
+
+        if (result.warnings.length > 0) {
+          toast.warning(result.warnings[0] || t("hooks.patchReview.appliedWithWarnings"));
+        }
+
+        return finalizeSuccessfulApply(result.appliedPatchIds, syncWarnings);
       }
 
       if (result.warnings.length > 0) {
@@ -390,10 +459,7 @@ export const usePatchReview = ({
         return false;
       }
 
-      setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
-      setPatchReviewOpen(false);
-      toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
-      return true;
+      return false;
     }
 
     if (isDocumentTextPatchSet(patchSetToApply)) {
@@ -439,20 +505,35 @@ export const usePatchReview = ({
           patchSetTitle: patchSetToApply.title,
         });
 
+        let syncWarnings: string[] = [];
+
         try {
           const syncResult = await onWorkspaceSync?.(nextDocument);
-
-          const syncWarnings = syncResult && typeof syncResult === "object" && "warnings" in syncResult
-            ? syncResult.warnings
-            : undefined;
-
-          if (syncWarnings?.length) {
-            toast.warning(syncWarnings[0]);
-          }
+          syncWarnings = getWorkspaceSyncWarnings(syncResult);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";
+          recordSyncFailure("document_text", nextDocument, result.appliedPatchIds, message);
           toast.warning(message);
+          return false;
         }
+
+        if (result.failures.length > 0) {
+          if (result.warnings.length > 0) {
+            toast.warning(result.warnings[0] || t("hooks.patchReview.appliedWithWarnings"));
+          }
+          recordApplyFailure("document_text", result);
+          toast.warning(t("hooks.patchReview.appliedWithFailures", {
+            applied: result.appliedPatchIds.length,
+            failed: result.failures.length,
+          }));
+          return false;
+        }
+
+        if (result.warnings.length > 0) {
+          toast.warning(result.warnings[0] || t("hooks.patchReview.appliedWithWarnings"));
+        }
+
+        return finalizeSuccessfulApply(result.appliedPatchIds, syncWarnings);
       }
 
       if (result.warnings.length > 0) {
@@ -468,10 +549,7 @@ export const usePatchReview = ({
         return false;
       }
 
-      setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
-      setPatchReviewOpen(false);
-      toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
-      return true;
+      return false;
     }
 
     if (!activeEditor) {
@@ -554,20 +632,35 @@ export const usePatchReview = ({
         patchSetTitle: patchSetToApply.title,
       });
 
+      let syncWarnings: string[] = [];
+
       try {
         const syncResult = await onWorkspaceSync?.(nextDocument);
-
-        const syncWarnings = syncResult && typeof syncResult === "object" && "warnings" in syncResult
-          ? syncResult.warnings
-          : undefined;
-
-        if (syncWarnings?.length) {
-          toast.warning(syncWarnings[0]);
-        }
+        syncWarnings = getWorkspaceSyncWarnings(syncResult);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";
+        recordSyncFailure("rich_text", nextDocument, result.appliedPatchIds, message);
         toast.warning(message);
+        return false;
       }
+
+      if (result.failures.length > 0) {
+        if (result.warnings.length > 0) {
+          toast.warning(result.warnings[0] || t("hooks.patchReview.appliedWithWarnings"));
+        }
+        recordApplyFailure("rich_text", result);
+        toast.warning(t("hooks.patchReview.appliedWithFailures", {
+          applied: result.appliedPatchIds.length,
+          failed: result.failures.length,
+        }));
+        return false;
+      }
+
+      if (result.warnings.length > 0) {
+        toast.warning(result.warnings[0] || t("hooks.patchReview.appliedWithWarnings"));
+      }
+
+      return finalizeSuccessfulApply(result.appliedPatchIds, syncWarnings);
     }
 
     if (result.warnings.length > 0) {
@@ -583,10 +676,7 @@ export const usePatchReview = ({
       return false;
     }
 
-    setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
-    setPatchReviewOpen(false);
-    toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
-    return true;
+    return false;
   }, [
     activeDoc,
     activeDoc.content,
@@ -628,6 +718,44 @@ export const usePatchReview = ({
     return applyPreparedPatchSet(acceptanceResult.patchSet);
   }, [applyPreparedPatchSet, t]);
 
+  const retryWorkspaceSync = useCallback(async () => {
+    if (!pendingWorkspaceSync || !onWorkspaceSync) {
+      return false;
+    }
+
+    setLastApplyReport(null);
+
+    try {
+      const syncResult = await onWorkspaceSync(pendingWorkspaceSync.document);
+      const syncWarnings = getWorkspaceSyncWarnings(syncResult);
+
+      setPendingWorkspaceSync(null);
+      setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
+
+      if (syncWarnings.length > 0) {
+        setPatchReviewOpen(true);
+        toast.warning(syncWarnings[0] || t("hooks.patchReview.appliedWithWarnings"));
+        return true;
+      }
+
+      setPatchReviewOpen(false);
+      toast.success(t("hooks.patchReview.appliedSuccess", { count: pendingWorkspaceSync.appliedPatchIds.length }));
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Workspace sync failed after local apply.";
+      setLastApplyReport(createApplyReport({
+        appliedPatchIds: pendingWorkspaceSync.appliedPatchIds,
+        failures: [{ message }],
+        patchSet: pendingWorkspaceSync.patchSet,
+        phase: pendingWorkspaceSync.phase,
+        scope: "sync",
+        warnings: [],
+      }));
+      toast.warning(message);
+      return false;
+    }
+  }, [onWorkspaceSync, pendingWorkspaceSync, t]);
+
   return {
     acceptedPatchCount,
     autoApplyPatchSet,
@@ -639,12 +767,14 @@ export const usePatchReview = ({
     handleEditPatch: (patch: DocumentPatch, suggestedText: string) => handlePatchDecision(patch, "edited", suggestedText),
     handleRejectPatch: (patch: DocumentPatch) => handlePatchDecision(patch, "rejected"),
     handleRejectPatches,
+    hasPendingWorkspaceSync: pendingWorkspaceSync !== null,
     lastApplyReport,
     loadPatchSet,
     openPatchReview,
     patchCount,
     patchReviewOpen,
     patchSet,
+    retryWorkspaceSync,
     setPatchReviewOpen,
   };
 };

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, open, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -11,6 +11,8 @@ import type { TexDiagnostic, TexExportPdfRequest, TexPreviewRequest, TexValidate
 const COMPILE_TIMEOUT_MS = Number(process.env.TEX_COMPILE_TIMEOUT_MS || 15000);
 const MAX_SOURCE_BYTES = Number(process.env.TEX_MAX_SOURCE_BYTES || 300_000);
 const MAX_CONCURRENCY = Number(process.env.TEX_MAX_CONCURRENCY || 1);
+const MAX_COMPILE_OUTPUT_BYTES = 64_000;
+const MAX_LOG_TAIL_BYTES = 128_000;
 type CompileMode = "export" | "preview" | "validate";
 
 let activeCompilations = 0;
@@ -77,6 +79,19 @@ const normalizeCompileInput = (latex: string, documentName?: string) => {
   return buildWrappedLatexDocument(latex, documentName);
 };
 
+const appendCappedText = (current: string, nextChunk: string, maxBytes: number) => {
+  const combined = `${current}${nextChunk}`;
+  const combinedBytes = Buffer.byteLength(combined, "utf8");
+
+  if (combinedBytes <= maxBytes) {
+    return combined;
+  }
+
+  return Buffer.from(combined, "utf8")
+    .subarray(Math.max(0, combinedBytes - maxBytes))
+    .toString("utf8");
+};
+
 const runCompileCommand = async (workdir: string) => {
   const command = "latexmk";
   const args = [
@@ -106,11 +121,11 @@ const runCompileCommand = async (workdir: string) => {
     }, COMPILE_TIMEOUT_MS);
 
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString("utf8");
+      stdout = appendCappedText(stdout, chunk.toString("utf8"), MAX_COMPILE_OUTPUT_BYTES);
     });
 
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString("utf8");
+      stderr = appendCappedText(stderr, chunk.toString("utf8"), MAX_COMPILE_OUTPUT_BYTES);
     });
 
     child.on("error", (error) => {
@@ -141,9 +156,19 @@ export interface CompileTexResult {
 
 const readLogOutput = async (workdir: string, fallbackOutput: string) => {
   try {
-    const logBuffer = await readFile(join(workdir, "document.log"));
-    const logText = logBuffer.toString("utf8").trim();
-    return logText ? `${fallbackOutput}\n${logText}`.trim() : fallbackOutput;
+    const fileHandle = await open(join(workdir, "document.log"), "r");
+
+    try {
+      const stats = await fileHandle.stat();
+      const bytesToRead = Math.min(stats.size, MAX_LOG_TAIL_BYTES);
+      const buffer = Buffer.alloc(bytesToRead);
+
+      await fileHandle.read(buffer, 0, bytesToRead, Math.max(0, stats.size - bytesToRead));
+      const logText = buffer.toString("utf8").trim();
+      return logText ? `${fallbackOutput}\n${logText}`.trim() : fallbackOutput;
+    } finally {
+      await fileHandle.close();
+    }
   } catch {
     return fallbackOutput;
   }
@@ -194,6 +219,18 @@ const compileLatexDocument = async (
   }
 };
 
+export const compileTexArtifact = ({
+  documentName,
+  latex,
+  mode,
+  sourceType,
+}: {
+  documentName?: string;
+  latex: string;
+  mode: CompileMode;
+  sourceType: TexValidateRequest["sourceType"];
+}) => compileLatexDocument(latex, documentName, sourceType, mode);
+
 export const validateLatex = async (request: TexValidateRequest): Promise<CompileTexResult> => {
   const result = await compileLatexDocument(request.latex, request.documentName, request.sourceType, "validate");
 
@@ -209,7 +246,12 @@ export const validateLatex = async (request: TexValidateRequest): Promise<Compil
 };
 
 export const exportPdf = async (request: TexExportPdfRequest) => {
-  const result = await compileLatexDocument(request.latex, request.documentName, request.sourceType, "export");
+  const result = await compileTexArtifact({
+    documentName: request.documentName,
+    latex: request.latex,
+    mode: "export",
+    sourceType: request.sourceType,
+  });
 
   if (!result.ok || !result.pdfBuffer) {
     const primaryError = result.diagnostics.find((diagnostic) => diagnostic.severity === "error")?.message || "XeLaTeX compilation failed.";
@@ -220,7 +262,12 @@ export const exportPdf = async (request: TexExportPdfRequest) => {
 };
 
 export const previewLatex = async (request: TexPreviewRequest) => {
-  return compileLatexDocument(request.latex, request.documentName, request.sourceType, "preview");
+  return compileTexArtifact({
+    documentName: request.documentName,
+    latex: request.latex,
+    mode: "preview",
+    sourceType: request.sourceType,
+  });
 };
 
 export const getTexToolingHealth = () => {

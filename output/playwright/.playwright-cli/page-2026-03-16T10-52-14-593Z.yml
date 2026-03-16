@@ -1,0 +1,140 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e5]:
+    - generic [ref=e9]:
+      - button [ref=e11] [cursor=pointer]:
+        - img [ref=e12]
+      - list [ref=e17]:
+        - listitem [ref=e18]:
+          - button [ref=e19] [cursor=pointer]:
+            - img [ref=e20]
+        - listitem [ref=e23]:
+          - button [ref=e24] [cursor=pointer]:
+            - img [ref=e25]
+      - generic [ref=e29]:
+        - button "템플릿" [ref=e30] [cursor=pointer]:
+          - img
+        - button "newDocument" [ref=e31] [cursor=pointer]:
+          - generic [ref=e32]:
+            - img
+    - generic [ref=e33]:
+      - banner [ref=e34]:
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - button "사이드바 토글" [ref=e37] [cursor=pointer]:
+              - img
+            - link "Docsy Docsy" [ref=e38] [cursor=pointer]:
+              - /url: /
+              - img "Docsy" [ref=e39]
+              - generic [ref=e40]: Docsy
+            - generic [ref=e41]: "|"
+            - textbox "제목 없음" [ref=e42]: Release Runbook Source
+            - generic [ref=e43]: .md
+            - generic "마지막 저장 오후 7:51" [ref=e45]: 저장됨
+            - button "Markdown" [ref=e46] [cursor=pointer]:
+              - text: Markdown
+              - img
+          - generic [ref=e47]:
+            - button "1614자 / 238단어 / 22줄" [ref=e48] [cursor=pointer]:
+              - generic [ref=e49]: 1614자
+              - generic [ref=e50]: /
+              - generic [ref=e51]: 238단어
+              - generic [ref=e52]: /
+              - generic [ref=e53]: 22줄
+            - button "지원되는 파일 불러오기 (최대 5MB)" [ref=e54] [cursor=pointer]:
+              - img
+            - button "Google" [ref=e55] [cursor=pointer]:
+              - img
+              - generic [ref=e56]: Google
+              - img
+            - button "내보내기" [ref=e57] [cursor=pointer]:
+              - img
+              - img
+            - button "미리보기 패널 토글" [ref=e58] [cursor=pointer]:
+              - img
+            - button "AI assistant" [ref=e59] [cursor=pointer]:
+              - img
+            - button "고급" [ref=e60] [cursor=pointer]
+            - button "ko" [ref=e61] [cursor=pointer]:
+              - img
+              - generic [ref=e62]: ko
+            - button "단축키 보기 (Ctrl+/)" [ref=e63] [cursor=pointer]:
+              - img
+            - button "전체화면 전환 (F11)" [ref=e64] [cursor=pointer]:
+              - img
+            - button "다크 모드로 전환" [ref=e65] [cursor=pointer]:
+              - img
+            - button "패치 검토" [ref=e66] [cursor=pointer]
+            - button "추가 작업" [ref=e67] [cursor=pointer]:
+              - img
+      - generic [ref=e68]:
+        - generic [ref=e72]:
+          - button "Release Runbook Source" [ref=e73] [cursor=pointer]:
+            - generic [ref=e74]: Release Runbook Source
+            - generic [ref=e75]: .md
+            - img [ref=e77]
+          - button "Release Runbook Target" [ref=e80] [cursor=pointer]:
+            - generic [ref=e81]: Release Runbook Target
+            - generic [ref=e82]: .md
+            - img [ref=e84]
+        - button "새로 시작" [ref=e87] [cursor=pointer]:
+          - img
+        - button "새 문서" [ref=e88] [cursor=pointer]:
+          - img
+      - generic [ref=e90]:
+        - generic [ref=e92]:
+          - generic [ref=e93]:
+            - button "실행 취소" [ref=e94] [cursor=pointer]:
+              - img [ref=e95]
+            - button "다시 실행" [ref=e98] [cursor=pointer]:
+              - img [ref=e99]
+            - button "굵게" [ref=e102] [cursor=pointer]:
+              - img [ref=e103]
+            - button "기울임꼴" [ref=e105] [cursor=pointer]:
+              - img [ref=e106]
+            - button "밑줄" [ref=e108] [cursor=pointer]:
+              - img [ref=e109]
+          - generic [ref=e111]:
+            - button "추가서식" [ref=e112] [cursor=pointer]:
+              - text: 추가서식
+              - img
+            - button "구조" [ref=e113] [cursor=pointer]:
+              - text: 구조
+              - img
+            - button "정렬" [ref=e114] [cursor=pointer]:
+              - text: 정렬
+              - img
+            - button "링크" [ref=e115] [cursor=pointer]:
+              - text: 링크
+              - img
+            - button "색상" [ref=e116] [cursor=pointer]:
+              - text: 색상
+              - img
+            - button "문서도구" [ref=e117] [cursor=pointer]:
+              - text: 문서도구
+              - img
+            - button "글꼴" [ref=e118] [cursor=pointer]:
+              - text: 글꼴
+              - img
+            - button "글자크기" [ref=e119] [cursor=pointer]:
+              - text: 글자크기
+              - img
+            - button "캡션" [ref=e120] [cursor=pointer]:
+              - text: 캡션
+              - img
+            - button "수식 삽입" [ref=e121] [cursor=pointer]:
+              - text: 수식 삽입
+              - img
+            - button "Mermaid diagram 삽입" [ref=e122] [cursor=pointer]:
+              - text: Mermaid diagram 삽입
+              - img
+        - generic [ref=e125]:
+          - generic [ref=e127]:
+            - heading "Release Runbook" [level=1] [ref=e128]
+            - heading "Deployment Procedure" [level=2] [ref=e129]
+            - paragraph [ref=e130]: "Source step 1: validate release evidence and capture baseline metrics for all regions. Source step 2: validate release evidence and capture baseline metrics for all regions. Source step 3: validate release evidence and capture baseline metrics for all regions. Source step 4: validate release evidence and capture baseline metrics for all regions. Source step 5: validate release evidence and capture baseline metrics for all regions. Source step 6: validate release evidence and capture baseline metrics for all regions. Source step 7: validate release evidence and capture baseline metrics for all regions. Source step 8: validate release evidence and capture baseline metrics for all regions. Source step 9: validate release evidence and capture baseline metrics for all regions. Source step 10: validate release evidence and capture baseline metrics for all regions. Source step 11: validate release evidence and capture baseline metrics for all regions. Source step 12: validate release evidence and capture baseline metrics for all regions. Source step 13: validate release evidence and capture baseline metrics for all regions. Source step 14: validate release evidence and capture baseline metrics for all regions. Source step 15: validate release evidence and capture baseline metrics for all regions. Source step 16: validate release evidence and capture baseline metrics for all regions. Source step 17: validate release evidence and capture baseline metrics for all regions. Source step 18: validate release evidence and capture baseline metrics for all regions."
+          - button "Source" [ref=e131] [cursor=pointer]:
+            - img
+            - text: Source

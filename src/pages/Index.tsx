@@ -2498,6 +2498,7 @@ const Index = () => {
     && (documentSupportRuntimeEnabled || (canAccessHistory && historyEnabled));
   const patchReviewDialogProps = {
     acceptedPatchCount,
+    hasPendingWorkspaceSync: documentSupportRuntimeState?.hasPendingWorkspaceSync ?? false,
     onAccept: handleAcceptPatch,
     onAcceptSelected: handleAcceptPatches,
     onApply: applyReviewedPatches,
@@ -2513,10 +2514,20 @@ const Index = () => {
 
       openPatchReview();
     },
+    onRefreshLinkedDocument: activeDoc.workspaceBinding
+      ? () => {
+        clearPatchSet();
+        handleRefreshWorkspaceDocument(activeDoc.id);
+      }
+      : undefined,
     onReject: handleRejectPatch,
     onRejectSelected: handleRejectPatches,
+    onRetryWorkspaceSync: documentSupportRuntimeState?.retryWorkspaceSync,
     open: canAccessPatchReview ? patchReviewOpen : false,
     patchSet,
+    workspaceLinked: activeDoc.workspaceBinding?.provider === "google_drive",
+    workspaceSyncError: activeDoc.workspaceBinding?.syncError,
+    workspaceSyncPending: workspaceSyncing,
     workspaceSyncWarnings: activeDoc.workspaceBinding?.syncWarnings,
   };
   const historySidebarProps = {

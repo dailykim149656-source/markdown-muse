@@ -6,6 +6,7 @@ import { I18nContext } from "@/i18n/I18nProvider";
 import { useTexValidation } from "@/hooks/useTexValidation";
 
 const getTexHealthMock = vi.fn();
+const getTexJobMock = vi.fn();
 const validateTexMock = vi.fn();
 const previewTexMock = vi.fn();
 const exportTexPdfMock = vi.fn();
@@ -13,6 +14,7 @@ const exportTexPdfMock = vi.fn();
 vi.mock("@/lib/ai/texClient", () => ({
   exportTexPdf: (...args: unknown[]) => exportTexPdfMock(...args),
   getTexHealth: (...args: unknown[]) => getTexHealthMock(...args),
+  getTexJob: (...args: unknown[]) => getTexJobMock(...args),
   previewTex: (...args: unknown[]) => previewTexMock(...args),
   validateTex: (...args: unknown[]) => validateTexMock(...args),
 }));
@@ -41,6 +43,7 @@ describe("useTexValidation", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     getTexHealthMock.mockReset();
+    getTexJobMock.mockReset();
     validateTexMock.mockReset();
     previewTexMock.mockReset();
     exportTexPdfMock.mockReset();
@@ -179,13 +182,27 @@ describe("useTexValidation", () => {
 
     previewTexMock
       .mockResolvedValueOnce({
+        jobId: "preview-job-1",
+        mode: "preview",
+        pollUrl: "/api/tex/jobs/preview-job-1",
+        status: "queued",
+      })
+      .mockResolvedValueOnce({
+        jobId: "preview-job-2",
+        mode: "preview",
+        pollUrl: "/api/tex/jobs/preview-job-2",
+        status: "queued",
+      });
+    getTexJobMock
+      .mockResolvedValueOnce({
         compileMs: 11,
         diagnostics: [],
-        engine: "xelatex",
+        expiresAt: Date.now() + 900_000,
+        jobId: "preview-job-1",
         logSummary: "ok",
-        ok: true,
-        previewExpiresAt: Date.now() + 900_000,
+        mode: "preview",
         previewUrl: "https://example.com/preview-1.pdf",
+        status: "succeeded",
       })
       .mockResolvedValueOnce({
         compileMs: 13,
@@ -194,9 +211,11 @@ describe("useTexValidation", () => {
           severity: "error",
           stage: "compile",
         }],
-        engine: "xelatex",
+        error: "Compile error",
+        jobId: "preview-job-2",
         logSummary: "failed",
-        ok: false,
+        mode: "preview",
+        status: "failed",
       });
 
     const { result, rerender } = renderHook((props: { latexSource: string }) => useTexValidation({
@@ -221,6 +240,7 @@ describe("useTexValidation", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(5000);
     });
+    await flushAsyncValidation();
     await flushAsyncValidation();
 
     expect(result.current.previewUrl).toBe("https://example.com/preview-1.pdf");

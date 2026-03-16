@@ -54,20 +54,24 @@ export const createGoogleDocument = async (accessToken: string, title: string) =
   return response.json() as Promise<unknown>;
 };
 
+export interface GoogleDocsWriteControl {
+  requiredRevisionId?: string;
+  targetRevisionId?: string;
+}
+
 export const batchUpdateGoogleDocument = async (
   accessToken: string,
   fileId: string,
   requests: unknown[],
-  requiredRevisionId?: string,
+  writeControl?: GoogleDocsWriteControl,
 ) => {
   const url = new URL(`${GOOGLE_DOCS_API_URL}/documents/${encodeURIComponent(fileId)}:batchUpdate`);
+  const normalizedWriteControl = writeControl && (writeControl.requiredRevisionId || writeControl.targetRevisionId)
+    ? writeControl
+    : undefined;
   const body = JSON.stringify({
     requests,
-    writeControl: requiredRevisionId
-      ? {
-        requiredRevisionId,
-      }
-      : undefined,
+    writeControl: normalizedWriteControl,
   });
 
   const response = await fetch(url, {
@@ -86,6 +90,7 @@ export const batchUpdateGoogleDocument = async (
   return response.json() as Promise<{
     writeControl?: {
       requiredRevisionId?: string;
+      targetRevisionId?: string;
     };
   }>;
 };

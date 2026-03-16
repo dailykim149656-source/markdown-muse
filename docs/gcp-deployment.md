@@ -85,8 +85,11 @@ gcloud builds submit \
 
 ### 2. Required runtime env vars
 
-- `GEMINI_API_KEY`
+- `GOOGLE_GENAI_USE_VERTEXAI`
+- `GOOGLE_CLOUD_PROJECT`
+- `GOOGLE_CLOUD_LOCATION`
 - `GEMINI_MODEL`
+- `GEMINI_FALLBACK_MODEL`
 - `AI_ALLOWED_ORIGIN`
 - `AI_MAX_REQUEST_BYTES`
 - `AI_DIAGNOSTICS_TOKEN`
@@ -106,6 +109,7 @@ gcloud builds submit \
 Recommended values:
 
 - `GEMINI_MODEL=gemini-2.5-flash`
+- `GEMINI_FALLBACK_MODEL=gemini-2.5-flash-lite`
 - `AI_SERVER_PORT=8080`
 - `AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
 - `AI_MAX_REQUEST_BYTES=2097152`
@@ -142,11 +146,12 @@ gcloud run deploy markdown-muse-ai \
   --image REGION-docker.pkg.dev/PROJECT/REPO/markdown-muse-ai \
   --region REGION \
   --allow-unauthenticated \
-  --set-env-vars GEMINI_MODEL=gemini-2.5-flash,AI_SERVER_PORT=8080,AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN,WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN,GOOGLE_OAUTH_REDIRECT_URI=https://app.YOUR_DOMAIN/api/auth/google/callback,GOOGLE_OAUTH_PUBLISHING_STATUS=testing,GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted,TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL
+  --set-env-vars GEMINI_MODEL=gemini-2.5-flash,GEMINI_FALLBACK_MODEL=gemini-2.5-flash-lite,AI_SERVER_PORT=8080,AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN,WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN,GOOGLE_OAUTH_REDIRECT_URI=https://app.YOUR_DOMAIN/api/auth/google/callback,GOOGLE_OAUTH_PUBLISHING_STATUS=testing,GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted,TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL
 ```
 
-Set `GEMINI_API_KEY` through Secret Manager or Cloud Run secrets rather than
-inline CLI flags when possible.
+Cloud Run uses Vertex AI auth through the runtime service account. Do not wire a
+Gemini API key into this service. Grant the runtime service account Vertex AI
+permissions instead.
 
 Run the public-deploy validator before switching the OAuth app to production:
 
@@ -371,8 +376,11 @@ Verify all of the following:
 
 Required:
 
-- `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+- `GOOGLE_GENAI_USE_VERTEXAI`
+- `GOOGLE_CLOUD_PROJECT`
+- `GOOGLE_CLOUD_LOCATION`
 - `GEMINI_MODEL`
+- `GEMINI_FALLBACK_MODEL`
 - `AI_ALLOWED_ORIGIN`
 - `TEX_SERVICE_BASE_URL`
 - `TEX_SERVICE_AUTH_TOKEN`
@@ -390,7 +398,12 @@ Recommended:
 
 Expected shape:
 
+- `GOOGLE_GENAI_USE_VERTEXAI=true`
+- `GOOGLE_CLOUD_PROJECT=YOUR_GCP_PROJECT`
+- `GOOGLE_CLOUD_LOCATION=asia-northeast3`
 - `AI_ALLOWED_ORIGIN=https://app.YOUR_DOMAIN`
+- `GEMINI_MODEL=gemini-2.5-flash`
+- `GEMINI_FALLBACK_MODEL=gemini-2.5-flash-lite`
 - `TEX_SERVICE_BASE_URL=https://YOUR_TEX_CLOUD_RUN_URL`
 - `WORKSPACE_FRONTEND_ORIGIN=https://app.YOUR_DOMAIN`
 - `GOOGLE_OAUTH_REDIRECT_URI=https://app.YOUR_DOMAIN/api/auth/google/callback`
@@ -583,9 +596,13 @@ node scripts/check-ai-runtime-smoke.mjs --origin https://app.YOUR_DOMAIN
 
 That smoke test verifies:
 
-- `GET /api/ai/health`
+- `GET /api/ai/health` returns a configuration-level JSON response
 - `GET /api/auth/session` without cookies
-- `POST /api/ai/agent/turn` with a minimal payload
+- `POST /api/ai/agent/turn` with a minimal payload returns no `agentStatus`
+
+`/api/ai/health` confirms that the required Vertex AI env vars are present. It
+does not prove the configured model can actually serve requests. The smoke test
+is the readiness check that exercises a real Agent turn.
 
 ## Notes
 

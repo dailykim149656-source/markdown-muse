@@ -9,8 +9,10 @@ on:
       - ".github/workflows/deploy-full-stack.yml"
       - "Dockerfile.tex"
       - "cloudbuild.tex.yaml"
+      - "scripts/gcp/ensure-tex-runtime-resources.sh"
       - "scripts/validate-public-deploy-config.mjs"
       - "server/texService.ts"
+      - "server/texWorker.ts"
       - "server/modules/config/**"
       - "server/modules/tex/**"
       - "src/types/tex.ts"
@@ -30,11 +32,12 @@ jobs:
     env:
       GCP_REGION: asia-northeast3
       TEX_SERVICE_NAME: docsy-tex
+      TEX_WORKER_SERVICE_NAME: docsy-tex-worker
       ARTIFACT_REPOSITORY: docsy
       TEX_COMPILE_TIMEOUT_MS: "15000"
       TEX_MAX_SOURCE_BYTES: "300000"
-      TEX_MAX_REQUEST_BYTES: "400000"
-      TEX_MAX_CONCURRENCY: "2"
+      TEX_MAX_REQUEST_BYTES: "300000"
+      TEX_MAX_CONCURRENCY: "1"
       TEX_ALLOW_RAW_DOCUMENT: "true"
       TEX_ALLOW_RESTRICTED_COMMANDS: "false"
       TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK"
@@ -55,6 +58,15 @@ jobs:
           set -euo pipefail
           ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
           echo "Active gcloud account: ${ACTIVE_ACCOUNT}"
+
+      - name: Ensure TeX runtime resources
+        id: tex-resources
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          TEX_PREVIEW_BUCKET: ${{ secrets.GCP_TEX_PREVIEW_BUCKET }}
+          TEX_TASK_QUEUE: ${{ secrets.GCP_TEX_TASK_QUEUE }}
+          TEX_TASK_LOCATION: ${{ secrets.GCP_TEX_TASK_LOCATION }}
+        run: bash scripts/gcp/ensure-tex-runtime-resources.sh
 
       - name: Deploy TeX service via Cloud Build
         id: tex
@@ -98,7 +110,7 @@ jobs:
 
           TEX_MAX_REQUEST_BYTES="${{ secrets.GCP_TEX_MAX_REQUEST_BYTES }}"
           if [ -z "${TEX_MAX_REQUEST_BYTES}" ]; then
-            TEX_MAX_REQUEST_BYTES="400000"
+            TEX_MAX_REQUEST_BYTES="300000"
           fi
 
           TEX_ALLOW_ALL_PACKAGES="${{ secrets.GCP_TEX_ALLOW_ALL_PACKAGES }}"
@@ -135,6 +147,10 @@ jobs:
           echo "  project: ${PROJECT_ID}"
           echo "  region: ${GCP_REGION}"
           echo "  service: ${TEX_SERVICE_NAME}"
+          echo "  worker_service: ${TEX_WORKER_SERVICE_NAME}"
+          echo "  preview_bucket: ${{ steps.tex-resources.outputs.preview_bucket }}"
+          echo "  task_queue: ${{ steps.tex-resources.outputs.task_queue }}"
+          echo "  task_location: ${{ steps.tex-resources.outputs.task_location }}"
           echo "  tex_allow_all_packages: ${TEX_ALLOW_ALL_PACKAGES}"
           echo "  tex_allow_raw_document: ${TEX_ALLOW_RAW_DOCUMENT}"
           echo "  tex_allow_restricted_commands: ${TEX_ALLOW_RESTRICTED_COMMANDS}"
@@ -142,10 +158,11 @@ jobs:
           echo "  app_token_secret: ${TEX_SERVICE_AUTH_TOKEN_SECRET}"
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${TEX_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_SERVICE_NAME=%s|_TEX_COMPILE_TIMEOUT_MS=%s|_TEX_MAX_SOURCE_BYTES=%s|_TEX_MAX_REQUEST_BYTES=%s|_TEX_MAX_CONCURRENCY=%s|_TEX_ALLOW_ALL_PACKAGES=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_RUN_SERVICE_ACCOUNT=%s|_CALLER_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_SERVICE_NAME=%s|_WORKER_SERVICE_NAME=%s|_TEX_COMPILE_TIMEOUT_MS=%s|_TEX_MAX_SOURCE_BYTES=%s|_TEX_MAX_REQUEST_BYTES=%s|_TEX_MAX_CONCURRENCY=%s|_TEX_ALLOW_ALL_PACKAGES=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_PREVIEW_BUCKET=%s|_TEX_PREVIEW_URL_TTL_SECONDS=%s|_TEX_TASK_QUEUE=%s|_TEX_TASK_LOCATION=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_RUN_SERVICE_ACCOUNT=%s|_CALLER_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$TEX_SERVICE_NAME" \
+            "$TEX_WORKER_SERVICE_NAME" \
             "$TEX_COMPILE_TIMEOUT_MS" \
             "$TEX_MAX_SOURCE_BYTES" \
             "${TEX_MAX_REQUEST_BYTES}" \
@@ -154,6 +171,10 @@ jobs:
             "${TEX_ALLOW_RAW_DOCUMENT}" \
             "${TEX_ALLOW_RESTRICTED_COMMANDS}" \
             "${TEX_ALLOWED_PACKAGES}" \
+            "${{ steps.tex-resources.outputs.preview_bucket }}" \
+            "900" \
+            "${{ steps.tex-resources.outputs.task_queue }}" \
+            "${{ steps.tex-resources.outputs.task_location }}" \
             "$TEX_SERVICE_AUTH_TOKEN_SECRET" \
             "$RUN_SERVICE_ACCOUNT" \
             "$RUN_SERVICE_ACCOUNT")
@@ -171,7 +192,14 @@ jobs:
           fi
 
           echo "TeX service deployed at: ${TEX_URL}"
+          WORKER_URL="$(gcloud run services describe ${TEX_WORKER_SERVICE_NAME} --region ${GCP_REGION} --format='value(status.url)')"
+          if [ -z "${WORKER_URL}" ]; then
+            echo "Cloud Run TeX worker URL could not be resolved."
+            exit 1
+          fi
+          echo "TeX worker deployed at: ${WORKER_URL}"
           echo "url=${TEX_URL}" >> "${GITHUB_OUTPUT}"
+          echo "worker_url=${WORKER_URL}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify TeX health
         run: |
@@ -198,4 +226,28 @@ jobs:
           done
 
           echo "TeX health check failed after 10 attempts."
+          exit 1
+
+      - name: Verify TeX worker health
+        run: |
+          set -euo pipefail
+          TOKEN_SECRET_NAME="${{ secrets.GCP_TEX_SERVICE_AUTH_TOKEN_SECRET_NAME }}"
+          if [ -z "${TOKEN_SECRET_NAME}" ]; then
+            TOKEN_SECRET_NAME="tex-service-auth-token"
+          fi
+
+          APP_TOKEN="$(gcloud secrets versions access latest --secret="${TOKEN_SECRET_NAME}")"
+          echo "Verifying worker health at: ${{ steps.tex.outputs.worker_url }}/health"
+          for i in {1..10}; do
+            if curl -fsS \
+              -H "X-Docsy-Tex-Token: ${APP_TOKEN}" \
+              "${{ steps.tex.outputs.worker_url }}/health" >/dev/null; then
+              echo "TeX worker health check passed!"
+              exit 0
+            fi
+            echo "TeX worker health check failed (attempt $i), retrying in 5 seconds..."
+            sleep 5
+          done
+
+          echo "TeX worker health check failed after 10 attempts."
           exit 1

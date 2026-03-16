@@ -3,15 +3,19 @@ import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { binary, HttpError, json, parseRequestBody, writeHttpResponse } from "./modules/http/http";
 import { logRequestCompletion, logRequestStart } from "./modules/http/requestObservability";
-import { exportPdf, getTexToolingHealth, previewLatex, validateLatex } from "./modules/tex/compiler";
-import { consumeLocalTexPreview, storeTexPreviewPdf } from "./modules/tex/previewStorage";
+import { getTexToolingHealth, validateLatex } from "./modules/tex/compiler";
+import { consumeLocalTexArtifact } from "./modules/tex/artifactStorage";
+import { buildTexJobEnqueueResponse, buildTexJobStatusResponse } from "./modules/tex/jobResponse";
+import { enqueueTexJob } from "./modules/tex/jobQueue";
+import { getTexJobStore } from "./modules/tex/jobStore";
+import { processTexJobById } from "./modules/tex/processTexJob";
 import { assertTexCompilationAllowed } from "./modules/tex/security";
 import type { TexExportPdfRequest, TexPreviewRequest, TexValidateRequest } from "@/types/tex";
 
 process.env.TEX_MAX_REQUEST_BYTES = process.env.TEX_MAX_REQUEST_BYTES || "400000";
 const PORT = Number(process.env.PORT || process.env.TEX_SERVICE_PORT || 8081);
 const MAX_REQUEST_BYTES = Number(process.env.TEX_MAX_REQUEST_BYTES || 400000);
-const LOCAL_PREVIEW_ROUTE_PATTERN = /^\/preview-assets\/(?<previewId>[A-Za-z0-9-]+)$/;
+const LOCAL_ARTIFACT_ROUTE_PATTERN = /^\/artifacts\/(?<artifactId>[A-Za-z0-9-]+)$/;
 
 const getExpectedAuthToken = () => process.env.TEX_SERVICE_AUTH_TOKEN?.trim() || "";
 
@@ -29,7 +33,7 @@ const assertAuthorized = (requestTokenHeader: string | undefined) => {
   }
 };
 
-const getLocalPreviewId = (url: string) => url.match(LOCAL_PREVIEW_ROUTE_PATTERN)?.groups?.previewId || null;
+const getLocalArtifactId = (url: string) => url.match(LOCAL_ARTIFACT_ROUTE_PATTERN)?.groups?.artifactId || null;
 
 const server = createServer(async (request, response) => {
   const requestId = randomUUID();
@@ -52,10 +56,10 @@ const server = createServer(async (request, response) => {
 
     route = request.url;
 
-    const localPreviewId = getLocalPreviewId(request.url);
-    const isLocalPreviewRoute = request.method === "GET" && Boolean(localPreviewId);
+    const localArtifactId = getLocalArtifactId(request.url);
+    const isLocalArtifactRoute = request.method === "GET" && Boolean(localArtifactId);
 
-    if (!isLocalPreviewRoute) {
+    if (!isLocalArtifactRoute) {
       assertAuthorized(typeof request.headers["x-docsy-tex-token"] === "string" ? request.headers["x-docsy-tex-token"] : undefined);
     }
 
@@ -65,12 +69,12 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    if (request.method === "GET" && localPreviewId) {
-      const preview = consumeLocalTexPreview(localPreviewId);
+    if (request.method === "GET" && localArtifactId) {
+      const artifact = consumeLocalTexArtifact(localArtifactId);
       responseStatus = 200;
-      writeHttpResponse(response, binary(preview.buffer, "application/pdf", 200, request.headers.origin, {
+      writeHttpResponse(response, binary(artifact.buffer, "application/pdf", 200, request.headers.origin, {
         "Cache-Control": "private, max-age=60",
-        "Content-Disposition": "inline; filename=\"preview.pdf\"",
+        "Content-Disposition": artifact.contentDisposition,
       }));
       return;
     }
@@ -99,52 +103,76 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/preview") {
       const payload = await parseRequestBody<TexPreviewRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
-      const result = await previewLatex(payload);
-      const storedPreview = result.ok && result.pdfBuffer
-        ? await storeTexPreviewPdf({
-          pdfBuffer: result.pdfBuffer,
+      const jobRecord = await getTexJobStore().createJob({
+        contentHash: payload.contentHash,
+        documentName: payload.documentName,
+        latex: payload.latex,
+        mode: "preview",
+        sourceType: payload.sourceType,
+      });
+      await enqueueTexJob({
+        jobId: jobRecord.jobId,
+        processLocally: () => processTexJobById({
+          jobId: jobRecord.jobId,
           request,
-        })
-        : {
-          previewExpiresAt: undefined,
-          previewStorageBackend: "unavailable" as const,
-          previewUrl: undefined,
-        };
+        }).then(() => undefined),
+      });
       requestLogExtra = {
-        compileMode: "preview",
+        jobId: jobRecord.jobId,
         latexBytes: Buffer.byteLength(payload.latex, "utf8"),
-        ok: result.ok,
-        pdfBytes: result.pdfBytes,
-        previewStorageBackend: storedPreview.previewStorageBackend,
+        mode: "preview",
       };
-      responseStatus = 200;
-      writeHttpResponse(response, json({
-        compileMs: result.compileMs,
-        diagnostics: result.diagnostics,
-        engine: "xelatex",
-        logSummary: result.logSummary,
-        ok: result.ok,
-        previewExpiresAt: storedPreview.previewExpiresAt,
-        previewUrl: storedPreview.previewUrl,
-      }, 200, request.headers.origin));
+      responseStatus = 202;
+      writeHttpResponse(response, json(buildTexJobEnqueueResponse(jobRecord), 202, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/export-pdf") {
       const payload = await parseRequestBody<TexExportPdfRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
-      const result = await exportPdf(payload);
-      const safeFileName = (payload.documentName || "Untitled").replace(/[^a-zA-Z0-9._-]+/g, "-");
+      const jobRecord = await getTexJobStore().createJob({
+        documentName: payload.documentName,
+        latex: payload.latex,
+        mode: "export",
+        sourceType: payload.sourceType,
+      });
+      await enqueueTexJob({
+        jobId: jobRecord.jobId,
+        processLocally: () => processTexJobById({
+          jobId: jobRecord.jobId,
+          request,
+        }).then(() => undefined),
+      });
       requestLogExtra = {
-        compileMode: "export",
+        jobId: jobRecord.jobId,
         latexBytes: Buffer.byteLength(payload.latex, "utf8"),
-        ok: result.ok,
-        pdfBytes: result.pdfBytes,
+        mode: "export",
+      };
+      responseStatus = 202;
+      writeHttpResponse(response, json(buildTexJobEnqueueResponse(jobRecord), 202, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "GET" && request.url.startsWith("/jobs/")) {
+      const jobId = request.url.replace(/^\/jobs\//, "").trim();
+
+      if (!jobId) {
+        throw new HttpError(400, "jobId is required.");
+      }
+
+      const jobRecord = await getTexJobStore().getJob(decodeURIComponent(jobId));
+
+      if (!jobRecord) {
+        throw new HttpError(404, "TeX job was not found.");
+      }
+
+      requestLogExtra = {
+        jobId: jobRecord.jobId,
+        mode: jobRecord.mode,
+        status: jobRecord.status,
       };
       responseStatus = 200;
-      writeHttpResponse(response, binary(result.pdfBuffer!, "application/pdf", 200, request.headers.origin, {
-        "Content-Disposition": `attachment; filename="${safeFileName || "Untitled"}.pdf"`,
-      }));
+      writeHttpResponse(response, json(buildTexJobStatusResponse(jobRecord), 200, request.headers.origin));
       return;
     }
 

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "ai:server": "node --env-file-if-exists=.env.local --import tsx server/aiServer.ts",
-    "build:server": "esbuild server/aiServer.ts server/texService.ts --bundle --platform=node --format=esm --target=node22 --outdir=server-dist --packages=external",
+    "build:server": "esbuild server/aiServer.ts server/texService.ts server/texWorker.ts --bundle --platform=node --format=esm --target=node22 --outdir=server-dist --packages=external",
     "dev": "vite",
     "build": "vite build",
     "build:web": "vite build --mode web",
@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.17.2",
+    "@google-cloud/tasks": "^5.5.0",
     "@google-cloud/firestore": "^8.3.0",
     "@google/genai": "^1.44.0",
     "@hookform/resolvers": "^3.10.0",

@@ -1,3 +1,5 @@
+import { pathToFileURL } from "node:url";
+
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 const readArguments = (argv) => {
@@ -92,21 +94,25 @@ const buildAgentTurnPayload = () => ({
   threadId: "smoke-thread",
 });
 
-const assertHealthPayload = (payload) => {
+export const assertHealthPayload = (payload) => {
   if (!payload || payload.ok !== true || typeof payload.configured !== "boolean") {
     throw new Error(`/api/ai/health returned an unexpected payload: ${JSON.stringify(payload)}`);
   }
 };
 
-const assertAuthSessionPayload = (payload) => {
+export const assertAuthSessionPayload = (payload) => {
   if (!payload || payload.connected !== false || payload.provider !== null || payload.user !== null) {
     throw new Error(`/api/auth/session expected { connected: false, provider: null, user: null } without cookies. Received: ${JSON.stringify(payload)}`);
   }
 };
 
-const assertAgentTurnPayload = (payload) => {
+export const assertAgentTurnPayload = (payload) => {
   if (!payload || typeof payload !== "object") {
     throw new Error(`/api/ai/agent/turn returned an empty payload.`);
+  }
+
+  if (payload.agentStatus?.kind) {
+    throw new Error(`/api/ai/agent/turn returned agentStatus=${payload.agentStatus.kind}: ${payload.agentStatus.message || "Unknown Gemini runtime failure."}`);
   }
 
   if (typeof payload.assistantMessage?.text !== "string" || payload.assistantMessage.text.trim().length === 0) {
@@ -118,7 +124,7 @@ const assertAgentTurnPayload = (payload) => {
   }
 };
 
-const main = async () => {
+export const main = async () => {
   const { label, origin } = readArguments(process.argv.slice(2));
 
   console.log(`[ai-runtime-smoke] label=${label} origin=${origin}`);
@@ -149,7 +155,13 @@ const main = async () => {
   console.log(`[ai-runtime-smoke] agent/turn ok effect=${agentTurn.effect.type}`);
 };
 
-main().catch((error) => {
-  console.error(`[ai-runtime-smoke] FAIL ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+const isDirectExecution = process.argv[1]
+  ? import.meta.url === pathToFileURL(process.argv[1]).href
+  : false;
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error(`[ai-runtime-smoke] FAIL ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });
+}

@@ -1,9 +1,10 @@
 import { HttpError } from "../http/http";
 import type {
-  TexExportPdfRequest,
   TexHealthResponse,
+  TexJobEnqueueResponse,
+  TexJobStatusResponse,
+  TexExportPdfRequest,
   TexPreviewRequest,
-  TexPreviewResponse,
   TexValidateRequest,
   TexValidateResponse,
 } from "@/types/tex";
@@ -130,30 +131,10 @@ export const validateTex = (payload: TexValidateRequest) =>
   requestJson<TexValidateResponse, TexValidateRequest>("POST", "/validate", payload);
 
 export const previewTex = (payload: TexPreviewRequest) =>
-  requestJson<TexPreviewResponse, TexPreviewRequest>("POST", "/preview", payload);
+  requestJson<TexJobEnqueueResponse, TexPreviewRequest>("POST", "/preview", payload);
 
-export const exportTexPdf = async (payload: TexExportPdfRequest) => {
-  const baseUrl = ensureTexServiceConfigured();
-  const response = await fetch(`${baseUrl}/export-pdf`, {
-    body: JSON.stringify(payload),
-    headers: {
-      "Content-Type": "application/json",
-      ...(await buildTexServiceHeaders(baseUrl)),
-    },
-    method: "POST",
-  }).catch((error) => {
-    throw new HttpError(503, error instanceof Error ? error.message : "Unable to reach TeX service.");
-  });
+export const exportTexPdf = (payload: TexExportPdfRequest) =>
+  requestJson<TexJobEnqueueResponse, TexExportPdfRequest>("POST", "/export-pdf", payload);
 
-  if (!response.ok) {
-    throw new HttpError(response.status, await readErrorMessage(response));
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-
-  return {
-    body: Buffer.from(arrayBuffer),
-    contentDisposition: response.headers.get("content-disposition") || undefined,
-    contentType: response.headers.get("content-type") || "application/pdf",
-  };
-};
+export const getTexJob = (jobId: string) =>
+  requestJson<TexJobStatusResponse>("GET", `/jobs/${encodeURIComponent(jobId)}`);

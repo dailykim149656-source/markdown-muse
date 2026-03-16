@@ -1,0 +1,128 @@
+- generic [ref=e2]:
+  - region "Notifications (F8)":
+    - list
+  - region "Notifications alt+T"
+  - generic [ref=e4]:
+    - generic [ref=e8]:
+      - button [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+      - list [ref=e16]:
+        - listitem [ref=e17]:
+          - button [ref=e18] [cursor=pointer]:
+            - img [ref=e19]
+      - generic [ref=e23]:
+        - button "템플릿" [ref=e24] [cursor=pointer]:
+          - img
+        - button "newDocument" [ref=e25] [cursor=pointer]:
+          - generic [ref=e26]:
+            - img
+    - generic [ref=e27]:
+      - banner [ref=e28]:
+        - generic [ref=e29]:
+          - generic [ref=e30]:
+            - button "사이드바 토글" [ref=e31] [cursor=pointer]:
+              - img
+            - link "Docsy Docsy" [ref=e32] [cursor=pointer]:
+              - /url: /
+              - img "Docsy" [ref=e33]
+              - generic [ref=e34]: Docsy
+            - generic [ref=e35]: "|"
+            - textbox "제목 없음" [ref=e36]: Untitled
+            - generic [ref=e37]: .md
+            - generic "마지막 저장 오후 7:30" [ref=e39]: 저장됨
+            - button "Markdown" [ref=e40] [cursor=pointer]:
+              - text: Markdown
+              - img
+          - generic [ref=e41]:
+            - button "0자 / 0단어 / 0줄" [ref=e42] [cursor=pointer]:
+              - generic [ref=e43]: 0자
+              - generic [ref=e44]: /
+              - generic [ref=e45]: 0단어
+              - generic [ref=e46]: /
+              - generic [ref=e47]: 0줄
+            - button "지원되는 파일 불러오기 (최대 5MB)" [ref=e48] [cursor=pointer]:
+              - img
+            - button "Google" [ref=e49] [cursor=pointer]:
+              - img
+              - generic [ref=e50]: Google
+              - img
+            - button "내보내기" [ref=e51] [cursor=pointer]:
+              - img
+              - img
+            - button "미리보기 패널 토글" [ref=e52] [cursor=pointer]:
+              - img
+            - button "AI assistant" [ref=e53] [cursor=pointer]:
+              - img
+            - button "고급" [ref=e54] [cursor=pointer]
+            - button "ko" [ref=e55] [cursor=pointer]:
+              - img
+              - generic [ref=e56]: ko
+            - button "단축키 보기 (Ctrl+/)" [ref=e57] [cursor=pointer]:
+              - img
+            - button "전체화면 전환 (F11)" [ref=e58] [cursor=pointer]:
+              - img
+            - button "다크 모드로 전환" [ref=e59] [cursor=pointer]:
+              - img
+            - button "패치 검토" [ref=e60] [cursor=pointer]
+            - button "추가 작업" [ref=e61] [cursor=pointer]:
+              - img
+      - generic [ref=e62]:
+        - button "Untitled" [ref=e67] [cursor=pointer]:
+          - generic [ref=e68]: Untitled
+          - generic [ref=e69]: .md
+        - button "새로 시작" [ref=e70] [cursor=pointer]:
+          - img
+        - button "새 문서" [ref=e71] [cursor=pointer]:
+          - img
+      - generic [ref=e73]:
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - button "실행 취소" [ref=e77] [cursor=pointer]:
+              - img [ref=e78]
+            - button "다시 실행" [ref=e81] [cursor=pointer]:
+              - img [ref=e82]
+            - button "굵게" [ref=e85] [cursor=pointer]:
+              - img [ref=e86]
+            - button "기울임꼴" [ref=e88] [cursor=pointer]:
+              - img [ref=e89]
+            - button "밑줄" [ref=e91] [cursor=pointer]:
+              - img [ref=e92]
+          - generic [ref=e94]:
+            - button "추가서식" [ref=e95] [cursor=pointer]:
+              - text: 추가서식
+              - img
+            - button "구조" [ref=e96] [cursor=pointer]:
+              - text: 구조
+              - img
+            - button "정렬" [ref=e97] [cursor=pointer]:
+              - text: 정렬
+              - img
+            - button "링크" [ref=e98] [cursor=pointer]:
+              - text: 링크
+              - img
+            - button "색상" [ref=e99] [cursor=pointer]:
+              - text: 색상
+              - img
+            - button "문서도구" [ref=e100] [cursor=pointer]:
+              - text: 문서도구
+              - img
+            - button "글꼴" [ref=e101] [cursor=pointer]:
+              - text: 글꼴
+              - img
+            - button "글자크기" [ref=e102] [cursor=pointer]:
+              - text: 글자크기
+              - img
+            - button "캡션" [ref=e103] [cursor=pointer]:
+              - text: 캡션
+              - img
+            - button "수식 삽입" [ref=e104] [cursor=pointer]:
+              - text: 수식 삽입
+              - img
+            - button "Mermaid diagram 삽입" [ref=e105] [cursor=pointer]:
+              - text: Mermaid diagram 삽입
+              - img
+        - generic [ref=e108]:
+          - paragraph [ref=e111]: Markdown WYSIWYG with synced source mode.
+          - button "Source" [ref=e112] [cursor=pointer]:
+            - img
+            - text: Source

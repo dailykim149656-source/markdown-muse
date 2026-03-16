@@ -14,6 +14,7 @@ import type { DocumentPatch, DocumentPatchSet, PatchApplyReport } from "@/types/
 
 interface PatchReviewDialogProps {
   acceptedPatchCount: number;
+  hasPendingWorkspaceSync?: boolean;
   onAccept: (patch: DocumentPatch) => void;
   onAcceptSelected: (patchIds: string[]) => void;
   onApply: () => void;
@@ -21,11 +22,16 @@ interface PatchReviewDialogProps {
   onEdit: (patch: DocumentPatch, suggestedText: string) => void;
   onLoadPatchSet: () => void;
   onOpenChange: (open: boolean) => void;
+  onRefreshLinkedDocument?: () => void;
   onReject: (patch: DocumentPatch) => void;
   onRejectSelected: (patchIds: string[]) => void;
+  onRetryWorkspaceSync?: () => void;
   open: boolean;
   patchSet: DocumentPatchSet | null;
   lastApplyReport: PatchApplyReport | null;
+  workspaceLinked?: boolean;
+  workspaceSyncError?: string | null;
+  workspaceSyncPending?: boolean;
   workspaceSyncWarnings?: string[];
 }
 
@@ -53,6 +59,7 @@ const getConfidenceLabelKey = (patchSet: DocumentPatchSet) => {
 
 const PatchReviewDialog = ({
   acceptedPatchCount,
+  hasPendingWorkspaceSync = false,
   onAccept,
   onAcceptSelected,
   onApply,
@@ -61,10 +68,15 @@ const PatchReviewDialog = ({
   lastApplyReport,
   onLoadPatchSet,
   onOpenChange,
+  onRefreshLinkedDocument,
   onReject,
   onRejectSelected,
+  onRetryWorkspaceSync,
   open,
   patchSet,
+  workspaceLinked = false,
+  workspaceSyncError = null,
+  workspaceSyncPending = false,
   workspaceSyncWarnings = [],
 }: PatchReviewDialogProps) => {
   const { t } = useI18n();
@@ -81,12 +93,20 @@ const PatchReviewDialog = ({
   const applyLogSummary = lastApplyReport
     ? lastApplyReport.scope === "preflight"
       ? t("patchReview.applyLogPreflight")
+      : lastApplyReport.scope === "sync"
+        ? t("patchReview.applyLogSync")
       : t("patchReview.applyLogPartial", {
         applied: lastApplyReport.appliedPatchIds.length,
         failed: lastApplyReport.failures.length,
       })
     : null;
   const applyLogPhaseLabel = lastApplyReport ? t(`patchReview.applyLogPhase.${lastApplyReport.phase}`) : null;
+  const showWorkspaceSyncRecovery = workspaceLinked && Boolean(
+    hasPendingWorkspaceSync
+    || workspaceSyncError
+    || workspaceSyncWarnings.length > 0,
+  );
+  const applyDisabled = !patchSet || acceptedPatchCount === 0 || hasPendingWorkspaceSync || patchSet.status === "completed";
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -110,7 +130,7 @@ const PatchReviewDialog = ({
           </div>
           <Button
             className="h-auto min-h-10 w-full whitespace-normal text-center sm:w-auto"
-            disabled={!patchSet || acceptedPatchCount === 0}
+            disabled={applyDisabled}
             onClick={onApply}
             type="button"
           >
@@ -175,6 +195,45 @@ const PatchReviewDialog = ({
                     <li key={warning}>{warning}</li>
                   ))}
                 </ul>
+              </div>
+            )}
+            {showWorkspaceSyncRecovery && (
+              <div className="rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2 text-[11px] text-foreground sm:col-span-2 xl:col-span-4">
+                <div className="flex min-w-0 items-start gap-2 font-medium">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-500" />
+                  {t("patchReview.workspaceSyncActionsTitle")}
+                </div>
+                <p className="mt-1 leading-5 text-muted-foreground">
+                  {workspaceSyncError
+                    ? workspaceSyncError
+                    : hasPendingWorkspaceSync
+                      ? t("patchReview.workspaceSyncRetryDescription")
+                      : t("patchReview.workspaceSyncWarningsDescription")}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {onRetryWorkspaceSync && (
+                    <Button
+                      disabled={!hasPendingWorkspaceSync || workspaceSyncPending}
+                      onClick={onRetryWorkspaceSync}
+                      size="sm"
+                      type="button"
+                      variant="secondary"
+                    >
+                      {t("patchReview.retryWorkspaceSync")}
+                    </Button>
+                  )}
+                  {onRefreshLinkedDocument && (
+                    <Button
+                      disabled={workspaceSyncPending}
+                      onClick={onRefreshLinkedDocument}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      {t("patchReview.refreshLinkedDocument")}
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </div>

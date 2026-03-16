@@ -687,4 +687,143 @@ describe("usePatchReview", () => {
       scope: "apply",
     }));
   });
+
+  it("records workspace sync failures after local apply and retries sync without reapplying patches", async () => {
+    const updateActiveDoc = vi.fn();
+    const onWorkspaceSync = vi.fn()
+      .mockRejectedValueOnce(new Error("Workspace sync failed after local apply."))
+      .mockResolvedValueOnce({ warnings: [] });
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      documentId: "doc-1",
+      patchSetId: "patch-set-sync-retry",
+      patches: [{
+        author: "ai",
+        operation: "replace_text_range",
+        patchId: "patch-sync-retry",
+        payload: {
+          kind: "replace_text",
+          text: "New",
+        },
+        status: "accepted",
+        target: {
+          endOffset: 3,
+          nodeId: "paragraph-1",
+          startOffset: 0,
+          targetType: "text_range",
+        },
+        title: "Retry sync patch",
+      }],
+      status: "in_review",
+      title: "Retry sync review",
+    };
+
+    const { result } = renderHook(() => usePatchReview({
+      activeDoc: createActiveDoc({
+        workspaceBinding: {
+          documentKind: "google_docs",
+          fileId: "file-123",
+          importedAt: 10,
+          mimeType: "application/vnd.google-apps.document",
+          provider: "google_drive",
+          revisionId: "rev-1",
+          syncStatus: "dirty_local",
+        },
+      }),
+      activeEditor: createActiveEditor(richTextDocumentJson) as never,
+      bumpEditorKey: vi.fn(),
+      onVersionSnapshot: vi.fn(),
+      onWorkspaceSync,
+      setLiveEditorHtml: vi.fn(),
+      updateActiveDoc,
+    }), { wrapper });
+
+    act(() => {
+      result.current.loadPatchSet(patchSet);
+    });
+
+    await act(async () => {
+      await result.current.applyReviewedPatches();
+    });
+
+    expect(updateActiveDoc).toHaveBeenCalledTimes(1);
+    expect(onWorkspaceSync).toHaveBeenCalledTimes(1);
+    expect(result.current.hasPendingWorkspaceSync).toBe(true);
+    expect(result.current.lastApplyReport).toEqual(expect.objectContaining({
+      appliedPatchIds: ["patch-sync-retry"],
+      failures: [expect.objectContaining({ message: "Workspace sync failed after local apply." })],
+      phase: "rich_text",
+      scope: "sync",
+    }));
+
+    await act(async () => {
+      await result.current.retryWorkspaceSync();
+    });
+
+    expect(onWorkspaceSync).toHaveBeenCalledTimes(2);
+    expect(updateActiveDoc).toHaveBeenCalledTimes(1);
+    expect(result.current.hasPendingWorkspaceSync).toBe(false);
+    expect(result.current.patchSet?.status).toBe("completed");
+  });
+
+  it("keeps patch review open when workspace sync succeeds with warnings", async () => {
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      documentId: "doc-1",
+      patchSetId: "patch-set-sync-warning",
+      patches: [{
+        author: "ai",
+        operation: "replace_text_range",
+        patchId: "patch-sync-warning",
+        payload: {
+          kind: "replace_text",
+          text: "New",
+        },
+        status: "accepted",
+        target: {
+          endOffset: 3,
+          nodeId: "paragraph-1",
+          startOffset: 0,
+          targetType: "text_range",
+        },
+        title: "Warning patch",
+      }],
+      status: "in_review",
+      title: "Warning review",
+    };
+
+    const { result } = renderHook(() => usePatchReview({
+      activeDoc: createActiveDoc({
+        workspaceBinding: {
+          documentKind: "google_docs",
+          fileId: "file-456",
+          importedAt: 10,
+          mimeType: "application/vnd.google-apps.document",
+          provider: "google_drive",
+          revisionId: "rev-1",
+          syncStatus: "dirty_local",
+        },
+      }),
+      activeEditor: createActiveEditor(richTextDocumentJson) as never,
+      bumpEditorKey: vi.fn(),
+      onVersionSnapshot: vi.fn(),
+      onWorkspaceSync: vi.fn().mockResolvedValue({ warnings: ["Merged against the latest Google Docs revision."] }),
+      setLiveEditorHtml: vi.fn(),
+      updateActiveDoc: vi.fn(),
+    }), { wrapper });
+
+    act(() => {
+      result.current.loadPatchSet(patchSet);
+    });
+
+    await act(async () => {
+      await result.current.applyReviewedPatches();
+    });
+
+    expect(result.current.patchSet?.status).toBe("completed");
+    expect(result.current.patchReviewOpen).toBe(true);
+    expect(result.current.hasPendingWorkspaceSync).toBe(false);
+  });
 });

@@ -33,10 +33,13 @@ import { resolveWorkspaceSessionForAgent } from "./modules/agent/resolveWorkspac
 import { normalizeAgentTurnResponse } from "./modules/agent/turnResponse";
 import {
   getGeminiFallbackModel,
+  getGeminiErrorStatusCode,
   generateStructuredJson,
   generateMultimodalStructuredJson,
   getGeminiModel,
+  isGeminiModelConfigurationError,
   isGeminiConfigured,
+  isGeminiRateLimitError,
   schemaType,
 } from "./modules/gemini/client";
 import {
@@ -94,6 +97,7 @@ import { handleShareRoute } from "./modules/share/routes";
 import { handleTexAutoFix } from "./modules/tex/autoFix";
 import {
   exportTexPdf,
+  getTexJob as getTexJobWithService,
   getTexHealth as getTexServiceHealth,
   previewTex as previewTexWithService,
   validateTex as validateTexWithService,
@@ -778,33 +782,24 @@ const classifyGeminiStatus = ({
   error: unknown;
   locale?: Locale;
 }): AgentStatus => {
-  const statusCode = typeof error === "object" && error !== null && "status" in error
-    ? Number((error as { status?: unknown }).status)
-    : undefined;
-  const message = error instanceof Error ? error.message : String(error);
-  const normalizedMessage = message.toLowerCase();
+  const statusCode = getGeminiErrorStatusCode(error);
 
-  if (
-    statusCode === 429
-    || normalizedMessage.includes("resource_exhausted")
-    || normalizedMessage.includes("quota")
-    || normalizedMessage.includes("rate limit")
-  ) {
+  if (isGeminiRateLimitError(error)) {
     return {
       kind: "gemini_rate_limited",
       message: buildAgentStatusMessage({ kind: "gemini_rate_limited", locale }),
     };
   }
 
-  if (
-    statusCode === 400
-    || normalizedMessage.includes("unexpected model name format")
-    || (normalizedMessage.includes("invalid_argument") && normalizedMessage.includes("model"))
-  ) {
+  if (isGeminiModelConfigurationError(error)) {
     return {
       kind: "gemini_misconfigured",
       message: buildAgentStatusMessage({ kind: "gemini_misconfigured", locale }),
     };
+  }
+
+  if (statusCode === 400) {
+    console.warn("[LiveAgent] Gemini request failed with a non-model 400; reporting unavailable status.");
   }
 
   return {
@@ -1344,8 +1339,8 @@ const server = createServer(async (request, response) => {
       assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await previewTexWithService(payload);
       requestLogExtra = buildAiRequestLogContext(payload);
-      responseStatus = 200;
-      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      responseStatus = 202;
+      writeHttpResponse(response, json(result, 202, request.headers.origin));
       return;
     }
 
@@ -1354,10 +1349,21 @@ const server = createServer(async (request, response) => {
       assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await exportTexPdf(payload);
       requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 202;
+      writeHttpResponse(response, json(result, 202, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "GET" && requestUrl.pathname.startsWith("/api/tex/jobs/")) {
+      const jobId = requestUrl.pathname.replace(/^\/api\/tex\/jobs\//, "").trim();
+
+      if (!jobId) {
+        throw new HttpError(400, "jobId is required.");
+      }
+
+      const result = await getTexJobWithService(jobId);
       responseStatus = 200;
-      writeHttpResponse(response, binary(result.body, result.contentType, 200, request.headers.origin, {
-        "Content-Disposition": result.contentDisposition || "attachment; filename=\"document.pdf\"",
-      }));
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 

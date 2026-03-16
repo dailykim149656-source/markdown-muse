@@ -215,4 +215,63 @@ describe("PatchReviewDialog metrics", () => {
     expect(screen.getByText("patchReview.applyLogWarnings")).toBeInTheDocument();
     expect(screen.getByText("Patch target could not be found.")).toBeInTheDocument();
   });
+
+  it("renders Google Docs sync recovery actions for linked documents", () => {
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      description: "Patch set",
+      documentId: "doc-1",
+      patchSetId: "patch-set-sync-actions",
+      patches: [
+        {
+          author: "ai",
+          operation: "replace_text_range",
+          patchId: "patch-sync-actions-1",
+          status: "accepted",
+          suggestedText: "Suggested patch body",
+          target: {
+            endOffset: 8,
+            nodeId: "node-sync-actions-1",
+            startOffset: 0,
+            targetType: "text_range",
+          },
+          title: "Patch Sync Actions",
+        },
+      ],
+      status: "in_review",
+      title: "Sync action review",
+    };
+
+    renderWithI18n(
+      <PatchReviewDialog
+        acceptedPatchCount={1}
+        hasPendingWorkspaceSync
+        onAccept={vi.fn()}
+        onAcceptSelected={vi.fn()}
+        onApply={vi.fn()}
+        onClear={vi.fn()}
+        onEdit={vi.fn()}
+        lastApplyReport={null}
+        onLoadPatchSet={vi.fn()}
+        onOpenChange={vi.fn()}
+        onRefreshLinkedDocument={vi.fn()}
+        onReject={vi.fn()}
+        onRejectSelected={vi.fn()}
+        onRetryWorkspaceSync={vi.fn()}
+        open
+        patchSet={patchSet}
+        workspaceLinked
+        workspaceSyncError="Workspace sync failed after local apply."
+        workspaceSyncPending={false}
+        workspaceSyncWarnings={[]}
+      />,
+    );
+
+    expect(screen.getByText("patchReview.workspaceSyncActionsTitle")).toBeInTheDocument();
+    expect(screen.getByText("Workspace sync failed after local apply.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "patchReview.retryWorkspaceSync" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "patchReview.refreshLinkedDocument" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: 'patchReview.applyAccepted:{"count":1}' })).toBeDisabled();
+  });
 });

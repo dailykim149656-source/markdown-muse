@@ -164,7 +164,9 @@ Frontend deployment:
 Health check:
 
 - `GET /api/ai/health`
-- returns primary `model` and optional `fallbackModel`
+- returns configuration-level `configured` state for the public AI runtime
+- `GET /api/internal/ai/health` includes `model` and `fallbackModel` when called with the diagnostics token
+- `node scripts/check-ai-runtime-smoke.mjs --origin https://YOUR_HOST` is the runtime readiness check and fails when `POST /api/ai/agent/turn` returns `agentStatus`
 
 Google OAuth production guard:
 
@@ -201,9 +203,9 @@ Google OAuth production guard:
 
 ## Security notes
 
-- `GEMINI_API_KEY` is never exposed to the browser bundle.
+- Vertex AI credentials are never exposed to the browser bundle.
 - Gemini calls are routed through the server layer.
-- The frontend sends document payloads to the AI service, while secrets stay in server environment variables.
+- The frontend sends document payloads to the AI service, while credentials stay in the server runtime and service account.
 - Workspace state now defaults outside the repository, and `.data/` is ignored to prevent token-bearing state from being committed.
 
 ## Status

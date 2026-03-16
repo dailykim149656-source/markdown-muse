@@ -306,7 +306,7 @@ const ExportPreviewPanel = ({
                 variant="secondary"
               >
                 <Download className="h-3.5 w-3.5" />
-                {t("texValidation.compilePdf")}
+                {texValidationProps.isExportingPdf ? t("texValidation.preparingPdf") : t("texValidation.compilePdf")}
               </Button>
             </>
           ) : null}

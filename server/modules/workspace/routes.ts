@@ -11,7 +11,12 @@ import {
   listGoogleDocsFiles,
   listGoogleDriveChanges,
 } from "./googleDriveClient";
-import { batchUpdateGoogleDocument, createGoogleDocument, getGoogleDocument } from "./googleDocsClient";
+import {
+  batchUpdateGoogleDocument,
+  createGoogleDocument,
+  getGoogleDocument,
+  type GoogleDocsWriteControl,
+} from "./googleDocsClient";
 import {
   buildGoogleDocsBatchUpdateFromMarkdown,
   buildImportedGoogleDocument,
@@ -123,6 +128,73 @@ const buildRemoteChangePayload = ({
   revisionId,
 });
 
+const isLegacyDriveVersionToken = (revisionId?: string) =>
+  Boolean(revisionId && /^\d+$/.test(revisionId));
+
+const hasRemoteDocsRevisionChanged = ({
+  currentRevisionId,
+  importedRevisionId,
+}: {
+  currentRevisionId?: string;
+  importedRevisionId?: string;
+}) => {
+  if (!currentRevisionId) {
+    return false;
+  }
+
+  if (!importedRevisionId) {
+    return false;
+  }
+
+  if (importedRevisionId === currentRevisionId) {
+    return false;
+  }
+
+  return !isLegacyDriveVersionToken(importedRevisionId);
+};
+
+const resolveGoogleDocsWriteControl = ({
+  currentRevisionId,
+  expectedRevisionId,
+}: {
+  currentRevisionId?: string;
+  expectedRevisionId?: string;
+}) => {
+  if (!currentRevisionId) {
+    if (!expectedRevisionId || isLegacyDriveVersionToken(expectedRevisionId)) {
+      return null;
+    }
+
+    return {
+      didAutoMerge: false,
+      warning: null,
+      writeControl: {
+        requiredRevisionId: expectedRevisionId,
+      } satisfies GoogleDocsWriteControl,
+    };
+  }
+
+  if (!expectedRevisionId || expectedRevisionId === currentRevisionId) {
+    return {
+      didAutoMerge: false,
+      warning: null,
+      writeControl: {
+        requiredRevisionId: currentRevisionId,
+      } satisfies GoogleDocsWriteControl,
+    };
+  }
+
+  return {
+    didAutoMerge: true,
+    warning: isLegacyDriveVersionToken(expectedRevisionId)
+      ? null
+      : "Google Docs changed since the last synced revision. Applied changes against the latest Google Docs revision automatically.",
+    writeControl: {
+      targetRevisionId: currentRevisionId,
+    } satisfies GoogleDocsWriteControl,
+  };
+};
+
 const getAuthorizedConnection = async (request: IncomingMessage) => {
   const repository = getWorkspaceRepository();
   const sessionState = await assertWorkspaceSession(request);
@@ -156,16 +228,18 @@ const performFullWorkspaceRescan = async ({
   repository: ReturnType<typeof getWorkspaceRepository>;
   rescannedAt: number;
 }) => {
-  const changedRecords = await Promise.all(importedDocuments.map(async (importedDocument) => {
-    const [file, currentDocument] = await Promise.all([
-      getGoogleDriveFileMetadata(accessToken, importedDocument.fileId),
-      getGoogleDocument(accessToken, importedDocument.fileId).catch(() => null),
-    ]);
-    const currentRevisionId = getRevisionIdFromGoogleDocument(currentDocument) || file.revisionId;
-    const isChanged = (
-      Boolean(currentRevisionId && importedDocument.revisionId && currentRevisionId !== importedDocument.revisionId)
-      || Boolean(file.modifiedTime && importedDocument.driveModifiedTime && file.modifiedTime !== importedDocument.driveModifiedTime)
-    );
+    const changedRecords = await Promise.all(importedDocuments.map(async (importedDocument) => {
+      const [file, currentDocument] = await Promise.all([
+        getGoogleDriveFileMetadata(accessToken, importedDocument.fileId),
+        getGoogleDocument(accessToken, importedDocument.fileId).catch(() => null),
+      ]);
+    const currentRevisionId = getRevisionIdFromGoogleDocument(currentDocument);
+    const isChanged = currentRevisionId
+      ? hasRemoteDocsRevisionChanged({
+        currentRevisionId,
+        importedRevisionId: importedDocument.revisionId,
+      })
+      : Boolean(file.modifiedTime && importedDocument.driveModifiedTime && file.modifiedTime !== importedDocument.driveModifiedTime);
 
     await repository.upsertImportedDocument({
       ...importedDocument,
@@ -239,15 +313,25 @@ const performIncrementalWorkspaceRescan = async ({
       getGoogleDriveFileMetadata(accessToken, importedDocument.fileId),
       getGoogleDocument(accessToken, importedDocument.fileId).catch(() => null),
     ]);
-    const currentRevisionId = getRevisionIdFromGoogleDocument(currentDocument) || file.revisionId;
+    const currentRevisionId = getRevisionIdFromGoogleDocument(currentDocument);
+    const isChanged = currentRevisionId
+      ? hasRemoteDocsRevisionChanged({
+        currentRevisionId,
+        importedRevisionId: importedDocument.revisionId,
+      })
+      : Boolean(file.modifiedTime && importedDocument.driveModifiedTime && file.modifiedTime !== importedDocument.driveModifiedTime);
 
     await repository.upsertImportedDocument({
       ...importedDocument,
       lastRescannedAt: rescannedAt,
-      latestRemoteModifiedTime: file.modifiedTime,
-      latestRemoteRevisionId: currentRevisionId,
-      remoteChangeDetectedAt: rescannedAt,
+      latestRemoteModifiedTime: isChanged ? file.modifiedTime : undefined,
+      latestRemoteRevisionId: isChanged ? currentRevisionId : undefined,
+      remoteChangeDetectedAt: isChanged ? rescannedAt : undefined,
     });
+
+    if (!isChanged) {
+      return null;
+    }
 
     return buildRemoteChangePayload({
       detectedAt: rescannedAt,
@@ -323,11 +407,9 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
       throw new HttpError(400, "fileId is required.");
     }
 
-    const [file, exportedHtml, docsJson] = await Promise.all([
-      getGoogleDriveFileMetadata(accessToken, fileId),
-      exportGoogleDocAsHtml(accessToken, fileId),
-      getGoogleDocument(accessToken, fileId).catch(() => null),
-    ]);
+    const file = await getGoogleDriveFileMetadata(accessToken, fileId);
+    const exportedHtml = await exportGoogleDocAsHtml(accessToken, fileId);
+    const docsJson = await getGoogleDocument(accessToken, fileId).catch(() => null);
     const docsRevisionId = getRevisionIdFromGoogleDocument(docsJson);
     const importedAt = Date.now();
     const document = buildImportedGoogleDocument({
@@ -350,7 +432,7 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
       lastRescannedAt: undefined,
       mimeType: file.mimeType,
       remoteChangeDetectedAt: undefined,
-      revisionId: docsRevisionId || file.revisionId,
+      revisionId: docsRevisionId,
       updatedAt: importedAt,
     });
 
@@ -384,14 +466,23 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
     const createdRevisionId = getRevisionIdFromGoogleDocument(createdDocument);
     const { requests, warnings } = buildGoogleDocsBatchUpdateFromMarkdown(createdDocument, markdown);
 
-    await batchUpdateGoogleDocument(accessToken, fileId, requests, createdRevisionId);
+    await batchUpdateGoogleDocument(
+      accessToken,
+      fileId,
+      requests,
+      createdRevisionId
+        ? {
+          requiredRevisionId: createdRevisionId,
+        }
+        : undefined,
+    );
 
     const [file, updatedDocument] = await Promise.all([
       getGoogleDriveFileMetadata(accessToken, fileId),
       getGoogleDocument(accessToken, fileId).catch(() => null),
     ]);
     const exportedAt = Date.now();
-    const revisionId = getRevisionIdFromGoogleDocument(updatedDocument) || createdRevisionId || file.revisionId;
+    const revisionId = getRevisionIdFromGoogleDocument(updatedDocument) || createdRevisionId;
     const workspaceBinding = buildWorkspaceBinding(file, exportedAt, {
       lastSyncedAt: exportedAt,
       revisionId,
@@ -485,26 +576,30 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
       throw new HttpError(404, "Imported Google document snapshot was not found.");
     }
 
-    const [file, currentDocument] = await Promise.all([
-      getGoogleDriveFileMetadata(accessToken, fileId),
-      getGoogleDocument(accessToken, fileId),
-    ]);
+    const currentDocument = await getGoogleDocument(accessToken, fileId);
     const currentRevisionId = getRevisionIdFromGoogleDocument(currentDocument);
     const expectedRevisionId = body?.baseRevisionId || importedDocument.revisionId;
-
-    if (expectedRevisionId && currentRevisionId && expectedRevisionId !== currentRevisionId) {
-      throw new HttpError(409, "The Google Doc changed since it was imported. Refresh before syncing.");
-    }
-
+    const writeControlDecision = resolveGoogleDocsWriteControl({
+      currentRevisionId,
+      expectedRevisionId,
+    });
     const { requests, warnings } = buildGoogleDocsBatchUpdateFromMarkdown(currentDocument, markdown);
-    await batchUpdateGoogleDocument(accessToken, fileId, requests, currentRevisionId || expectedRevisionId);
+    const syncWarnings = writeControlDecision?.warning
+      ? [writeControlDecision.warning, ...warnings]
+      : warnings;
+    await batchUpdateGoogleDocument(
+      accessToken,
+      fileId,
+      requests,
+      writeControlDecision?.writeControl || undefined,
+    );
 
     const [updatedFile, updatedDocument] = await Promise.all([
       getGoogleDriveFileMetadata(accessToken, fileId),
       getGoogleDocument(accessToken, fileId).catch(() => null),
     ]);
     const appliedAt = Date.now();
-    const revisionId = getRevisionIdFromGoogleDocument(updatedDocument) || currentRevisionId || expectedRevisionId;
+    const revisionId = getRevisionIdFromGoogleDocument(updatedDocument) || currentRevisionId;
 
     await repository.upsertImportedDocument({
       ...importedDocument,
@@ -522,7 +617,7 @@ export const handleWorkspaceRoute = async (request: IncomingMessage): Promise<Ht
       ok: true,
       revisionId,
       syncStatus: "synced",
-      warnings,
+      warnings: syncWarnings,
     }, 200, requestOrigin);
   }
 

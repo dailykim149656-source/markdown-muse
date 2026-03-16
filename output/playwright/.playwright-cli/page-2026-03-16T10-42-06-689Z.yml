@@ -1,0 +1,215 @@
+- generic:
+  - generic:
+    - list
+    - region "Notifications alt+T"
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - button:
+                  - img
+              - generic:
+                - generic:
+                  - generic:
+                    - list:
+                      - listitem:
+                        - button:
+                          - img
+                      - listitem:
+                        - button:
+                          - img
+              - generic:
+                - generic:
+                  - button:
+                    - img
+                  - button:
+                    - generic:
+                      - img
+        - generic:
+          - banner:
+            - generic:
+              - generic:
+                - button:
+                  - img
+                - link:
+                  - /url: /
+                  - img
+                  - generic: Docsy
+                - generic: "|"
+                - textbox:
+                  - /placeholder: 제목 없음
+                  - text: Release Runbook Source
+                - generic: .md
+                - generic:
+                  - generic: 저장됨
+                - button:
+                  - text: Markdown
+                  - img
+              - generic:
+                - button:
+                  - generic: 1635자
+                  - generic: /
+                  - generic: 220단어
+                  - generic: /
+                  - generic: 1줄
+                - button:
+                  - img
+                - button:
+                  - img
+                  - generic: Google
+                  - img
+                - button:
+                  - img
+                  - img
+                - button:
+                  - img
+                - button:
+                  - img
+                - button: 고급
+                - button:
+                  - img
+                  - generic: ko
+                - button:
+                  - img
+                - button:
+                  - img
+                - button:
+                  - img
+                - button: 패치 검토
+                - button:
+                  - img
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - button:
+                      - generic: Release Runbook Source
+                      - generic: .md
+                      - generic:
+                        - img
+                    - button:
+                      - generic: Release Runbook Target
+                      - generic: .md
+                      - generic:
+                        - img
+            - button:
+              - img
+            - button:
+              - img
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - button:
+                      - img
+                    - button:
+                      - img
+                    - button:
+                      - img
+                    - button:
+                      - img
+                    - button:
+                      - img
+                  - generic:
+                    - button:
+                      - text: 추가서식
+                      - img
+                    - button:
+                      - text: 구조
+                      - img
+                    - button:
+                      - text: 정렬
+                      - img
+                    - button:
+                      - text: 링크
+                      - img
+                    - button:
+                      - text: 색상
+                      - img
+                    - button:
+                      - text: 문서도구
+                      - img
+                    - button:
+                      - text: 글꼴
+                      - img
+                    - button:
+                      - text: 글자크기
+                      - img
+                    - button:
+                      - text: 캡션
+                      - img
+                    - button:
+                      - text: 수식 삽입
+                      - img
+                    - button:
+                      - text: Mermaid diagram 삽입
+                      - img
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - heading [level=1]: "Release Runbook\\n\\n## Deployment Procedure\\n\\nSource step 1: validate release evidence and capture baseline metrics for all regions.\\nSource step 2: validate release evidence and capture baseline metrics for all regions.\\nSource step 3: validate release evidence and capture baseline metrics for all regions.\\nSource step 4: validate release evidence and capture baseline metrics for all regions.\\nSource step 5: validate release evidence and capture baseline metrics for all regions.\\nSource step 6: validate release evidence and capture baseline metrics for all regions.\\nSource step 7: validate release evidence and capture baseline metrics for all regions.\\nSource step 8: validate release evidence and capture baseline metrics for all regions.\\nSource step 9: validate release evidence and capture baseline metrics for all regions.\\nSource step 10: validate release evidence and capture baseline metrics for all regions.\\nSource step 11: validate release evidence and capture baseline metrics for all regions.\\nSource step 12: validate release evidence and capture baseline metrics for all regions.\\nSource step 13: validate release evidence and capture baseline metrics for all regions.\\nSource step 14: validate release evidence and capture baseline metrics for all regions.\\nSource step 15: validate release evidence and capture baseline metrics for all regions.\\nSource step 16: validate release evidence and capture baseline metrics for all regions.\\nSource step 17: validate release evidence and capture baseline metrics for all regions.\\nSource step 18: validate release evidence and capture baseline metrics for all regions."
+                    - button:
+                      - img
+                      - text: Source
+    - generic:
+      - button:
+        - img
+        - text: Navigator
+  - dialog "AI assistant" [ref=e138]:
+    - generic [ref=e139]:
+      - heading "AI assistant" [level=2] [ref=e140]:
+        - img [ref=e141]
+        - text: AI assistant
+      - paragraph [ref=e143]: Gemini가 요약과 섹션 초안을 생성하고, 비교 결과는 검토 가능한 패치로 불러옵니다.
+    - generic [ref=e144]:
+      - tablist [ref=e145]:
+        - tab "Agent" [selected] [ref=e146] [cursor=pointer]
+        - tab "Navigator" [ref=e147] [cursor=pointer]
+        - tab "요약" [ref=e148] [cursor=pointer]
+        - tab "섹션" [ref=e149] [cursor=pointer]
+        - tab "목차" [ref=e150] [cursor=pointer]
+        - tab "비교" [ref=e151] [cursor=pointer]
+        - tab "업데이트" [ref=e152] [cursor=pointer]
+        - tab "절차" [ref=e153] [cursor=pointer]
+      - tabpanel "Agent" [active] [ref=e154]:
+        - generic [ref=e155]:
+          - generic [ref=e156]:
+            - generic [ref=e157]:
+              - generic [ref=e158]:
+                - heading "Agent" [level=3] [ref=e159]
+                - paragraph [ref=e160]: 자연어로 AI assistant 기능을 실행하고, 현재 문서를 수정하거나 Google Drive 문서를 찾을 수 있습니다.
+              - button "채팅 초기화" [ref=e161] [cursor=pointer]:
+                - img
+                - text: 채팅 초기화
+            - generic [ref=e166]: 요약, 섹션 생성, 목차, 비교, 업데이트 제안, 절차 추출, Google Doc 검색을 요청해 보세요.
+            - generic [ref=e167]:
+              - textbox "요약, 비교, 업데이트, 문서 수정 요청을 입력해 보세요..." [ref=e168]
+              - generic [ref=e169]:
+                - paragraph [ref=e170]: "현재 대상: Release Runbook Source"
+                - button "보내기" [disabled]
+          - complementary [ref=e171]:
+            - generic [ref=e172]:
+              - heading "참조" [level=3] [ref=e173]
+              - paragraph [ref=e174]: 활성 문서는 항상 포함됩니다. 추가 문맥이 필요할 때만 로컬 문서나 Google 참조를 더하세요.
+            - generic [ref=e175]:
+              - generic [ref=e176]: 활성 문서
+              - generic [ref=e177]: Release Runbook Source
+            - generic [ref=e178]:
+              - generic [ref=e179]: 로컬 참조
+              - generic [ref=e181] [cursor=pointer]:
+                - checkbox "Release Runbook Target markdown" [ref=e182]
+                - generic [ref=e183]:
+                  - generic [ref=e184]: Release Runbook Target
+                  - generic [ref=e185]: markdown
+            - generic [ref=e186]:
+              - generic [ref=e187]: 선택한 Google 참조
+              - generic [ref=e189]: Drive 후보에서 "참조로 사용"을 누르면 임시 agent 문맥에 유지됩니다.
+    - button "Close" [ref=e190] [cursor=pointer]:
+      - img [ref=e191]
+      - generic [ref=e194]: Close
