@@ -9,14 +9,25 @@ interface TocHeading {
   level: number;
 }
 
-const TableOfContentsComponent = ({ editor }: any) => {
+const normalizeTocMaxDepth = (value: unknown): 1 | 2 | 3 => {
+  const parsed = typeof value === "number" ? value : Number(value);
+
+  if (parsed === 1 || parsed === 2) {
+    return parsed;
+  }
+
+  return 3;
+};
+
+const TableOfContentsComponent = ({ editor, node }: any) => {
   const [headings, setHeadings] = useState<TocHeading[]>([]);
+  const maxDepth = normalizeTocMaxDepth(node?.attrs?.maxDepth);
 
   const collectHeadings = useCallback(() => {
     if (!editor) return;
     const items: TocHeading[] = [];
     editor.state.doc.descendants((node: any, pos: number) => {
-      if (node.type.name === "heading") {
+      if (node.type.name === "heading" && node.attrs.level <= maxDepth) {
         const id = `heading-${pos}`;
         items.push({
           id,
@@ -26,7 +37,7 @@ const TableOfContentsComponent = ({ editor }: any) => {
       }
     });
     setHeadings(items);
-  }, [editor]);
+  }, [editor, maxDepth]);
 
   useEffect(() => {
     collectHeadings();
@@ -80,6 +91,18 @@ const TableOfContents = Node.create({
   name: "tableOfContents",
   group: "block",
   atom: true,
+
+  addAttributes() {
+    return {
+      maxDepth: {
+        default: 3,
+        parseHTML: (element: HTMLElement) => normalizeTocMaxDepth(element.getAttribute("data-max-depth")),
+        renderHTML: (attributes: { maxDepth?: number }) => ({
+          "data-max-depth": String(normalizeTocMaxDepth(attributes.maxDepth)),
+        }),
+      },
+    };
+  },
 
   parseHTML() {
     return [{ tag: 'div[data-type="toc"]' }];

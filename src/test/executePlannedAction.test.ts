@@ -322,6 +322,28 @@ describe("executePlannedAction", () => {
     expect(result.driveCandidates).toHaveLength(1);
   });
 
+  it("degrades drive search actions to open_google_connect when workspace lookup is unavailable", async () => {
+    const planner: AgentPlannerResponse = {
+      action: "search_drive_documents",
+      arguments: {
+        query: "find the runbook",
+      },
+      confidence: 0.9,
+      missingInformation: [],
+      reason: "Search Google Drive.",
+    };
+
+    const result = await executePlannedAction(createContext({
+      workspaceConnected: false,
+    }), planner);
+
+    expect(result.rawResponse.effect?.type).toBe("open_google_connect");
+    expect(result.telemetry).toEqual(expect.objectContaining({
+      driveAuthGateUsed: true,
+      executorAction: "search_drive_documents",
+    }));
+  });
+
   it("returns ready_to_import when a selected drive reference is unambiguous", async () => {
     const planner: AgentPlannerResponse = {
       action: "prepare_drive_import",
@@ -348,7 +370,7 @@ describe("executePlannedAction", () => {
     });
   });
 
-  it("routes disabled actions to ask_followup", async () => {
+  it("routes delegated actions to delegate_ai_capability", async () => {
     const planner: AgentPlannerResponse = {
       action: "generate_toc",
       confidence: 0.92,
@@ -358,6 +380,6 @@ describe("executePlannedAction", () => {
 
     const result = await executePlannedAction(createContext(), planner);
 
-    expect(result.rawResponse.effect?.type).toBe("ask_followup");
+    expect(result.rawResponse.effect?.type).toBe("delegate_ai_capability");
   });
 });

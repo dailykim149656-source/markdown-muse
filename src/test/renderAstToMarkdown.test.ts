@@ -19,6 +19,21 @@ describe("renderAstToMarkdown", () => {
     expect(markdown).toMatchSnapshot();
   });
 
+  it("renders explicit TOC depth placeholders when maxDepth is set", () => {
+    const markdown = renderAstToMarkdown({
+      type: "document",
+      nodeId: "doc_toc_depth",
+      blocks: [{
+        kind: "block",
+        maxDepth: 2,
+        nodeId: "toc-1",
+        type: "table_of_contents",
+      }],
+    });
+
+    expect(markdown).toBe("[[toc:2]]\n");
+  });
+
   it("falls back when the editor document cannot be serialized", () => {
     const unsupported: JSONContent = {
       type: "doc",

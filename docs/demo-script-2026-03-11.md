@@ -2,7 +2,7 @@
 
 ## Demo objective
 
-Show that Docsy is not just a text generator. It is a review-first AI document workflow agent that can analyze document context, return structured output, and trigger a real editor workflow.
+Show that Docsy is not just a text generator. It is now a visual UI navigator for its own document workflow, using Gemini to interpret the live viewport and trigger real browser actions before handing off to review-first patch handling.
 
 ## Total target length
 
@@ -10,10 +10,10 @@ Show that Docsy is not just a text generator. It is a review-first AI document w
 
 ## Demo setup
 
-- open the editor with at least two related technical documents
-- prepare one document with a procedure that can be changed
-- prepare another document that should be updated for consistency
-- keep the patch review UI ready to show
+- open the editor in advanced mode
+- keep the AI Assistant available
+- keep Google Workspace disconnected so the connection dialog is meaningful
+- keep at least one document open with a patch review flow ready to show afterward
 
 ## Script
 
@@ -21,98 +21,98 @@ Show that Docsy is not just a text generator. It is a review-first AI document w
 
 Narration:
 
-"This is Docsy, an AI document workflow agent for maintaining technical documentation."
+"This is Docsy, a Gemini-powered visual UI navigator for technical document workflows."
 
 Screen:
 
 - show the editor workspace
-- show multiple open documents
-- briefly show the sidebar and review-focused UI
+- briefly show the AI Assistant button, Google Workspace button, and Patch Review button
 
-### Scene 2: Introduce the problem
-
-Narration:
-
-"In real teams, a procedure changes in one document but related documents are often left behind."
-
-Screen:
-
-- open the source document
-- point to the procedure section
-
-### Scene 3: Make a change
+### Scene 2: Introduce the navigator
 
 Narration:
 
-"Here I update one step in the onboarding procedure."
+"Instead of only generating text, Docsy can now look at the visible UI and take the next browser action inside the current session."
 
 Screen:
 
-- edit one meaningful line or step
-- keep the change short and obvious
+- open AI Assistant
+- switch to the Visual Navigator tab
 
-### Scene 4: Send context to Gemini
+### Scene 3: Give a UI task
 
 Narration:
 
-"Docsy sends document context, structure, and editor state to a Gemini-powered AI service."
+"I can ask it to complete a visible UI task, like opening the Google Workspace connection flow."
 
 Screen:
 
-- trigger the AI action
-- if available, show that screenshot capture or context gathering is happening
+- enter a short intent such as `Open the Google Workspace connection dialog`
+- click `Start visual run`
 
-### Scene 5: Structured output
+### Scene 4: Gemini action loop
 
 Narration:
 
-"Instead of returning raw text, Gemini produces structured action data for the editor."
+"Docsy captures the live viewport, sends that screenshot to Gemini on Cloud Run, and gets back one structured browser action at a time."
 
 Screen:
 
-- show the AI response result
-- emphasize action JSON or the resulting patch proposal
+- let the assistant dialog close
+- show the floating Visual Navigator overlay
+- show the Google Workspace menu opening
+- show the connection dialog opening
 
-### Scene 6: Real UI action
+### Scene 5: Reviewable execution
 
 Narration:
 
-"That action is wired to a real interface flow. Here it opens patch review."
+"Each step is bounded, reviewable, and visible. The product is not guessing in the background."
 
 Screen:
 
-- show the patch review dialog opening
-- show before/after or patch cards if available
+- keep the overlay on screen for a moment
+- show the action history and confidence
 
-### Scene 7: Review-first close
+### Scene 6: Handoff to document workflow
 
 Narration:
 
-"The key idea is review-first AI. The system proposes changes, and the user stays in control."
+"After the UI navigation step, Docsy still hands off to the review-first patch workflow for the actual document change."
 
 Screen:
 
-- show accept and reject controls
-- end on the review screen
+- navigate to Patch Review or open it manually if needed
+- show before and after cards
+
+### Scene 7: Close
+
+Narration:
+
+"The key idea is that Gemini becomes the user's hands on screen, while the user still stays in control of every document change."
+
+Screen:
+
+- end on patch review and the visual navigator overlay or history
 
 ## Editing notes
 
-- keep cursor movement deliberate
+- keep the intent short and concrete
 - avoid long typing sequences
-- use one concrete document change only
-- keep the patch review moment on screen for a few seconds
-- if multimodal screenshot input is not yet visible in UI, explain it in narration
+- show at least one visible browser action
+- keep the overlay visible long enough for judges to read it
+- end with the review-first patch flow so the product story stays coherent
 
 ## Fallback version
 
-If the fully automated action path is not ready:
+If the full multi-step loop is unstable:
 
-1. show the source document edit
-2. trigger the AI request
-3. show the structured response
-4. manually open patch review
-5. narrate that the next step is direct UI wiring from the action
+1. open the Visual Navigator tab
+2. start a run that opens only one visible UI surface
+3. show the overlay and action history
+4. manually continue into Patch Review
+5. narrate that the UI loop and patch workflow are intentionally separate
 
 ## Submission message
 
-"Docsy combines Gemini reasoning, structured action output, and review-first patch workflows for safer technical document maintenance."
+"Docsy combines Gemini multimodal reasoning, executable browser actions, and review-first patch workflows for safer technical document maintenance."

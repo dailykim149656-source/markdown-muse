@@ -10,19 +10,22 @@ import {
 } from "@/components/ui/dialog";
 import { useI18n } from "@/i18n/useI18n";
 import PatchReviewPanel from "@/components/editor/PatchReviewPanel";
-import type { DocumentPatch, DocumentPatchSet } from "@/types/documentPatch";
+import type { DocumentPatch, DocumentPatchSet, PatchApplyReport } from "@/types/documentPatch";
 
 interface PatchReviewDialogProps {
   acceptedPatchCount: number;
   onAccept: (patch: DocumentPatch) => void;
+  onAcceptSelected: (patchIds: string[]) => void;
   onApply: () => void;
   onClear: () => void;
   onEdit: (patch: DocumentPatch, suggestedText: string) => void;
   onLoadPatchSet: () => void;
   onOpenChange: (open: boolean) => void;
   onReject: (patch: DocumentPatch) => void;
+  onRejectSelected: (patchIds: string[]) => void;
   open: boolean;
   patchSet: DocumentPatchSet | null;
+  lastApplyReport: PatchApplyReport | null;
   workspaceSyncWarnings?: string[];
 }
 
@@ -51,12 +54,15 @@ const getConfidenceLabelKey = (patchSet: DocumentPatchSet) => {
 const PatchReviewDialog = ({
   acceptedPatchCount,
   onAccept,
+  onAcceptSelected,
   onApply,
   onClear,
   onEdit,
+  lastApplyReport,
   onLoadPatchSet,
   onOpenChange,
   onReject,
+  onRejectSelected,
   open,
   patchSet,
   workspaceSyncWarnings = [],
@@ -72,6 +78,15 @@ const PatchReviewDialog = ({
   const dialogRowsClass = patchSet
     ? "grid-rows-[auto_auto_auto_minmax(0,1fr)]"
     : "grid-rows-[auto_auto_minmax(0,1fr)]";
+  const applyLogSummary = lastApplyReport
+    ? lastApplyReport.scope === "preflight"
+      ? t("patchReview.applyLogPreflight")
+      : t("patchReview.applyLogPartial", {
+        applied: lastApplyReport.appliedPatchIds.length,
+        failed: lastApplyReport.failures.length,
+      })
+    : null;
+  const applyLogPhaseLabel = lastApplyReport ? t(`patchReview.applyLogPhase.${lastApplyReport.phase}`) : null;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -166,8 +181,68 @@ const PatchReviewDialog = ({
         )}
 
         {patchSet ? (
-          <div className="min-h-0 overflow-hidden" data-testid="patch-review-body">
-            <PatchReviewPanel onAccept={onAccept} onEdit={onEdit} onReject={onReject} patchSet={patchSet} />
+          <div className="min-h-0 flex flex-col gap-3 overflow-hidden">
+            {lastApplyReport && (
+              <div
+                className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm"
+                data-testid="patch-review-apply-log"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <div className="font-medium text-foreground">{t("patchReview.applyLogTitle")}</div>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {applyLogSummary || t("patchReview.applyLogEmpty")}
+                    </p>
+                  </div>
+                  {applyLogPhaseLabel && (
+                    <Badge variant="outline">{applyLogPhaseLabel}</Badge>
+                  )}
+                </div>
+                {lastApplyReport.failures.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      {t("patchReview.applyLogFailures")}
+                    </div>
+                    <ul className="mt-2 space-y-2 text-xs">
+                      {lastApplyReport.failures.map((failure, index) => (
+                        <li className="rounded-md border border-border/60 bg-background/80 px-3 py-2" key={`${failure.patchId || "general"}-${index}`}>
+                          <div className="font-medium text-foreground">
+                            {failure.patchTitle
+                              ? `${failure.patchTitle}${failure.patchId ? ` (${failure.patchId})` : ""}`
+                              : failure.patchId || t("patchReview.applyLogGeneralFailure")}
+                          </div>
+                          <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{failure.message}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {lastApplyReport.warnings.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      {t("patchReview.applyLogWarnings")}
+                    </div>
+                    <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                      {lastApplyReport.warnings.map((warning) => (
+                        <li className="rounded-md border border-border/60 bg-background/80 px-3 py-2" key={warning}>
+                          {warning}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="min-h-0 overflow-hidden" data-testid="patch-review-body">
+              <PatchReviewPanel
+                onAccept={onAccept}
+                onAcceptSelected={onAcceptSelected}
+                onEdit={onEdit}
+                onReject={onReject}
+                onRejectSelected={onRejectSelected}
+                patchSet={patchSet}
+              />
+            </div>
           </div>
         ) : (
           <div

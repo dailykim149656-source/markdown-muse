@@ -136,14 +136,18 @@ describe("PatchReviewPanel", () => {
 
   it("emits accept, reject, and edit actions", () => {
     const onAccept = vi.fn();
+    const onAcceptSelected = vi.fn();
     const onReject = vi.fn();
+    const onRejectSelected = vi.fn();
     const onEdit = vi.fn();
 
     renderWithI18n(
       <PatchReviewPanel
         onAccept={onAccept}
+        onAcceptSelected={onAcceptSelected}
         onEdit={onEdit}
         onReject={onReject}
+        onRejectSelected={onRejectSelected}
         patchSet={patchSetFixture}
       />,
     );
@@ -156,7 +160,61 @@ describe("PatchReviewPanel", () => {
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ patchId: "patch-1" }), "Edited intro");
     expect(onAccept).toHaveBeenCalledWith(expect.objectContaining({ patchId: "patch-1" }));
     expect(onReject).toHaveBeenCalledWith(expect.objectContaining({ patchId: "patch-1" }));
+    expect(onAcceptSelected).not.toHaveBeenCalled();
+    expect(onRejectSelected).not.toHaveBeenCalled();
   }, 15000);
+
+  it("supports selecting patches and accepting or rejecting them in bulk", () => {
+    const onAcceptSelected = vi.fn();
+    const onRejectSelected = vi.fn();
+
+    renderWithI18n(
+      <PatchReviewPanel
+        onAcceptSelected={onAcceptSelected}
+        onRejectSelected={onRejectSelected}
+        patchSet={patchSetFixture}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "patchReview.selectPatch Update intro" }));
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.acceptSelected" }));
+
+    expect(onAcceptSelected).toHaveBeenCalledWith(["patch-1"]);
+    expect(screen.getByRole("button", { name: "patchReview.acceptSelected" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.selectAllInPatchSet" }));
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.rejectSelected" }));
+
+    expect(onRejectSelected).toHaveBeenCalledWith(["patch-1", "patch-2"]);
+    expect(screen.getByRole("button", { name: "patchReview.rejectSelected" })).toBeDisabled();
+  });
+
+  it("distinguishes visible-only selection from selecting the full patch set", () => {
+    const onAcceptSelected = vi.fn();
+    const onRejectSelected = vi.fn();
+
+    renderWithI18n(
+      <PatchReviewPanel
+        onAcceptSelected={onAcceptSelected}
+        onRejectSelected={onRejectSelected}
+        patchSet={patchSetFixture}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.provenanceGapsOnly" }));
+    expect(screen.queryByText("1. Update intro")).not.toBeInTheDocument();
+    expect(screen.getByText("1. Add conclusion")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.selectVisible" }));
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.acceptSelected" }));
+
+    expect(onAcceptSelected).toHaveBeenCalledWith(["patch-2"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.selectAllInPatchSet" }));
+    fireEvent.click(screen.getByRole("button", { name: "patchReview.rejectSelected" }));
+
+    expect(onRejectSelected).toHaveBeenCalledWith(["patch-1", "patch-2"]);
+  }, 30000);
 
   it("disables text editing for non-rewritable patches", () => {
     renderWithI18n(<PatchReviewPanel patchSet={nonEditablePatchSetFixture} />);

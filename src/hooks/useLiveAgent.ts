@@ -2,17 +2,24 @@ import type { JSONContent } from "@tiptap/core";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import type { PatchPreviewResult, SectionGenerationResult, TocPreviewResult } from "@/hooks/useAiAssistant";
 import { buildDerivedDocumentIndex } from "@/lib/ast/documentIndex";
 import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
 import { captureWorkspaceScreenshot } from "@/lib/ai/captureWorkspaceScreenshot";
 import { liveAgentTurn } from "@/lib/ai/liveAgentClient";
 import { buildLiveAgentGraphContext } from "@/lib/ai/liveAgentGraphContext";
 import { buildLiveAgentPatchSet } from "@/lib/ai/liveAgentPatchBuilder";
+import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
+import type { SummaryDocumentDraftInput } from "@/lib/ai/summaryDocument";
 import { useI18n } from "@/i18n/useI18n";
+import type { SummarizeDocumentResponse } from "@/types/aiAssistant";
 import type { DocumentData } from "@/types/document";
 import type {
+  AgentArtifact,
+  AgentAvailableTargetDocument,
   AgentChatMessage,
   AgentCurrentDocumentDraft,
+  AgentDelegatedCapability,
   AgentDocumentContext,
   AgentDriveCandidate,
   AgentLocalReference,
@@ -25,6 +32,7 @@ import type { DocumentPatchSet } from "@/types/documentPatch";
 
 const MAX_MESSAGE_HISTORY = 12;
 const MAX_DRIVE_REFERENCES = 3;
+const createArtifactId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 type PendingAgentConfirmation =
   | { type: "create_new_document"; draft: AgentNewDocumentDraft }
@@ -109,13 +117,22 @@ interface UseLiveAgentOptions {
   documents: DocumentData[];
   getFreshRenderableMarkdown: () => Promise<string>;
   onCreateDocumentDraft: (draft: AgentNewDocumentDraft) => void;
+  onCreateSummaryDocument: (input: SummaryDocumentDraftInput) => unknown;
+  onCompareWithDocument: (targetDocumentId: string) => Promise<PatchPreviewResult>;
+  onExtractProcedure: () => Promise<ProcedureExtractionResult | unknown> | unknown;
+  onGenerateSection: (prompt: string) => Promise<SectionGenerationResult | void>;
+  onGenerateToc: () => Promise<TocPreviewResult>;
   onImportDriveDocument: (fileId: string) => Promise<void>;
   onOpenPatchReview: (patchSet: DocumentPatchSet) => void;
   onOpenWorkspaceConnection: () => void;
+  onSummarizeDocument: (objective: string) => Promise<SummarizeDocumentResponse | unknown> | unknown;
+  onSuggestUpdates: (targetDocumentId: string) => Promise<PatchPreviewResult>;
 }
 
 export interface LiveAgentState {
+  artifacts: AgentArtifact[];
   availableLocalReferences: DocumentData[];
+  availableTargetDocuments: AgentAvailableTargetDocument[];
   composerText: string;
   isSubmitting: boolean;
   latestDraftPreview: AgentCurrentDocumentDraft | AgentNewDocumentDraft | null;
@@ -132,9 +149,12 @@ export interface LiveAgentState {
 export interface LiveAgentRuntimeState extends LiveAgentState {
   addDriveReference: (candidate: AgentDriveCandidate) => void;
   confirmPendingAction: () => Promise<void>;
+  createSummaryDocumentFromArtifact: (artifactId: string) => void;
   discardPendingAction: () => void;
+  openArtifactPatchReview: (artifactId: string) => void;
   queueDriveImport: (candidate: Pick<AgentDriveCandidate, "fileId" | "fileName">) => void;
   removeDriveReference: (fileId: string) => void;
+  resolveArtifactDocumentTarget: (artifactId: string, documentId: string) => Promise<void>;
   resetThread: () => void;
   sendMessage: (textOverride?: string) => Promise<void>;
   setComposerText: (value: string) => void;
@@ -148,11 +168,19 @@ export const useLiveAgent = ({
   documents,
   getFreshRenderableMarkdown,
   onCreateDocumentDraft,
+  onCreateSummaryDocument,
+  onCompareWithDocument,
+  onExtractProcedure,
+  onGenerateSection,
+  onGenerateToc,
   onImportDriveDocument,
   onOpenPatchReview,
   onOpenWorkspaceConnection,
+  onSummarizeDocument,
+  onSuggestUpdates,
 }: UseLiveAgentOptions): LiveAgentRuntimeState => {
   const { t, locale } = useI18n();
+  const [artifacts, setArtifacts] = useState<AgentArtifact[]>([]);
   const [threadId, setThreadId] = useState(() => createThreadId());
   const [messages, setMessages] = useState<AgentChatMessage[]>([]);
   const [composerText, setComposerText] = useState("");
@@ -169,8 +197,17 @@ export const useLiveAgent = ({
     () => documents.filter((document) => document.id !== activeDoc.id && isRichTextDocument(document)),
     [activeDoc.id, documents],
   );
+  const availableTargetDocuments = useMemo<AgentAvailableTargetDocument[]>(
+    () => availableLocalReferences.map((document) => ({
+      documentId: document.id,
+      fileName: document.name,
+      mode: document.mode as AgentAvailableTargetDocument["mode"],
+    })),
+    [availableLocalReferences],
+  );
 
   const resetThread = useCallback(() => {
+    setArtifacts([]);
     setComposerText("");
     setLatestDraftPreview(null);
     setLatestDriveCandidates([]);
@@ -245,6 +282,7 @@ export const useLiveAgent = ({
 
     return {
       activeDocument,
+      availableTargetDocuments,
       driveReferenceFileIds: selectedDriveReferences.map((reference) => reference.fileId),
       graphContext: buildLiveAgentGraphContext({
         activeDocumentId: activeDoc.id,
@@ -257,7 +295,7 @@ export const useLiveAgent = ({
       targetDefault: "active_document",
       threadId,
     };
-  }, [activeDoc, activeEditor, currentRenderableMarkdown, documents, getFreshRenderableMarkdown, locale, selectedDriveReferences, selectedLocalReferenceIds, threadId]);
+  }, [activeDoc, activeEditor, availableTargetDocuments, currentRenderableMarkdown, documents, getFreshRenderableMarkdown, locale, selectedDriveReferences, selectedLocalReferenceIds, threadId]);
 
   const queueDriveImport = useCallback((candidate: Pick<AgentDriveCandidate, "fileId" | "fileName">) => {
     setPendingConfirmation({
@@ -293,6 +331,247 @@ export const useLiveAgent = ({
         : [...current, documentId]
     ));
   }, []);
+
+  const appendArtifact = useCallback((artifact: AgentArtifact) => {
+    setArtifacts((current) => [...current, artifact]);
+  }, []);
+
+  const updateArtifact = useCallback((artifactId: string, updater: (artifact: AgentArtifact) => AgentArtifact) => {
+    setArtifacts((current) => current.map((artifact) => (
+      artifact.id === artifactId ? updater(artifact) : artifact
+    )));
+  }, []);
+
+  const removeArtifact = useCallback((artifactId: string) => {
+    setArtifacts((current) => current.filter((artifact) => artifact.id !== artifactId));
+  }, []);
+
+  const appendDocumentTargetArtifact = useCallback((
+    capability: Extract<AgentDelegatedCapability, "compare_documents" | "suggest_document_updates">,
+    prompt: string,
+  ) => {
+    const candidates = availableTargetDocuments;
+
+    if (candidates.length === 0) {
+      toast.info(capability === "compare_documents" ? t("aiDialog.compare.noCandidates") : t("aiDialog.update.noCandidates"));
+      return;
+    }
+
+    appendArtifact({
+      candidates,
+      capability,
+      id: createArtifactId(`target-${capability}`),
+      kind: "document_target",
+      prompt,
+    });
+  }, [appendArtifact, availableTargetDocuments, t]);
+
+  const executeDelegatedTargetCapability = useCallback(async ({
+    capability,
+    prompt,
+    targetDocumentId,
+  }: {
+    capability: Extract<AgentDelegatedCapability, "compare_documents" | "suggest_document_updates">;
+    prompt: string;
+    targetDocumentId?: string;
+  }) => {
+    const targetDocument = targetDocumentId
+      ? availableTargetDocuments.find((candidate) => candidate.documentId === targetDocumentId)
+      : undefined;
+
+    if (!targetDocument) {
+      appendDocumentTargetArtifact(capability, prompt);
+      return;
+    }
+
+    if (capability === "compare_documents") {
+      const preview = await onCompareWithDocument(targetDocument.documentId);
+
+      appendArtifact({
+        comparisonCounts: {
+          added: preview.comparison.counts.added,
+          changed: preview.comparison.counts.changed,
+          inconsistent: preview.comparison.counts.inconsistent,
+          removed: preview.comparison.counts.removed,
+        },
+        id: createArtifactId("compare"),
+        kind: "compare_preview",
+        patchCount: preview.patchCount,
+        patchSet: preview.patchSet || null,
+        patchSetTitle: preview.patchSetTitle,
+        targetDocumentId: targetDocument.documentId,
+        targetDocumentName: targetDocument.fileName,
+      });
+      return;
+    }
+
+    const preview = await onSuggestUpdates(targetDocument.documentId);
+
+    appendArtifact({
+      capability,
+      id: createArtifactId("patch"),
+      kind: "patch_result",
+      patchCount: preview.patchCount,
+      patchSet: preview.patchSet || null,
+      patchSetTitle: preview.patchSetTitle,
+      reviewOpened: true,
+      targetDocumentId: targetDocument.documentId,
+      targetDocumentName: targetDocument.fileName,
+    });
+  }, [appendArtifact, appendDocumentTargetArtifact, availableTargetDocuments, onCompareWithDocument, onSuggestUpdates]);
+
+  const handleDelegatedCapability = useCallback(async ({
+    capability,
+    createDocumentAfter,
+    objective,
+    prompt,
+    targetDocumentId,
+  }: {
+    capability: AgentDelegatedCapability;
+    createDocumentAfter?: boolean;
+    objective?: string;
+    prompt?: string;
+    targetDocumentId?: string;
+  }) => {
+    if (capability === "summarize_document") {
+      const summaryObjective = objective?.trim() || prompt?.trim();
+
+      if (!summaryObjective) {
+        throw new Error(t("hooks.ai.summarizeFailed"));
+      }
+
+      const result = await onSummarizeDocument(summaryObjective) as SummarizeDocumentResponse;
+
+      appendArtifact({
+        createDocumentAfter,
+        id: createArtifactId("summary"),
+        kind: "summary",
+        objective: summaryObjective,
+        result,
+        sourceDocumentId: activeDoc.id,
+        sourceDocumentName: activeDoc.name,
+      });
+      return;
+    }
+
+    if (capability === "generate_section") {
+      const sectionPrompt = prompt?.trim() || objective?.trim();
+
+      if (!sectionPrompt) {
+        throw new Error(t("hooks.ai.generateFailed"));
+      }
+
+      const result = await onGenerateSection(sectionPrompt);
+
+      if (!result) {
+        return;
+      }
+
+      appendArtifact({
+        capability,
+        id: createArtifactId("patch"),
+        kind: "patch_result",
+        patchCount: result.patchSet.patches.length,
+        patchSet: result.patchSet,
+        patchSetTitle: result.patchSet.title,
+        reviewOpened: true,
+      });
+      return;
+    }
+
+    if (capability === "generate_toc") {
+      const preview = await onGenerateToc();
+
+      appendArtifact({
+        entries: preview.entries,
+        id: createArtifactId("toc"),
+        kind: "toc_preview",
+        maxDepth: preview.maxDepth,
+        patchCount: preview.patchCount,
+        patchSet: preview.patchSet,
+        patchSetTitle: preview.patchSetTitle,
+        rationale: preview.rationale,
+      });
+      return;
+    }
+
+    if (capability === "extract_procedure") {
+      const result = await onExtractProcedure() as ProcedureExtractionResult;
+
+      appendArtifact({
+        id: createArtifactId("procedure"),
+        kind: "procedure",
+        result,
+      });
+      return;
+    }
+
+    if (capability === "compare_documents" || capability === "suggest_document_updates") {
+      const comparisonPrompt = prompt?.trim() || objective?.trim() || activeDoc.name;
+      await executeDelegatedTargetCapability({
+        capability,
+        prompt: comparisonPrompt,
+        targetDocumentId,
+      });
+    }
+  }, [activeDoc.id, activeDoc.name, appendArtifact, executeDelegatedTargetCapability, onExtractProcedure, onGenerateSection, onGenerateToc, onSummarizeDocument, t]);
+
+  const createSummaryDocumentFromArtifact = useCallback((artifactId: string) => {
+    const artifact = artifacts.find((candidate): candidate is Extract<AgentArtifact, { kind: "summary" }> =>
+      candidate.id === artifactId && candidate.kind === "summary");
+
+    if (!artifact) {
+      return;
+    }
+
+    onCreateSummaryDocument({
+      locale,
+      objective: artifact.objective,
+      sourceDocumentId: artifact.sourceDocumentId,
+      sourceDocumentName: artifact.sourceDocumentName,
+      summary: artifact.result,
+    });
+    updateArtifact(artifactId, (current) => current.kind === "summary"
+      ? {
+        ...current,
+        documentCreated: true,
+      }
+      : current);
+  }, [artifacts, locale, onCreateSummaryDocument, updateArtifact]);
+
+  const openArtifactPatchReview = useCallback((artifactId: string) => {
+    const artifact = artifacts.find((candidate) => candidate.id === artifactId);
+
+    if (!artifact) {
+      return;
+    }
+
+    const patchSet = artifact.kind === "compare_preview" || artifact.kind === "patch_result" || artifact.kind === "toc_preview"
+      ? artifact.patchSet
+      : null;
+
+    if (!patchSet) {
+      return;
+    }
+
+    onOpenPatchReview(patchSet);
+  }, [artifacts, onOpenPatchReview]);
+
+  const resolveArtifactDocumentTarget = useCallback(async (artifactId: string, documentId: string) => {
+    const artifact = artifacts.find((candidate): candidate is Extract<AgentArtifact, { kind: "document_target" }> =>
+      candidate.id === artifactId && candidate.kind === "document_target");
+
+    if (!artifact) {
+      return;
+    }
+
+    removeArtifact(artifactId);
+    await executeDelegatedTargetCapability({
+      capability: artifact.capability,
+      prompt: artifact.prompt,
+      targetDocumentId: documentId,
+    });
+  }, [artifacts, executeDelegatedTargetCapability, removeArtifact]);
 
   const sendMessage = useCallback(async (textOverride?: string) => {
     const nextText = (textOverride ?? composerText).trim();
@@ -350,6 +629,11 @@ export const useLiveAgent = ({
 
           setPendingConfirmation(null);
           onOpenPatchReview(patchSet);
+          appendArtifact({
+            draft: response.currentDocumentDraft,
+            id: createArtifactId("draft"),
+            kind: "draft_preview",
+          });
           break;
         }
         case "draft_new_document":
@@ -360,6 +644,30 @@ export const useLiveAgent = ({
           setPendingConfirmation({
             draft: response.newDocumentDraft,
             type: "create_new_document",
+          });
+          appendArtifact({
+            draft: response.newDocumentDraft,
+            id: createArtifactId("draft"),
+            kind: "draft_preview",
+          });
+          break;
+        case "show_drive_candidates":
+          setPendingConfirmation(null);
+          appendArtifact({
+            candidates: response.driveCandidates || [],
+            id: createArtifactId("drive"),
+            kind: "drive_candidates",
+            query: response.effect.query,
+          });
+          break;
+        case "delegate_ai_capability":
+          setPendingConfirmation(null);
+          await handleDelegatedCapability({
+            capability: response.effect.capability,
+            createDocumentAfter: response.effect.createDocumentAfter,
+            objective: response.effect.objective || optimisticUserMessage.text,
+            prompt: response.effect.prompt || optimisticUserMessage.text,
+            targetDocumentId: response.effect.targetDocumentId,
           });
           break;
         case "ready_to_import_drive_file":
@@ -384,7 +692,19 @@ export const useLiveAgent = ({
     } finally {
       setIsSubmitting(false);
     }
-  }, [activeDoc, activeEditor, buildAgentRequest, composerText, isSubmitting, messages, onOpenPatchReview, onOpenWorkspaceConnection, t]);
+  }, [
+    activeDoc,
+    activeEditor,
+    appendArtifact,
+    buildAgentRequest,
+    composerText,
+    handleDelegatedCapability,
+    isSubmitting,
+    messages,
+    onOpenPatchReview,
+    onOpenWorkspaceConnection,
+    t,
+  ]);
 
   const confirmPendingAction = useCallback(async () => {
     if (!pendingConfirmation) {
@@ -412,9 +732,12 @@ export const useLiveAgent = ({
 
   return useMemo(() => ({
     addDriveReference,
+    artifacts,
     availableLocalReferences,
+    availableTargetDocuments,
     composerText,
     confirmPendingAction,
+    createSummaryDocumentFromArtifact,
     discardPendingAction,
     isSubmitting,
     latestDraftPreview,
@@ -422,9 +745,11 @@ export const useLiveAgent = ({
     latestError,
     latestStatus,
     messages,
+    openArtifactPatchReview,
     pendingConfirmation,
     queueDriveImport,
     removeDriveReference,
+    resolveArtifactDocumentTarget,
     resetThread,
     selectedDriveReferences,
     selectedLocalReferenceIds,
@@ -434,9 +759,12 @@ export const useLiveAgent = ({
     toggleLocalReference,
   }), [
     addDriveReference,
+    artifacts,
     availableLocalReferences,
+    availableTargetDocuments,
     composerText,
     confirmPendingAction,
+    createSummaryDocumentFromArtifact,
     discardPendingAction,
     isSubmitting,
     latestDraftPreview,
@@ -444,9 +772,11 @@ export const useLiveAgent = ({
     latestError,
     latestStatus,
     messages,
+    openArtifactPatchReview,
     pendingConfirmation,
     queueDriveImport,
     removeDriveReference,
+    resolveArtifactDocumentTarget,
     resetThread,
     selectedDriveReferences,
     selectedLocalReferenceIds,

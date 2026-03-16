@@ -1,5 +1,5 @@
 import type { Locale } from "../../../src/i18n/types";
-import type { AgentDriveCandidate, AgentTurnRequest } from "../../../src/types/liveAgent";
+import type { AgentAvailableTargetDocument, AgentDelegatedCapability, AgentDriveCandidate, AgentTurnRequest } from "../../../src/types/liveAgent";
 import { generateMultimodalStructuredJson, generateStructuredJson, schemaType } from "../gemini/client";
 import { searchDriveDocuments } from "../workspace/searchDriveDocuments";
 import {
@@ -44,12 +44,17 @@ const generalReplySchema = {
   type: schemaType.OBJECT,
 };
 
-const NON_EXECUTABLE_ACTIONS = new Set<AgentPlannedAction>([
+const DELEGATED_AI_ACTIONS = new Set<AgentPlannedAction>([
+  "summarize_document",
+  "generate_section",
   "compare_documents",
   "extract_procedure",
   "generate_toc",
   "suggest_document_updates",
 ]);
+
+const isDelegatedAiAction = (action: AgentPlannedAction): action is AgentDelegatedCapability =>
+  DELEGATED_AI_ACTIONS.has(action);
 
 const getRequestImages = (request: AgentTurnRequest) => {
   if (!request.screenshot?.dataBase64?.trim() || !request.screenshot.mimeType?.trim()) {
@@ -135,6 +140,135 @@ const createReplyOnlyResponse = ({
   }),
   effect: {
     type: "reply_only",
+  },
+});
+
+const SUMMARY_DOCUMENT_REQUEST_PATTERN = /(summary document|separate summary|document the summary|요약 문서|문서화|따로 문서|별도 문서)/i;
+
+const resolveDelegatedTargetDocument = ({
+  latestUserMessage,
+  planner,
+  request,
+}: {
+  latestUserMessage: string;
+  planner: AgentPlannerResponse;
+  request: AgentTurnRequest;
+}): AgentAvailableTargetDocument | null => {
+  const availableTargets = request.availableTargetDocuments || [];
+
+  if (availableTargets.length === 0) {
+    return null;
+  }
+
+  if (planner.target?.documentId) {
+    return availableTargets.find((document) => document.documentId === planner.target?.documentId) || null;
+  }
+
+  const normalizedMessage = latestUserMessage.trim().toLowerCase();
+  const exactNameMatches = availableTargets.filter((document) =>
+    normalizedMessage.includes(document.fileName.trim().toLowerCase()),
+  );
+
+  if (exactNameMatches.length === 1) {
+    return exactNameMatches[0];
+  }
+
+  if (planner.target?.documentName) {
+    const normalizedTargetName = planner.target.documentName.trim().toLowerCase();
+    const targetNameMatches = availableTargets.filter((document) =>
+      document.fileName.trim().toLowerCase() === normalizedTargetName,
+    );
+
+    if (targetNameMatches.length === 1) {
+      return targetNameMatches[0];
+    }
+  }
+
+  return availableTargets.length === 1 ? availableTargets[0] : null;
+};
+
+const createDelegatedCapabilityResponse = ({
+  capability,
+  context,
+  createDocumentAfter,
+  objective,
+  prompt,
+  targetDocument,
+}: {
+  capability: AgentDelegatedCapability;
+  context: AgentExecutionContext;
+  createDocumentAfter?: boolean;
+  objective?: string;
+  prompt?: string;
+  targetDocument?: AgentAvailableTargetDocument | null;
+}): RawAgentTurnResponse => ({
+  assistantText: (() => {
+    if (capability === "compare_documents" && !targetDocument) {
+      return buildAssistantText({
+        en: "Choose a document to compare against.",
+        ko: "비교할 문서를 선택해 주세요.",
+        locale: context.request.locale,
+      });
+    }
+
+    if (capability === "suggest_document_updates" && !targetDocument) {
+      return buildAssistantText({
+        en: "Choose a reference document to generate update suggestions.",
+        ko: "업데이트 제안을 생성할 기준 문서를 선택해 주세요.",
+        locale: context.request.locale,
+      });
+    }
+
+    if (capability === "summarize_document") {
+      return buildAssistantText({
+        en: createDocumentAfter
+          ? "I prepared a summary request and a summary document can be created after review."
+          : "I prepared a summary request for the current document.",
+        ko: createDocumentAfter
+          ? "현재 문서의 요약을 준비했습니다. 검토 후 요약 문서를 만들 수 있습니다."
+          : "현재 문서 요약을 준비했습니다.",
+        locale: context.request.locale,
+      });
+    }
+
+    if (capability === "generate_section") {
+      return buildAssistantText({
+        en: "I prepared a section-generation request for the current document.",
+        ko: "현재 문서에 대한 섹션 생성 요청을 준비했습니다.",
+        locale: context.request.locale,
+      });
+    }
+
+    if (capability === "generate_toc") {
+      return buildAssistantText({
+        en: "I prepared a TOC suggestion request for the current document.",
+        ko: "현재 문서에 대한 목차 제안 요청을 준비했습니다.",
+        locale: context.request.locale,
+      });
+    }
+
+    if (capability === "extract_procedure") {
+      return buildAssistantText({
+        en: "I prepared a procedure extraction request for the current document.",
+        ko: "현재 문서에 대한 절차 추출 요청을 준비했습니다.",
+        locale: context.request.locale,
+      });
+    }
+
+    return buildAssistantText({
+      en: `I prepared a ${targetDocument ? `targeted ` : ""}${capability} request${targetDocument ? ` using "${targetDocument.fileName}"` : ""}.`,
+      ko: `${targetDocument ? `"${targetDocument.fileName}" 문서를 기준으로 ` : ""}${capability} 요청을 준비했습니다.`,
+      locale: context.request.locale,
+    });
+  })(),
+  effect: {
+    capability,
+    createDocumentAfter,
+    objective,
+    prompt,
+    targetDocumentId: targetDocument?.documentId,
+    targetDocumentName: targetDocument?.fileName,
+    type: "delegate_ai_capability",
   },
 });
 
@@ -954,28 +1088,45 @@ const executeGeneralReply = async (context: AgentExecutionContext, planner: Agen
   };
 };
 
-const executeDisabledAction = (context: AgentExecutionContext, planner: AgentPlannerResponse): AgentExecutionResult => ({
-  availableImportTargets: [],
-  driveCandidates: [],
-  rawResponse: createAskFollowupResponse({
-    locale: context.request.locale,
-    reason: buildAssistantText({
-      en: `That request maps to "${planner.action}", which is not yet executable in Live Agent. Use the existing AI assistant tool for now.`,
-      ko: `\uC774 \uC694\uCCAD\uC740 "${planner.action}" \uAE30\uB2A5\uC5D0 \uD574\uB2F9\uD558\uC9C0\uB9CC Live Agent\uC5D0\uC11C \uC544\uC9C1 \uBC14\uB85C \uC2E4\uD589\uD558\uC9C0 \uBABB\uD569\uB2C8\uB2E4. \uC9C0\uAE08\uC740 \uAE30\uC874 AI Assistant \uB3C4\uAD6C\uB97C \uC0AC\uC6A9\uD574 \uC8FC\uC138\uC694.`,
-      locale: context.request.locale,
+const executeDelegatedAction = (
+  context: AgentExecutionContext,
+  planner: AgentPlannerResponse & { action: AgentDelegatedCapability },
+): AgentExecutionResult => {
+  const delegatedTarget = planner.action === "compare_documents" || planner.action === "suggest_document_updates"
+    ? resolveDelegatedTargetDocument({
+      latestUserMessage: context.latestUserMessage,
+      planner,
+      request: context.request,
+    })
+    : null;
+  const objective = planner.arguments?.prompt?.trim() || context.latestUserMessage.trim();
+  const createDocumentAfter = planner.action === "summarize_document"
+    ? Boolean(planner.arguments?.createDocumentAfter) || SUMMARY_DOCUMENT_REQUEST_PATTERN.test(context.latestUserMessage)
+    : undefined;
+
+  return {
+    availableImportTargets: [],
+    driveCandidates: [],
+    rawResponse: createDelegatedCapabilityResponse({
+      capability: planner.action as AgentDelegatedCapability,
+      context,
+      createDocumentAfter,
+      objective,
+      prompt: objective,
+      targetDocument: delegatedTarget,
     }),
-  }),
-  telemetry: {
-    executorAction: planner.action,
-  },
-});
+    telemetry: {
+      executorAction: planner.action,
+    },
+  };
+};
 
 export const executePlannedAction = async (
   context: AgentExecutionContext,
   planner: AgentPlannerResponse,
 ): Promise<AgentExecutionResult> => {
-  if (NON_EXECUTABLE_ACTIONS.has(planner.action)) {
-    return executeDisabledAction(context, planner);
+  if (isDelegatedAiAction(planner.action)) {
+    return executeDelegatedAction(context, planner as AgentPlannerResponse & { action: AgentDelegatedCapability });
   }
 
   switch (planner.action) {

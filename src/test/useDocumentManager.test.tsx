@@ -192,6 +192,24 @@ describe("useDocumentManager", () => {
     expect(restored.result.current.activeDocId).toBe("agent-draft");
   });
 
+  it("flushes edited content on pagehide before the autosave interval", () => {
+    const hook = renderHook(() => useDocumentManager());
+
+    act(() => {
+      hook.result.current.handleContentChange("# Draft before unload");
+    });
+
+    act(() => {
+      window.dispatchEvent(new Event("pagehide"));
+    });
+
+    hook.unmount();
+
+    const restored = renderHook(() => useDocumentManager());
+
+    expect(restored.result.current.activeDoc.content).toBe("# Draft before unload");
+  });
+
   it("resets documents to a fresh blank draft and persists it immediately", () => {
     const { result } = renderHook(() => useDocumentManager());
     const previousDocumentId = result.current.activeDocId;

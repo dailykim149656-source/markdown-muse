@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import PatchReviewDialog from "@/components/editor/PatchReviewDialog";
 import { I18nContext } from "@/i18n/I18nProvider";
-import type { DocumentPatchSet } from "@/types/documentPatch";
+import type { DocumentPatchSet, PatchApplyReport } from "@/types/documentPatch";
 
 const renderWithI18n = (ui: React.ReactNode) =>
   render(
@@ -41,7 +41,7 @@ describe("PatchReviewDialog metrics", () => {
           sources: [{ chunkId: "chunk-1", sourceId: "source-1" }],
           status: "pending",
           suggestedText: "New text",
-          target: { nodeId: "node-1", textRange: { end: 10, start: 0 }, type: "text_range" },
+          target: { endOffset: 10, nodeId: "node-1", startOffset: 0, targetType: "text_range" },
           title: "Patch One",
         },
         {
@@ -52,7 +52,7 @@ describe("PatchReviewDialog metrics", () => {
           reason: "Follow-up update",
           status: "pending",
           suggestedText: "Other text",
-          target: { nodeId: "node-2", textRange: { end: 12, start: 0 }, type: "text_range" },
+          target: { endOffset: 12, nodeId: "node-2", startOffset: 0, targetType: "text_range" },
           title: "Patch Two",
         },
       ],
@@ -64,12 +64,15 @@ describe("PatchReviewDialog metrics", () => {
       <PatchReviewDialog
         acceptedPatchCount={1}
         onAccept={vi.fn()}
+        onAcceptSelected={vi.fn()}
         onApply={vi.fn()}
         onClear={vi.fn()}
         onEdit={vi.fn()}
+        lastApplyReport={null}
         onLoadPatchSet={vi.fn()}
         onOpenChange={vi.fn()}
         onReject={vi.fn()}
+        onRejectSelected={vi.fn()}
         open
         patchSet={patchSet}
         workspaceSyncWarnings={["Markdown tables are not preserved in Google Docs sync."]}
@@ -127,12 +130,15 @@ describe("PatchReviewDialog metrics", () => {
       <PatchReviewDialog
         acceptedPatchCount={1}
         onAccept={vi.fn()}
+        onAcceptSelected={vi.fn()}
         onApply={vi.fn()}
         onClear={vi.fn()}
         onEdit={vi.fn()}
+        lastApplyReport={null}
         onLoadPatchSet={vi.fn()}
         onOpenChange={vi.fn()}
         onReject={vi.fn()}
+        onRejectSelected={vi.fn()}
         open
         patchSet={patchSet}
         workspaceSyncWarnings={[]}
@@ -142,5 +148,71 @@ describe("PatchReviewDialog metrics", () => {
     expect(screen.getByTestId("patch-review-dialog")).toHaveClass("grid-rows-[auto_auto_auto_minmax(0,1fr)]");
     expect(screen.getByTestId("patch-review-metrics")).toHaveClass("shrink-0");
     expect(screen.getByTestId("patch-review-body")).toHaveClass("min-h-0");
+  });
+
+  it("renders the apply log when patch application fails or is partial", () => {
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      description: "Patch set",
+      documentId: "doc-1",
+      patchSetId: "patch-set-log",
+      patches: [
+        {
+          author: "ai",
+          operation: "replace_text_range",
+          patchId: "patch-log-1",
+          status: "accepted",
+          suggestedText: "Suggested patch body",
+          target: {
+            endOffset: 8,
+            nodeId: "node-log-1",
+            startOffset: 0,
+            targetType: "text_range",
+          },
+          title: "Patch Log",
+        },
+      ],
+      status: "in_review",
+      title: "Log review",
+    };
+    const lastApplyReport: PatchApplyReport = {
+      appliedPatchIds: ["patch-log-1"],
+      attemptedAt: Date.now(),
+      failures: [{
+        message: "Patch target could not be found.",
+        patchId: "patch-log-1",
+        patchTitle: "Patch Log",
+      }],
+      phase: "rich_text",
+      scope: "apply",
+      warnings: ["patch-log-1: warning"],
+    };
+
+    renderWithI18n(
+      <PatchReviewDialog
+        acceptedPatchCount={1}
+        onAccept={vi.fn()}
+        onAcceptSelected={vi.fn()}
+        onApply={vi.fn()}
+        onClear={vi.fn()}
+        onEdit={vi.fn()}
+        lastApplyReport={lastApplyReport}
+        onLoadPatchSet={vi.fn()}
+        onOpenChange={vi.fn()}
+        onReject={vi.fn()}
+        onRejectSelected={vi.fn()}
+        open
+        patchSet={patchSet}
+        workspaceSyncWarnings={[]}
+      />,
+    );
+
+    expect(screen.getByTestId("patch-review-apply-log")).toBeInTheDocument();
+    expect(screen.getByText("patchReview.applyLogTitle")).toBeInTheDocument();
+    expect(screen.getByText('patchReview.applyLogPartial:{"applied":1,"failed":1}')).toBeInTheDocument();
+    expect(screen.getByText("patchReview.applyLogFailures")).toBeInTheDocument();
+    expect(screen.getByText("patchReview.applyLogWarnings")).toBeInTheDocument();
+    expect(screen.getByText("Patch target could not be found.")).toBeInTheDocument();
   });
 });

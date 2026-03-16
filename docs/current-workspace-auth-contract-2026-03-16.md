@@ -69,10 +69,25 @@ Common failure signatures:
 - `Error [500]: Firestore transactions require all reads to be executed before all writes.`
 - `invalid_client`
 
+## AI Assistant 5xx First Checks
+
+If `GET /api/ai/health` is healthy but browser `POST /api/ai/agent/turn` requests fail, check these first:
+
+1. Firestore database exists in the target GCP project and `firestore.googleapis.com` is enabled.
+2. The Cloud Run runtime service account can read and write Firestore for the deployed project.
+3. `AI_ALLOWED_ORIGIN`, `WORKSPACE_FRONTEND_ORIGIN`, and `GOOGLE_OAUTH_REDIRECT_URI` are aligned to the same deployed frontend origin for the Firebase Hosting rewrite topology.
+
+Hosted smoke verification order:
+
+1. `GET /api/ai/health`
+2. `GET /api/auth/session` without cookies should return `connected=false`
+3. `POST /api/ai/agent/turn` with a minimal payload should return 200 JSON with `assistantMessage` and `effect`
+
 ## Diagnostics
 
 - Public health: `GET /api/ai/health`
 - Internal health: `GET /api/internal/ai/health` with `X-Docsy-Diagnostics-Token`
+- Runtime smoke: `node scripts/check-ai-runtime-smoke.mjs --origin https://YOUR_ORIGIN`
 - Manual smoke helper: `scripts/check-google-workspace-auth-smoke.ps1`
 
 ## Frontend/Server Revision Tracking

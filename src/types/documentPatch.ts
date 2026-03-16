@@ -82,3 +82,18 @@ export interface PatchDecision {
   editedSuggestedText?: string;
   decidedAt: number;
 }
+
+export interface PatchApplyReportFailure {
+  patchId?: string;
+  patchTitle?: string;
+  message: string;
+}
+
+export interface PatchApplyReport {
+  appliedPatchIds: string[];
+  attemptedAt: number;
+  failures: PatchApplyReportFailure[];
+  phase: "rich_text" | "document_text" | "structured";
+  scope: "preflight" | "apply";
+  warnings: string[];
+}

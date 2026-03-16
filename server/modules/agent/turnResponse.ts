@@ -2,6 +2,7 @@ import { schemaType } from "../gemini/client";
 import type {
   AgentChatMessage,
   AgentCurrentDocumentDraft,
+  AgentDelegatedCapability,
   AgentDriveCandidate,
   AgentEffect,
   AgentNewDocumentDraft,
@@ -14,9 +15,15 @@ export interface RawAgentTurnResponse {
   assistantText?: string;
   currentDocumentDraft?: AgentCurrentDocumentDraft;
   effect?: {
+    capability?: AgentDelegatedCapability;
     type?: string;
     changeSetTitle?: string;
+    createDocumentAfter?: boolean;
+    objective?: string;
+    prompt?: string;
     summary?: string;
+    targetDocumentId?: string;
+    targetDocumentName?: string;
     title?: string;
     query?: string;
     fileId?: string;
@@ -26,11 +33,17 @@ export interface RawAgentTurnResponse {
 }
 
 const effectBaseProperties = {
+  capability: { type: schemaType.STRING },
   changeSetTitle: { type: schemaType.STRING },
+  createDocumentAfter: { type: schemaType.BOOLEAN },
   fileId: { type: schemaType.STRING },
   fileName: { type: schemaType.STRING },
+  objective: { type: schemaType.STRING },
+  prompt: { type: schemaType.STRING },
   query: { type: schemaType.STRING },
   summary: { type: schemaType.STRING },
+  targetDocumentId: { type: schemaType.STRING },
+  targetDocumentName: { type: schemaType.STRING },
   title: { type: schemaType.STRING },
   type: { type: schemaType.STRING },
 };
@@ -104,6 +117,11 @@ const appendActionHint = (text: string, effect: AgentEffect) => {
     return trimmed.includes(hint) ? trimmed : `${trimmed}\n\n${hint}`.trim();
   }
 
+  if (effect.type === "delegate_ai_capability" && effect.capability === "summarize_document" && effect.createDocumentAfter) {
+    const hint = "Review the summary card and create the summary document when ready.";
+    return trimmed.includes(hint) ? trimmed : `${trimmed}\n\n${hint}`.trim();
+  }
+
   return trimmed;
 };
 
@@ -150,6 +168,16 @@ const normalizeEffect = (
     }
     case "open_google_connect":
       return { type: "open_google_connect" };
+    case "delegate_ai_capability":
+      return {
+        capability: effect.capability || "summarize_document",
+        createDocumentAfter: effect.createDocumentAfter,
+        objective: effect.objective?.trim() || undefined,
+        prompt: effect.prompt?.trim() || undefined,
+        targetDocumentId: effect.targetDocumentId?.trim() || undefined,
+        targetDocumentName: effect.targetDocumentName?.trim() || undefined,
+        type: "delegate_ai_capability",
+      };
     case "ask_followup":
       return { type: "ask_followup" };
     default:

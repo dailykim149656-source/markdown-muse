@@ -15,6 +15,21 @@ import { marked } from "marked";
 const PLACEHOLDER_PREFIX = "XPLACEHOLDERX";
 const PLACEHOLDER_SUFFIX = "XENDX";
 
+const normalizeTocMaxDepth = (value: number | string | null | undefined): 1 | 2 | 3 => {
+  const parsed = typeof value === "number" ? value : Number(value);
+
+  if (parsed === 1 || parsed === 2) {
+    return parsed;
+  }
+
+  return 3;
+};
+
+const formatTocPlaceholder = (value: number | string | null | undefined) => {
+  const maxDepth = normalizeTocMaxDepth(value);
+  return maxDepth === 3 ? "[[toc]]" : `[[toc:${maxDepth}]]`;
+};
+
 /**
  * Pre-process HTML to replace custom Tiptap nodes with placeholders
  * that Turndown won't strip (since they're empty/atom elements).
@@ -65,6 +80,17 @@ function preProcessHtml(html: string): { html: string; replacements: Map<string,
       const key = makeKey();
       const decoded = code.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
       replacements.set(key, `\n\n\`\`\`mermaid\n${decoded}\n\`\`\`\n\n`);
+      return `<p>${key}</p>`;
+    }
+  );
+
+  // Table of contents: <div data-type="toc" data-max-depth="...">...</div>
+  processed = processed.replace(
+    /<div[^>]*data-type="toc"[^>]*>[\s\S]*?<\/div>/gi,
+    (match) => {
+      const maxDepth = match.match(/data-max-depth="([^"]*)"/i)?.[1];
+      const key = makeKey();
+      replacements.set(key, formatTocPlaceholder(maxDepth));
       return `<p>${key}</p>`;
     }
   );
@@ -233,6 +259,29 @@ export function createMarkedInstance(): typeof marked {
     }
     return originalRenderer.code.call(this, { text, lang } as any);
   };
+
+  // Table of contents: [[toc]] or [[toc:N]]
+  extensions.push({
+    name: "tableOfContents",
+    level: "block",
+    start(src: string) {
+      return src.search(/\[\[toc(?::[123])?\]\]/i);
+    },
+    tokenizer(src: string) {
+      const match = src.match(/^(?: {0,3})?\[\[toc(?::([123]))?\]\](?:[ \t]*(?:\n|$))/i);
+      if (match) {
+        return {
+          type: "tableOfContents",
+          raw: match[0],
+          maxDepth: normalizeTocMaxDepth(match[1]),
+        };
+      }
+      return undefined;
+    },
+    renderer(token: any) {
+      return `<div data-type="toc" data-max-depth="${escapeAttr(String(token.maxDepth || 3))}">Table of Contents</div>`;
+    },
+  });
 
   // Admonition: > [!TYPE title]\n> content  (GitHub-style callout)
   extensions.push({

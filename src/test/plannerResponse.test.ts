@@ -55,4 +55,41 @@ describe("normalizePlannerResponse", () => {
 
     expect(plannerNeedsFollowup(planner, 0.65)).toBe(true);
   });
+
+  it("keeps summarize_document arguments including createDocumentAfter", async () => {
+    const { normalizePlannerResponse: normalize } = await import("../../server/modules/agent/plannerResponse");
+    const response = normalize({
+      action: "summarize_document",
+      arguments: {
+        createDocumentAfter: true,
+        prompt: "Summarize the current document.",
+      },
+      confidence: 0.9,
+      missingInformation: [],
+      reason: "The user asked for a summary document.",
+    });
+
+    expect(response).toEqual({
+      action: "summarize_document",
+      arguments: {
+        createDocumentAfter: true,
+        prompt: "Summarize the current document.",
+      },
+      confidence: 0.9,
+      missingInformation: [],
+      reason: "The user asked for a summary document.",
+      target: undefined,
+    });
+  });
+
+  it("allows compare_documents to proceed without blocking follow-up when the target is unresolved", () => {
+    const planner: AgentPlannerResponse = {
+      action: "compare_documents",
+      confidence: 0.88,
+      missingInformation: ["target document"],
+      reason: "The user wants a comparison but did not name the target.",
+    };
+
+    expect(plannerNeedsFollowup(planner, 0.65)).toBe(false);
+  });
 });

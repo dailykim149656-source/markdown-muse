@@ -8,6 +8,8 @@ export const AGENT_PLANNED_ACTIONS = [
   "prepare_drive_import",
   "general_reply",
   "ask_followup",
+  "summarize_document",
+  "generate_section",
   "generate_toc",
   "compare_documents",
   "extract_procedure",
@@ -26,6 +28,7 @@ export interface AgentPlannerTarget {
 }
 
 export interface AgentPlannerArguments {
+  createDocumentAfter?: boolean;
   fieldKeys?: string[];
   graphNodeIds?: string[];
   prompt?: string;
@@ -91,6 +94,7 @@ export const agentPlannerResponseSchema = {
     action: { type: schemaType.STRING },
     arguments: {
       properties: {
+        createDocumentAfter: { type: schemaType.BOOLEAN },
         fieldKeys: {
           items: { type: schemaType.STRING },
           type: schemaType.ARRAY,
@@ -178,6 +182,7 @@ const normalizeArguments = (value: AgentPlannerArguments | undefined) => {
   }
 
   const normalized = {
+    createDocumentAfter: typeof value.createDocumentAfter === "boolean" ? value.createDocumentAfter : undefined,
     fieldKeys: Array.isArray(value.fieldKeys)
       ? value.fieldKeys.map((entry) => entry?.trim()).filter((entry): entry is string => Boolean(entry))
       : undefined,

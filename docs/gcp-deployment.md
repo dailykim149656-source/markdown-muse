@@ -562,6 +562,31 @@ Fix:
 - for diagnostics checks, do the same for `ai-diagnostics-token` if you want the
   internal health verification to run
 
+### `GET /api/ai/health` works, but browser AI assistant requests still fail
+
+Symptom:
+
+- `GET /api/ai/health` returns 200 JSON
+- browser `POST /api/ai/agent/turn` requests still fail with 5xx
+
+Check these first:
+
+- Firestore is enabled and has a database in the same GCP project as the AI Cloud Run service
+- the Cloud Run runtime service account can access Firestore in that project
+- `AI_ALLOWED_ORIGIN`, `WORKSPACE_FRONTEND_ORIGIN`, and `GOOGLE_OAUTH_REDIRECT_URI` all match the deployed frontend origin when using Firebase Hosting `/api/**` rewrites
+
+Recommended post-deploy smoke test:
+
+```bash
+node scripts/check-ai-runtime-smoke.mjs --origin https://app.YOUR_DOMAIN
+```
+
+That smoke test verifies:
+
+- `GET /api/ai/health`
+- `GET /api/auth/session` without cookies
+- `POST /api/ai/agent/turn` with a minimal payload
+
 ## Notes
 
 - `npm run build` is for desktop-oriented output and should not be used for the

@@ -2,6 +2,7 @@ import { Plus, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { useI18n } from "@/i18n/useI18n";
+import { getDocumentTabTitle } from "@/lib/workspace/documentTabTitle";
 import { getWorkspaceSyncLabel } from "@/lib/workspace/workspaceLabels";
 import type { DocumentData } from "@/types/document";
 
@@ -52,28 +53,35 @@ const DocumentTabs = ({
           {documents.map((document) => {
             const isActive = document.id === activeDocId;
             const workspaceSyncLabel = getWorkspaceSyncLabel(document.workspaceBinding);
+            const { displayTitle, fullTitle } = getDocumentTabTitle({
+              fallbackTitle: t("common.untitled"),
+              name: document.name,
+              workspaceBinding: document.workspaceBinding,
+            });
 
             return (
               <button
                 key={document.id}
-                className={`group flex max-w-[130px] shrink-0 items-center gap-1 rounded-t-md px-2 py-1.5 text-xs transition-colors sm:max-w-[160px] sm:px-2.5 sm:py-1 ${
+                aria-label={fullTitle}
+                className={`group flex min-w-0 max-w-[130px] shrink-0 items-center gap-1 overflow-hidden rounded-t-md px-2 py-1.5 text-xs transition-colors sm:max-w-[160px] sm:px-2.5 sm:py-1 ${
                   isActive
                     ? "border-b-2 border-primary bg-background text-foreground"
                     : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
                 }`}
                 onClick={() => onSelectDoc(document.id)}
+                title={fullTitle}
                 type="button"
               >
-                <span className="truncate">{document.name || t("common.untitled")}</span>
-                <span className="text-[9px] text-muted-foreground/60">{modeLabel(document.mode)}</span>
+                <span className="min-w-0 flex-1 truncate">{displayTitle}</span>
+                <span className="shrink-0 text-[9px] text-muted-foreground/60">{modeLabel(document.mode)}</span>
                 {workspaceSyncLabel && (
-                  <span className="rounded-full border border-border/60 px-1 py-0.5 text-[8px] text-muted-foreground">
+                  <span className="shrink-0 rounded-full border border-border/60 px-1 py-0.5 text-[8px] text-muted-foreground">
                     {workspaceSyncLabel}
                   </span>
                 )}
                 {documents.length > 1 && (
                   <span
-                    className="ml-0.5 opacity-100 transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
+                    className="ml-0.5 shrink-0 opacity-100 transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
                     onClick={(event) => {
                       event.stopPropagation();
                       onCloseDoc(document.id);

@@ -73,6 +73,19 @@ const indentLines = (value: string, prefix: string) =>
     .map((line) => `${prefix}${line}`.trimEnd())
     .join("\n");
 
+const normalizeTocMaxDepth = (value: number | undefined) => {
+  if (value === 1 || value === 2) {
+    return value;
+  }
+
+  return 3;
+};
+
+const formatTocPlaceholder = (maxDepth: number | undefined) => {
+  const resolvedDepth = normalizeTocMaxDepth(maxDepth);
+  return resolvedDepth === 3 ? "[[toc]]" : `[[toc:${resolvedDepth}]]`;
+};
+
 const renderBlocks = (blocks: BlockNode[], depth = 0): string =>
   blocks.map((block) => renderBlockNode(block, depth)).filter(Boolean).join("\n\n");
 
@@ -182,7 +195,7 @@ const renderBlockNode = (node: BlockNode, depth = 0): string => {
     case "latex_abstract":
       return `> **Abstract**\n> ${node.content.replace(/\n/g, "\n> ")}`;
     case "table_of_contents":
-      return "[[toc]]";
+      return formatTocPlaceholder(node.maxDepth);
     case "footnote_item":
       return `[^${node.footnoteId}]: ${renderInlineNodes(node.children)}`;
     default:

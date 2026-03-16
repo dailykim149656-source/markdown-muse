@@ -292,6 +292,7 @@ const EditorHeader = ({
             <DropdownMenuTrigger asChild>
               <Button
                 className="h-7 min-w-0 shrink-0 gap-1 px-2 text-xs"
+                data-visual-target="header-mode-trigger"
                 size="sm"
                 title={`${currentFamilyLabel}: ${renderModeLabel(mode)}`}
                 variant="outline"
@@ -399,6 +400,7 @@ const EditorHeader = ({
               <DropdownMenuTrigger asChild>
                 <Button
                   className="h-8 gap-1 px-2"
+                  data-visual-target="header-google-menu"
                   size="sm"
                   title={workspaceConnected ? "Google Workspace connected" : "Google Workspace"}
                   type="button"
@@ -413,7 +415,7 @@ const EditorHeader = ({
                 <DropdownMenuLabel className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                   Google Workspace
                 </DropdownMenuLabel>
-                <DropdownMenuItem disabled={workspaceConnectionPending} onClick={onOpenWorkspaceConnection}>
+                <DropdownMenuItem data-visual-target="workspace-manage-connection" disabled={workspaceConnectionPending} onClick={onOpenWorkspaceConnection}>
                   <Link2 className="mr-2 h-4 w-4" />
                   {workspaceConnectionPending
                     ? "Google..."
@@ -423,6 +425,7 @@ const EditorHeader = ({
                 </DropdownMenuItem>
                 {onOpenWorkspaceImport && (
                   <DropdownMenuItem
+                    data-visual-target="workspace-import-drive"
                     disabled={!workspaceConnected || workspaceImportPending}
                     onClick={() => onOpenWorkspaceImport()}
                   >
@@ -432,6 +435,7 @@ const EditorHeader = ({
                 )}
                 {showWorkspaceExportAction && (
                   <DropdownMenuItem
+                    data-visual-target="workspace-export-google"
                     disabled={!workspaceConnected || workspaceExportPending || !workspaceExportEnabled}
                     onClick={() => onOpenWorkspaceExport?.()}
                   >
@@ -441,6 +445,7 @@ const EditorHeader = ({
                 )}
                 {showWorkspaceSyncAction && (
                   <DropdownMenuItem
+                    data-visual-target="workspace-save-google"
                     disabled={!workspaceConnected || workspaceSyncPending}
                     onClick={() => onSaveWorkspaceDocument?.()}
                   >
@@ -571,7 +576,14 @@ const EditorHeader = ({
           )}
 
           {isAdvancedProfile && mode !== "json" && mode !== "yaml" && onOpenAiAssistant && (
-            <Button variant="ghost" size="sm" onClick={onOpenAiAssistant} title={t("header.aiAssistant")} className="h-8 w-8 p-0">
+            <Button
+              className="h-8 w-8 p-0"
+              data-visual-target="header-open-ai-assistant"
+              onClick={onOpenAiAssistant}
+              size="sm"
+              title={t("header.aiAssistant")}
+              variant="ghost"
+            >
               <Sparkles className="h-4 w-4" />
             </Button>
           )}
@@ -638,7 +650,7 @@ const EditorHeader = ({
           </Button>
 
           {isAdvancedProfile && onOpenPatchReview && (
-            <Button className="hidden h-8 px-2 text-xs sm:inline-flex" onClick={onOpenPatchReview} size="sm" type="button" variant="ghost">
+            <Button className="hidden h-8 px-2 text-xs sm:inline-flex" data-visual-target="header-open-patch-review" onClick={onOpenPatchReview} size="sm" type="button" variant="ghost">
               {t("header.patchReview")}
               {patchCount > 0 ? ` (${patchCount})` : ""}
             </Button>
@@ -658,7 +670,7 @@ const EditorHeader = ({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
               {isAdvancedProfile && onOpenPatchReview && (
-                <DropdownMenuItem onClick={onOpenPatchReview}>
+                <DropdownMenuItem data-visual-target="header-open-patch-review-menu" onClick={onOpenPatchReview}>
                   {t("header.patchReview")}
                   {patchCount > 0 ? ` (${patchCount})` : ""}
                 </DropdownMenuItem>

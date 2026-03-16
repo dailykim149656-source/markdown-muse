@@ -2,14 +2,17 @@ import { useEffect } from "react";
 import type { Editor as TiptapEditor } from "@tiptap/react";
 import type { KnowledgeSuggestionContext } from "@/components/editor/sidebarFeatureTypes";
 import { useAiAssistant } from "@/hooks/useAiAssistant";
-import type { AiBusyAction, PatchPreviewResult, TocPreviewResult } from "@/hooks/useAiAssistant";
+import type { AiBusyAction, PatchPreviewResult, SectionGenerationResult, TocPreviewResult } from "@/hooks/useAiAssistant";
 import { useLiveAgent } from "@/hooks/useLiveAgent";
 import type { LiveAgentRuntimeState } from "@/hooks/useLiveAgent";
+import { useVisualNavigator } from "@/hooks/useVisualNavigator";
+import type { VisualNavigatorRuntimeState } from "@/hooks/useVisualNavigator";
 import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
 import type { SummarizeDocumentResponse } from "@/types/aiAssistant";
 import type { DocumentData } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
 import type { AgentNewDocumentDraft } from "@/types/liveAgent";
+import type { SummaryDocumentDraftInput } from "@/lib/ai/summaryDocument";
 
 export interface AiAssistantRuntimeState {
   assistantOpen: boolean;
@@ -18,8 +21,9 @@ export interface AiAssistantRuntimeState {
   comparePreview: PatchPreviewResult | null;
   compareWithDocument: (targetDocumentId: string) => Promise<PatchPreviewResult>;
   extractProcedureFromActiveDocument: () => Promise<ProcedureExtractionResult | unknown> | unknown;
-  generateSectionPatch: (prompt: string) => Promise<void>;
+  generateSectionPatch: (prompt: string) => Promise<SectionGenerationResult | void>;
   generateTocSuggestion: () => Promise<TocPreviewResult>;
+  lastSummaryObjective: string | null;
   loadTocPatch: (maxDepthOverride?: 1 | 2 | 3) => Promise<DocumentPatchSet | null>;
   procedureResult: ProcedureExtractionResult | null;
   richTextAvailable: boolean;
@@ -33,12 +37,14 @@ export interface AiAssistantRuntimeState {
   tocPreview: TocPreviewResult | null;
   updateSuggestionPreview: PatchPreviewResult | null;
   liveAgent: LiveAgentRuntimeState;
+  visualNavigator: VisualNavigatorRuntimeState;
 }
 
 interface AiAssistantRuntimeProps {
   activeDoc: DocumentData;
   activeEditor: TiptapEditor | null;
   createDocumentDraft: (draft: AgentNewDocumentDraft) => void;
+  createSummaryDocument: (input: SummaryDocumentDraftInput) => unknown;
   currentRenderableMarkdown: string;
   documents: DocumentData[];
   getFreshRenderableMarkdown: () => Promise<string>;
@@ -52,6 +58,7 @@ const AiAssistantRuntime = ({
   activeDoc,
   activeEditor,
   createDocumentDraft,
+  createSummaryDocument,
   currentRenderableMarkdown,
   documents,
   getFreshRenderableMarkdown,
@@ -74,12 +81,22 @@ const AiAssistantRuntime = ({
     currentRenderableMarkdown,
     documents,
     getFreshRenderableMarkdown,
+    onCreateSummaryDocument: createSummaryDocument,
     onCreateDocumentDraft: createDocumentDraft,
+    onCompareWithDocument: state.compareWithDocument,
+    onExtractProcedure: state.extractProcedureFromActiveDocument,
+    onGenerateSection: state.generateSectionPatch,
+    onGenerateToc: state.generateTocSuggestion,
     onImportDriveDocument: importWorkspaceDocument,
     onOpenPatchReview: (patchSet) => {
       loadPatchSet(patchSet);
     },
     onOpenWorkspaceConnection: openWorkspaceConnection,
+    onSummarizeDocument: state.summarizeActiveDocument,
+    onSuggestUpdates: (targetDocumentId: string) => state.suggestUpdatesFromDocument(targetDocumentId),
+  });
+  const visualNavigator = useVisualNavigator({
+    onCloseAssistant: () => state.setAssistantOpen(false),
   });
 
   useEffect(() => {
@@ -92,6 +109,7 @@ const AiAssistantRuntime = ({
       extractProcedureFromActiveDocument: state.extractProcedureFromActiveDocument,
       generateSectionPatch: state.generateSectionPatch,
       generateTocSuggestion: state.generateTocSuggestion,
+      lastSummaryObjective: state.lastSummaryObjective,
       loadTocPatch: state.loadTocPatch,
       procedureResult: state.procedureResult,
       richTextAvailable: state.richTextAvailable,
@@ -102,6 +120,7 @@ const AiAssistantRuntime = ({
       tocPreview: state.tocPreview,
       updateSuggestionPreview: state.updateSuggestionPreview,
       liveAgent,
+      visualNavigator,
     });
   }, [
     liveAgent,
@@ -114,6 +133,7 @@ const AiAssistantRuntime = ({
     state.extractProcedureFromActiveDocument,
     state.generateSectionPatch,
     state.generateTocSuggestion,
+    state.lastSummaryObjective,
     state.loadTocPatch,
     state.procedureResult,
     state.richTextAvailable,
@@ -123,6 +143,7 @@ const AiAssistantRuntime = ({
     state.summaryResult,
     state.tocPreview,
     state.updateSuggestionPreview,
+    visualNavigator,
   ]);
 
   useEffect(() => () => onStateChange(null), [onStateChange]);

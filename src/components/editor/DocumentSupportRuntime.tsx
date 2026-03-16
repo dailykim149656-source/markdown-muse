@@ -6,7 +6,7 @@ import type {
   DocumentData,
   DocumentVersionSnapshotMetadata,
 } from "@/types/document";
-import type { DocumentPatch, DocumentPatchSet } from "@/types/documentPatch";
+import type { DocumentPatch, DocumentPatchSet, PatchApplyReport } from "@/types/documentPatch";
 
 export interface DocumentSupportRuntimeState {
   acceptedPatchCount: number;
@@ -14,8 +14,11 @@ export interface DocumentSupportRuntimeState {
   clearPatchSet: () => void;
   closePatchReview: () => void;
   handleAcceptPatch: (patch: DocumentPatch) => void;
+  handleAcceptPatches: (patchIds: string[]) => void;
   handleEditPatch: (patch: DocumentPatch, suggestedText: string) => void;
   handleRejectPatch: (patch: DocumentPatch) => void;
+  handleRejectPatches: (patchIds: string[]) => void;
+  lastApplyReport: PatchApplyReport | null;
   loadPatchSet: (patchSet: DocumentPatchSet) => void;
   openPatchReview: () => void;
   patchCount: number;
@@ -74,8 +77,11 @@ const DocumentSupportRuntime = ({
       clearPatchSet: patchReview.clearPatchSet,
       closePatchReview: patchReview.closePatchReview,
       handleAcceptPatch: patchReview.handleAcceptPatch,
+      handleAcceptPatches: patchReview.handleAcceptPatches,
       handleEditPatch: patchReview.handleEditPatch,
       handleRejectPatch: patchReview.handleRejectPatch,
+      handleRejectPatches: patchReview.handleRejectPatches,
+      lastApplyReport: patchReview.lastApplyReport,
       loadPatchSet: patchReview.loadPatchSet,
       openPatchReview: patchReview.openPatchReview,
       patchCount: patchReview.patchCount,
@@ -94,8 +100,11 @@ const DocumentSupportRuntime = ({
     patchReview.clearPatchSet,
     patchReview.closePatchReview,
     patchReview.handleAcceptPatch,
+    patchReview.handleAcceptPatches,
     patchReview.handleEditPatch,
     patchReview.handleRejectPatch,
+    patchReview.handleRejectPatches,
+    patchReview.lastApplyReport,
     patchReview.loadPatchSet,
     patchReview.openPatchReview,
     patchReview.patchCount,

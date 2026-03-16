@@ -1,9 +1,15 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
 import type { JSONContent } from "@tiptap/core";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
+import MarkdownEditor from "@/components/editor/MarkdownEditor";
 import { I18nContext } from "@/i18n/I18nProvider";
+import {
+  analyzeTocSuggestion,
+  buildTocPatchSetWithAst,
+} from "@/lib/ai/tocGeneration";
 import { buildLiveAgentPatchSet } from "@/lib/ai/liveAgentPatchBuilder";
+import { serializeTiptapToAst } from "@/lib/ast/tiptapAst";
 import { usePatchReview } from "@/hooks/usePatchReview";
 import type { DocumentData } from "@/types/document";
 import type { DocumentAst } from "@/types/documentAst";
@@ -64,7 +70,116 @@ const createActiveEditor = (json: JSONContent) => ({
   getJSON: vi.fn(() => json),
 });
 
+const emptyTiptapDoc: JSONContent = {
+  type: "doc",
+  content: [{ type: "paragraph" }],
+};
+
 describe("usePatchReview", () => {
+  it("accepts selected patches in bulk without downgrading edited patches", () => {
+    const { result } = renderHook(() => usePatchReview({
+      activeDoc: createActiveDoc(),
+      activeEditor: createActiveEditor(richTextDocumentJson) as never,
+      bumpEditorKey: vi.fn(),
+      onVersionSnapshot: vi.fn(),
+      onWorkspaceSync: vi.fn(),
+      setLiveEditorHtml: vi.fn(),
+      updateActiveDoc: vi.fn(),
+    }), { wrapper });
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      documentId: "doc-1",
+      patchSetId: "patch-set-bulk-accept",
+      patches: [
+        {
+          author: "ai",
+          operation: "replace_text_range",
+          patchId: "patch-pending",
+          payload: { kind: "replace_text", text: "Updated intro" },
+          status: "pending",
+          suggestedText: "Updated intro",
+          target: { endOffset: 3, nodeId: "paragraph-1", startOffset: 0, targetType: "text_range" },
+          title: "Pending patch",
+        },
+        {
+          author: "ai",
+          operation: "replace_text_range",
+          patchId: "patch-edited",
+          payload: { kind: "replace_text", text: "Edited intro" },
+          status: "edited",
+          suggestedText: "Edited intro",
+          target: { endOffset: 3, nodeId: "paragraph-1", startOffset: 0, targetType: "text_range" },
+          title: "Edited patch",
+        },
+      ],
+      status: "in_review",
+      title: "Bulk accept",
+    };
+
+    act(() => {
+      result.current.loadPatchSet(patchSet);
+      result.current.handleAcceptPatches(["patch-pending", "patch-edited"]);
+    });
+
+    expect(result.current.patchSet?.patches).toEqual(expect.arrayContaining([
+      expect.objectContaining({ patchId: "patch-pending", status: "accepted" }),
+      expect.objectContaining({ patchId: "patch-edited", status: "edited" }),
+    ]));
+  });
+
+  it("rejects selected patches in bulk", () => {
+    const { result } = renderHook(() => usePatchReview({
+      activeDoc: createActiveDoc(),
+      activeEditor: createActiveEditor(richTextDocumentJson) as never,
+      bumpEditorKey: vi.fn(),
+      onVersionSnapshot: vi.fn(),
+      onWorkspaceSync: vi.fn(),
+      setLiveEditorHtml: vi.fn(),
+      updateActiveDoc: vi.fn(),
+    }), { wrapper });
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      documentId: "doc-1",
+      patchSetId: "patch-set-bulk-reject",
+      patches: [
+        {
+          author: "ai",
+          operation: "replace_text_range",
+          patchId: "patch-accepted",
+          payload: { kind: "replace_text", text: "Accepted intro" },
+          status: "accepted",
+          suggestedText: "Accepted intro",
+          target: { endOffset: 3, nodeId: "paragraph-1", startOffset: 0, targetType: "text_range" },
+          title: "Accepted patch",
+        },
+        {
+          author: "ai",
+          operation: "replace_text_range",
+          patchId: "patch-edited",
+          payload: { kind: "replace_text", text: "Edited intro" },
+          status: "edited",
+          suggestedText: "Edited intro",
+          target: { endOffset: 3, nodeId: "paragraph-1", startOffset: 0, targetType: "text_range" },
+          title: "Edited patch",
+        },
+      ],
+      status: "in_review",
+      title: "Bulk reject",
+    };
+
+    act(() => {
+      result.current.loadPatchSet(patchSet);
+      result.current.handleRejectPatches(["patch-accepted", "patch-edited"]);
+    });
+
+    expect(result.current.patchSet?.patches).toEqual(expect.arrayContaining([
+      expect.objectContaining({ patchId: "patch-accepted", status: "rejected" }),
+      expect.objectContaining({ patchId: "patch-edited", status: "rejected" }),
+    ]));
+  });
+
   it("updates rich-text document state with the full applied snapshot", async () => {
     const updateActiveDoc = vi.fn();
     const setLiveEditorHtml = vi.fn();
@@ -283,5 +398,198 @@ describe("usePatchReview", () => {
       tiptapJson: null,
     }));
     expect(setLiveEditorHtml).toHaveBeenCalledWith(expect.stringContaining("Fixed body."));
+  });
+
+  it("persists TOC placeholders in markdown and rehydrates them back into a TOC node", async () => {
+    const updateActiveDoc = vi.fn();
+    const setLiveEditorHtml = vi.fn();
+    const activeEditor = createActiveEditor(richTextDocumentJson);
+    const sourceAst = serializeTiptapToAst(richTextDocumentJson, { documentNodeId: "doc-1" });
+    const analysis = analyzeTocSuggestion(sourceAst, [
+      { level: 1, title: "Overview" },
+    ], 2);
+    const patchSet = buildTocPatchSetWithAst(sourceAst, {
+      analysis,
+      documentId: "doc-1",
+      maxDepth: 2,
+      patchSetId: "toc-patch-set",
+      rationale: "Insert a TOC placeholder.",
+    });
+    const acceptedPatchSet: DocumentPatchSet = {
+      ...patchSet,
+      patches: patchSet.patches.map((patch) => ({
+        ...patch,
+        status: "accepted" as const,
+      })),
+    };
+
+    const { result } = renderHook(() => usePatchReview({
+      activeDoc: createActiveDoc(),
+      activeEditor: activeEditor as never,
+      bumpEditorKey: vi.fn(),
+      onVersionSnapshot: vi.fn(),
+      onWorkspaceSync: vi.fn(),
+      setLiveEditorHtml,
+      updateActiveDoc,
+    }), { wrapper });
+
+    act(() => {
+      result.current.loadPatchSet(acceptedPatchSet);
+    });
+
+    await act(async () => {
+      await result.current.applyReviewedPatches();
+    });
+
+    const appliedPatch = updateActiveDoc.mock.calls[0]?.[0];
+
+    expect(appliedPatch.content).toContain("[[toc:2]]");
+    expect(appliedPatch.sourceSnapshots?.markdown).toContain("[[toc:2]]");
+    expect(setLiveEditorHtml).toHaveBeenCalledWith(expect.stringContaining('data-type="toc"'));
+
+    const onTiptapChange = vi.fn();
+    render(
+      <MarkdownEditor
+        documentFeaturesEnabled
+        initialContent={appliedPatch.content}
+        initialTiptapDoc={emptyTiptapDoc}
+        onTiptapChange={onTiptapChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(onTiptapChange).toHaveBeenCalled();
+    }, { timeout: 20000 });
+
+    const lastTiptapDoc = onTiptapChange.mock.calls.at(-1)?.[0] as JSONContent | undefined;
+    expect(screen.queryByText("[[toc:2]]")).not.toBeInTheDocument();
+    expect(lastTiptapDoc?.content?.[0]).toEqual(expect.objectContaining({
+      attrs: expect.objectContaining({ maxDepth: 2 }),
+      type: "tableOfContents",
+    }));
+  }, 30000);
+
+  it("records a preflight apply report when the rich-text editor is unavailable", async () => {
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      documentId: "doc-1",
+      patchSetId: "patch-set-preflight",
+      patches: [{
+        author: "ai",
+        operation: "replace_text_range",
+        patchId: "patch-preflight",
+        payload: {
+          kind: "replace_text",
+          text: "New",
+        },
+        status: "accepted",
+        target: {
+          endOffset: 3,
+          nodeId: "paragraph-1",
+          startOffset: 0,
+          targetType: "text_range",
+        },
+        title: "Preflight patch",
+      }],
+      status: "in_review",
+      title: "Preflight review",
+    };
+    const { result } = renderHook(() => usePatchReview({
+      activeDoc: createActiveDoc(),
+      activeEditor: null,
+      bumpEditorKey: vi.fn(),
+      onVersionSnapshot: vi.fn(),
+      onWorkspaceSync: vi.fn(),
+      setLiveEditorHtml: vi.fn(),
+      updateActiveDoc: vi.fn(),
+    }), { wrapper });
+
+    act(() => {
+      result.current.loadPatchSet(patchSet);
+    });
+
+    await act(async () => {
+      await result.current.applyReviewedPatches();
+    });
+
+    expect(result.current.lastApplyReport).toEqual(expect.objectContaining({
+      appliedPatchIds: [],
+      failures: [expect.objectContaining({ message: "hooks.patchReview.editorNotReady" })],
+      phase: "rich_text",
+      scope: "preflight",
+      warnings: [],
+    }));
+  });
+
+  it("records partial apply failures with applied patch ids", async () => {
+    const updateActiveDoc = vi.fn();
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      documentId: "doc-1",
+      patchSetId: "patch-set-partial",
+      patches: [
+        {
+          author: "ai",
+          operation: "delete_node",
+          patchId: "patch-delete",
+          status: "accepted",
+          target: {
+            nodeId: "paragraph-1",
+            targetType: "node",
+          },
+          title: "Delete paragraph",
+        },
+        {
+          author: "ai",
+          operation: "replace_text_range",
+          patchId: "patch-missing-target",
+          payload: {
+            kind: "replace_text",
+            text: "New",
+          },
+          status: "accepted",
+          target: {
+            endOffset: 3,
+            nodeId: "paragraph-1",
+            startOffset: 0,
+            targetType: "text_range",
+          },
+          title: "Replace missing paragraph",
+        },
+      ],
+      status: "in_review",
+      title: "Partial apply review",
+    };
+    const { result } = renderHook(() => usePatchReview({
+      activeDoc: createActiveDoc(),
+      activeEditor: createActiveEditor(richTextDocumentJson) as never,
+      bumpEditorKey: vi.fn(),
+      onVersionSnapshot: vi.fn(),
+      onWorkspaceSync: vi.fn(),
+      setLiveEditorHtml: vi.fn(),
+      updateActiveDoc,
+    }), { wrapper });
+
+    act(() => {
+      result.current.loadPatchSet(patchSet);
+    });
+
+    await act(async () => {
+      await result.current.applyReviewedPatches();
+    });
+
+    expect(updateActiveDoc).toHaveBeenCalled();
+    expect(result.current.lastApplyReport).toEqual(expect.objectContaining({
+      appliedPatchIds: ["patch-delete"],
+      failures: [expect.objectContaining({
+        message: expect.stringContaining('Patch "patch-missing-target" could not find target node "paragraph-1".'),
+        patchId: "patch-missing-target",
+        patchTitle: "Replace missing paragraph",
+      })],
+      phase: "rich_text",
+      scope: "apply",
+    }));
   });
 });

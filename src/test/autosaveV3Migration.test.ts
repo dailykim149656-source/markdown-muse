@@ -22,7 +22,12 @@ vi.mock("@/lib/documents/autosaveV3Store", () => ({
   writeAutosaveV3Snapshot: mockWriteAutosaveV3Snapshot,
 }));
 
-import { DOCSY_AUTOSAVE_STORAGE_KEY, hydrateSavedData, saveData } from "@/components/editor/useAutoSave";
+import {
+  DOCSY_AUTOSAVE_STORAGE_KEY,
+  hydrateSavedData,
+  saveData,
+  saveDataForUnload,
+} from "@/components/editor/useAutoSave";
 
 describe("autosave v3 migration", () => {
   beforeEach(() => {
@@ -105,5 +110,91 @@ describe("autosave v3 migration", () => {
         dirtyDocumentIds: ["doc-2"],
       }),
     );
+  });
+
+  it("prefers a newer local fallback when the v3 snapshot is stale", async () => {
+    mockReadAutosaveV3Snapshot.mockResolvedValue({
+      activeDocId: "doc-3",
+      documents: [{
+        ast: null,
+        content: "# Older",
+        createdAt: 1,
+        id: "doc-3",
+        metadata: {},
+        mode: "markdown",
+        name: "Draft",
+        sourceSnapshots: { markdown: "# Older" },
+        storageKind: "docsy",
+        tiptapJson: null,
+        updatedAt: 2,
+      }],
+      lastSaved: 100,
+      version: 2,
+    });
+    localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify({
+      activeDocId: "doc-3",
+      documents: [{
+        ast: null,
+        content: "# Newer",
+        createdAt: 1,
+        id: "doc-3",
+        metadata: {},
+        mode: "markdown",
+        name: "Draft",
+        sourceSnapshots: { markdown: "# Newer" },
+        storageKind: "docsy",
+        tiptapJson: null,
+        updatedAt: 3,
+      }],
+      lastSaved: 200,
+      version: 2,
+    }));
+
+    const hydrated = await hydrateSavedData();
+
+    expect(hydrated?.documents[0]?.content).toBe("# Newer");
+    expect(mockWriteAutosaveV3Snapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activeDocId: "doc-3",
+        documents: expect.arrayContaining([
+          expect.objectContaining({
+            content: "# Newer",
+            id: "doc-3",
+          }),
+        ]),
+      }),
+      expect.objectContaining({
+        dirtyDocumentIds: ["doc-3"],
+      }),
+    );
+    expect(localStorage.getItem(DOCSY_AUTOSAVE_STORAGE_KEY)).toContain("# Newer");
+  });
+
+  it("forces a reload-safe local fallback during unload saves", () => {
+    const largeContent = "A".repeat(60_000);
+
+    const result = saveDataForUnload({
+      activeDocId: "doc-4",
+      documents: [{
+        ast: null,
+        content: largeContent,
+        createdAt: 1,
+        id: "doc-4",
+        metadata: {},
+        mode: "markdown",
+        name: "Large Draft",
+        sourceSnapshots: { markdown: largeContent },
+        storageKind: "docsy",
+        tiptapJson: null,
+        updatedAt: 3,
+      }],
+      lastSaved: 200,
+      version: 2,
+    }, {
+      reason: "beforeunload",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(localStorage.getItem(DOCSY_AUTOSAVE_STORAGE_KEY)).toContain("Large Draft");
   });
 });

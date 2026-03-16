@@ -310,6 +310,7 @@ const renderBlockNode = (node: BlockNode, footnoteMap: Map<string, string>): str
     case "table_of_contents":
       return `<div${renderAttributes([
         ["data-type", "toc"],
+        ["data-max-depth", node.maxDepth ?? 3],
         ["data-node-id", node.nodeId],
       ])}>Table of Contents</div>`;
     case "footnote_item":

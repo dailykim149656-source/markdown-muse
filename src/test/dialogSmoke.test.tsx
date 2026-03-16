@@ -26,6 +26,25 @@ const renderWithI18n = (ui: ReactNode) =>
     </I18nContext.Provider>,
   );
 
+const visualNavigatorStub = {
+  canStart: false,
+  clearHistory: vi.fn(),
+  confirmPendingAction: vi.fn(),
+  history: [],
+  intent: "",
+  isRunning: false,
+  lastConfidence: null,
+  lastError: null,
+  lastRationale: null,
+  pendingConfirmation: null,
+  rejectPendingAction: vi.fn(),
+  setIntent: vi.fn(),
+  startRun: vi.fn(),
+  statusText: null,
+  stopReason: null,
+  stopRun: vi.fn(),
+};
+
 describe("Dialog smoke paths", () => {
   it("renders ShareLinkDialog when opened", () => {
     renderWithI18n(
@@ -62,12 +81,15 @@ describe("Dialog smoke paths", () => {
       <PatchReviewDialog
         acceptedPatchCount={0}
         onAccept={vi.fn()}
+        onAcceptSelected={vi.fn()}
         onApply={vi.fn()}
         onClear={vi.fn()}
         onEdit={vi.fn()}
+        lastApplyReport={null}
         onLoadPatchSet={vi.fn()}
         onOpenChange={vi.fn()}
         onReject={vi.fn()}
+        onRejectSelected={vi.fn()}
         open
         patchSet={null}
         workspaceSyncWarnings={[]}
@@ -82,12 +104,15 @@ describe("Dialog smoke paths", () => {
       <PatchReviewDialog
         acceptedPatchCount={1}
         onAccept={vi.fn()}
+        onAcceptSelected={vi.fn()}
         onApply={vi.fn()}
         onClear={vi.fn()}
         onEdit={vi.fn()}
+        lastApplyReport={null}
         onLoadPatchSet={vi.fn()}
         onOpenChange={vi.fn()}
         onReject={vi.fn()}
+        onRejectSelected={vi.fn()}
         open
         patchSet={{
           author: "ai",
@@ -127,9 +152,12 @@ describe("Dialog smoke paths", () => {
         comparePreview={null}
         liveAgent={{
           addDriveReference: vi.fn(),
+          artifacts: [],
           availableLocalReferences: [],
+          availableTargetDocuments: [],
           composerText: "",
           confirmPendingAction: vi.fn(),
+          createSummaryDocumentFromArtifact: vi.fn(),
           discardPendingAction: vi.fn(),
           isSubmitting: false,
           latestDraftPreview: null,
@@ -137,9 +165,11 @@ describe("Dialog smoke paths", () => {
           latestError: null,
           latestStatus: null,
           messages: [],
+          openArtifactPatchReview: vi.fn(),
           pendingConfirmation: null,
           queueDriveImport: vi.fn(),
           removeDriveReference: vi.fn(),
+          resolveArtifactDocumentTarget: vi.fn(),
           resetThread: vi.fn(),
           selectedDriveReferences: [],
           selectedLocalReferenceIds: [],
@@ -149,6 +179,7 @@ describe("Dialog smoke paths", () => {
           toggleLocalReference: vi.fn(),
         }}
         onCompare={vi.fn()}
+        onCreateSummaryDocument={vi.fn()}
         onExtractProcedure={vi.fn()}
         onGenerateSection={vi.fn()}
         onGenerateToc={vi.fn()}
@@ -156,12 +187,14 @@ describe("Dialog smoke paths", () => {
         onOpenChange={vi.fn()}
         onSuggestUpdates={vi.fn()}
         onSummarize={vi.fn()}
+        lastSummaryObjective={null}
         open
         procedureResult={null}
         richTextAvailable={false}
         summaryResult={null}
         tocPreview={null}
         updateSuggestionPreview={null}
+        visualNavigator={visualNavigatorStub}
       />,
     );
 
@@ -179,9 +212,12 @@ describe("Dialog smoke paths", () => {
         comparePreview={null}
         liveAgent={{
           addDriveReference: vi.fn(),
+          artifacts: [],
           availableLocalReferences: [],
+          availableTargetDocuments: [],
           composerText: "",
           confirmPendingAction: vi.fn(),
+          createSummaryDocumentFromArtifact: vi.fn(),
           discardPendingAction: vi.fn(),
           isSubmitting: false,
           latestDraftPreview: null,
@@ -189,9 +225,11 @@ describe("Dialog smoke paths", () => {
           latestError: null,
           latestStatus: null,
           messages: [],
+          openArtifactPatchReview: vi.fn(),
           pendingConfirmation: null,
           queueDriveImport: vi.fn(),
           removeDriveReference: vi.fn(),
+          resolveArtifactDocumentTarget: vi.fn(),
           resetThread: vi.fn(),
           selectedDriveReferences: [],
           selectedLocalReferenceIds: [],
@@ -201,6 +239,7 @@ describe("Dialog smoke paths", () => {
           toggleLocalReference: vi.fn(),
         }}
         onCompare={vi.fn()}
+        onCreateSummaryDocument={vi.fn()}
         onExtractProcedure={vi.fn()}
         onGenerateSection={vi.fn()}
         onGenerateToc={vi.fn()}
@@ -208,12 +247,14 @@ describe("Dialog smoke paths", () => {
         onOpenChange={vi.fn()}
         onSuggestUpdates={vi.fn()}
         onSummarize={vi.fn()}
+        lastSummaryObjective={null}
         open
         procedureResult={null}
         richTextAvailable
         summaryResult={null}
         tocPreview={null}
         updateSuggestionPreview={null}
+        visualNavigator={visualNavigatorStub}
       />,
     );
 

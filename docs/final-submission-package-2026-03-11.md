@@ -6,38 +6,39 @@ Docsy
 
 ## Tagline
 
-Gemini-powered review-first document maintenance
+Gemini-powered visual UI navigation for Docsy's document workflow
 
 ## One-line summary
 
-Docsy is a review-first AI document workflow agent that uses Gemini to turn technical document context into structured, reviewable editor actions.
+Docsy is a visual UI navigator and review-first document workflow agent that uses Gemini to interpret live Docsy viewport screenshots and trigger executable browser actions before handing off to patch review.
 
 ## Short description
 
-Docsy helps teams maintain technical documentation safely. Instead of auto-editing documents, it analyzes document context, related files, and editor state, then proposes structured actions and patch suggestions that users review before applying.
+Docsy helps teams maintain technical documentation safely. It now observes the real Docsy UI, chooses the next visible browser action, and then uses the existing review-first patch workflow to keep the user in control of document changes.
 
 ## Medium description
 
 Technical documentation drifts across multiple files. A procedure changes in one SOP or runbook, but related documents are often left outdated. Most AI tools can generate text, but they do not fit the real workflow of maintaining documentation safely.
 
-Docsy treats this as a workflow problem. The editor gathers document context, structure, related-document signals, and multimodal editor-state input, sends that to a Gemini-powered AI service, and receives structured JSON actions or patch proposals in return. The product then opens a review-first patch workflow instead of silently mutating the document.
+Docsy treats this as a workflow problem. The app captures the live Docsy viewport, adds lightweight UI hints and document context, sends that to a Gemini-powered AI service, and receives structured JSON browser actions or patch proposals in return. The product then executes one visible browser action at a time and opens a review-first patch workflow instead of silently mutating the document.
 
 ## Long description
 
-Docsy is an AI document workflow agent built for technical documentation such as SOPs, runbooks, onboarding guides, and engineering docs. The product is designed around one idea: AI should propose reviewable actions, not directly rewrite important documents without oversight.
+Docsy is a visual UI navigator and document workflow agent built for technical documentation such as SOPs, runbooks, onboarding guides, and engineering docs. The product is designed around one idea: AI should take visible browser actions safely and still keep important document edits reviewable.
 
-In the current demo flow, a user edits one technical document, and Docsy identifies related documents that may now be inconsistent. The app gathers the active document content, structural metadata, and an image payload representing the current editor state. That context is sent to a separate AI service running on Cloud Run, where Gemini is accessed through the Google GenAI SDK.
+In the current demo flow, a user launches the Visual Navigator and asks Docsy to complete a visible UI task such as opening the Google Workspace connection dialog or navigating to patch review. The app captures the real visible Docsy viewport, adds compact UI hints, and sends that context to a separate AI service running on Cloud Run, where Gemini is accessed through the Google GenAI SDK.
 
-Gemini returns structured JSON rather than free-form chat output. In the current implementation, that structured response can trigger a real editor action: opening patch review. The user then sees before/after patch cards, related document recommendations, conflict highlights, and TOC suggestion previews, and can accept or reject the proposed update.
+Gemini returns structured JSON rather than free-form chat output. In the current implementation, that structured response can trigger real browser actions such as opening the Google Workspace menu, opening the connection dialog, switching editor modes, or navigating to patch review. The user then sees before/after patch cards, related document recommendations, conflict highlights, and TOC suggestion previews, and can accept or reject the proposed update.
 
-This makes Docsy a better fit for real documentation maintenance workflows. It treats AI as a workflow assistant that understands structure, relationships, and review boundaries, rather than as an unrestricted text generator.
+This makes Docsy a stronger fit for real documentation maintenance workflows and for the UI Navigator challenge. Gemini becomes the user's hands on the visible Docsy UI, while document changes still stay reviewable.
 
 ## Core features
 
+- visual navigator tab with bounded browser action loop
 - review-first patch workflow
 - Gemini-backed structured JSON output
-- multimodal request path with image payload plus document context
-- one real UI action wired from model output
+- multimodal request path with live viewport screenshots plus document context
+- one real browser action wired from model output per turn
 - related-document recommendation
 - conflict highlighting
 - TOC suggestion preview
@@ -52,37 +53,38 @@ Docsy needs more than text generation:
 - product-ready action output
 - safe workflow integration
 
-Gemini is used here not as a chat layer, but as an engine for structured workflow decisions inside an editor.
+Gemini is used here not as a chat layer, but as an engine for visual UI decisions and structured workflow actions inside the editor.
 
 ## Demo flow
 
-1. Open multiple related technical documents.
-2. Update one procedure.
-3. Let Docsy identify related documents and conflict signals.
-4. Send structured multimodal context to Gemini.
-5. Receive action JSON and patch proposal.
-6. Open patch review.
-7. Accept or reject the proposed change.
+1. Open Docsy and launch the Visual Navigator.
+2. Ask it to open the Google Workspace connection dialog or patch review.
+3. Let Docsy capture the live viewport and send structured multimodal context to Gemini.
+4. Receive one strict JSON browser action at a time.
+5. Watch Docsy execute the visible UI flow.
+6. Continue into patch review.
+7. Accept or reject the proposed document change.
 
 ## Gemini judging bullets
 
 - Uses Gemini through the Google GenAI SDK
-- Includes a multimodal input path
+- Includes a multimodal input path with live viewport screenshots
 - Receives strict structured JSON output
-- Maps model output to a real UI action
+- Maps model output to real browser actions
 - Demonstrates a real product workflow, not just prompting
 
 ## What makes this different
 
 - It is not a generic AI text editor
 - It does not rely on silent auto-editing
-- It turns model output into operational editor behavior
+- It turns model output into visible browser actions and operational editor behavior
 - It keeps the user in control with review-first patch application
 
 ## Current limitations
 
-- the current image input is a generated editor-state snapshot, not a full DOM screenshot capture
-- one action type is wired end-to-end today
+- the current navigator is limited to the visible Docsy web UI, not arbitrary websites or desktop apps
+- v1 uses screenshots, not screen recordings
+- the executable action set is intentionally bounded for safety
 - final Cloud Run deployment still needs real project-specific values
 
 ## Links to fill before submission
@@ -94,25 +96,25 @@ Gemini is used here not as a chat layer, but as an engine for structured workflo
 
 ## Final 60-second demo narration
 
-This is Docsy, an AI document workflow agent for technical documentation.
+This is Docsy, a Gemini-powered visual UI navigator for technical document workflows.
 
-Here I have multiple related documents open in the editor. If I update a procedure in one document, related documents can quickly become inconsistent.
+Instead of only generating text, Docsy can now look at the real visible UI and take the next browser action inside the current session.
 
-I’ll change this onboarding step. Now Docsy can recommend related documents, surface conflict signals, and send document context plus multimodal editor state to a Gemini-powered AI service.
+I ask the navigator to open the Google Workspace connection flow. Docsy captures the live viewport, sends that screenshot to Gemini on Cloud Run through the Google GenAI SDK, and gets back one structured browser action at a time.
 
-Instead of returning raw text, Gemini returns structured action data and a reviewable patch proposal.
+Docsy executes those actions visibly in the browser. Then it can continue into the existing review-first patch workflow for the document itself.
 
-Docsy then opens patch review, where I can inspect before and after changes, understand the proposed update, and choose whether to accept or reject it.
+Patch review still works the same way: I inspect the before and after changes and decide whether to accept them.
 
-The key idea is review-first AI. Gemini helps maintain documentation, but the user stays in control of every change.
+The key idea is that Gemini becomes the user's hands on screen, but the user still stays in control of every document change.
 
 ## Opening line
 
-Docsy is a Gemini-powered AI document workflow agent for technical documentation.
+Docsy is a Gemini-powered visual UI navigator for technical documentation workflows.
 
 ## Closing line
 
-Docsy shows how Gemini can power safer document maintenance through structured, reviewable workflow actions.
+Docsy shows how Gemini can power safer document maintenance through live UI navigation and structured, reviewable workflow actions.
 
 ## Submission checklist
 
@@ -122,8 +124,8 @@ Docsy shows how Gemini can power safer document maintenance through structured, 
 - [ ] AI service URL filled
 - [ ] `/api/ai/health` verified
 - [ ] demo under 90 seconds
-- [ ] related-document recommendation visible
-- [ ] conflict highlight visible
+- [ ] visual navigator loop visible
+- [ ] live browser action executes successfully
 - [ ] patch review opens during demo
 
 ## Related reference docs

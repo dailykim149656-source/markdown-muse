@@ -13,9 +13,11 @@ import {
   isAutoSaveWriteFailure,
   loadSavedData,
   saveData,
+  saveDataForUnload,
   useAutoSave,
 } from "@/components/editor/useAutoSave";
 import { readAutosavePointer } from "@/lib/documents/autosaveV3Store";
+import { recordAutosaveDebugEvent } from "@/lib/documents/autosaveDebug";
 
 const areValuesEqual = (left: unknown, right: unknown) => {
   if (Object.is(left, right)) {
@@ -157,6 +159,16 @@ export const useDocumentManager = () => {
   }, [autoSaveState.lastSavedAt]);
 
   useEffect(() => {
+    recordAutosaveDebugEvent("editor_boot", {
+      activeDocId: initialActiveDocId,
+      docCount: initialDocuments.length,
+      hasInitialSavedData: Boolean(initialSavedData),
+      hasPointer: Boolean(readAutosavePointer()),
+      restoredDocuments: hasMeaningfulSavedDocuments(initialSavedData),
+    });
+  }, [initialActiveDocId, initialDocuments.length, initialSavedData]);
+
+  useEffect(() => {
     if (!shouldHydrateFromStorage) {
       return;
     }
@@ -164,6 +176,10 @@ export const useDocumentManager = () => {
     let cancelled = false;
 
     const hydrateDocuments = async () => {
+      recordAutosaveDebugEvent("hydrate_start", {
+        hasInitialSavedData: Boolean(initialSavedData),
+        hasPointer: Boolean(readAutosavePointer()),
+      });
       const hydratedData = await hydrateSavedData();
 
       if (
@@ -172,6 +188,15 @@ export const useDocumentManager = () => {
         || hasUserMutatedRef.current
         || hydratedData.documents.length === 0
       ) {
+        recordAutosaveDebugEvent("hydrate_result", {
+          cancelled,
+          docCount: hydratedData?.documents.length ?? 0,
+          outcome: cancelled
+            ? "cancelled"
+            : hasUserMutatedRef.current
+              ? "ignored_after_mutation"
+              : "no_data",
+        });
         return;
       }
 
@@ -186,6 +211,10 @@ export const useDocumentManager = () => {
       });
 
       if (nextSnapshotKey === lastSavedSnapshotKeyRef.current) {
+        recordAutosaveDebugEvent("hydrate_result", {
+          docCount: nextDocuments.length,
+          outcome: "snapshot_unchanged",
+        });
         return;
       }
 
@@ -203,6 +232,11 @@ export const useDocumentManager = () => {
         status: "saved",
       });
       setEditorKey((key) => key + 1);
+      recordAutosaveDebugEvent("hydrate_result", {
+        activeDocId: nextActiveDocId,
+        docCount: nextDocuments.length,
+        outcome: "applied",
+      });
     };
 
     void hydrateDocuments();
@@ -210,21 +244,33 @@ export const useDocumentManager = () => {
     return () => {
       cancelled = true;
     };
-  }, [clearDirtyDocuments, shouldHydrateFromStorage]);
+  }, [clearDirtyDocuments, initialSavedData, shouldHydrateFromStorage]);
 
   const persistSnapshot = useCallback((
     nextDocuments: DocumentData[],
     nextActiveDocId: string,
     lastSavedOverride?: number,
+    options?: {
+      reason?: "autosave" | "manual" | "reset" | "pagehide" | "beforeunload";
+      useUnloadFallback?: boolean;
+    },
   ) => {
-    const result = saveData({
+    const snapshot = {
       version: 2,
       documents: nextDocuments,
       activeDocId: nextActiveDocId,
       lastSaved: lastSavedOverride ?? autoSaveState.lastSavedAt ?? Date.now(),
-    }, {
-      dirtyDocumentIds: Array.from(dirtyDocumentIdsRef.current),
-    });
+    } satisfies AutoSaveData;
+    const dirtyDocumentIds = Array.from(dirtyDocumentIdsRef.current);
+    const result = options?.useUnloadFallback
+      ? saveDataForUnload(snapshot, {
+        dirtyDocumentIds,
+        reason: options.reason,
+      })
+      : saveData(snapshot, {
+        dirtyDocumentIds,
+        reason: options?.reason,
+      });
 
     if (isAutoSaveWriteFailure(result)) {
       const { error } = result;
@@ -245,14 +291,14 @@ export const useDocumentManager = () => {
     });
     lastSavedSnapshotKeyRef.current = JSON.stringify({
       activeDocId: nextActiveDocId,
-        documents: nextDocuments,
-        version: 2,
-      });
+      documents: nextDocuments,
+      version: 2,
+    });
     return result;
   }, [autoSaveState.lastSavedAt, clearDirtyDocuments]);
 
   const saveImmediate = useCallback(() => {
-    persistSnapshot(documents, activeDocId);
+    persistSnapshot(documents, activeDocId, undefined, { reason: "manual" });
   }, [activeDocId, documents, persistSnapshot]);
 
   const resetDocuments = useCallback(() => {
@@ -278,6 +324,8 @@ export const useDocumentManager = () => {
       documents: nextDocuments,
       lastSaved: Date.now(),
       version: 2,
+    }, {
+      reason: "reset",
     });
 
     if (isAutoSaveWriteFailure(result)) {
@@ -474,15 +522,22 @@ export const useDocumentManager = () => {
   }, [documents, markDocumentsDirty, persistSnapshot, resolveUniqueDocumentId]);
 
   useEffect(() => {
-    const flushSnapshot = () => {
+    const flushSnapshot = (reason: "pagehide" | "beforeunload") => {
       const snapshot = {
         activeDocId: activeDocIdRef.current,
         documents: documentsRef.current,
         version: 2 as const,
       };
       const snapshotKey = JSON.stringify(snapshot);
+      const pending = snapshotKey !== lastSavedSnapshotKeyRef.current;
 
-      if (snapshotKey === lastSavedSnapshotKeyRef.current) {
+      recordAutosaveDebugEvent(reason === "pagehide" ? "pagehide_flush" : "beforeunload_flush", {
+        activeDocId: activeDocIdRef.current,
+        docCount: documentsRef.current.length,
+        pending,
+      });
+
+      if (!pending) {
         return;
       }
 
@@ -490,22 +545,26 @@ export const useDocumentManager = () => {
         documentsRef.current,
         activeDocIdRef.current,
         lastSavedAtRef.current ?? Date.now(),
+        {
+          reason,
+          useUnloadFallback: true,
+        },
       );
     };
 
     const handlePageHide = () => {
-      flushSnapshot();
+      flushSnapshot("pagehide");
     };
 
     const handleBeforeUnload = () => {
-      flushSnapshot();
+      flushSnapshot("beforeunload");
     };
 
     window.addEventListener("pagehide", handlePageHide);
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      flushSnapshot();
+      flushSnapshot("beforeunload");
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };

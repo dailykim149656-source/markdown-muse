@@ -51,6 +51,11 @@ describe("Markdown round-trip: Turndown custom rules (HTML→MD)", () => {
     const md = htmlToMd(html);
     expect(md).toContain("[^fn-1]: 각주 내용입니다");
   });
+
+  it("converts TOC HTML to TOC placeholders", () => {
+    expect(htmlToMd('<div data-type="toc">Table of Contents</div>').trim()).toBe("[[toc]]");
+    expect(htmlToMd('<div data-type="toc" data-max-depth="2">Table of Contents</div>').trim()).toBe("[[toc:2]]");
+  });
 });
 
 describe("Markdown round-trip: marked custom extensions (MD→HTML)", () => {
@@ -92,6 +97,17 @@ describe("Markdown round-trip: marked custom extensions (MD→HTML)", () => {
     expect(html).toContain('data-footnote-id="fn-1"');
     expect(html).toContain("각주 내용입니다");
   });
+
+  it("parses TOC placeholders into TOC HTML blocks", () => {
+    const defaultDepthHtml = mdToHtml("[[toc]]");
+    const explicitDepthHtml = mdToHtml("[[toc:2]]");
+
+    expect(defaultDepthHtml).toContain('data-type="toc"');
+    expect(defaultDepthHtml).toContain('data-max-depth="3"');
+    expect(explicitDepthHtml).toContain('data-type="toc"');
+    expect(explicitDepthHtml).toContain('data-max-depth="2"');
+  });
+
   it("converts table HTML to GFM table", () => {
     const html = '<table><thead><tr><th>이름</th><th>나이</th></tr></thead><tbody><tr><td>홍길동</td><td>30</td></tr></tbody></table>';
     const md = htmlToMd(html);

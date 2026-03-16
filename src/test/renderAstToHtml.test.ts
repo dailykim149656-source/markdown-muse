@@ -17,6 +17,7 @@ describe("renderAstToHtml", () => {
     expect(html).toContain('data-type="figure-caption"');
     expect(html).toContain('data-type="footnote-ref"');
     expect(html).toContain('data-type="footnote-item"');
+    expect(html).toContain('data-max-depth="3"');
     expect(html).toContain('data-node-id="');
     expect(html).toMatchSnapshot();
   });

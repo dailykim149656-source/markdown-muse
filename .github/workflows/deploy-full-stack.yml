@@ -450,6 +450,21 @@ jobs:
             fi
           done
 
+      - name: Verify AI runtime smoke on direct Cloud Run URL
+        run: |
+          set -euo pipefail
+          for i in {1..10}; do
+            if node scripts/check-ai-runtime-smoke.mjs --origin "${{ steps.ai.outputs.url }}" --label "Cloud Run direct"; then
+              echo "Direct Cloud Run AI runtime smoke check passed!"
+              exit 0
+            fi
+            echo "Direct Cloud Run AI runtime smoke check failed (attempt $i), retrying in 5 seconds..."
+            sleep 5
+          done
+
+          echo "Direct Cloud Run AI runtime smoke check failed after 10 attempts."
+          exit 1
+
       - name: Verify AI to TeX proxy health
         run: |
           set -euo pipefail
@@ -696,3 +711,26 @@ jobs:
             --only hosting \
             --project "${FIREBASE_PROJECT_ID}" \
             --non-interactive
+
+      - name: Verify AI runtime smoke through frontend origin
+        run: |
+          set -euo pipefail
+          FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
+          if [ -z "${FRONTEND_ORIGIN}" ]; then
+            FRONTEND_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          fi
+          if [ -z "${FRONTEND_ORIGIN}" ]; then
+            FRONTEND_ORIGIN="https://docsy.cyou"
+          fi
+
+          for i in {1..10}; do
+            if node scripts/check-ai-runtime-smoke.mjs --origin "${FRONTEND_ORIGIN}" --label "Frontend same-origin rewrite"; then
+              echo "Frontend same-origin AI runtime smoke check passed!"
+              exit 0
+            fi
+            echo "Frontend same-origin AI runtime smoke check failed (attempt $i), retrying in 5 seconds..."
+            sleep 5
+          done
+
+          echo "Frontend same-origin AI runtime smoke check failed after 10 attempts."
+          exit 1

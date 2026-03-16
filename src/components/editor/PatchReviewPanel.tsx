@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Link2, TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/i18n/useI18n";
@@ -10,8 +11,10 @@ import type { DocumentPatch, DocumentPatchSet, PatchStatus } from "@/types/docum
 
 interface PatchReviewPanelProps {
   onAccept?: (patch: DocumentPatch) => void;
+  onAcceptSelected?: (patchIds: string[]) => void;
   onEdit?: (patch: DocumentPatch, suggestedText: string) => void;
   onReject?: (patch: DocumentPatch) => void;
+  onRejectSelected?: (patchIds: string[]) => void;
   patchSet: DocumentPatchSet;
 }
 
@@ -139,10 +142,18 @@ const getStatusVariant = (status: PatchStatus) => {
   }
 };
 
-const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewPanelProps) => {
+const PatchReviewPanel = ({
+  onAccept,
+  onAcceptSelected,
+  onEdit,
+  onReject,
+  onRejectSelected,
+  patchSet,
+}: PatchReviewPanelProps) => {
   const { t } = useI18n();
   const [showProvenanceGapsOnly, setShowProvenanceGapsOnly] = useState(false);
   const [selectedPatchId, setSelectedPatchId] = useState<string>(patchSet.patches[0]?.patchId ?? "");
+  const [selectedPatchIds, setSelectedPatchIds] = useState<Set<string>>(() => new Set());
   const [editedText, setEditedText] = useState("");
   const filteredPatches = useMemo(
     () => showProvenanceGapsOnly
@@ -165,6 +176,14 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
     pending: patchSet.patches.filter((patch) => patch.status === "pending").length,
     rejected: patchSet.patches.filter((patch) => patch.status === "rejected").length,
   }), [patchSet.patches]);
+  const visiblePatchIds = useMemo(() => filteredPatches.map((patch) => patch.patchId), [filteredPatches]);
+  const selectedVisibleCount = useMemo(
+    () => visiblePatchIds.filter((patchId) => selectedPatchIds.has(patchId)).length,
+    [selectedPatchIds, visiblePatchIds],
+  );
+  const allVisibleSelected = visiblePatchIds.length > 0 && selectedVisibleCount === visiblePatchIds.length;
+  const selectedCount = selectedPatchIds.size;
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
 
   useEffect(() => {
     setSelectedPatchId((currentPatchId) => {
@@ -179,6 +198,10 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
   useEffect(() => {
     setEditedText(selectedPatch ? getPatchPreviewText(selectedPatch) : "");
   }, [selectedPatch]);
+
+  useEffect(() => {
+    setSelectedPatchIds(new Set());
+  }, [patchSet.patchSetId]);
 
   if (!selectedPatch) {
     return null;
@@ -205,6 +228,68 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
     setSelectedPatchId(filteredPatches[nextIndex]?.patchId ?? "");
   };
 
+  const toggleSelectedPatch = (patchId: string, checked: boolean | "indeterminate") => {
+    setSelectedPatchIds((currentSelectedPatchIds) => {
+      const nextSelectedPatchIds = new Set(currentSelectedPatchIds);
+
+      if (checked) {
+        nextSelectedPatchIds.add(patchId);
+      } else {
+        nextSelectedPatchIds.delete(patchId);
+      }
+
+      return nextSelectedPatchIds;
+    });
+  };
+
+  const toggleVisibleSelection = (checked: boolean | "indeterminate") => {
+    setSelectedPatchIds((currentSelectedPatchIds) => {
+      const nextSelectedPatchIds = new Set(currentSelectedPatchIds);
+
+      if (checked) {
+        visiblePatchIds.forEach((patchId) => nextSelectedPatchIds.add(patchId));
+      } else {
+        visiblePatchIds.forEach((patchId) => nextSelectedPatchIds.delete(patchId));
+      }
+
+      return nextSelectedPatchIds;
+    });
+  };
+
+  const selectAllVisible = () => {
+    setSelectedPatchIds((currentSelectedPatchIds) => {
+      const nextSelectedPatchIds = new Set(currentSelectedPatchIds);
+      visiblePatchIds.forEach((patchId) => nextSelectedPatchIds.add(patchId));
+      return nextSelectedPatchIds;
+    });
+  };
+
+  const selectAllPatches = () => {
+    setSelectedPatchIds(new Set(patchSet.patches.map((patch) => patch.patchId)));
+  };
+
+  const clearSelection = () => {
+    setSelectedPatchIds(new Set());
+  };
+
+  const acceptSelected = () => {
+    if (!onAcceptSelected || selectedCount === 0) {
+      return;
+    }
+
+    onAcceptSelected(Array.from(selectedPatchIds));
+    clearSelection();
+  };
+
+  const rejectSelected = () => {
+    if (!onRejectSelected || selectedCount === 0) {
+      return;
+    }
+
+    onRejectSelected(Array.from(selectedPatchIds));
+    clearSelection();
+  };
+
   return (
     <div className="grid h-full min-h-0 gap-4 overflow-hidden xl:grid-cols-[minmax(16rem,18rem)_minmax(0,1fr)]" data-testid="patch-review-panel">
       <div className="flex h-full min-h-0 flex-col gap-4">
@@ -217,22 +302,71 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
             <Badge variant={missingProvenanceCount > 0 ? "outline" : "secondary"}>
               {t("patchReview.provenanceGapCount", { count: missingProvenanceCount })}
             </Badge>
+            {selectedCount > 0 && (
+              <Badge variant="secondary">{t("patchReview.selectedCount", { count: selectedCount })}</Badge>
+            )}
           </div>
-          <Button
-            className="mt-3 h-auto min-h-7 whitespace-normal text-left text-xs"
-            disabled={missingProvenanceCount === 0}
-            onClick={() => setShowProvenanceGapsOnly((current) => !current)}
-            size="sm"
-            type="button"
-            variant={showProvenanceGapsOnly ? "secondary" : "outline"}
-          >
-            {t("patchReview.provenanceGapsOnly")}
-          </Button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              className="h-auto min-h-7 whitespace-normal text-left text-xs"
+              disabled={missingProvenanceCount === 0}
+              onClick={() => setShowProvenanceGapsOnly((current) => !current)}
+              size="sm"
+              type="button"
+              variant={showProvenanceGapsOnly ? "secondary" : "outline"}
+            >
+              {t("patchReview.provenanceGapsOnly")}
+            </Button>
+            <Button className="h-auto min-h-7 whitespace-normal text-xs" onClick={selectAllVisible} size="sm" type="button" variant="outline">
+              {t("patchReview.selectVisible")}
+            </Button>
+            <Button className="h-auto min-h-7 whitespace-normal text-xs" onClick={selectAllPatches} size="sm" type="button" variant="outline">
+              {t("patchReview.selectAllInPatchSet")}
+            </Button>
+            <Button
+              className="h-auto min-h-7 whitespace-normal text-xs"
+              disabled={selectedCount === 0}
+              onClick={clearSelection}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {t("patchReview.clearSelection")}
+            </Button>
+            <Button
+              className="h-auto min-h-7 whitespace-normal text-xs"
+              disabled={selectedCount === 0}
+              onClick={acceptSelected}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              {t("patchReview.acceptSelected", { count: selectedCount })}
+            </Button>
+            <Button
+              className="h-auto min-h-7 whitespace-normal text-xs"
+              disabled={selectedCount === 0}
+              onClick={rejectSelected}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {t("patchReview.rejectSelected", { count: selectedCount })}
+            </Button>
+          </div>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-border">
           <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-            <span className="min-w-0 flex-1 text-sm font-medium">{t("patchReview.patchCount", { count: filteredPatches.length })}</span>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Checkbox
+                aria-label={t("patchReview.selectVisible")}
+                checked={allVisibleSelected ? true : someVisibleSelected ? "indeterminate" : false}
+                disabled={visiblePatchIds.length === 0}
+                onCheckedChange={toggleVisibleSelection}
+              />
+              <span className="min-w-0 flex-1 text-sm font-medium">{t("patchReview.patchCount", { count: filteredPatches.length })}</span>
+            </div>
             <div className="flex shrink-0 items-center gap-1">
               <Button className="h-7 w-7 p-0" onClick={() => moveSelection("prev")} size="sm" title={t("patchReview.previous")} variant="ghost">
                 <ChevronLeft className="h-4 w-4" />
@@ -248,29 +382,39 @@ const PatchReviewPanel = ({ onAccept, onEdit, onReject, patchSet }: PatchReviewP
           >
             <div className="space-y-1 p-2">
               {filteredPatches.map((patch, index) => (
-                <button
-                  key={patch.patchId}
-                  className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                <div
+                  className={`flex items-start gap-2 rounded-md border px-3 py-2 transition-colors ${
                     patch.patchId === selectedPatch.patchId
                       ? "border-primary bg-accent text-accent-foreground"
                       : "border-transparent hover:bg-muted"
                   }`}
-                  onClick={() => setSelectedPatchId(patch.patchId)}
-                  type="button"
+                  key={patch.patchId}
                 >
-                  <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="break-words font-medium leading-5">{index + 1}. {patch.title}</div>
-                      <div className="mt-1 break-all text-xs text-muted-foreground">{patch.operation}</div>
+                  <Checkbox
+                    aria-label={`${t("patchReview.selectPatch")} ${patch.title}`}
+                    checked={selectedPatchIds.has(patch.patchId)}
+                    className="mt-0.5"
+                    onCheckedChange={(checked) => toggleSelectedPatch(patch.patchId, checked)}
+                  />
+                  <button
+                    className="min-w-0 flex-1 text-left text-sm"
+                    onClick={() => setSelectedPatchId(patch.patchId)}
+                    type="button"
+                  >
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="break-words font-medium leading-5">{index + 1}. {patch.title}</div>
+                        <div className="mt-1 break-all text-xs text-muted-foreground">{patch.operation}</div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-1 sm:max-w-[10rem] sm:justify-end">
+                        <Badge className="max-w-full break-words" variant={getStatusVariant(patch.status)}>{t(`patchReview.status.${patch.status}`)}</Badge>
+                        {(patch.sources || []).length === 0 && (
+                          <Badge className="max-w-full break-words" variant="outline">{t("patchReview.provenanceGapBadge")}</Badge>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-1 sm:max-w-[10rem] sm:justify-end">
-                      <Badge className="max-w-full break-words" variant={getStatusVariant(patch.status)}>{t(`patchReview.status.${patch.status}`)}</Badge>
-                      {(patch.sources || []).length === 0 && (
-                        <Badge className="max-w-full break-words" variant="outline">{t("patchReview.provenanceGapBadge")}</Badge>
-                      )}
-                    </div>
-                  </div>
-                </button>
+                  </button>
+                </div>
               ))}
             </div>
           </ScrollArea>

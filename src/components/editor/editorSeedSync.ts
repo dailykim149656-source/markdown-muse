@@ -1,6 +1,7 @@
 import type { JSONContent } from "@tiptap/core";
 import type { Editor } from "@tiptap/react";
 import type { MutableRefObject } from "react";
+import { recordAutosaveDebugEvent } from "@/lib/documents/autosaveDebug";
 
 type SeedContent = JSONContent | string | null | undefined;
 
@@ -63,5 +64,9 @@ export const applyEditorSeed = ({
   onHtmlChange?.(editor.getHTML());
   onTiptapChange?.(editor.getJSON());
   seedSignatureRef.current = nextSignature;
+  recordAutosaveDebugEvent("seed_apply", {
+    contentKind: typeof nextContent === "string" ? "html" : "json",
+    signature: nextSignature,
+  });
   return true;
 };

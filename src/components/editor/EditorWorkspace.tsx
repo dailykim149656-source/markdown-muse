@@ -241,7 +241,7 @@ const EditorWorkspaceLayout = ({
   const showSplitPreview = !isMobile && previewOpen && activeMode !== "json" && activeMode !== "yaml";
 
   return (
-    <div className="relative flex h-[100svh] w-full overflow-hidden" ref={editorWorkspaceRef}>
+    <div className="relative flex h-[100svh] w-full overflow-hidden" data-visual-target="editor-workspace" ref={editorWorkspaceRef}>
       <FileSidebar {...sidebarProps} />
       {!isMobile && !isCollapsed && (
         <div

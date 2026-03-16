@@ -128,4 +128,31 @@ describe("normalizeAgentTurnResponse", () => {
     expect(response.newDocumentDraft).toBeUndefined();
     expect(response.currentDocumentDraft).toBeUndefined();
   });
+
+  it("normalizes delegated assistant capability effects", () => {
+    const response = normalizeAgentTurnResponse({
+      availableImportTargets: [],
+      driveCandidates: [],
+      response: {
+        assistantText: "I prepared a summary request.",
+        effect: {
+          capability: "summarize_document",
+          createDocumentAfter: true,
+          objective: "Summarize the current document.",
+          type: "delegate_ai_capability",
+        },
+      },
+    });
+
+    expect(response.effect).toEqual({
+      capability: "summarize_document",
+      createDocumentAfter: true,
+      objective: "Summarize the current document.",
+      prompt: undefined,
+      targetDocumentId: undefined,
+      targetDocumentName: undefined,
+      type: "delegate_ai_capability",
+    });
+    expect(response.assistantMessage.text).toContain("summary document");
+  });
 });

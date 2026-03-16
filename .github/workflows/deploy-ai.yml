@@ -9,6 +9,7 @@ on:
       - ".github/workflows/deploy-full-stack.yml"
       - "Dockerfile.ai"
       - "cloudbuild.ai.yaml"
+      - "scripts/check-ai-runtime-smoke.mjs"
       - "server/**"
       - "server/modules/config/**"
       - "scripts/validate-public-deploy-config.mjs"
@@ -280,6 +281,21 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Verify AI runtime smoke on direct Cloud Run URL
+        run: |
+          set -euo pipefail
+          for i in {1..10}; do
+            if node scripts/check-ai-runtime-smoke.mjs --origin "${{ steps.ai.outputs.url }}" --label "Cloud Run direct"; then
+              echo "Direct Cloud Run AI runtime smoke check passed!"
+              exit 0
+            fi
+            echo "Direct Cloud Run AI runtime smoke check failed (attempt $i), retrying in 5 seconds..."
+            sleep 5
+          done
+
+          echo "Direct Cloud Run AI runtime smoke check failed after 10 attempts."
+          exit 1
 
       - name: Verify AI to TeX proxy health
         run: |

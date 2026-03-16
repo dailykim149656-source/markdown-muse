@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import AiAgentTab from "@/components/editor/AiAgentTab";
+import VisualNavigatorTab from "@/components/editor/VisualNavigatorTab";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { LiveAgentRuntimeState } from "@/hooks/useLiveAgent";
+import type { VisualNavigatorRuntimeState } from "@/hooks/useVisualNavigator";
 import { useI18n } from "@/i18n/useI18n";
 import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
 import type { AiBusyAction, PatchPreviewResult, TocPreviewResult } from "@/hooks/useAiAssistant";
@@ -27,8 +29,10 @@ interface AiAssistantDialogProps {
   busyAction: AiBusyAction;
   compareCandidates: DocumentData[];
   comparePreview: PatchPreviewResult | null;
+  lastSummaryObjective: string | null;
   liveAgent: LiveAgentRuntimeState;
   onCompare: (targetDocumentId: string) => Promise<unknown> | unknown;
+  onCreateSummaryDocument: () => void;
   onExtractProcedure: () => Promise<ProcedureExtractionResult | unknown> | unknown;
   onGenerateSection: (prompt: string) => Promise<unknown> | unknown;
   onGenerateToc: () => Promise<unknown> | unknown;
@@ -42,6 +46,7 @@ interface AiAssistantDialogProps {
   summaryResult: SummarizeDocumentResponse | null;
   tocPreview: TocPreviewResult | null;
   updateSuggestionPreview: PatchPreviewResult | null;
+  visualNavigator: VisualNavigatorRuntimeState;
 }
 
 const getTocConflictTone = (conflict: TocPreviewResult["conflicts"][number]) => {
@@ -114,8 +119,10 @@ const AiAssistantDialog = ({
   busyAction,
   compareCandidates,
   comparePreview,
+  lastSummaryObjective,
   liveAgent,
   onCompare,
+  onCreateSummaryDocument,
   onExtractProcedure,
   onGenerateSection,
   onGenerateToc,
@@ -129,6 +136,7 @@ const AiAssistantDialog = ({
   summaryResult,
   tocPreview,
   updateSuggestionPreview,
+  visualNavigator,
 }: AiAssistantDialogProps) => {
   const { t } = useI18n();
   const [summaryObjective, setSummaryObjective] = useState("");
@@ -152,7 +160,7 @@ const AiAssistantDialog = ({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="max-w-5xl" data-visual-target="ai-assistant-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5" />
@@ -168,8 +176,9 @@ const AiAssistantDialog = ({
             </div>
           )}
 
-          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 lg:grid-cols-7">
-            <TabsTrigger value="agent">Agent</TabsTrigger>
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 p-1 lg:grid-cols-8">
+            <TabsTrigger data-visual-target="ai-dialog-tab-agent" value="agent">Agent</TabsTrigger>
+            <TabsTrigger data-visual-target="ai-dialog-tab-navigator" value="navigator">{t("aiDialog.tabs.navigator")}</TabsTrigger>
             <TabsTrigger value="summary">{t("aiDialog.tabs.summary")}</TabsTrigger>
             <TabsTrigger value="generate">{t("aiDialog.tabs.generate")}</TabsTrigger>
             <TabsTrigger value="toc">{t("aiDialog.tabs.toc")}</TabsTrigger>
@@ -184,6 +193,10 @@ const AiAssistantDialog = ({
               aiUnavailableMessage={aiUnavailableMessage}
               liveAgent={liveAgent}
             />
+          </TabsContent>
+
+          <TabsContent value="navigator">
+            <VisualNavigatorTab visualNavigator={visualNavigator} />
           </TabsContent>
 
           <TabsContent value="summary">
@@ -214,7 +227,18 @@ const AiAssistantDialog = ({
                 </section>
 
                 <section className="rounded-lg border border-border p-4">
-                  <h3 className="text-sm font-semibold">{t("aiDialog.summary.result")}</h3>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold">{t("aiDialog.summary.result")}</h3>
+                    <Button
+                      disabled={!summaryResult || !lastSummaryObjective}
+                      onClick={onCreateSummaryDocument}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      {t("aiDialog.summary.createDocument")}
+                    </Button>
+                  </div>
                   <ScrollArea className="mt-3 h-72 pr-3">
                     {summaryResult ? (
                       <div className="space-y-4 text-sm">

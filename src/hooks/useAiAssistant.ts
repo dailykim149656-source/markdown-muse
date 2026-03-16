@@ -18,6 +18,7 @@ import type {
   ProposeEditorActionResponse,
   SummarizeDocumentResponse,
 } from "@/types/aiAssistant";
+import type { GenerateSectionResponse } from "@/types/aiAssistant";
 
 export type AiBusyAction =
   | "compare"
@@ -44,8 +45,14 @@ export interface TocPreviewResult {
   hasLoadablePatch: boolean;
   maxDepth: 1 | 2 | 3;
   patchCount: number;
+  patchSet: DocumentPatchSet | null;
   patchSetTitle: string;
   rationale: string;
+}
+
+export interface SectionGenerationResult {
+  patchSet: DocumentPatchSet;
+  response: GenerateSectionResponse;
 }
 
 interface UseAiAssistantOptions {
@@ -117,6 +124,7 @@ export const useAiAssistant = ({
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [busyAction, setBusyAction] = useState<AiBusyAction>(null);
   const [summaryResult, setSummaryResult] = useState<SummarizeDocumentResponse | null>(null);
+  const [lastSummaryObjective, setLastSummaryObjective] = useState<string | null>(null);
   const [comparePreview, setComparePreview] = useState<PatchPreviewResult | null>(null);
   const [updateSuggestionPreview, setUpdateSuggestionPreview] = useState<PatchPreviewResult | null>(null);
   const [procedureResult, setProcedureResult] = useState<ProcedureExtractionResult | null>(null);
@@ -131,6 +139,7 @@ export const useAiAssistant = ({
 
   useEffect(() => {
     setSummaryResult(null);
+    setLastSummaryObjective(null);
     setComparePreview(null);
     setUpdateSuggestionPreview(null);
     setProcedureResult(null);
@@ -227,6 +236,7 @@ export const useAiAssistant = ({
         screenshot,
       });
 
+      setLastSummaryObjective(objective.trim());
       setSummaryResult(result);
       return result;
     } catch (error) {
@@ -292,6 +302,10 @@ export const useAiAssistant = ({
 
       loadPatchSet(patchSet);
       toast.success(t("hooks.ai.generatedPatch", { title: generated.title }));
+      return {
+        patchSet,
+        response: generated,
+      } satisfies SectionGenerationResult;
     } catch (error) {
       const message = error instanceof Error ? error.message : t("hooks.ai.generateFailed");
       toast.error(message);
@@ -352,6 +366,7 @@ export const useAiAssistant = ({
         hasLoadablePatch: patchSet.patches.length > 0,
         maxDepth: result.maxDepth,
         patchCount: patchSet.patches.length,
+        patchSet,
         patchSetTitle: patchSet.title,
         rationale: result.rationale,
       } satisfies TocPreviewResult;
@@ -401,6 +416,7 @@ export const useAiAssistant = ({
           hasLoadablePatch: false,
           maxDepth,
           patchCount: 0,
+          patchSet: null,
         }
         : current);
       return null;
@@ -414,6 +430,7 @@ export const useAiAssistant = ({
         hasLoadablePatch: true,
         maxDepth,
         patchCount: patchSet.patches.length,
+        patchSet,
       }
       : current);
     toast.success(t("hooks.ai.tocPatchLoaded"));
@@ -604,6 +621,7 @@ export const useAiAssistant = ({
     extractProcedureFromActiveDocument,
     generateSectionPatch,
     generateTocSuggestion,
+    lastSummaryObjective,
     loadTocPatch,
     procedureResult,
     richTextAvailable,

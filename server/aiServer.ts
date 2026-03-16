@@ -20,6 +20,7 @@ import {
   agentPlannerResponseSchema,
   normalizePlannerResponse,
 } from "./modules/agent/plannerResponse";
+import { resolveWorkspaceSessionForAgent } from "./modules/agent/resolveWorkspaceSessionForAgent";
 import { normalizeAgentTurnResponse } from "./modules/agent/turnResponse";
 import {
   getGeminiFallbackModel,
@@ -38,7 +39,6 @@ import { getGoogleOAuthRuntimeSummary } from "./modules/auth/googleOAuth";
 import { handleAuthRoute } from "./modules/auth/routes";
 import {
   FORWARDED_WORKSPACE_SESSION_COOKIE,
-  getWorkspaceSession,
   getWorkspaceSessionCookieNames,
   getWorkspaceSessionCookieSameSite,
   WORKSPACE_AUTH_SUCCESS_CRITERION,
@@ -61,6 +61,11 @@ import {
   sanitizeLogMessage,
 } from "./modules/http/aiDiagnostics";
 import { handleListenError } from "./modules/http/handleListenError";
+import { buildNavigatorPrompt } from "./modules/navigator/buildNavigatorPrompt";
+import {
+  navigatorTurnResponseSchema,
+  normalizeNavigatorTurnResponse,
+} from "./modules/navigator/turnResponse";
 import {
   consumeRateLimit,
   getRequestClientId,
@@ -101,6 +106,7 @@ import type {
   TexPreviewRequest,
   TexValidateRequest,
 } from "../src/types/tex";
+import type { NavigatorTurnRequest, NavigatorTurnResponse } from "../src/types/visualNavigator";
 
 console.log("[AI Server] Initializing modules...");
 process.env.AI_MAX_REQUEST_BYTES = process.env.AI_MAX_REQUEST_BYTES || "2097152";
@@ -152,9 +158,20 @@ const assertMarkdownDocument = (
   }
 };
 
+const assertNavigatorRequest = (request: NavigatorTurnRequest) => {
+  if (!request.intent.trim()) {
+    throw new HttpError(400, "Navigator intent is required.");
+  }
+
+  if (!request.screenshot?.dataBase64?.trim() || !request.screenshot.mimeType?.trim()) {
+    throw new HttpError(400, "Navigator screenshot is required.");
+  }
+};
+
 const getRequestImages = (
   request:
     | AgentTurnRequest
+    | NavigatorTurnRequest
     | SummarizeDocumentRequest
     | GenerateSectionRequest
     | GenerateTocRequest
@@ -559,6 +576,20 @@ const handleProposeAction = async (request: ProposeEditorActionRequest): Promise
   return normalizeActionResponse(response, request);
 };
 
+export const handleNavigatorTurn = async (
+  request: NavigatorTurnRequest,
+): Promise<NavigatorTurnResponse> => {
+  assertNavigatorRequest(request);
+  const locale = resolveAiLocale(request.locale);
+  const response = await generateMultimodalStructuredJson({
+    images: getRequestImages(request),
+    prompt: buildNavigatorPrompt(request, locale),
+    responseSchema: navigatorTurnResponseSchema,
+  });
+
+  return normalizeNavigatorTurnResponse(response);
+};
+
 const MIN_PLANNER_CONFIDENCE = 0.65;
 const SUCCESS_REPLY_ONLY_PATTERN = /\b(done|updated|applied|prepared|created|imported|reflected)\b|(?:\uBC18\uC601|\uC218\uC815|\uC801\uC6A9|\uC644\uB8CC|\uC0DD\uC131|\uC900\uBE44)/i;
 
@@ -712,14 +743,15 @@ const handleCspReport = async (request: import("node:http").IncomingMessage, req
   }
 };
 
-const handleAgentTurn = async (
+export const handleAgentTurn = async (
   httpRequest: import("node:http").IncomingMessage,
   request: AgentTurnRequest,
+  requestId = randomUUID(),
 ): Promise<AgentTurnResponse> => {
   const latestUserMessage = findLatestUserMessage(request);
   const locale = request.locale ? resolveAiLocale(request.locale) : undefined;
-  const workspaceSession = await getWorkspaceSession(httpRequest);
-  const workspaceConnected = Boolean(workspaceSession);
+  const workspaceSession = await resolveWorkspaceSessionForAgent(httpRequest, requestId);
+  const workspaceConnected = workspaceSession.workspaceConnected;
   const retrievalContext = buildActiveDocumentRetrievalContext({
     latestUserMessage,
     request,
@@ -735,7 +767,7 @@ const handleAgentTurn = async (
           fileName: reference.fileName,
         }));
     } catch (error) {
-      console.warn("[LiveAgent] failed to load selected drive references before planning", error);
+      console.warn(`[LiveAgent] failed to load selected drive references before planning requestId=${requestId}`, error);
       driveReferences = [];
     }
   }
@@ -769,7 +801,7 @@ const handleAgentTurn = async (
   }
 
   console.info(
-    `[LiveAgent] planner action=${planner.action} confidence=${planner.confidence.toFixed(2)} graphSections=${retrievalContext?.topSectionTargets.map((target) => `${target.sectionId || target.headingNodeId}:${target.score}`).join("|") || "none"} graphFields=${retrievalContext?.topFieldTargets.map((target) => `${target.fieldKey}:${target.score}`).join("|") || "none"}`,
+    `[LiveAgent] planner requestId=${requestId} action=${planner.action} confidence=${planner.confidence.toFixed(2)} workspaceConnected=${workspaceConnected ? "yes" : "no"} sessionLookupFailed=${workspaceSession.sessionLookupFailed ? "yes" : "no"} graphSections=${retrievalContext?.topSectionTargets.map((target) => `${target.sectionId || target.headingNodeId}:${target.score}`).join("|") || "none"} graphFields=${retrievalContext?.topFieldTargets.map((target) => `${target.fieldKey}:${target.score}`).join("|") || "none"}`,
   );
 
   if (plannerNeedsFollowup(planner, MIN_PLANNER_CONFIDENCE)) {
@@ -806,7 +838,7 @@ const handleAgentTurn = async (
     });
 
     console.info(
-      `[LiveAgent] executor action=${executionResult.telemetry?.executorAction || planner.action} effect=${normalizedResponse.effect.type} deterministicFallback=${executionResult.telemetry?.deterministicFallbackUsed ? "yes" : "no"} driveAuthGate=${executionResult.telemetry?.driveAuthGateUsed ? "yes" : "no"} failureReason=${executionResult.telemetry?.failureReason || "none"}`,
+      `[LiveAgent] executor requestId=${requestId} action=${executionResult.telemetry?.executorAction || planner.action} effect=${normalizedResponse.effect.type} deterministicFallback=${executionResult.telemetry?.deterministicFallbackUsed ? "yes" : "no"} driveAuthGate=${executionResult.telemetry?.driveAuthGateUsed ? "yes" : "no"} failureReason=${executionResult.telemetry?.failureReason || "none"}`,
     );
 
     if (shouldWarnOnReplyOnlySuccessText(normalizedResponse)) {
@@ -951,7 +983,14 @@ const server = createServer(async (request, response) => {
 
     if (request.method === "POST" && request.url === "/api/ai/agent/turn") {
       const payload = await parseRequestBody<AgentTurnRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
-      const result = await handleAgentTurn(request, payload);
+      const result = await handleAgentTurn(request, payload, requestId);
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/ai/navigator/turn") {
+      const payload = await parseRequestBody<NavigatorTurnRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      const result = await handleNavigatorTurn(payload);
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
@@ -1036,22 +1075,24 @@ const server = createServer(async (request, response) => {
   }
 });
 
-server.once("error", (error) => {
-  void handleListenError({
-    error: error as NodeJS.ErrnoException,
-    port: PORT,
-    serviceName: "AI Server",
-  }).then((exitCode) => {
-    process.exit(exitCode);
-  }).catch((listenError) => {
-    console.error("[AI Server] Failed to handle startup error.", listenError);
-    process.exit(1);
+if (process.env.VITEST !== "true") {
+  server.once("error", (error) => {
+    void handleListenError({
+      error: error as NodeJS.ErrnoException,
+      port: PORT,
+      serviceName: "AI Server",
+    }).then((exitCode) => {
+      process.exit(exitCode);
+    }).catch((listenError) => {
+      console.error("[AI Server] Failed to handle startup error.", listenError);
+      process.exit(1);
+    });
   });
-});
 
-console.log("[AI Server] Starting listener...");
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`[AI Server] Listening on http://0.0.0.0:${PORT}`);
-});
+  console.log("[AI Server] Starting listener...");
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`[AI Server] Listening on http://0.0.0.0:${PORT}`);
+  });
+}
 
 

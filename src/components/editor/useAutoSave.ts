@@ -8,6 +8,7 @@ import {
   writeAutosavePointer,
   writeAutosaveV3Snapshot,
 } from "@/lib/documents/autosaveV3Store";
+import { recordAutosaveDebugEvent } from "@/lib/documents/autosaveDebug";
 import { migrateStoredDocumentData } from "@/lib/documents/storedDocument";
 
 export const DOCSY_AUTOSAVE_STORAGE_KEY = "docsy-autosave-v2";
@@ -242,7 +243,11 @@ export const migrateLegacyAutoSaveData = (raw: unknown): AutoSaveData | null => 
   };
 };
 
-export const loadSavedData = (): AutoSaveData | null => {
+interface ReadLocalSavedDataOptions {
+  touchLastSaved?: boolean;
+}
+
+const readLocalSavedData = ({ touchLastSaved = true }: ReadLocalSavedDataOptions = {}): AutoSaveData | null => {
   try {
     const nextRaw = localStorage.getItem(DOCSY_AUTOSAVE_STORAGE_KEY);
 
@@ -250,7 +255,9 @@ export const loadSavedData = (): AutoSaveData | null => {
       const migrated = migrateLegacyAutoSaveData(JSON.parse(nextRaw) as unknown);
 
       if (migrated) {
-        localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify({ ...migrated, lastSaved: Date.now() }));
+        if (touchLastSaved) {
+          localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify({ ...migrated, lastSaved: Date.now() }));
+        }
         return migrated;
       }
     }
@@ -267,8 +274,10 @@ export const loadSavedData = (): AutoSaveData | null => {
       return null;
     }
 
-    localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify({ ...migrated, lastSaved: Date.now() }));
-    localStorage.removeItem(DOCSY_LEGACY_AUTOSAVE_STORAGE_KEY);
+    if (touchLastSaved) {
+      localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify({ ...migrated, lastSaved: Date.now() }));
+      localStorage.removeItem(DOCSY_LEGACY_AUTOSAVE_STORAGE_KEY);
+    }
 
     return migrated;
   } catch {
@@ -276,49 +285,128 @@ export const loadSavedData = (): AutoSaveData | null => {
   }
 };
 
-export const hydrateSavedData = async (): Promise<AutoSaveData | null> => {
-  const v3Snapshot = await readAutosaveV3Snapshot();
+export const loadSavedData = (): AutoSaveData | null =>
+  readLocalSavedData({ touchLastSaved: true });
 
-  if (v3Snapshot) {
-    return dedupeDocuments(v3Snapshot.documents.map(migrateStoredDocumentData), v3Snapshot.activeDocId);
+const choosePreferredSnapshot = (
+  v3Snapshot: AutoSaveData | null,
+  localSnapshot: AutoSaveData | null,
+) => {
+  if (v3Snapshot && localSnapshot) {
+    return localSnapshot.lastSaved > v3Snapshot.lastSaved
+      ? { data: localSnapshot, source: "local" as const }
+      : { data: v3Snapshot, source: "v3" as const };
   }
 
-  const legacySnapshot = loadSavedData();
+  if (localSnapshot) {
+    return {
+      data: localSnapshot,
+      source: "local" as const,
+    };
+  }
 
-  if (!legacySnapshot) {
+  if (v3Snapshot) {
+    return {
+      data: v3Snapshot,
+      source: "v3" as const,
+    };
+  }
+
+  return null;
+};
+
+const persistLocalFallbackSnapshot = (
+  data: AutoSaveData,
+  options?: {
+    force?: boolean;
+  },
+) => {
+  const shouldWrite = Boolean(options?.force) || shouldPersistLocalFallback(data);
+
+  if (shouldWrite) {
+    localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify(data));
+    return true;
+  }
+
+  localStorage.removeItem(DOCSY_AUTOSAVE_STORAGE_KEY);
+  return false;
+};
+
+export const hydrateSavedData = async (): Promise<AutoSaveData | null> => {
+  const v3Snapshot = (() => {
+    const snapshot = readAutosaveV3Snapshot();
+    return snapshot;
+  })();
+  const localSnapshot = readLocalSavedData({ touchLastSaved: false });
+  const hydratedV3Snapshot = await v3Snapshot;
+  const normalizedV3Snapshot = hydratedV3Snapshot
+    ? {
+      ...dedupeDocuments(hydratedV3Snapshot.documents.map(migrateStoredDocumentData), hydratedV3Snapshot.activeDocId),
+      lastSaved: hydratedV3Snapshot.lastSaved,
+    }
+    : null;
+  const preferred = choosePreferredSnapshot(normalizedV3Snapshot, localSnapshot);
+
+  if (!preferred) {
+    recordAutosaveDebugEvent("hydrate_result", {
+      localLastSaved: localSnapshot?.lastSaved ?? null,
+      source: "none",
+      v3LastSaved: normalizedV3Snapshot?.lastSaved ?? null,
+    });
     return null;
   }
 
-  const savedAt = legacySnapshot.lastSaved || Date.now();
-  const migrated = await writeAutosaveV3Snapshot(
-    {
-      ...legacySnapshot,
-      lastSaved: savedAt,
-      version: DOCSY_AUTOSAVE_VERSION,
-    },
-    {
-      dirtyDocumentIds: legacySnapshot.documents.map((document) => document.id),
-      lastSaved: savedAt,
-    },
-  );
+  const preferredSnapshot = {
+    ...preferred.data,
+    lastSaved: preferred.data.lastSaved || Date.now(),
+    version: DOCSY_AUTOSAVE_VERSION,
+  } satisfies AutoSaveData;
 
-  if (migrated) {
+  try {
+    persistLocalFallbackSnapshot(preferredSnapshot);
     writeAutosavePointer({
-      activeDocId: legacySnapshot.activeDocId,
-      documentIds: legacySnapshot.documents.map((document) => document.id),
-      lastSaved: savedAt,
+      activeDocId: preferredSnapshot.activeDocId,
+      documentIds: preferredSnapshot.documents.map((document) => document.id),
+      lastSaved: preferredSnapshot.lastSaved,
       version: 3,
     });
+    localStorage.removeItem(DOCSY_LEGACY_AUTOSAVE_STORAGE_KEY);
+  } catch {
+    // best effort local fallback alignment
+  }
 
-    try {
-      localStorage.removeItem(DOCSY_AUTOSAVE_STORAGE_KEY);
-      localStorage.removeItem(DOCSY_LEGACY_AUTOSAVE_STORAGE_KEY);
-    } catch {
-      // best effort cleanup
+  const shouldRefreshV3 = preferred.source !== "v3"
+    || !normalizedV3Snapshot
+    || normalizedV3Snapshot.lastSaved < preferredSnapshot.lastSaved;
+
+  if (shouldRefreshV3) {
+    const migrated = await writeAutosaveV3Snapshot(
+      preferredSnapshot,
+      {
+        dirtyDocumentIds: preferredSnapshot.documents.map((document) => document.id),
+        lastSaved: preferredSnapshot.lastSaved,
+      },
+    );
+
+    if (migrated) {
+      writeAutosavePointer({
+        activeDocId: preferredSnapshot.activeDocId,
+        documentIds: preferredSnapshot.documents.map((document) => document.id),
+        lastSaved: preferredSnapshot.lastSaved,
+        version: 3,
+      });
     }
   }
 
-  return legacySnapshot;
+  recordAutosaveDebugEvent("hydrate_result", {
+    docCount: preferredSnapshot.documents.length,
+    localLastSaved: localSnapshot?.lastSaved ?? null,
+    selectedLastSaved: preferredSnapshot.lastSaved,
+    source: preferred.source,
+    v3LastSaved: normalizedV3Snapshot?.lastSaved ?? null,
+  });
+
+  return preferredSnapshot;
 };
 
 export const clearSavedData = () => {
@@ -355,11 +443,14 @@ export const getAutoSaveSnapshotKey = (data: AutoSaveData) => JSON.stringify({
 
 interface SaveDataOptions {
   dirtyDocumentIds?: string[];
+  forceLocalFallback?: boolean;
+  reason?: "autosave" | "manual" | "reset" | "pagehide" | "beforeunload";
 }
 
 export const saveData = (data: AutoSaveData, options: SaveDataOptions = {}): AutoSaveWriteResult => {
   const savedAt = Date.now();
   const normalized = dedupeDocuments(data.documents.map(migrateStoredDocumentData), data.activeDocId);
+  const reason = options.reason ?? "manual";
 
   try {
     const savedSnapshot = {
@@ -367,6 +458,9 @@ export const saveData = (data: AutoSaveData, options: SaveDataOptions = {}): Aut
       version: DOCSY_AUTOSAVE_VERSION,
       lastSaved: savedAt,
     } satisfies AutoSaveData;
+    const localFallbackWritten = persistLocalFallbackSnapshot(savedSnapshot, {
+      force: options.forceLocalFallback,
+    });
 
     const pointer = {
       activeDocId: savedSnapshot.activeDocId,
@@ -375,29 +469,57 @@ export const saveData = (data: AutoSaveData, options: SaveDataOptions = {}): Aut
       version: 3 as const,
     };
 
-    writeAutosavePointer(pointer);
-    if (shouldPersistLocalFallback(savedSnapshot)) {
-      localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify(savedSnapshot));
-    } else {
-      localStorage.removeItem(DOCSY_AUTOSAVE_STORAGE_KEY);
-    }
     localStorage.removeItem(DOCSY_LEGACY_AUTOSAVE_STORAGE_KEY);
+    writeAutosavePointer(pointer);
+    recordAutosaveDebugEvent("autosave_saved", {
+      activeDocId: savedSnapshot.activeDocId,
+      docCount: savedSnapshot.documents.length,
+      localFallbackWritten,
+      reason,
+      savedAt,
+    });
     void writeAutosaveV3Snapshot(savedSnapshot, {
       dirtyDocumentIds: options.dirtyDocumentIds,
       lastSaved: savedAt,
     }).then((persisted) => {
-      if (!persisted && !shouldPersistLocalFallback(savedSnapshot)) {
-        localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify(savedSnapshot));
+      if (!persisted) {
+        recordAutosaveDebugEvent("autosave_error", {
+          activeDocId: savedSnapshot.activeDocId,
+          error: "indexeddb_write_failed",
+          reason,
+          savedAt,
+        });
+      }
+
+      if (!persisted && !localFallbackWritten) {
+        try {
+          persistLocalFallbackSnapshot(savedSnapshot, { force: true });
+          writeAutosavePointer(pointer);
+        } catch {
+          // best effort fallback recovery
+        }
       }
     });
     return { ok: true, savedAt };
   } catch {
+    recordAutosaveDebugEvent("autosave_error", {
+      activeDocId: normalized.activeDocId,
+      docCount: normalized.documents.length,
+      error: "local_storage_unavailable",
+      reason,
+    });
     return {
       error: "Autosave failed because local storage is unavailable or full.",
       ok: false,
     };
   }
 };
+
+export const saveDataForUnload = (data: AutoSaveData, options: Omit<SaveDataOptions, "forceLocalFallback"> = {}) =>
+  saveData(data, {
+    ...options,
+    forceLocalFallback: true,
+  });
 
 interface UseAutoSaveOptions {
   getDirtyDocumentIds?: () => string[];
@@ -437,9 +559,15 @@ export const useAutoSave = (
         return;
       }
 
+      recordAutosaveDebugEvent("autosave_tick", {
+        activeDocId: dataRef.current.activeDocId,
+        dirtyDocumentCount: optionsRef.current.getDirtyDocumentIds?.().length ?? null,
+        docCount: dataRef.current.documents.length,
+      });
       optionsRef.current.onSaving?.();
       const result = saveData(dataRef.current, {
         dirtyDocumentIds: optionsRef.current.getDirtyDocumentIds?.(),
+        reason: "autosave",
       });
 
       if (isAutoSaveWriteFailure(result)) {

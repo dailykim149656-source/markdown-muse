@@ -57,7 +57,10 @@ const MarkdownEditor = ({
 
   const syncingFromWysiwyg = useRef(false);
   const syncingFromSource = useRef(false);
+  const isEditorComposingRef = useRef(false);
+  const pendingWysiwygUpdateRef = useRef<{ document: JSONContent; html: string } | null>(null);
   const sourceSyncFrame = useRef<number | null>(null);
+  const wysiwygSyncFrame = useRef<number | null>(null);
   const seedSignatureRef = useRef<string | null>(null);
   const [sourceSyncRevision, setSourceSyncRevision] = useState(0);
 
@@ -123,20 +126,69 @@ const MarkdownEditor = ({
     }
   }, [advancedBlocksEnabled, onEnableAdvancedBlocks, requiresAdvancedBlocks]);
 
+  const flushPendingWysiwygUpdate = useCallback(() => {
+    const pendingUpdate = pendingWysiwygUpdateRef.current;
+
+    if (!pendingUpdate || shouldHoldEditor || syncingFromSource.current || isEditorComposingRef.current) {
+      return;
+    }
+
+    pendingWysiwygUpdateRef.current = null;
+    syncingFromWysiwyg.current = true;
+    const md = turndownService.turndown(pendingUpdate.html);
+    latestEditorSeedRef.current = pendingUpdate.document;
+    setMdSource(md);
+    onContentChange?.(md);
+    onHtmlChange?.(pendingUpdate.html);
+    onTiptapChange?.(pendingUpdate.document);
+
+    queueMicrotask(() => {
+      syncingFromWysiwyg.current = false;
+    });
+  }, [onContentChange, onHtmlChange, onTiptapChange, shouldHoldEditor, turndownService]);
+
+  const scheduleWysiwygSync = useCallback(() => {
+    if (wysiwygSyncFrame.current !== null) {
+      cancelAnimationFrame(wysiwygSyncFrame.current);
+    }
+
+    if (isEditorComposingRef.current || syncingFromSource.current || shouldHoldEditor) {
+      return;
+    }
+
+    wysiwygSyncFrame.current = requestAnimationFrame(() => {
+      wysiwygSyncFrame.current = null;
+      flushPendingWysiwygUpdate();
+    });
+  }, [flushPendingWysiwygUpdate, shouldHoldEditor]);
+
   const handleWysiwygUpdate = useCallback(
     (html: string, document: JSONContent) => {
-      if (shouldHoldEditor || syncingFromSource.current) return;
-      syncingFromWysiwyg.current = true;
-      const md = turndownService.turndown(html);
-      latestEditorSeedRef.current = document;
-      setMdSource(md);
-      onContentChange?.(md);
-      onHtmlChange?.(html);
-      onTiptapChange?.(document);
-      queueMicrotask(() => { syncingFromWysiwyg.current = false; });
+      if (shouldHoldEditor || syncingFromSource.current) {
+        return;
+      }
+
+      pendingWysiwygUpdateRef.current = { document, html };
+      scheduleWysiwygSync();
     },
-    [onContentChange, onHtmlChange, onTiptapChange, shouldHoldEditor, turndownService]
+    [scheduleWysiwygSync, shouldHoldEditor]
   );
+
+  const editorProps = useMemo(() => ({
+    ...editorPropsDefault,
+    handleDOMEvents: {
+      ...editorPropsDefault.handleDOMEvents,
+      compositionend: () => {
+        isEditorComposingRef.current = false;
+        scheduleWysiwygSync();
+        return false;
+      },
+      compositionstart: () => {
+        isEditorComposingRef.current = true;
+        return false;
+      },
+    },
+  }), [editorPropsDefault, scheduleWysiwygSync]);
 
   const editor = useEditor({
     extensions: shouldHoldEditor ? coreExtensions : extensions,
@@ -154,7 +206,7 @@ const MarkdownEditor = ({
       rememberEditorSelection(editor);
       handleWysiwygUpdate(editor.getHTML(), editor.getJSON());
     },
-    editorProps: editorPropsDefault,
+    editorProps,
   }, [advancedBlocksEnabled, documentFeaturesEnabled, extensionsReady, shouldHoldEditor]);
 
   useEffect(() => {
@@ -278,6 +330,7 @@ const MarkdownEditor = ({
 
       syncingFromSource.current = true;
       pendingSourceSyncHtmlRef.current = null;
+      pendingWysiwygUpdateRef.current = null;
       editor.commands.setContent(nextHtml, { emitUpdate: false });
       latestEditorSeedRef.current = editor.getJSON();
       onTiptapChange?.(editor.getJSON());
@@ -299,7 +352,12 @@ const MarkdownEditor = ({
       cancelAnimationFrame(sourceSyncFrame.current);
       sourceSyncFrame.current = null;
     }
+    if (wysiwygSyncFrame.current !== null) {
+      cancelAnimationFrame(wysiwygSyncFrame.current);
+      wysiwygSyncFrame.current = null;
+    }
     pendingSourceSyncHtmlRef.current = null;
+    pendingWysiwygUpdateRef.current = null;
   }, []);
 
   const handleSourceKeyDown = useCallback(

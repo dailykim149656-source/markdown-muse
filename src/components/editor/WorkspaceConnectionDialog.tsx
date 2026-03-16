@@ -34,7 +34,7 @@ const WorkspaceConnectionDialog = ({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" data-visual-target="workspace-connection-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5" />
@@ -72,6 +72,7 @@ const WorkspaceConnectionDialog = ({
           <div className="flex flex-wrap justify-end gap-2">
             {connected ? (
               <Button
+                data-visual-target="workspace-disconnect"
                 disabled={isDisconnecting}
                 onClick={onDisconnect}
                 type="button"
@@ -82,6 +83,7 @@ const WorkspaceConnectionDialog = ({
               </Button>
             ) : (
               <Button
+                data-visual-target="workspace-connect"
                 disabled={isConnecting}
                 onClick={onConnect}
                 type="button"

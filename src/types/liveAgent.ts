@@ -1,5 +1,8 @@
 import type { AiAssistantScreenshotPayload } from "@/types/aiAssistant";
+import type { SummarizeDocumentResponse } from "@/types/aiAssistant";
 import type { Locale } from "@/i18n/types";
+import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
+import type { DocumentPatchSet } from "@/types/documentPatch";
 
 export type AgentRole = "assistant" | "user";
 
@@ -33,6 +36,12 @@ export interface AgentSelectedDriveReference {
   fileName: string;
 }
 
+export interface AgentAvailableTargetDocument {
+  documentId: string;
+  fileName: string;
+  mode: "html" | "latex" | "markdown";
+}
+
 export interface AgentEvidence {
   sourceId: string;
   sourceKind: "drive" | "local";
@@ -41,15 +50,6 @@ export interface AgentEvidence {
   sectionId?: string;
   excerpt?: string;
 }
-
-export type AgentEffect =
-  | { type: "reply_only" }
-  | { type: "ask_followup" }
-  | { type: "draft_current_document"; changeSetTitle: string; summary: string }
-  | { type: "draft_new_document"; title: string; summary: string }
-  | { type: "show_drive_candidates"; query: string }
-  | { type: "ready_to_import_drive_file"; fileId: string; fileName: string }
-  | { type: "open_google_connect" };
 
 export type AgentSectionEdit =
   | {
@@ -146,10 +146,19 @@ export interface AgentGraphContext {
   workspaceHints?: AgentWorkspaceGraphHints | null;
 }
 
+export type AgentDelegatedCapability =
+  | "compare_documents"
+  | "extract_procedure"
+  | "generate_section"
+  | "generate_toc"
+  | "suggest_document_updates"
+  | "summarize_document";
+
 export interface AgentTurnRequest {
   threadId: string;
   messages: AgentChatMessage[];
   activeDocument: AgentDocumentContext | null;
+  availableTargetDocuments: AgentAvailableTargetDocument[];
   targetDefault: "active_document";
   localReferences: AgentLocalReference[];
   driveReferenceFileIds: string[];
@@ -166,3 +175,95 @@ export interface AgentTurnResponse {
   newDocumentDraft?: AgentNewDocumentDraft;
   driveCandidates?: AgentDriveCandidate[];
 }
+
+export type AgentEffect =
+  | { type: "reply_only" }
+  | { type: "ask_followup" }
+  | { type: "draft_current_document"; changeSetTitle: string; summary: string }
+  | { type: "draft_new_document"; title: string; summary: string }
+  | { type: "show_drive_candidates"; query: string }
+  | { type: "ready_to_import_drive_file"; fileId: string; fileName: string }
+  | { type: "open_google_connect" }
+  | {
+      type: "delegate_ai_capability";
+      capability: AgentDelegatedCapability;
+      createDocumentAfter?: boolean;
+      objective?: string;
+      prompt?: string;
+      targetDocumentId?: string;
+      targetDocumentName?: string;
+    };
+
+export type AgentArtifact =
+  | {
+      id: string;
+      kind: "compare_preview";
+      patchCount: number;
+      patchSet: DocumentPatchSet | null;
+      patchSetTitle: string;
+      targetDocumentId: string;
+      targetDocumentName: string;
+      comparisonCounts: {
+        added: number;
+        changed: number;
+        inconsistent: number;
+        removed: number;
+      };
+    }
+  | {
+      id: string;
+      kind: "draft_preview";
+      draft: AgentCurrentDocumentDraft | AgentNewDocumentDraft;
+    }
+  | {
+      id: string;
+      kind: "document_target";
+      capability: Extract<AgentDelegatedCapability, "compare_documents" | "suggest_document_updates">;
+      candidates: AgentAvailableTargetDocument[];
+      prompt: string;
+    }
+  | {
+      id: string;
+      kind: "drive_candidates";
+      candidates: AgentDriveCandidate[];
+      query?: string;
+    }
+  | {
+      id: string;
+      kind: "patch_result";
+      capability: Extract<AgentDelegatedCapability, "generate_section" | "suggest_document_updates">;
+      patchCount: number;
+      patchSet: DocumentPatchSet | null;
+      patchSetTitle: string;
+      reviewOpened: boolean;
+      targetDocumentId?: string;
+      targetDocumentName?: string;
+    }
+  | {
+      id: string;
+      kind: "procedure";
+      result: ProcedureExtractionResult;
+    }
+  | {
+      id: string;
+      kind: "summary";
+      createDocumentAfter?: boolean;
+      documentCreated?: boolean;
+      objective: string;
+      result: SummarizeDocumentResponse;
+      sourceDocumentId: string;
+      sourceDocumentName: string;
+    }
+  | {
+      id: string;
+      kind: "toc_preview";
+      entries: Array<{
+        level: 1 | 2 | 3;
+        title: string;
+      }>;
+      maxDepth: 1 | 2 | 3;
+      patchCount: number;
+      patchSet: DocumentPatchSet | null;
+      patchSetTitle: string;
+      rationale: string;
+    };

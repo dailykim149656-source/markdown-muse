@@ -64,6 +64,7 @@ import {
   resolveImportedDocumentOptions,
 } from "@/lib/io/documentIoShared";
 import { DOC_SHARE_HASH_PREFIX } from "@/lib/share/shareConstants";
+import { buildSummaryDocumentDraft, type SummaryDocumentDraftInput } from "@/lib/ai/summaryDocument";
 import type { DocumentVersionSnapshotMetadata, EditorMode, SourceSnapshots } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
 import type { AgentNewDocumentDraft } from "@/types/liveAgent";
@@ -78,6 +79,7 @@ const DocumentIORuntime = lazy(() => import("@/components/editor/DocumentIORunti
 const DocumentSupportRuntime = lazy(() => import("@/components/editor/DocumentSupportRuntime"));
 const PreviewRuntime = lazy(() => import("@/components/editor/PreviewRuntime"));
 const WorkspaceRuntime = lazy(() => import("@/components/editor/WorkspaceRuntime"));
+const VisualNavigatorOverlay = lazy(() => import("@/components/editor/VisualNavigatorOverlay"));
 const WorkspaceConnectionDialog = lazy(() => import("@/components/editor/WorkspaceConnectionDialog"));
 const WorkspaceExportDialog = lazy(() => import("@/components/editor/WorkspaceExportDialog"));
 const WorkspaceImportDialog = lazy(() => import("@/components/editor/WorkspaceImportDialog"));
@@ -755,6 +757,9 @@ const Index = () => {
   const handleAcceptPatch = useCallback((patch: import("@/types/documentPatch").DocumentPatch) => {
     documentSupportRuntimeState?.handleAcceptPatch(patch);
   }, [documentSupportRuntimeState]);
+  const handleAcceptPatches = useCallback((patchIds: string[]) => {
+    documentSupportRuntimeState?.handleAcceptPatches(patchIds);
+  }, [documentSupportRuntimeState]);
   const handleEditPatch = useCallback((
     patch: import("@/types/documentPatch").DocumentPatch,
     suggestedText: string,
@@ -764,6 +769,9 @@ const Index = () => {
   const handleRejectPatch = useCallback((patch: import("@/types/documentPatch").DocumentPatch) => {
     documentSupportRuntimeState?.handleRejectPatch(patch);
   }, [documentSupportRuntimeState]);
+  const handleRejectPatches = useCallback((patchIds: string[]) => {
+    documentSupportRuntimeState?.handleRejectPatches(patchIds);
+  }, [documentSupportRuntimeState]);
   const applyReviewedPatches = useCallback(async () => {
     await documentSupportRuntimeState?.applyReviewedPatches();
   }, [documentSupportRuntimeState]);
@@ -772,6 +780,7 @@ const Index = () => {
   }, [documentSupportRuntimeState]);
   const acceptedPatchCount = documentSupportRuntimeState?.acceptedPatchCount ?? 0;
   const patchCount = documentSupportRuntimeState?.patchCount ?? 0;
+  const lastApplyReport = documentSupportRuntimeState?.lastApplyReport ?? null;
   const patchReviewOpen = documentSupportRuntimeState?.patchReviewOpen ?? false;
   const patchSet = documentSupportRuntimeState?.patchSet ?? null;
   const versionHistoryReady = documentSupportRuntimeState?.versionHistoryReady ?? false;
@@ -1836,6 +1845,36 @@ const Index = () => {
     });
     toast.success(`Created draft "${resolvedTitle}".`);
   }, [createDocument, t]);
+  const handleCreateSummaryDocument = useCallback(({
+    createdAt,
+    locale: draftLocale,
+    objective,
+    sourceDocumentId,
+    sourceDocumentName,
+    summary,
+  }: SummaryDocumentDraftInput) => {
+    const draft = buildSummaryDocumentDraft({
+      createdAt,
+      locale: draftLocale || locale,
+      objective,
+      sourceDocumentId,
+      sourceDocumentName,
+      summary,
+    });
+
+    createDocument({
+      content: draft.markdown,
+      mode: "markdown",
+      name: draft.title,
+      sourceSnapshots: {
+        markdown: draft.markdown,
+      },
+      storageKind: "docsy",
+      tiptapJson: null,
+    });
+    toast.success(`Created summary document "${draft.title}".`);
+    return draft;
+  }, [createDocument, locale]);
 
   const handleDeleteDoc = useCallback((id: string) => {
     deleteDocument(id);
@@ -2275,8 +2314,22 @@ const Index = () => {
       busyAction: aiRuntimeState.busyAction,
       compareCandidates: aiRuntimeState.compareCandidates,
       comparePreview: aiRuntimeState.comparePreview,
+      lastSummaryObjective: aiRuntimeState.lastSummaryObjective,
       liveAgent: aiRuntimeState.liveAgent,
       onCompare: aiRuntimeState.compareWithDocument,
+      onCreateSummaryDocument: () => {
+        if (!aiRuntimeState.summaryResult || !aiRuntimeState.lastSummaryObjective) {
+          return;
+        }
+
+        handleCreateSummaryDocument({
+          locale,
+          objective: aiRuntimeState.lastSummaryObjective,
+          sourceDocumentId: activeDoc.id,
+          sourceDocumentName: activeDoc.name,
+          summary: aiRuntimeState.summaryResult,
+        });
+      },
       onExtractProcedure: aiRuntimeState.extractProcedureFromActiveDocument,
       onGenerateSection: aiRuntimeState.generateSectionPatch,
       onGenerateToc: aiRuntimeState.generateTocSuggestion,
@@ -2295,6 +2348,7 @@ const Index = () => {
       summaryResult: aiRuntimeState.summaryResult,
       tocPreview: aiRuntimeState.tocPreview,
       updateSuggestionPreview: aiRuntimeState.updateSuggestionPreview,
+      visualNavigator: aiRuntimeState.visualNavigator,
     }
     : {
       activeDocumentName: activeDoc.name,
@@ -2302,11 +2356,15 @@ const Index = () => {
       busyAction: null,
       compareCandidates: [],
       comparePreview: null,
+      lastSummaryObjective: null,
       liveAgent: {
         addDriveReference: () => undefined,
+        artifacts: [],
         availableLocalReferences: [],
+        availableTargetDocuments: [],
         composerText: "",
         confirmPendingAction: async () => undefined,
+        createSummaryDocumentFromArtifact: () => undefined,
         discardPendingAction: () => undefined,
         isSubmitting: false,
         latestDraftPreview: null,
@@ -2314,9 +2372,11 @@ const Index = () => {
         latestError: null,
         latestStatus: null,
         messages: [],
+        openArtifactPatchReview: () => undefined,
         pendingConfirmation: null,
         queueDriveImport: () => undefined,
         removeDriveReference: () => undefined,
+        resolveArtifactDocumentTarget: async () => undefined,
         resetThread: () => undefined,
         selectedDriveReferences: [],
         selectedLocalReferenceIds: [],
@@ -2325,7 +2385,26 @@ const Index = () => {
         threadId: "agent-disabled",
         toggleLocalReference: () => undefined,
       },
+      visualNavigator: {
+        canStart: false,
+        clearHistory: () => undefined,
+        confirmPendingAction: async () => undefined,
+        history: [],
+        intent: "",
+        isRunning: false,
+        lastConfidence: null,
+        lastError: null,
+        lastRationale: null,
+        pendingConfirmation: null,
+        rejectPendingAction: () => undefined,
+        setIntent: () => undefined,
+        startRun: async () => undefined,
+        statusText: null,
+        stopReason: null,
+        stopRun: () => undefined,
+      },
       onCompare: async () => undefined,
+      onCreateSummaryDocument: () => undefined,
       onExtractProcedure: async () => undefined,
       onGenerateSection: async () => undefined,
       onGenerateToc: async () => undefined,
@@ -2353,9 +2432,11 @@ const Index = () => {
   const patchReviewDialogProps = {
     acceptedPatchCount,
     onAccept: handleAcceptPatch,
+    onAcceptSelected: handleAcceptPatches,
     onApply: applyReviewedPatches,
     onClear: clearPatchSet,
     onEdit: handleEditPatch,
+    lastApplyReport,
     onLoadPatchSet: handleLoad,
     onOpenChange: (open: boolean) => {
       if (!open) {
@@ -2366,6 +2447,7 @@ const Index = () => {
       openPatchReview();
     },
     onReject: handleRejectPatch,
+    onRejectSelected: handleRejectPatches,
     open: canAccessPatchReview ? patchReviewOpen : false,
     patchSet,
     workspaceSyncWarnings: activeDoc.workspaceBinding?.syncWarnings,
@@ -2397,6 +2479,7 @@ const Index = () => {
             activeDoc={activeDoc}
             activeEditor={activeEditor}
             createDocumentDraft={handleCreateLiveAgentDocumentDraft}
+            createSummaryDocument={handleCreateSummaryDocument}
             currentRenderableMarkdown={currentRenderableMarkdown}
             documents={documents}
             getFreshRenderableMarkdown={getFreshRenderableMarkdown}
@@ -2689,6 +2772,11 @@ const Index = () => {
             onOpenChange={setWorkspaceExportOpen}
             open={workspaceExportOpen}
           />
+        </Suspense>
+      )}
+      {canAccessAiAssistant && aiRuntimeState && (
+        <Suspense fallback={null}>
+          <VisualNavigatorOverlay visualNavigator={aiRuntimeState.visualNavigator} />
         </Suspense>
       )}
       <ResetDocumentsDialog
