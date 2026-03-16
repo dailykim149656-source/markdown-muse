@@ -37,6 +37,7 @@ Firebase Hosting rewrites only forward `__session` to the rewritten backend, so 
 - `AI_ALLOWED_ORIGIN=https://docsy.cyou`
 - `WORKSPACE_FRONTEND_ORIGIN=https://docsy.cyou`
 - `GOOGLE_OAUTH_REDIRECT_URI=https://docsy.cyou/api/auth/google/callback`
+- `PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN=https://docsy.cyou` during CI validation and Cloud Run runtime startup checks
 - `GOOGLE_OAUTH_PUBLISHING_STATUS=testing|production`
 - `GOOGLE_WORKSPACE_SCOPE_PROFILE=restricted|reduced`
 - `WORKSPACE_REPOSITORY_BACKEND=firestore`

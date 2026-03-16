@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   GOOGLE_WORKSPACE_SCOPE_PROFILES,
   readPublicDeploymentConfig,
+  readPublicDeploymentValidationOptions,
   shouldBlockServerStartupForPublicDeployment,
   validatePublicDeploymentConfig,
 } from "../../server/modules/config/publicDeploymentConfig.js";
@@ -62,6 +63,27 @@ describe("publicDeploymentConfig", () => {
     expect(validation.errors).toEqual([]);
     expect(validation.warnings.some((warning) => warning.includes("web.app"))).toBe(true);
     expect(validation.warnings.some((warning) => warning.includes("run.app"))).toBe(true);
+  });
+
+  it("rejects managed hosts in testing mode when a hosted frontend expectation is pinned", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://docsy-mc32v24cyq-du.a.run.app",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://docsy-mc32v24cyq-du.a.run.app/api/auth/google/callback",
+      VITE_AI_API_BASE_URL: "https://docsy-mc32v24cyq-du.a.run.app",
+      WORKSPACE_FRONTEND_ORIGIN: "https://docsy-mc32v24cyq-du.a.run.app",
+    });
+    const validation = validatePublicDeploymentConfig(config, {
+      expectedHostedFrontendOrigin: "https://docsy.cyou",
+    });
+
+    expect(validation.errors.some((error) => error.includes("WORKSPACE_FRONTEND_ORIGIN uses managed Google host"))).toBe(true);
+    expect(validation.errors.some((error) => error.includes("GOOGLE_OAUTH_REDIRECT_URI uses managed Google host"))).toBe(true);
+    expect(validation.errors.some((error) => error.includes("VITE_AI_API_BASE_URL uses managed Google host"))).toBe(true);
+    expect(validation.errors.some((error) => error.includes('WORKSPACE_FRONTEND_ORIGIN must match PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN "https://docsy.cyou"'))).toBe(true);
+    expect(validation.errors.some((error) => error.includes('GOOGLE_OAUTH_REDIRECT_URI must be "https://docsy.cyou/api/auth/google/callback"'))).toBe(true);
+    expect(validation.errors.some((error) => error.includes('VITE_AI_API_BASE_URL must match PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN "https://docsy.cyou"'))).toBe(true);
   });
 
   it("normalizes equivalent origins before comparing frontend and CORS config", () => {
@@ -152,6 +174,26 @@ describe("publicDeploymentConfig", () => {
     expect(validation.errors).toEqual([]);
     expect(validation.warnings.some((warning) => warning.includes("GOOGLE_OAUTH_REDIRECT_URI does not share"))).toBe(true);
     expect(validation.warnings.some((warning) => warning.includes("VITE_AI_API_BASE_URL does not match"))).toBe(true);
+  });
+
+  it("accepts the pinned same-origin hosting rewrite deployment", () => {
+    const config = readPublicDeploymentConfig({
+      AI_ALLOWED_ORIGIN: "https://docsy.cyou",
+      GOOGLE_CLIENT_ID: "client-id",
+      GOOGLE_OAUTH_PUBLISHING_STATUS: "testing",
+      GOOGLE_OAUTH_REDIRECT_URI: "https://docsy.cyou/api/auth/google/callback",
+      VITE_AI_API_BASE_URL: "https://docsy.cyou",
+      WORKSPACE_FRONTEND_ORIGIN: "https://docsy.cyou",
+    });
+    const validation = validatePublicDeploymentConfig(
+      config,
+      readPublicDeploymentValidationOptions({
+        PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN: "https://docsy.cyou",
+      }),
+    );
+
+    expect(validation.errors).toEqual([]);
+    expect(validation.notes.some((note) => note.includes("Public deploy expectation pins the hosted frontend origin"))).toBe(true);
   });
 
   it("rejects deployed OAuth config when the file repository backend is forced", () => {

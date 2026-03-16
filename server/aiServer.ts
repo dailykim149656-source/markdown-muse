@@ -44,6 +44,7 @@ import {
 } from "./modules/gemini/client";
 import {
   readPublicDeploymentConfig,
+  readPublicDeploymentValidationOptions,
   shouldBlockServerStartupForPublicDeployment,
   validatePublicDeploymentConfig,
 } from "./modules/config/publicDeploymentConfig.js";
@@ -143,7 +144,11 @@ const MAX_REQUEST_BYTES = Number(process.env.AI_MAX_REQUEST_BYTES || 2097152);
 console.log(`[AI Server] Configuration: PORT=${PORT}, MAX_CHUNKS=${MAX_CHUNKS}, MAX_REQUEST_BYTES=${MAX_REQUEST_BYTES}`);
 
 const publicDeploymentConfig = readPublicDeploymentConfig(process.env);
-const publicDeploymentValidation = validatePublicDeploymentConfig(publicDeploymentConfig);
+const publicDeploymentValidationOptions = readPublicDeploymentValidationOptions(process.env);
+const publicDeploymentValidation = validatePublicDeploymentConfig(
+  publicDeploymentConfig,
+  publicDeploymentValidationOptions,
+);
 const googleOAuthRuntimeSummary = getGoogleOAuthRuntimeSummary();
 
 for (const note of publicDeploymentValidation.notes) {
@@ -169,6 +174,11 @@ if (shouldBlockServerStartupForPublicDeployment(publicDeploymentConfig, publicDe
 console.log(
   `[AI Server] Google OAuth deployment status=${googleOAuthRuntimeSummary.publishingStatus} scopeProfile=${googleOAuthRuntimeSummary.scopeProfile} scopeRisk=${googleOAuthRuntimeSummary.scopeRisk} frontendOrigin=${googleOAuthRuntimeSummary.frontendOrigin || "(unset)"} redirectOrigin=${googleOAuthRuntimeSummary.redirectOrigin || "(unset)"} allowedOrigins=${publicDeploymentConfig.allowedOrigins.join(",") || "(none)"}`,
 );
+if (publicDeploymentValidationOptions.expectedHostedFrontendOrigin) {
+  console.log(
+    `[AI Server] Expected hosted frontend origin=${publicDeploymentValidationOptions.expectedHostedFrontendOrigin}`,
+  );
+}
 console.log(
   `[AI Server] Workspace repository backend=${resolveWorkspaceRepositoryBackend()} revision=${process.env.K_REVISION || "(unset)"} service=${process.env.K_SERVICE || "(unset)"} secureCookie=${FORWARDED_WORKSPACE_SESSION_COOKIE} secureSameSite=${getWorkspaceSessionCookieSameSite({ headers: { "x-forwarded-proto": "https" } } as never)}`,
 );

@@ -296,6 +296,7 @@ jobs:
 
           DEFAULT_FRONTEND_ORIGIN="https://docsy.cyou"
           DEFAULT_GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_FRONTEND_ORIGIN}/api/auth/google/callback"
+          EXPECTED_PUBLIC_FRONTEND_ORIGIN="${DEFAULT_FRONTEND_ORIGIN}"
 
           require_secret() {
             local name="$1"
@@ -431,6 +432,7 @@ jobs:
           echo "  project: ${PROJECT_ID}"
           echo "  region: ${GCP_REGION}"
           echo "  ai_url_source: TeX output ${TEX_SERVICE_BASE_URL}"
+          echo "  expected_public_frontend_origin: ${EXPECTED_PUBLIC_FRONTEND_ORIGIN}"
           echo "  frontend_origin: ${WORKSPACE_FRONTEND_ORIGIN}"
           echo "  oauth_redirect_uri: ${GOOGLE_OAUTH_REDIRECT_URI}"
           echo "  workspace_repository_backend: ${WORKSPACE_REPOSITORY_BACKEND}"
@@ -446,6 +448,7 @@ jobs:
           export GOOGLE_OAUTH_REDIRECT_URI
           export GOOGLE_WORKSPACE_SCOPES
           export GOOGLE_WORKSPACE_SCOPE_PROFILE
+          export PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN="${EXPECTED_PUBLIC_FRONTEND_ORIGIN}"
           export WORKSPACE_FRONTEND_ORIGIN
           export WORKSPACE_REPOSITORY_BACKEND
           export AI_MAX_REQUEST_BYTES
@@ -457,7 +460,7 @@ jobs:
           node scripts/validate-public-deploy-config.mjs
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${AI_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_VERTEX_LOCATION=%s|_SERVICE_NAME=%s|_GEMINI_MODEL=%s|_GEMINI_FALLBACK_MODEL=%s|_AI_ALLOWED_ORIGIN=%s|_AI_MAX_REQUEST_BYTES=%s|_GOOGLE_CLIENT_ID=%s|_GOOGLE_OAUTH_REDIRECT_URI=%s|_GOOGLE_OAUTH_PUBLISHING_STATUS=%s|_GOOGLE_WORKSPACE_SCOPE_PROFILE=%s|_WORKSPACE_FRONTEND_ORIGIN=%s|_WORKSPACE_REPOSITORY_BACKEND=%s|_GOOGLE_WORKSPACE_SCOPES=%s|_AI_DIAGNOSTICS_TOKEN_SECRET=%s|_GOOGLE_CLIENT_SECRET_SECRET=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_TEX_ALLOW_ALL_PACKAGES=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_SERVICE_BASE_URL=%s|_RUN_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_VERTEX_LOCATION=%s|_SERVICE_NAME=%s|_GEMINI_MODEL=%s|_GEMINI_FALLBACK_MODEL=%s|_AI_ALLOWED_ORIGIN=%s|_AI_MAX_REQUEST_BYTES=%s|_GOOGLE_CLIENT_ID=%s|_GOOGLE_OAUTH_REDIRECT_URI=%s|_GOOGLE_OAUTH_PUBLISHING_STATUS=%s|_GOOGLE_WORKSPACE_SCOPE_PROFILE=%s|_WORKSPACE_FRONTEND_ORIGIN=%s|_PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN=%s|_WORKSPACE_REPOSITORY_BACKEND=%s|_GOOGLE_WORKSPACE_SCOPES=%s|_AI_DIAGNOSTICS_TOKEN_SECRET=%s|_GOOGLE_CLIENT_SECRET_SECRET=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_TEX_ALLOW_ALL_PACKAGES=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_SERVICE_BASE_URL=%s|_RUN_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$VERTEX_LOCATION" \
@@ -471,6 +474,7 @@ jobs:
             "${GOOGLE_OAUTH_PUBLISHING_STATUS}" \
             "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" \
             "${WORKSPACE_FRONTEND_ORIGIN}" \
+            "${EXPECTED_PUBLIC_FRONTEND_ORIGIN}" \
             "${WORKSPACE_REPOSITORY_BACKEND}" \
             "${GOOGLE_WORKSPACE_SCOPES}" \
             "${AI_DIAGNOSTICS_TOKEN_SECRET}" \
@@ -645,6 +649,7 @@ jobs:
 
           DEFAULT_FRONTEND_ORIGIN="https://docsy.cyou"
           DEFAULT_GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_FRONTEND_ORIGIN}/api/auth/google/callback"
+          EXPECTED_PUBLIC_FRONTEND_ORIGIN="${DEFAULT_FRONTEND_ORIGIN}"
 
           require_secret() {
             local name="$1"
@@ -718,6 +723,7 @@ jobs:
           export GOOGLE_OAUTH_REDIRECT_URI
           export GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
           export GOOGLE_WORKSPACE_SCOPE_PROFILE
+          export PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN="${EXPECTED_PUBLIC_FRONTEND_ORIGIN}"
           export WORKSPACE_FRONTEND_ORIGIN="${FRONTEND_ORIGIN}"
 
           require_secret "GCP_GOOGLE_CLIENT_ID" "${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
@@ -731,6 +737,7 @@ jobs:
           echo "Deployment summary:"
           echo "  firebase_project: ${FIREBASE_PROJECT_ID}"
           echo "  browser_api_base_url: ${AI_API_BASE_URL}"
+          echo "  expected_public_frontend_origin: ${EXPECTED_PUBLIC_FRONTEND_ORIGIN}"
           echo "  frontend_origin: ${FRONTEND_ORIGIN}"
           echo "  routing_mode: ${ROUTING_MODE}"
           echo "  oauth_redirect_uri: ${GOOGLE_OAUTH_REDIRECT_URI}"

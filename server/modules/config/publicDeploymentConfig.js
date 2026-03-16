@@ -280,10 +280,22 @@ export const readPublicDeploymentConfig = (env = process.env) => {
   };
 };
 
-export const validatePublicDeploymentConfig = (config) => {
+export const readPublicDeploymentValidationOptions = (env = process.env) => ({
+  expectedHostedFrontendOrigin: normalizeConfiguredOrigin(env.PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN),
+});
+
+export const validatePublicDeploymentConfig = (config, options = {}) => {
   const errors = [];
   const warnings = [];
   const notes = [];
+  const expectedHostedFrontendOrigin = normalizeConfiguredOrigin(options.expectedHostedFrontendOrigin);
+  const expectedHostedFrontendUrl = parseUrl(
+    expectedHostedFrontendOrigin,
+    "PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN",
+    errors,
+  );
+  validateOriginOnlyUrl(expectedHostedFrontendUrl, "PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN", errors);
+  const enforceHostedFrontendExpectation = Boolean(expectedHostedFrontendOrigin && expectedHostedFrontendUrl);
 
   if (config.texAllowRawDocument === "invalid") {
     errors.push(`TEX_ALLOW_RAW_DOCUMENT must be "true" or "false". Received "${config.texAllowRawDocumentRaw}".`);
@@ -382,7 +394,7 @@ export const validatePublicDeploymentConfig = (config) => {
 
     if (usesManagedGoogleHost(hostname)) {
       const message = `WORKSPACE_FRONTEND_ORIGIN uses managed Google host "${hostname}". Use a verified custom domain instead of "${config.frontendOrigin}".`;
-      if (config.publishingStatus === "production") {
+      if (config.publishingStatus === "production" || enforceHostedFrontendExpectation) {
         errors.push(message);
       } else {
         warnings.push(message);
@@ -418,7 +430,7 @@ export const validatePublicDeploymentConfig = (config) => {
 
     if (usesManagedGoogleHost(hostname)) {
       const message = `GOOGLE_OAUTH_REDIRECT_URI uses managed Google host "${hostname}". Use a verified custom API domain instead of "${config.redirectUri}".`;
-      if (config.publishingStatus === "production") {
+      if (config.publishingStatus === "production" || enforceHostedFrontendExpectation) {
         errors.push(message);
       } else {
         warnings.push(message);
@@ -450,7 +462,7 @@ export const validatePublicDeploymentConfig = (config) => {
 
     if (usesManagedGoogleHost(hostname)) {
       const message = `VITE_AI_API_BASE_URL uses managed Google host "${hostname}". Use the verified frontend custom domain for browser API calls instead of "${config.browserApiBaseUrl}".`;
-      if (config.publishingStatus === "production") {
+      if (config.publishingStatus === "production" || enforceHostedFrontendExpectation) {
         errors.push(message);
       } else {
         warnings.push(message);
@@ -469,6 +481,29 @@ export const validatePublicDeploymentConfig = (config) => {
 
   if (config.frontendOrigin && !config.allowedOrigins.includes("*") && !config.allowedOrigins.includes(config.frontendOrigin)) {
     errors.push("AI_ALLOWED_ORIGIN must include WORKSPACE_FRONTEND_ORIGIN so browser credentials can be sent correctly.");
+  }
+
+  if (enforceHostedFrontendExpectation) {
+    const expectedOrigin = expectedHostedFrontendUrl.origin;
+    const expectedRedirectUri = `${expectedOrigin}${GOOGLE_OAUTH_CALLBACK_PATH}`;
+
+    if (!config.allowedOrigins.includes("*") && !config.allowedOrigins.includes(expectedOrigin)) {
+      errors.push(`AI_ALLOWED_ORIGIN must include PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN "${expectedOrigin}".`);
+    }
+
+    if (config.frontendOrigin && frontendUrl && frontendUrl.origin !== expectedOrigin) {
+      errors.push(`WORKSPACE_FRONTEND_ORIGIN must match PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN "${expectedOrigin}" for the hosted Firebase rewrite deployment.`);
+    }
+
+    if (config.redirectUri && redirectUrl && config.redirectUri !== expectedRedirectUri) {
+      errors.push(`GOOGLE_OAUTH_REDIRECT_URI must be "${expectedRedirectUri}" for the hosted Firebase rewrite deployment.`);
+    }
+
+    if (config.hasBrowserApiBaseUrl && browserApiUrl && browserApiUrl.origin !== expectedOrigin) {
+      errors.push(`VITE_AI_API_BASE_URL must match PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN "${expectedOrigin}" for same-origin browser API calls.`);
+    }
+
+    notes.push(`Public deploy expectation pins the hosted frontend origin to ${expectedOrigin}.`);
   }
 
   if (hasNonLocalDeploymentTarget && config.oauthEnabled) {

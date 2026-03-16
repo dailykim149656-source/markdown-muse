@@ -159,6 +159,12 @@ Run the public-deploy validator before switching the OAuth app to production:
 npm run check:public-deploy
 ```
 
+For the hosted `https://docsy.cyou` topology, pin the expected public origin during validation so managed Google hosts fail fast even while the OAuth app is still in testing mode:
+
+```bash
+PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN=https://docsy.cyou npm run check:public-deploy
+```
+
 Google Workspace OAuth state must be shared across Cloud Run instances. This repo now defaults to the Firestore repository backend on Cloud Run. Before rollout, enable Firestore and create a database in the deploy project.
 
 ### 4. GitHub Actions deployment (recommended)

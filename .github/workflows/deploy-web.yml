@@ -56,6 +56,7 @@ jobs:
 
           DEFAULT_FRONTEND_ORIGIN="https://docsy.cyou"
           DEFAULT_GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_FRONTEND_ORIGIN}/api/auth/google/callback"
+          EXPECTED_PUBLIC_FRONTEND_ORIGIN="${DEFAULT_FRONTEND_ORIGIN}"
 
           require_secret() {
             local name="$1"
@@ -120,6 +121,7 @@ jobs:
           export GOOGLE_OAUTH_REDIRECT_URI
           export GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
           export GOOGLE_WORKSPACE_SCOPE_PROFILE
+          export PUBLIC_DEPLOY_EXPECTED_FRONTEND_ORIGIN="${EXPECTED_PUBLIC_FRONTEND_ORIGIN}"
           export WORKSPACE_FRONTEND_ORIGIN="${FRONTEND_ORIGIN}"
 
           require_secret "GCP_GOOGLE_CLIENT_ID" "${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
@@ -133,6 +135,7 @@ jobs:
           echo "Deployment summary:"
           echo "  firebase_project: ${FIREBASE_PROJECT_ID}"
           echo "  browser_api_base_url: ${AI_API_BASE_URL}"
+          echo "  expected_public_frontend_origin: ${EXPECTED_PUBLIC_FRONTEND_ORIGIN}"
           echo "  frontend_origin: ${FRONTEND_ORIGIN}"
           echo "  routing_mode: ${ROUTING_MODE}"
           echo "  oauth_redirect_uri: ${GOOGLE_OAUTH_REDIRECT_URI}"
