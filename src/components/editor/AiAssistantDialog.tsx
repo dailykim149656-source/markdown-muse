@@ -108,11 +108,14 @@ const DeltaBodyPanel = ({
   label: string;
   text: string;
 }) => (
-  <div className="space-y-2">
+  <div className="min-w-0 space-y-2">
     <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
       {label}
     </div>
-    <div className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/80 px-3 py-2 text-xs leading-5 text-foreground">
+    <div
+      className="min-w-0 whitespace-pre-wrap break-words rounded-md border border-border/60 bg-background/80 px-3 py-2 text-xs leading-5 text-foreground"
+      data-testid="ai-preview-detail-body"
+    >
       {text}
     </div>
   </div>
@@ -203,7 +206,7 @@ const PreviewSummary = ({
               {t("aiDialog.details.empty")}
             </div>
           ) : (
-            <ScrollArea className="mt-3 max-h-[26rem] pr-3">
+            <ScrollArea className="mt-3 max-h-[26rem] pr-3" data-testid="ai-preview-detail-scroll">
               <div className="space-y-3">
                 {comparison.deltas.map((delta) => (
                   <ComparisonDeltaCard

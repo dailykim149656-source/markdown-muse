@@ -136,6 +136,10 @@ const buildPreview = (
   targetDocumentName,
 });
 
+const buildLongBody = (prefix: string, lineCount: number) =>
+  Array.from({ length: lineCount }, (_, index) => `${prefix} line ${index + 1}: capture the full comparison body without clipping.`)
+    .join("\n");
+
 describe("Dialog smoke paths", () => {
   it("renders ShareLinkDialog when opened", () => {
     renderWithI18n(
@@ -346,6 +350,58 @@ describe("Dialog smoke paths", () => {
     expect(screen.queryByText("Changed section")).not.toBeInTheDocument();
   });
 
+  it("shows full compare detail bodies without nested scroll containers", () => {
+    const longSourceBody = buildLongBody("Source", 18);
+    const longTargetBody = buildLongBody("Target", 22);
+    const changedDelta: DocumentComparisonDelta = {
+      deltaId: "delta-compare-long",
+      kind: "changed",
+      similarityScore: 0.52,
+      source: {
+        chunkIds: ["chunk-source-long"],
+        ingestionId: "doc-active",
+        level: 2,
+        path: ["Overview", "Deployment Procedure"],
+        sectionId: "source-long-section",
+        text: longSourceBody,
+        title: "Deployment Procedure",
+      },
+      summary: "Long compare detail summary",
+      target: {
+        chunkIds: ["chunk-target-long"],
+        ingestionId: "doc-reference",
+        level: 2,
+        path: ["Overview", "Deployment Procedure"],
+        sectionId: "target-long-section",
+        text: longTargetBody,
+        title: "Deployment Procedure",
+      },
+    };
+
+    renderWithI18n(
+      <AiAssistantDialog
+        {...defaultAiAssistantDialogProps}
+        comparePreview={buildPreview([changedDelta])}
+        initialTab="compare"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "aiDialog.details.show" }));
+
+    expect(screen.getByTestId("ai-preview-detail-scroll")).toBeInTheDocument();
+
+    const detailBodies = screen.getAllByTestId("ai-preview-detail-body");
+    expect(detailBodies).toHaveLength(2);
+    expect(detailBodies[0].textContent).toBe(longSourceBody);
+    expect(detailBodies[1].textContent).toBe(longTargetBody);
+
+    detailBodies.forEach((detailBody) => {
+      expect(detailBody).not.toHaveClass("max-h-40");
+      expect(detailBody).not.toHaveClass("overflow-auto");
+      expect(detailBody).toHaveClass("whitespace-pre-wrap");
+    });
+  });
+
   it("shows target-only details for added update sections", () => {
     const addedDelta: DocumentComparisonDelta = {
       deltaId: "delta-added",
@@ -377,6 +433,58 @@ describe("Dialog smoke paths", () => {
     expect(screen.getByText("Added section")).toBeInTheDocument();
     expect(screen.getByText("Target-only body")).toBeInTheDocument();
     expect(screen.queryByText("Source-only body")).not.toBeInTheDocument();
+  });
+
+  it("shows full update detail bodies without nested scroll containers", () => {
+    const longSourceBody = buildLongBody("Update source", 16);
+    const longTargetBody = buildLongBody("Update target", 20);
+    const changedDelta: DocumentComparisonDelta = {
+      deltaId: "delta-update-long",
+      kind: "changed",
+      similarityScore: 0.61,
+      source: {
+        chunkIds: ["chunk-source-update-long"],
+        ingestionId: "doc-active",
+        level: 2,
+        path: ["Appendix", "Operational Notes"],
+        sectionId: "source-update-long-section",
+        text: longSourceBody,
+        title: "Operational Notes",
+      },
+      summary: "Long update detail summary",
+      target: {
+        chunkIds: ["chunk-target-update-long"],
+        ingestionId: "doc-reference",
+        level: 2,
+        path: ["Appendix", "Operational Notes"],
+        sectionId: "target-update-long-section",
+        text: longTargetBody,
+        title: "Operational Notes",
+      },
+    };
+
+    renderWithI18n(
+      <AiAssistantDialog
+        {...defaultAiAssistantDialogProps}
+        initialTab="update"
+        updateSuggestionPreview={buildPreview([changedDelta])}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "aiDialog.details.show" }));
+
+    expect(screen.getByTestId("ai-preview-detail-scroll")).toBeInTheDocument();
+
+    const detailBodies = screen.getAllByTestId("ai-preview-detail-body");
+    expect(detailBodies).toHaveLength(2);
+    expect(detailBodies[0].textContent).toBe(longSourceBody);
+    expect(detailBodies[1].textContent).toBe(longTargetBody);
+
+    detailBodies.forEach((detailBody) => {
+      expect(detailBody).not.toHaveClass("max-h-40");
+      expect(detailBody).not.toHaveClass("overflow-auto");
+      expect(detailBody).toHaveClass("whitespace-pre-wrap");
+    });
   });
 
   it("shows source-only details for removed update sections", () => {

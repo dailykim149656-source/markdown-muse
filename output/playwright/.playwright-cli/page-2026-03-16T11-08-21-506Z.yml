@@ -1,0 +1,198 @@
+- generic:
+  - generic:
+    - list
+    - region "Notifications alt+T"
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - button:
+                  - img
+              - generic:
+                - generic:
+                  - generic:
+                    - list:
+                      - listitem:
+                        - button:
+                          - img
+                      - listitem:
+                        - button:
+                          - img
+              - generic:
+                - generic:
+                  - button:
+                    - img
+                  - button:
+                    - generic:
+                      - img
+        - generic:
+          - banner:
+            - generic:
+              - generic:
+                - button:
+                  - img
+                - link:
+                  - /url: /
+                  - img
+                  - generic: Docsy
+                - generic: "|"
+                - textbox:
+                  - /placeholder: 제목 없음
+                  - text: Release Runbook Source
+                - generic: .md
+                - generic:
+                  - generic: 저장됨
+                - button:
+                  - text: Markdown
+                  - img
+              - generic:
+                - button:
+                  - generic: 1614자
+                  - generic: /
+                  - generic: 238단어
+                  - generic: /
+                  - generic: 22줄
+                - button:
+                  - img
+                - button:
+                  - img
+                  - generic: Google
+                  - img
+                - button:
+                  - img
+                  - img
+                - button:
+                  - img
+                - button:
+                  - img
+                - button: 고급
+                - button:
+                  - img
+                  - generic: ko
+                - button:
+                  - img
+                - button:
+                  - img
+                - button:
+                  - img
+                - button: 패치 검토
+                - button:
+                  - img
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - button:
+                      - generic: Release Runbook Source
+                      - generic: .md
+                      - generic:
+                        - img
+                    - button:
+                      - generic: Release Runbook Target
+                      - generic: .md
+                      - generic:
+                        - img
+            - button:
+              - img
+            - button:
+              - img
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - button:
+                      - img
+                    - button:
+                      - img
+                    - button:
+                      - img
+                    - button:
+                      - img
+                    - button:
+                      - img
+                  - generic:
+                    - button:
+                      - text: 추가서식
+                      - img
+                    - button:
+                      - text: 구조
+                      - img
+                    - button:
+                      - text: 정렬
+                      - img
+                    - button:
+                      - text: 링크
+                      - img
+                    - button:
+                      - text: 색상
+                      - img
+                    - button:
+                      - text: 문서도구
+                      - img
+                    - button:
+                      - text: 글꼴
+                      - img
+                    - button:
+                      - text: 글자크기
+                      - img
+                    - button:
+                      - text: 캡션
+                      - img
+                    - button:
+                      - text: 수식 삽입
+                      - img
+                    - button:
+                      - text: Mermaid diagram 삽입
+                      - img
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - heading [level=1]: Release Runbook
+                        - heading [level=2]: Deployment Procedure
+                        - paragraph: "Source step 1: validate release evidence and capture baseline metrics for all regions. Source step 2: validate release evidence and capture baseline metrics for all regions. Source step 3: validate release evidence and capture baseline metrics for all regions. Source step 4: validate release evidence and capture baseline metrics for all regions. Source step 5: validate release evidence and capture baseline metrics for all regions. Source step 6: validate release evidence and capture baseline metrics for all regions. Source step 7: validate release evidence and capture baseline metrics for all regions. Source step 8: validate release evidence and capture baseline metrics for all regions. Source step 9: validate release evidence and capture baseline metrics for all regions. Source step 10: validate release evidence and capture baseline metrics for all regions. Source step 11: validate release evidence and capture baseline metrics for all regions. Source step 12: validate release evidence and capture baseline metrics for all regions. Source step 13: validate release evidence and capture baseline metrics for all regions. Source step 14: validate release evidence and capture baseline metrics for all regions. Source step 15: validate release evidence and capture baseline metrics for all regions. Source step 16: validate release evidence and capture baseline metrics for all regions. Source step 17: validate release evidence and capture baseline metrics for all regions. Source step 18: validate release evidence and capture baseline metrics for all regions."
+                    - button:
+                      - img
+                      - text: Source
+    - generic:
+      - button:
+        - img
+        - text: Navigator
+  - dialog:
+    - generic:
+      - heading [level=2]:
+        - img
+        - text: AI assistant
+      - paragraph: Gemini가 요약과 섹션 초안을 생성하고, 비교 결과는 검토 가능한 패치로 불러옵니다.
+    - generic:
+      - tablist:
+        - tab: Agent
+        - tab: Navigator
+        - tab: 요약
+        - tab: 섹션
+        - tab: 목차
+        - tab [selected]: 비교
+        - tab: 업데이트
+        - tab: 절차
+      - tabpanel:
+        - generic:
+          - generic:
+            - generic:
+              - text: 비교 대상
+              - paragraph: 문서 차이를 먼저 확인하고 비교 결과를 검토하세요.
+            - combobox [expanded]:
+              - generic: 문서 선택
+              - img
+            - button [disabled]: 비교 분석
+          - generic: 아직 비교 결과가 없습니다.
+    - button:
+      - img
+      - generic: Close
+  - listbox [ref=e208]:
+    - option "Release Runbook Target" [active] [ref=e209]:
+      - generic [ref=e211]: Release Runbook Target
