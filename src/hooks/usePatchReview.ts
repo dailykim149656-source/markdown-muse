@@ -275,19 +275,14 @@ export const usePatchReview = ({
     })));
   }, [handlePatchDecisions]);
 
-  const applyReviewedPatches = useCallback(async () => {
-    if (!patchSet) {
-      toast.info(t("hooks.patchReview.loadFirst"));
-      return;
-    }
-
+  const applyPreparedPatchSet = useCallback(async (patchSetToApply: DocumentPatchSet) => {
     setLastApplyReport(null);
 
     const recordPreflightFailure = (phase: PatchApplyReport["phase"], message: string) => {
       setLastApplyReport(createApplyReport({
         appliedPatchIds: [],
         failures: [{ message }],
-        patchSet,
+        patchSet: patchSetToApply,
         phase,
         scope: "preflight",
         warnings: [],
@@ -309,7 +304,7 @@ export const usePatchReview = ({
       setLastApplyReport(createApplyReport({
         appliedPatchIds: result.appliedPatchIds,
         failures: result.failures,
-        patchSet,
+        patchSet: patchSetToApply,
         phase,
         scope: "apply",
         warnings: result.warnings,
@@ -317,11 +312,11 @@ export const usePatchReview = ({
     };
 
     if (activeDoc.mode === "json" || activeDoc.mode === "yaml") {
-      if (!isStructuredPatchSet(patchSet)) {
+      if (!isStructuredPatchSet(patchSetToApply)) {
         const message = t("hooks.patchReview.structuredOnly");
         toast.error(message);
         recordPreflightFailure("structured", message);
-        return;
+        return false;
       }
 
       let structuredDocument: unknown;
@@ -333,15 +328,15 @@ export const usePatchReview = ({
         const message = error instanceof Error ? error.message : t("hooks.patchReview.structuredParseFailed");
         toast.error(message);
         recordPreflightFailure("structured", message);
-        return;
+        return false;
       }
 
       const { applyStructuredPatchSet, serializeStructuredContent } = await import("@/lib/patches/applyStructuredPatchSet");
-      const result = applyStructuredPatchSet(structuredDocument, patchSet);
+      const result = applyStructuredPatchSet(structuredDocument, patchSetToApply);
 
       if (result.appliedPatchIds.length === 0 && result.failures.length === 0) {
         toast.info(t("hooks.patchReview.nothingToApply"));
-        return;
+        return false;
       }
 
       if (result.appliedPatchIds.length > 0) {
@@ -363,7 +358,7 @@ export const usePatchReview = ({
         bumpEditorKey();
         void onVersionSnapshot?.(nextDocument, {
           patchCount: result.appliedPatchIds.length,
-          patchSetTitle: patchSet.title,
+          patchSetTitle: patchSetToApply.title,
         });
 
         try {
@@ -392,22 +387,22 @@ export const usePatchReview = ({
           applied: result.appliedPatchIds.length,
           failed: result.failures.length,
         }));
-        return;
+        return false;
       }
 
       setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
       setPatchReviewOpen(false);
       toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
-      return;
+      return true;
     }
 
-    if (isDocumentTextPatchSet(patchSet)) {
+    if (isDocumentTextPatchSet(patchSetToApply)) {
       const { applyDocumentTextPatchSet } = await loadDocumentTextPatchSet();
-      const result = applyDocumentTextPatchSet(activeDoc.content, patchSet);
+      const result = applyDocumentTextPatchSet(activeDoc.content, patchSetToApply);
 
       if (result.appliedPatchIds.length === 0 && result.failures.length === 0) {
         toast.info(t("hooks.patchReview.nothingToApply"));
-        return;
+        return false;
       }
 
       if (result.appliedPatchIds.length > 0) {
@@ -441,7 +436,7 @@ export const usePatchReview = ({
         bumpEditorKey();
         void onVersionSnapshot?.(nextDocument, {
           patchCount: result.appliedPatchIds.length,
-          patchSetTitle: patchSet.title,
+          patchSetTitle: patchSetToApply.title,
         });
 
         try {
@@ -470,20 +465,20 @@ export const usePatchReview = ({
           applied: result.appliedPatchIds.length,
           failed: result.failures.length,
         }));
-        return;
+        return false;
       }
 
       setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
       setPatchReviewOpen(false);
       toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
-      return;
+      return true;
     }
 
     if (!activeEditor) {
       const message = t("hooks.patchReview.editorNotReady");
       toast.error(message);
       recordPreflightFailure("rich_text", message);
-      return;
+      return false;
     }
 
     const {
@@ -504,7 +499,7 @@ export const usePatchReview = ({
       const message = error instanceof Error ? error.message : t("hooks.patchReview.serializeFailed");
       toast.error(message);
       recordPreflightFailure("rich_text", message);
-      return;
+      return false;
     }
 
     const sourceValidation = validateDocumentAst(documentAst);
@@ -513,14 +508,14 @@ export const usePatchReview = ({
       const message = t("hooks.patchReview.invalidAst", { message: sourceValidation.errors[0]?.message || "" });
       toast.error(message);
       recordPreflightFailure("rich_text", message);
-      return;
+      return false;
     }
 
-    const result = applyDocumentPatchSet(documentAst, patchSet);
+    const result = applyDocumentPatchSet(documentAst, patchSetToApply);
 
     if (result.appliedPatchIds.length === 0 && result.failures.length === 0) {
       toast.info(t("hooks.patchReview.nothingToApply"));
-      return;
+      return false;
     }
 
     if (result.appliedPatchIds.length > 0) {
@@ -556,7 +551,7 @@ export const usePatchReview = ({
       bumpEditorKey();
       void onVersionSnapshot?.(nextDocument, {
         patchCount: result.appliedPatchIds.length,
-        patchSetTitle: patchSet.title,
+        patchSetTitle: patchSetToApply.title,
       });
 
       try {
@@ -585,12 +580,13 @@ export const usePatchReview = ({
         applied: result.appliedPatchIds.length,
         failed: result.failures.length,
       }));
-      return;
+      return false;
     }
 
     setPatchSet((currentPatchSet) => currentPatchSet ? { ...currentPatchSet, status: "completed" } : currentPatchSet);
     setPatchReviewOpen(false);
     toast.success(t("hooks.patchReview.appliedSuccess", { count: result.appliedPatchIds.length }));
+    return true;
   }, [
     activeDoc,
     activeDoc.content,
@@ -600,14 +596,41 @@ export const usePatchReview = ({
     bumpEditorKey,
     onVersionSnapshot,
     onWorkspaceSync,
-    patchSet,
     setLiveEditorHtml,
     t,
     updateActiveDoc,
   ]);
 
+  const applyReviewedPatches = useCallback(async () => {
+    if (!patchSet) {
+      toast.info(t("hooks.patchReview.loadFirst"));
+      return false;
+    }
+
+    return applyPreparedPatchSet(patchSet);
+  }, [applyPreparedPatchSet, patchSet, t]);
+
+  const autoApplyPatchSet = useCallback(async (nextPatchSet: DocumentPatchSet) => {
+    const acceptanceResult = applyPatchDecisions(
+      nextPatchSet,
+      nextPatchSet.patches.map((patch) => ({
+        decidedAt: Date.now(),
+        decision: "accepted" as const,
+        patchId: patch.patchId,
+      })),
+    );
+
+    if (acceptanceResult.warnings.length > 0) {
+      toast.warning(acceptanceResult.warnings[0]?.message || t("hooks.patchReview.decisionWarning"));
+    }
+
+    setPatchSet(acceptanceResult.patchSet);
+    return applyPreparedPatchSet(acceptanceResult.patchSet);
+  }, [applyPreparedPatchSet, t]);
+
   return {
     acceptedPatchCount,
+    autoApplyPatchSet,
     applyReviewedPatches,
     clearPatchSet,
     closePatchReview,

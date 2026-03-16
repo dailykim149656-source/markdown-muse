@@ -47,13 +47,17 @@ describe("normalizeAgentTurnResponse", () => {
         },
         effect: {
           changeSetTitle: "Live agent update",
+          deliveryMode: "direct_apply",
           summary: "Review the updates.",
           type: "draft_current_document",
         },
       },
     });
 
-    expect(response.effect.type).toBe("draft_current_document");
+    expect(response.effect).toEqual(expect.objectContaining({
+      deliveryMode: "direct_apply",
+      type: "draft_current_document",
+    }));
     expect(response.currentDocumentDraft?.edits).toHaveLength(1);
   });
 
@@ -73,6 +77,7 @@ describe("normalizeAgentTurnResponse", () => {
         },
         effect: {
           changeSetTitle: "Update current document",
+          deliveryMode: "direct_apply",
           summary: "Review the new handover values.",
           type: "draft_current_document",
         },
@@ -149,6 +154,7 @@ describe("normalizeAgentTurnResponse", () => {
       createDocumentAfter: true,
       objective: "Summarize the current document.",
       prompt: undefined,
+      targetFileId: undefined,
       targetDocumentId: undefined,
       targetDocumentName: undefined,
       type: "delegate_ai_capability",

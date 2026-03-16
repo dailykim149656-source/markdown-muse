@@ -54,16 +54,23 @@ interface AiAssistantDialogProps {
 const getTocConflictTone = (conflict: TocPreviewResult["conflicts"][number]) => {
   switch (conflict) {
     case "duplicate_headings":
-    case "non_matching_titles":
       return "border-destructive/30 bg-destructive/10 text-destructive";
+    case "non_matching_titles":
+    case "partial_anchor_match":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    case "duplicate_toc_placeholders":
     case "existing_toc":
     case "unchanged_toc":
       return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
     case "no_headings":
+    case "no_promotable_targets":
     default:
       return "border-border/60 bg-background text-muted-foreground";
   }
 };
+
+const getTocSkipReasonKey = (reason: TocPreviewResult["skippedEntries"][number]["reason"]) =>
+  `aiDialog.toc.skipReason.${reason}`;
 
 const getTocEntryAccent = (level: 1 | 2 | 3) => {
   switch (level) {
@@ -465,7 +472,7 @@ const AiAssistantDialog = ({
                     <p className="text-xs text-muted-foreground">{t("aiDialog.toc.depthHelp")}</p>
                     <Button
                       className="w-full"
-                      disabled={aiExecutionDisabled || !tocPreview}
+                      disabled={aiExecutionDisabled || !tocPreview?.hasLoadablePatch}
                       onClick={() => void onLoadTocPatch(Number(tocMaxDepth) as 1 | 2 | 3)}
                       type="button"
                       variant={tocPreview?.hasLoadablePatch ? "default" : "outline"}
@@ -480,7 +487,7 @@ const AiAssistantDialog = ({
                   <ScrollArea className="mt-3 h-72 pr-3">
                     {tocPreview ? (
                       <div className="space-y-4 text-sm">
-                        <div className="grid gap-2 sm:grid-cols-3">
+                        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
                           <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
                             <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                               {t("aiDialog.toc.depth")}
@@ -494,6 +501,24 @@ const AiAssistantDialog = ({
                               {t("aiDialog.toc.entries")}
                             </div>
                             <div className="mt-1 text-sm font-semibold text-foreground">{tocPreview.entries.length}</div>
+                          </div>
+                          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                              {t("aiDialog.toc.matched")}
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-foreground">{tocPreview.matchedCount}</div>
+                          </div>
+                          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                              {t("aiDialog.toc.promoted")}
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-foreground">{tocPreview.promotedCount}</div>
+                          </div>
+                          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                            <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                              {t("aiDialog.toc.skipped")}
+                            </div>
+                            <div className="mt-1 text-sm font-semibold text-foreground">{tocPreview.skippedEntries.length}</div>
                           </div>
                           <div className={`rounded-md border px-3 py-2 ${tocPreview.hasLoadablePatch ? "border-emerald-500/30 bg-emerald-500/10" : "border-amber-500/30 bg-amber-500/10"}`}>
                             <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
@@ -527,9 +552,31 @@ const AiAssistantDialog = ({
                                     {t("aiDialog.toc.entryLevel", { level: entry.level })}
                                   </div>
                                   <div className="mt-1 text-sm text-foreground">{entry.title}</div>
+                                  <div className="mt-1 text-[11px] text-muted-foreground">
+                                    {t(`aiDialog.toc.anchorStrategy.${entry.anchorStrategy}`)}
+                                    {entry.anchorText ? ` · ${entry.anchorText}` : ""}
+                                  </div>
                                 </div>
                               ))}
                             </div>
+                          </div>
+                        )}
+
+                        {tocPreview.skippedEntries.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">{t("aiDialog.toc.skippedEntries")}</p>
+                            <ul className="space-y-2 text-xs text-muted-foreground">
+                              {tocPreview.skippedEntries.map((entry, index) => (
+                                <li key={`${entry.title}-${entry.reason}-${index}`} className="rounded-md border border-border bg-muted/20 px-3 py-2">
+                                  <div className="font-medium text-foreground">{entry.title}</div>
+                                  <div className="mt-1">{t(getTocSkipReasonKey(entry.reason))}</div>
+                                  <div className="mt-1">
+                                    {t(`aiDialog.toc.anchorStrategy.${entry.anchorStrategy}`)}
+                                    {entry.anchorText ? ` · ${entry.anchorText}` : ""}
+                                  </div>
+                                </li>
+                              ))}
+                            </ul>
                           </div>
                         )}
 

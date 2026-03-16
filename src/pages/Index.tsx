@@ -52,7 +52,14 @@ import {
 } from "@/lib/editor/userProfiles";
 import { createLatestDeferredTaskRunner } from "@/lib/editor/latestDeferredTask";
 import { resetLocalDocumentState } from "@/lib/documents/resetLocalDocumentState";
-import { RESTORED_SESSION_TOAST_ID, showRestoredSessionToast } from "@/lib/documents/restoredSessionToast";
+import {
+  RESTORED_SESSION_TOAST_ID,
+  UNEXPECTED_RELOAD_LOST_TOAST_ID,
+  UNEXPECTED_RELOAD_RECOVERED_TOAST_ID,
+  showRestoredSessionToast,
+  showUnexpectedReloadLostToast,
+  showUnexpectedReloadRecoveredToast,
+} from "@/lib/documents/restoredSessionToast";
 import { getTemplateFallbackContent as getSharedTemplateFallbackContent } from "@/lib/editor/templateFallback";
 import {
   captureAutoSaveVersionSnapshot,
@@ -115,7 +122,8 @@ interface PendingImpactSuggestionEntry {
 
 type PendingDocumentSupportIntent =
   | { type: "open-patch-review" }
-  | { openAfterLoad?: boolean; patchSet: DocumentPatchSet; type: "load-patch-set" };
+  | { openAfterLoad?: boolean; patchSet: DocumentPatchSet; type: "load-patch-set" }
+  | { patchSet: DocumentPatchSet; type: "auto-apply-patch-set" };
 
 type PendingWorkspaceAction =
   | { type: "open-connection-dialog" }
@@ -406,9 +414,12 @@ const Index = () => {
     editorKey,
     handleContentChange,
     hasRestoredDocuments,
+    isRecovering,
+    recoveryFailure,
     renameDocument,
     resetDocuments,
     selectDocument,
+    unexpectedReloadState,
     updateDocument,
     updateActiveDoc,
   } = useDocumentManager();
@@ -539,6 +550,22 @@ const Index = () => {
       patchSet: nextPatchSet,
       type: "load-patch-set",
     });
+  }, [canAccessPatchReview, documentSupportRuntimeState]);
+  const requestPatchSetAutoApply = useCallback(async (nextPatchSet: DocumentPatchSet) => {
+    if (!canAccessPatchReview) {
+      return false;
+    }
+
+    if (documentSupportRuntimeState) {
+      return documentSupportRuntimeState.autoApplyPatchSet(nextPatchSet);
+    }
+
+    setDocumentSupportRuntimeEnabled(true);
+    setPendingDocumentSupportIntent({
+      patchSet: nextPatchSet,
+      type: "auto-apply-patch-set",
+    });
+    return true;
   }, [canAccessPatchReview, documentSupportRuntimeState]);
   const openPatchReview = requestPatchReviewOpen;
   const loadPatchSet = requestPatchSetLoad;
@@ -1580,6 +1607,8 @@ const Index = () => {
 
     if (pendingDocumentSupportIntent.type === "open-patch-review") {
       documentSupportRuntimeState.openPatchReview();
+    } else if (pendingDocumentSupportIntent.type === "auto-apply-patch-set") {
+      void documentSupportRuntimeState.autoApplyPatchSet(pendingDocumentSupportIntent.patchSet);
     } else {
       documentSupportRuntimeState.loadPatchSet(pendingDocumentSupportIntent.patchSet);
     }
@@ -1966,8 +1995,32 @@ const Index = () => {
   }, [activeDocumentCompatibility.isCompatible]);
 
   useEffect(() => {
+    if (unexpectedReloadState?.kind === "lost") {
+      toast.dismiss(RESTORED_SESSION_TOAST_ID);
+      toast.dismiss(UNEXPECTED_RELOAD_RECOVERED_TOAST_ID);
+      showUnexpectedReloadLostToast({ t });
+      return;
+    }
+
+    if (unexpectedReloadState?.kind === "recovered" && hasRestoredDocuments) {
+      toast.dismiss(RESTORED_SESSION_TOAST_ID);
+      toast.dismiss(UNEXPECTED_RELOAD_LOST_TOAST_ID);
+      showUnexpectedReloadRecoveredToast({
+        buildChanged: unexpectedReloadState.buildChanged,
+        disabled: resetDocumentsDisabled,
+        navigationType: unexpectedReloadState.navigationType,
+        onStartFresh: () => {
+          setResetDocumentsDialogOpen(true);
+        },
+        t,
+      });
+      return;
+    }
+
     if (!hasRestoredDocuments) {
       toast.dismiss(RESTORED_SESSION_TOAST_ID);
+      toast.dismiss(UNEXPECTED_RELOAD_LOST_TOAST_ID);
+      toast.dismiss(UNEXPECTED_RELOAD_RECOVERED_TOAST_ID);
       return;
     }
 
@@ -1981,8 +2034,10 @@ const Index = () => {
 
     return () => {
       toast.dismiss(RESTORED_SESSION_TOAST_ID);
+      toast.dismiss(UNEXPECTED_RELOAD_LOST_TOAST_ID);
+      toast.dismiss(UNEXPECTED_RELOAD_RECOVERED_TOAST_ID);
     };
-  }, [hasRestoredDocuments, resetDocumentsDisabled, t]);
+  }, [hasRestoredDocuments, resetDocumentsDisabled, t, unexpectedReloadState]);
 
   useEffect(() => {
     const openSharedDocumentFromHash = async () => {
@@ -2470,6 +2525,77 @@ const Index = () => {
     && documentPerformanceProfile.kind !== "normal"
     ? undefined
     : previewRuntimeState?.texValidationProps;
+  const showRecoveryLoadingScreen = Boolean(isRecovering && documents.length === 0);
+  const showRecoveryScreen = Boolean(recoveryFailure && documents.length === 0);
+
+  if (showRecoveryLoadingScreen) {
+    return (
+      <div className="flex h-[100svh] items-center justify-center bg-background px-6">
+        <div className="w-full max-w-xl rounded-2xl border border-border/60 bg-card p-8 text-center shadow-sm">
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            {t("recovery.loadingLabel")}
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-foreground">
+            {t("recovery.loadingTitle")}
+          </h1>
+          <p className="mt-4 text-sm leading-6 text-muted-foreground">
+            {t("recovery.loadingDescription")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (showRecoveryScreen) {
+    return (
+      <>
+        <div className="flex h-[100svh] items-center justify-center bg-background px-6 py-10">
+        <div className="w-full max-w-2xl rounded-2xl border border-destructive/30 bg-card p-8 shadow-sm">
+          <p className="text-sm font-medium uppercase tracking-[0.18em] text-destructive">
+            {t("recovery.failedLabel")}
+          </p>
+          <h1 className="mt-3 text-2xl font-semibold text-foreground">
+            {t("toasts.unexpectedReloadLost")}
+          </h1>
+          <p className="mt-4 text-sm leading-6 text-muted-foreground">
+            {t("recovery.failedDescription")}
+          </p>
+          <div className="mt-5 rounded-xl border border-border/60 bg-muted/30 p-4 text-xs text-muted-foreground">
+              <div>{t("recovery.hintsLabel")}: {recoveryFailure.hadRecoveryHints ? "yes" : "no"}</div>
+              <div>{t("recovery.sourceLabel")}: {recoveryFailure.source}</div>
+              <div>{t("recovery.candidateCount")}: {recoveryFailure.candidateCount}</div>
+              <div>{t("recovery.navigationLabel")}: {unexpectedReloadState?.navigationType || "unknown"}</div>
+          </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button
+                onClick={() => {
+                  setResetDocumentsDialogOpen(true);
+                }}
+              >
+                {t("resetDocuments.action")}
+              </Button>
+              <Button
+                onClick={() => {
+                  handleNewDoc();
+                }}
+                variant="outline"
+              >
+                {t("newDocument")}
+              </Button>
+            </div>
+          </div>
+        </div>
+        <ResetDocumentsDialog
+          isSubmitting={isResettingDocuments}
+          onConfirm={() => {
+            void handleResetDocuments();
+          }}
+          onOpenChange={setResetDocumentsDialogOpen}
+          open={resetDocumentsDialogOpen}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -2478,6 +2604,7 @@ const Index = () => {
           <AiAssistantRuntime
             activeDoc={activeDoc}
             activeEditor={activeEditor}
+            autoApplyPatchSet={requestPatchSetAutoApply}
             createDocumentDraft={handleCreateLiveAgentDocumentDraft}
             createSummaryDocument={handleCreateSummaryDocument}
             currentRenderableMarkdown={currentRenderableMarkdown}

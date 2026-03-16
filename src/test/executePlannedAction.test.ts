@@ -38,6 +38,7 @@ const createContext = (overrides?: Partial<AgentExecutionContext>): AgentExecuti
       markdown: "\uC778\uACC4\uC790: TBD\n\n\uC778\uC218\uC790: TBD",
       mode: "markdown",
     },
+    availableTargetDocuments: [],
     driveReferenceFileIds: [],
     localReferences: [],
     locale: "ko",
@@ -155,6 +156,9 @@ describe("executePlannedAction", () => {
 
     expect(result.rawResponse.effect?.type).toBe("draft_current_document");
     expect(result.telemetry?.deterministicFallbackUsed).toBe(true);
+    expect(result.rawResponse.effect).toEqual(expect.objectContaining({
+      deliveryMode: "direct_apply",
+    }));
   });
 
   it("falls back to the top retrieval field candidate when planner fieldKeys are missing", async () => {
@@ -182,6 +186,7 @@ describe("executePlannedAction", () => {
           markdown: "# Overview\n\nGeneral notes.\n\n## Deployment Procedure\n\n\uC2B9\uC778\uC790: TBD\n\nSteps.",
           mode: "markdown",
         },
+        availableTargetDocuments: [],
         driveReferenceFileIds: [],
         localReferences: [],
         locale: "ko",
@@ -381,5 +386,83 @@ describe("executePlannedAction", () => {
     const result = await executePlannedAction(createContext(), planner);
 
     expect(result.rawResponse.effect?.type).toBe("delegate_ai_capability");
+  });
+
+  it("prefers an exact open document match before Drive fallback for delegated compare actions", async () => {
+    const planner: AgentPlannerResponse = {
+      action: "compare_documents",
+      confidence: 0.92,
+      missingInformation: [],
+      reason: "Compare against the release notes.",
+    };
+
+    const result = await executePlannedAction(createContext({
+      latestUserMessage: "Compare this document with release notes.",
+      request: {
+        activeDocument: {
+          documentId: "doc-1",
+          existingHeadings: [],
+          fileName: "handover.md",
+          markdown: "Owner: TBD",
+          mode: "markdown",
+        },
+        availableTargetDocuments: [{
+          documentId: "doc-2",
+          fileName: "Release Notes",
+          mode: "markdown",
+        }],
+        driveReferenceFileIds: [],
+        localReferences: [],
+        locale: "en",
+        messages: [],
+        targetDefault: "active_document",
+        threadId: "thread-3",
+      },
+    }), planner);
+
+    expect(result.rawResponse.effect).toEqual(expect.objectContaining({
+      targetDocumentId: "doc-2",
+      type: "delegate_ai_capability",
+    }));
+  });
+
+  it("falls back to an exact Drive reference for delegated compare actions when no local target matches", async () => {
+    const planner: AgentPlannerResponse = {
+      action: "compare_documents",
+      confidence: 0.92,
+      missingInformation: [],
+      reason: "Compare against the rollback runbook.",
+    };
+
+    const result = await executePlannedAction(createContext({
+      latestUserMessage: "Compare this document with rollback runbook.",
+      driveReferences: [{
+        excerpt: "Runbook excerpt",
+        fileId: "file-1",
+        fileName: "Rollback Runbook",
+      }],
+      request: {
+        activeDocument: {
+          documentId: "doc-1",
+          existingHeadings: [],
+          fileName: "handover.md",
+          markdown: "Owner: TBD",
+          mode: "markdown",
+        },
+        availableTargetDocuments: [],
+        driveReferenceFileIds: ["file-1"],
+        localReferences: [],
+        locale: "en",
+        messages: [],
+        targetDefault: "active_document",
+        threadId: "thread-4",
+      },
+    }), planner);
+
+    expect(result.rawResponse.effect).toEqual(expect.objectContaining({
+      targetDocumentName: "Rollback Runbook",
+      targetFileId: "file-1",
+      type: "delegate_ai_capability",
+    }));
   });
 });

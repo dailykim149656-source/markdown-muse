@@ -43,6 +43,7 @@ export interface AiAssistantRuntimeState {
 interface AiAssistantRuntimeProps {
   activeDoc: DocumentData;
   activeEditor: TiptapEditor | null;
+  autoApplyPatchSet: (patchSet: DocumentPatchSet) => Promise<boolean>;
   createDocumentDraft: (draft: AgentNewDocumentDraft) => void;
   createSummaryDocument: (input: SummaryDocumentDraftInput) => unknown;
   currentRenderableMarkdown: string;
@@ -57,6 +58,7 @@ interface AiAssistantRuntimeProps {
 const AiAssistantRuntime = ({
   activeDoc,
   activeEditor,
+  autoApplyPatchSet,
   createDocumentDraft,
   createSummaryDocument,
   currentRenderableMarkdown,
@@ -83,6 +85,7 @@ const AiAssistantRuntime = ({
     getFreshRenderableMarkdown,
     onCreateSummaryDocument: createSummaryDocument,
     onCreateDocumentDraft: createDocumentDraft,
+    onAutoApplyPatchSet: autoApplyPatchSet,
     onCompareWithDocument: state.compareWithDocument,
     onExtractProcedure: state.extractProcedureFromActiveDocument,
     onGenerateSection: state.generateSectionPatch,

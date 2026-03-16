@@ -134,9 +134,12 @@ vi.mock("@/hooks/useDocumentManager", () => ({
     editorKey: 0,
     handleContentChange: vi.fn(),
     hasRestoredDocuments: false,
+    isRecovering: false,
+    recoveryFailure: null,
     renameDocument: vi.fn(),
     resetDocuments: vi.fn(),
     selectDocument: vi.fn(),
+    unexpectedReloadState: null,
     updateActiveDoc: vi.fn(),
     updateDocument: vi.fn(),
   }),
@@ -334,7 +337,11 @@ vi.mock("@/lib/documents/resetLocalDocumentState", () => ({
 
 vi.mock("@/lib/documents/restoredSessionToast", () => ({
   RESTORED_SESSION_TOAST_ID: "restored-session",
+  UNEXPECTED_RELOAD_LOST_TOAST_ID: "unexpected-reload-lost",
+  UNEXPECTED_RELOAD_RECOVERED_TOAST_ID: "unexpected-reload-recovered",
   showRestoredSessionToast: vi.fn(),
+  showUnexpectedReloadLostToast: vi.fn(),
+  showUnexpectedReloadRecoveredToast: vi.fn(),
 }));
 
 vi.mock("@/components/editor/EditorWorkspace", () => ({

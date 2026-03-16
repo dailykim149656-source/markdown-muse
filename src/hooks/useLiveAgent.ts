@@ -19,11 +19,13 @@ import type {
   AgentAvailableTargetDocument,
   AgentChatMessage,
   AgentCurrentDocumentDraft,
+  AgentDeliveryMode,
   AgentDelegatedCapability,
   AgentDocumentContext,
   AgentDriveCandidate,
   AgentLocalReference,
   AgentNewDocumentDraft,
+  AgentResolvedReference,
   AgentSelectedDriveReference,
   AgentStatus,
   AgentTurnRequest,
@@ -37,6 +39,12 @@ const createArtifactId = (prefix: string) => `${prefix}-${Date.now()}-${Math.ran
 type PendingAgentConfirmation =
   | { type: "create_new_document"; draft: AgentNewDocumentDraft }
   | { type: "import_drive_document"; fileId: string; fileName: string };
+
+type PendingImportedDelegation = {
+  capability: Extract<AgentDelegatedCapability, "compare_documents" | "suggest_document_updates">;
+  prompt: string;
+  targetDocumentName?: string;
+};
 
 const isRichTextDocument = (
   document: Pick<DocumentData, "mode">,
@@ -116,6 +124,7 @@ interface UseLiveAgentOptions {
   currentRenderableMarkdown: string;
   documents: DocumentData[];
   getFreshRenderableMarkdown: () => Promise<string>;
+  onAutoApplyPatchSet: (patchSet: DocumentPatchSet) => Promise<boolean>;
   onCreateDocumentDraft: (draft: AgentNewDocumentDraft) => void;
   onCreateSummaryDocument: (input: SummaryDocumentDraftInput) => unknown;
   onCompareWithDocument: (targetDocumentId: string) => Promise<PatchPreviewResult>;
@@ -128,6 +137,46 @@ interface UseLiveAgentOptions {
   onSummarizeDocument: (objective: string) => Promise<SummarizeDocumentResponse | unknown> | unknown;
   onSuggestUpdates: (targetDocumentId: string) => Promise<PatchPreviewResult>;
 }
+
+const createActiveDocumentReference = (documentName: string): AgentResolvedReference => ({
+  autoInferred: true,
+  kind: "active_document",
+  label: documentName,
+});
+
+const createLocalDocumentReference = ({
+  autoInferred = true,
+  documentId,
+  fileName,
+}: {
+  autoInferred?: boolean;
+  documentId: string;
+  fileName: string;
+}): AgentResolvedReference => ({
+  autoInferred,
+  documentId,
+  kind: "local_document",
+  label: fileName,
+});
+
+const createDriveDocumentReference = ({
+  autoInferred = true,
+  fileId,
+  fileName,
+}: {
+  autoInferred?: boolean;
+  fileId: string;
+  fileName: string;
+}): AgentResolvedReference => ({
+  autoInferred,
+  fileId,
+  kind: "drive_document",
+  label: fileName,
+});
+
+const DRIVE_INTENT_PATTERN = /\b(?:google\s*drive|google\s*docs|drive|docs|import|search)\b|(?:\uAD6C\uAE00\s*\uB4DC\uB77C\uC774\uBE0C)|(?:\uAD6C\uAE00\s*\uBB38\uC11C)|(?:\uB4DC\uB77C\uC774\uBE0C)|(?:\uAC00\uC838\uC624)|(?:\uAC80\uC0C9)/iu;
+
+const isDriveIntentMessage = (value: string) => DRIVE_INTENT_PATTERN.test(value.trim());
 
 export interface LiveAgentState {
   artifacts: AgentArtifact[];
@@ -167,6 +216,7 @@ export const useLiveAgent = ({
   currentRenderableMarkdown,
   documents,
   getFreshRenderableMarkdown,
+  onAutoApplyPatchSet,
   onCreateDocumentDraft,
   onCreateSummaryDocument,
   onCompareWithDocument,
@@ -189,6 +239,7 @@ export const useLiveAgent = ({
   const [selectedDriveReferences, setSelectedDriveReferences] = useState<AgentSelectedDriveReference[]>([]);
   const [latestDriveCandidates, setLatestDriveCandidates] = useState<AgentDriveCandidate[]>([]);
   const [pendingConfirmation, setPendingConfirmation] = useState<PendingAgentConfirmation | null>(null);
+  const [pendingImportedDelegation, setPendingImportedDelegation] = useState<PendingImportedDelegation | null>(null);
   const [latestDraftPreview, setLatestDraftPreview] = useState<AgentCurrentDocumentDraft | AgentNewDocumentDraft | null>(null);
   const [latestError, setLatestError] = useState<string | null>(null);
   const [latestStatus, setLatestStatus] = useState<AgentStatus | null>(null);
@@ -205,6 +256,10 @@ export const useLiveAgent = ({
     })),
     [availableLocalReferences],
   );
+  const activeResolvedReference = useMemo(
+    () => createActiveDocumentReference(activeDoc.name),
+    [activeDoc.name],
+  );
 
   const resetThread = useCallback(() => {
     setArtifacts([]);
@@ -215,6 +270,7 @@ export const useLiveAgent = ({
     setLatestStatus(null);
     setMessages([]);
     setPendingConfirmation(null);
+    setPendingImportedDelegation(null);
     setSelectedDriveReferences([]);
     setSelectedLocalReferenceIds([]);
     setThreadId(createThreadId());
@@ -246,7 +302,8 @@ export const useLiveAgent = ({
         updatedAt: Date.now(),
       };
     });
-    const localReferenceDocuments = selectedLocalReferenceIds
+    const localReferenceDocuments = Array.from(new Set(selectedLocalReferenceIds))
+      .filter((documentId) => documentId !== activeDoc.id)
       .map((documentId) => documents.find((document) => document.id === documentId) || null)
       .filter((document): document is DocumentData => Boolean(document))
       .filter((document): document is DocumentData & { mode: "html" | "latex" | "markdown" } => isRichTextDocument(document));
@@ -325,12 +382,16 @@ export const useLiveAgent = ({
   }, []);
 
   const toggleLocalReference = useCallback((documentId: string) => {
+    if (documentId === activeDoc.id) {
+      return;
+    }
+
     setSelectedLocalReferenceIds((current) => (
       current.includes(documentId)
         ? current.filter((currentId) => currentId !== documentId)
         : [...current, documentId]
     ));
-  }, []);
+  }, [activeDoc.id]);
 
   const appendArtifact = useCallback((artifact: AgentArtifact) => {
     setArtifacts((current) => [...current, artifact]);
@@ -363,8 +424,9 @@ export const useLiveAgent = ({
       id: createArtifactId(`target-${capability}`),
       kind: "document_target",
       prompt,
+      resolvedReferences: [activeResolvedReference],
     });
-  }, [appendArtifact, availableTargetDocuments, t]);
+  }, [activeResolvedReference, appendArtifact, availableTargetDocuments, t]);
 
   const executeDelegatedTargetCapability = useCallback(async ({
     capability,
@@ -399,6 +461,13 @@ export const useLiveAgent = ({
         patchCount: preview.patchCount,
         patchSet: preview.patchSet || null,
         patchSetTitle: preview.patchSetTitle,
+        resolvedReferences: [
+          activeResolvedReference,
+          createLocalDocumentReference({
+            documentId: targetDocument.documentId,
+            fileName: targetDocument.fileName,
+          }),
+        ],
         targetDocumentId: targetDocument.documentId,
         targetDocumentName: targetDocument.fileName,
       });
@@ -409,29 +478,42 @@ export const useLiveAgent = ({
 
     appendArtifact({
       capability,
+      deliveryMode: "review_first",
+      directApplySucceeded: false,
       id: createArtifactId("patch"),
       kind: "patch_result",
       patchCount: preview.patchCount,
       patchSet: preview.patchSet || null,
       patchSetTitle: preview.patchSetTitle,
+      resolvedReferences: [
+        activeResolvedReference,
+        createLocalDocumentReference({
+          documentId: targetDocument.documentId,
+          fileName: targetDocument.fileName,
+        }),
+      ],
       reviewOpened: true,
       targetDocumentId: targetDocument.documentId,
       targetDocumentName: targetDocument.fileName,
     });
-  }, [appendArtifact, appendDocumentTargetArtifact, availableTargetDocuments, onCompareWithDocument, onSuggestUpdates]);
+  }, [activeResolvedReference, appendArtifact, appendDocumentTargetArtifact, availableTargetDocuments, onCompareWithDocument, onSuggestUpdates]);
 
   const handleDelegatedCapability = useCallback(async ({
     capability,
     createDocumentAfter,
     objective,
     prompt,
+    targetFileId,
     targetDocumentId,
+    targetDocumentName,
   }: {
     capability: AgentDelegatedCapability;
     createDocumentAfter?: boolean;
     objective?: string;
     prompt?: string;
+    targetFileId?: string;
     targetDocumentId?: string;
+    targetDocumentName?: string;
   }) => {
     if (capability === "summarize_document") {
       const summaryObjective = objective?.trim() || prompt?.trim();
@@ -448,6 +530,7 @@ export const useLiveAgent = ({
         kind: "summary",
         objective: summaryObjective,
         result,
+        resolvedReferences: [activeResolvedReference],
         sourceDocumentId: activeDoc.id,
         sourceDocumentName: activeDoc.name,
       });
@@ -469,11 +552,14 @@ export const useLiveAgent = ({
 
       appendArtifact({
         capability,
+        deliveryMode: "review_first",
+        directApplySucceeded: false,
         id: createArtifactId("patch"),
         kind: "patch_result",
         patchCount: result.patchSet.patches.length,
         patchSet: result.patchSet,
         patchSetTitle: result.patchSet.title,
+        resolvedReferences: [activeResolvedReference],
         reviewOpened: true,
       });
       return;
@@ -491,6 +577,7 @@ export const useLiveAgent = ({
         patchSet: preview.patchSet,
         patchSetTitle: preview.patchSetTitle,
         rationale: preview.rationale,
+        resolvedReferences: [activeResolvedReference],
       });
       return;
     }
@@ -502,19 +589,46 @@ export const useLiveAgent = ({
         id: createArtifactId("procedure"),
         kind: "procedure",
         result,
+        resolvedReferences: [activeResolvedReference],
       });
       return;
     }
 
     if (capability === "compare_documents" || capability === "suggest_document_updates") {
       const comparisonPrompt = prompt?.trim() || objective?.trim() || activeDoc.name;
+
+      if (targetFileId) {
+        const importedReference = selectedDriveReferences.find((reference) => reference.fileId === targetFileId);
+
+        await onImportDriveDocument(targetFileId);
+        setPendingImportedDelegation({
+          capability,
+          prompt: comparisonPrompt,
+          targetDocumentName: importedReference?.fileName || targetDocumentName,
+        });
+        return;
+      }
+
       await executeDelegatedTargetCapability({
         capability,
         prompt: comparisonPrompt,
         targetDocumentId,
       });
     }
-  }, [activeDoc.id, activeDoc.name, appendArtifact, executeDelegatedTargetCapability, onExtractProcedure, onGenerateSection, onGenerateToc, onSummarizeDocument, t]);
+  }, [
+    activeDoc.id,
+    activeDoc.name,
+    activeResolvedReference,
+    appendArtifact,
+    executeDelegatedTargetCapability,
+    onExtractProcedure,
+    onGenerateSection,
+    onGenerateToc,
+    onImportDriveDocument,
+    onSummarizeDocument,
+    selectedDriveReferences,
+    t,
+  ]);
 
   const createSummaryDocumentFromArtifact = useCallback((artifactId: string) => {
     const artifact = artifacts.find((candidate): candidate is Extract<AgentArtifact, { kind: "summary" }> =>
@@ -573,10 +687,38 @@ export const useLiveAgent = ({
     });
   }, [artifacts, executeDelegatedTargetCapability, removeArtifact]);
 
+  useEffect(() => {
+    if (!pendingImportedDelegation || !pendingImportedDelegation.targetDocumentName) {
+      return;
+    }
+
+    const importedTarget = availableTargetDocuments.find((document) =>
+      document.fileName.trim().toLowerCase() === pendingImportedDelegation.targetDocumentName?.trim().toLowerCase(),
+    );
+
+    if (!importedTarget) {
+      return;
+    }
+
+    setPendingImportedDelegation(null);
+    void executeDelegatedTargetCapability({
+      capability: pendingImportedDelegation.capability,
+      prompt: pendingImportedDelegation.prompt,
+      targetDocumentId: importedTarget.documentId,
+    });
+  }, [availableTargetDocuments, executeDelegatedTargetCapability, pendingImportedDelegation]);
+
   const sendMessage = useCallback(async (textOverride?: string) => {
     const nextText = (textOverride ?? composerText).trim();
 
     if (!nextText || isSubmitting) {
+      return;
+    }
+
+    if (!isRichTextDocument(activeDoc) && !isDriveIntentMessage(nextText)) {
+      const message = t("hooks.ai.richTextOnly");
+      setLatestError(message);
+      toast.error(message);
       return;
     }
 
@@ -626,13 +768,40 @@ export const useLiveAgent = ({
             patchSetId: `live-agent-${Date.now()}`,
             title: response.effect.changeSetTitle,
           });
+          const resolvedReferences: AgentResolvedReference[] = [activeResolvedReference];
+          const shouldDirectApply = response.effect.deliveryMode === "direct_apply";
 
           setPendingConfirmation(null);
+          if (shouldDirectApply) {
+            const directApplySucceeded = await onAutoApplyPatchSet(patchSet);
+
+            appendArtifact({
+              capability: "update_current_document",
+              deliveryMode: "direct_apply",
+              directApplySucceeded,
+              id: createArtifactId("patch"),
+              kind: "patch_result",
+              patchCount: patchSet.patches.length,
+              patchSet,
+              patchSetTitle: patchSet.title,
+              resolvedReferences,
+              reviewOpened: false,
+            });
+            break;
+          }
+
           onOpenPatchReview(patchSet);
           appendArtifact({
-            draft: response.currentDocumentDraft,
-            id: createArtifactId("draft"),
-            kind: "draft_preview",
+            capability: "update_current_document",
+            deliveryMode: "review_first",
+            directApplySucceeded: false,
+            id: createArtifactId("patch"),
+            kind: "patch_result",
+            patchCount: patchSet.patches.length,
+            patchSet,
+            patchSetTitle: patchSet.title,
+            resolvedReferences,
+            reviewOpened: true,
           });
           break;
         }
@@ -649,6 +818,7 @@ export const useLiveAgent = ({
             draft: response.newDocumentDraft,
             id: createArtifactId("draft"),
             kind: "draft_preview",
+            resolvedReferences: [activeResolvedReference],
           });
           break;
         case "show_drive_candidates":
@@ -658,6 +828,7 @@ export const useLiveAgent = ({
             id: createArtifactId("drive"),
             kind: "drive_candidates",
             query: response.effect.query,
+            resolvedReferences: [activeResolvedReference],
           });
           break;
         case "delegate_ai_capability":
@@ -667,7 +838,9 @@ export const useLiveAgent = ({
             createDocumentAfter: response.effect.createDocumentAfter,
             objective: response.effect.objective || optimisticUserMessage.text,
             prompt: response.effect.prompt || optimisticUserMessage.text,
+            targetFileId: response.effect.targetFileId,
             targetDocumentId: response.effect.targetDocumentId,
+            targetDocumentName: response.effect.targetDocumentName,
           });
           break;
         case "ready_to_import_drive_file":
@@ -695,12 +868,14 @@ export const useLiveAgent = ({
   }, [
     activeDoc,
     activeEditor,
+    activeResolvedReference,
     appendArtifact,
     buildAgentRequest,
     composerText,
     handleDelegatedCapability,
     isSubmitting,
     messages,
+    onAutoApplyPatchSet,
     onOpenPatchReview,
     onOpenWorkspaceConnection,
     t,

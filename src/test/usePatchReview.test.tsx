@@ -52,6 +52,22 @@ const richTextDocumentJson: JSONContent = {
   type: "doc",
 };
 
+const paragraphOnlyDocumentJson: JSONContent = {
+  content: [
+    {
+      attrs: { nodeId: "paragraph-1" },
+      content: [{ text: "Project background", type: "text" }],
+      type: "paragraph",
+    },
+    {
+      attrs: { nodeId: "paragraph-2" },
+      content: [{ text: "Project goal", type: "text" }],
+      type: "paragraph",
+    },
+  ],
+  type: "doc",
+};
+
 const createActiveDoc = (overrides?: Partial<DocumentData>): DocumentData => ({
   content: "# Overview\n\nOld intro text.",
   createdAt: 1,
@@ -245,6 +261,60 @@ describe("usePatchReview", () => {
     expect(bumpEditorKey).toHaveBeenCalled();
   });
 
+  it("auto-applies a patch set by accepting all patches through the patch pipeline", async () => {
+    const updateActiveDoc = vi.fn();
+    const setLiveEditorHtml = vi.fn();
+    const bumpEditorKey = vi.fn();
+    const activeEditor = createActiveEditor(richTextDocumentJson);
+    const patchSet: DocumentPatchSet = {
+      author: "ai",
+      createdAt: Date.now(),
+      documentId: "doc-1",
+      patchSetId: "patch-set-auto-apply",
+      patches: [{
+        author: "ai",
+        operation: "replace_text_range",
+        patchId: "patch-auto-1",
+        payload: {
+          kind: "replace_text",
+          text: "New",
+        },
+        status: "pending",
+        suggestedText: "New",
+        target: {
+          endOffset: 3,
+          nodeId: "paragraph-1",
+          startOffset: 0,
+          targetType: "text_range",
+        },
+        title: "Auto apply intro",
+      }],
+      status: "in_review",
+      title: "Auto apply review",
+    };
+
+    const { result } = renderHook(() => usePatchReview({
+      activeDoc: createActiveDoc(),
+      activeEditor: activeEditor as never,
+      bumpEditorKey,
+      onVersionSnapshot: vi.fn(),
+      onWorkspaceSync: vi.fn(),
+      setLiveEditorHtml,
+      updateActiveDoc,
+    }), { wrapper });
+
+    await act(async () => {
+      await result.current.autoApplyPatchSet(patchSet);
+    });
+
+    expect(updateActiveDoc).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining("New intro text."),
+    }));
+    expect(result.current.patchSet?.status).toBe("completed");
+    expect(setLiveEditorHtml).toHaveBeenCalled();
+    expect(bumpEditorKey).toHaveBeenCalled();
+  });
+
   it("applies live-agent replace_document_body patches without leaving stale tiptap state", async () => {
     const updateActiveDoc = vi.fn();
     const activeEditorJson: JSONContent = {
@@ -400,20 +470,31 @@ describe("usePatchReview", () => {
     expect(setLiveEditorHtml).toHaveBeenCalledWith(expect.stringContaining("Fixed body."));
   });
 
-  it("persists TOC placeholders in markdown and rehydrates them back into a TOC node", async () => {
+  it("promotes anchored paragraphs into headings and rehydrates the generated TOC node", async () => {
     const updateActiveDoc = vi.fn();
     const setLiveEditorHtml = vi.fn();
-    const activeEditor = createActiveEditor(richTextDocumentJson);
-    const sourceAst = serializeTiptapToAst(richTextDocumentJson, { documentNodeId: "doc-1" });
+    const activeEditor = createActiveEditor(paragraphOnlyDocumentJson);
+    const sourceAst = serializeTiptapToAst(paragraphOnlyDocumentJson, { documentNodeId: "doc-1" });
     const analysis = analyzeTocSuggestion(sourceAst, [
-      { level: 1, title: "Overview" },
+      {
+        anchorStrategy: "promote_block",
+        anchorText: "Project background",
+        level: 1,
+        title: "프로젝트 배경",
+      },
+      {
+        anchorStrategy: "promote_block",
+        anchorText: "Project goal",
+        level: 2,
+        title: "프로젝트 목표",
+      },
     ], 2);
     const patchSet = buildTocPatchSetWithAst(sourceAst, {
       analysis,
       documentId: "doc-1",
       maxDepth: 2,
       patchSetId: "toc-patch-set",
-      rationale: "Insert a TOC placeholder.",
+      rationale: "Promote top-level blocks and insert a TOC.",
     });
     const acceptedPatchSet: DocumentPatchSet = {
       ...patchSet,
@@ -424,7 +505,13 @@ describe("usePatchReview", () => {
     };
 
     const { result } = renderHook(() => usePatchReview({
-      activeDoc: createActiveDoc(),
+      activeDoc: createActiveDoc({
+        content: "Project background\n\nProject goal",
+        sourceSnapshots: {
+          markdown: "Project background\n\nProject goal",
+        },
+        tiptapJson: paragraphOnlyDocumentJson,
+      }),
       activeEditor: activeEditor as never,
       bumpEditorKey: vi.fn(),
       onVersionSnapshot: vi.fn(),
@@ -444,8 +531,11 @@ describe("usePatchReview", () => {
     const appliedPatch = updateActiveDoc.mock.calls[0]?.[0];
 
     expect(appliedPatch.content).toContain("[[toc:2]]");
+    expect(appliedPatch.content).toContain("# 프로젝트 배경");
+    expect(appliedPatch.content).toContain("## 프로젝트 목표");
     expect(appliedPatch.sourceSnapshots?.markdown).toContain("[[toc:2]]");
     expect(setLiveEditorHtml).toHaveBeenCalledWith(expect.stringContaining('data-type="toc"'));
+    expect(setLiveEditorHtml).toHaveBeenCalledWith(expect.stringContaining("프로젝트 배경"));
 
     const onTiptapChange = vi.fn();
     render(
@@ -466,6 +556,11 @@ describe("usePatchReview", () => {
     expect(lastTiptapDoc?.content?.[0]).toEqual(expect.objectContaining({
       attrs: expect.objectContaining({ maxDepth: 2 }),
       type: "tableOfContents",
+    }));
+    expect(lastTiptapDoc?.content?.filter((node) => node.type === "tableOfContents")).toHaveLength(1);
+    expect(lastTiptapDoc?.content?.[1]).toEqual(expect.objectContaining({
+      attrs: expect.objectContaining({ level: 1 }),
+      type: "heading",
     }));
   }, 30000);
 

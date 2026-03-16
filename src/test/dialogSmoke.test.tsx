@@ -236,6 +236,45 @@ describe("Dialog smoke paths", () => {
     expect(screen.getByRole("tab", { name: "Agent" })).toBeInTheDocument();
   });
 
+  it("shows TOC match counts and disables patch loading when no actionable patch exists", () => {
+    renderWithI18n(
+      <AiAssistantDialog
+        {...defaultAiAssistantDialogProps}
+        initialTab="toc"
+        tocPreview={{
+          attributions: [],
+          conflicts: ["no_promotable_targets", "partial_anchor_match"],
+          entries: [{
+            anchorStrategy: "promote_block",
+            anchorText: "Project background",
+            level: 1,
+            title: "프로젝트 배경",
+          }],
+          hasLoadablePatch: false,
+          matchedCount: 0,
+          maxDepth: 2,
+          patchCount: 0,
+          patchSet: null,
+          patchSetTitle: "AI TOC structure update",
+          promotedCount: 0,
+          rationale: "No safe anchors were found.",
+          skippedEntries: [{
+            anchorStrategy: "promote_block",
+            anchorText: "Project background",
+            reason: "partial_match_only",
+            title: "프로젝트 배경",
+          }],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("aiDialog.toc.matched")).toBeInTheDocument();
+    expect(screen.getByText("aiDialog.toc.promoted")).toBeInTheDocument();
+    expect(screen.getByText("aiDialog.toc.skippedEntries")).toBeInTheDocument();
+    expect(screen.getByText("aiDialog.toc.skipReason.partial_match_only")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "aiDialog.toc.loadPatch" })).toBeDisabled();
+  });
+
   it("disables AI action buttons when Gemini is unavailable", () => {
     renderWithI18n(
       <AiAssistantDialog

@@ -88,6 +88,7 @@ const summarizeRetrievalContext = (retrievalContext: ActiveDocumentRetrievalCont
 
 export const buildPlannerPrompt = ({
   driveReferences,
+  preRouteHints,
   retrievalContext,
   request,
   workspaceConnected,
@@ -97,6 +98,13 @@ export const buildPlannerPrompt = ({
     fileId: string;
     fileName: string;
   }>;
+  preRouteHints: {
+    activeDocumentPinned: boolean;
+    ambiguousDriveReferences: Array<{ fileId: string; fileName: string }>;
+    ambiguousLocalTargets: Array<{ documentId: string; fileName: string; mode: "html" | "latex" | "markdown" }>;
+    driveReferenceTarget: { fileId: string; fileName: string } | null;
+    localTarget: { documentId: string; fileName: string; mode: "html" | "latex" | "markdown" } | null;
+  };
   retrievalContext: ActiveDocumentRetrievalContext | null;
   request: AgentTurnRequest;
   workspaceConnected: boolean;
@@ -121,6 +129,8 @@ Choose exactly one action from this catalog:
 
 Rules:
 - You are deciding the next action only, not executing it.
+- The active document is the primary working document for every non-Drive request.
+- Selected local references are supplementary context only; use them to inform the answer, not as the default mutation target.
 - Prefer update_current_document when the user wants the current active document revised.
 - Prefer create_new_document only when the user explicitly asks for a new draft, template, or fresh document.
 - Prefer summarize_document when the user asks for a summary, recap, synopsis, executive summary, or summary document for the active document.
@@ -140,6 +150,9 @@ Rules:
 - arguments.targetType should be one of section, field, or document when a target is known.
 - target.documentId must match the active document id when you refer to the current document.
 - target.documentId may be set to one of the available target documents for compare_documents or suggest_document_updates.
+- If pre-route hints show activeDocumentPinned=true, keep the active document as the base target for the request.
+- If pre-route hints show localTarget, prefer that exact target document unless the user clearly overrides it.
+- If pre-route hints show driveReferenceTarget for a compare/update style request and no local target exists, prefer that Drive file as the reference target.
 - target.sectionId should be set when one section is the clear target.
 - target.headingNodeId should be set when one exact heading node is the clear target.
 - target.fileId may only be used when a selected Drive reference already gives you that exact file id.
@@ -165,6 +178,9 @@ ${JSON.stringify(summarizeLocalReferences(request), null, 2)}
 
 Available target documents:
 ${JSON.stringify(summarizeAvailableTargetDocuments(request), null, 2)}
+
+Pre-route hints:
+${JSON.stringify(preRouteHints, null, 2)}
 
 Selected Drive references:
 ${JSON.stringify(summarizeDriveReferences(driveReferences), null, 2)}

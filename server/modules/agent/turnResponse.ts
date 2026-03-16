@@ -2,6 +2,7 @@ import { schemaType } from "../gemini/client";
 import type {
   AgentChatMessage,
   AgentCurrentDocumentDraft,
+  AgentDeliveryMode,
   AgentDelegatedCapability,
   AgentDriveCandidate,
   AgentEffect,
@@ -19,9 +20,11 @@ export interface RawAgentTurnResponse {
     type?: string;
     changeSetTitle?: string;
     createDocumentAfter?: boolean;
+    deliveryMode?: AgentDeliveryMode;
     objective?: string;
     prompt?: string;
     summary?: string;
+    targetFileId?: string;
     targetDocumentId?: string;
     targetDocumentName?: string;
     title?: string;
@@ -36,12 +39,14 @@ const effectBaseProperties = {
   capability: { type: schemaType.STRING },
   changeSetTitle: { type: schemaType.STRING },
   createDocumentAfter: { type: schemaType.BOOLEAN },
+  deliveryMode: { type: schemaType.STRING },
   fileId: { type: schemaType.STRING },
   fileName: { type: schemaType.STRING },
   objective: { type: schemaType.STRING },
   prompt: { type: schemaType.STRING },
   query: { type: schemaType.STRING },
   summary: { type: schemaType.STRING },
+  targetFileId: { type: schemaType.STRING },
   targetDocumentId: { type: schemaType.STRING },
   targetDocumentName: { type: schemaType.STRING },
   title: { type: schemaType.STRING },
@@ -134,6 +139,7 @@ const normalizeEffect = (
     case "draft_current_document":
       return {
         changeSetTitle: effect.changeSetTitle?.trim() || "Live agent patch set",
+        deliveryMode: effect.deliveryMode === "direct_apply" ? "direct_apply" : "review_first",
         summary: effect.summary?.trim() || "Review the suggested document updates.",
         type: "draft_current_document",
       };
@@ -174,6 +180,7 @@ const normalizeEffect = (
         createDocumentAfter: effect.createDocumentAfter,
         objective: effect.objective?.trim() || undefined,
         prompt: effect.prompt?.trim() || undefined,
+        targetFileId: effect.targetFileId?.trim() || undefined,
         targetDocumentId: effect.targetDocumentId?.trim() || undefined,
         targetDocumentName: effect.targetDocumentName?.trim() || undefined,
         type: "delegate_ai_capability",

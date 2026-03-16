@@ -123,6 +123,7 @@ export const buildDeterministicCurrentDocumentDraftResponse = ({
         ko: "\uD604\uC7AC \uBB38\uC11C \uC5C5\uB370\uC774\uD2B8",
         locale,
       }),
+      deliveryMode: "direct_apply",
       summary: buildLocalizedText({
         en: "Review the field value changes.",
         ko: "\uD544\uB4DC \uAC12 \uBCC0\uACBD\uC744 \uAC80\uD1A0\uD558\uC138\uC694.",

@@ -8,8 +8,10 @@ import type {
 import {
   clearSavedData,
   createNewDocument,
+  hasRecoverableStoredData,
   hydrateSavedData,
   hasMeaningfulSavedDocuments,
+  type HydratedSavedDataResult,
   isAutoSaveWriteFailure,
   loadSavedData,
   saveData,
@@ -17,7 +19,25 @@ import {
   useAutoSave,
 } from "@/components/editor/useAutoSave";
 import { readAutosavePointer } from "@/lib/documents/autosaveV3Store";
-import { recordAutosaveDebugEvent } from "@/lib/documents/autosaveDebug";
+import {
+  readLastSuccessfulAutosaveMarker,
+  readRestoreSelection,
+  readRuntimeBootInfo,
+  recordAutosaveDebugEvent,
+} from "@/lib/documents/autosaveDebug";
+
+interface UnexpectedReloadState {
+  buildChanged: boolean;
+  kind: "lost" | "recovered";
+  navigationType: string;
+  restoreSource: string;
+}
+
+interface RecoveryFailureState {
+  candidateCount: number;
+  hadRecoveryHints: boolean;
+  source: HydratedSavedDataResult["source"];
+}
 
 const areValuesEqual = (left: unknown, right: unknown) => {
   if (Object.is(left, right)) {
@@ -35,36 +55,73 @@ const areValuesEqual = (left: unknown, right: unknown) => {
   }
 };
 
+const isDeployedRuntime = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const hostname = window.location.hostname;
+  return hostname !== "localhost" && hostname !== "127.0.0.1";
+};
+
+const RECOVERY_PLACEHOLDER_DOCUMENT: DocumentData = {
+  id: "recovery-placeholder",
+  name: "Recovery required",
+  mode: "markdown",
+  content: "",
+  createdAt: 0,
+  updatedAt: 0,
+  ast: null,
+  metadata: {},
+  sourceSnapshots: { markdown: "" },
+  storageKind: "docsy",
+  tiptapJson: null,
+};
+
 export const useDocumentManager = () => {
   const initialSavedData = useMemo(() => loadSavedData(), []);
+  const hasStoredRecoveryHints = useMemo(() => hasRecoverableStoredData(), []);
+  const initialBootstrapData = useMemo(
+    () => hasStoredRecoveryHints && !hasMeaningfulSavedDocuments(initialSavedData)
+      ? null
+      : initialSavedData,
+    [hasStoredRecoveryHints, initialSavedData],
+  );
   const initialDocuments = useMemo(
-    () => initialSavedData?.documents?.length ? initialSavedData.documents : [createNewDocument()],
-    [initialSavedData]
+    () => initialBootstrapData?.documents?.length
+      ? initialBootstrapData.documents
+      : hasStoredRecoveryHints
+        ? []
+        : [createNewDocument()],
+    [hasStoredRecoveryHints, initialBootstrapData]
   );
   const initialActiveDocId = useMemo(() => {
-    if (initialSavedData?.activeDocId && initialDocuments.some((doc) => doc.id === initialSavedData.activeDocId)) {
-      return initialSavedData.activeDocId;
+    if (initialBootstrapData?.activeDocId && initialDocuments.some((doc) => doc.id === initialBootstrapData.activeDocId)) {
+      return initialBootstrapData.activeDocId;
     }
 
-    return initialDocuments[0].id;
-  }, [initialDocuments, initialSavedData]);
+    return initialDocuments[0]?.id || "";
+  }, [initialBootstrapData, initialDocuments]);
 
   const [documents, setDocuments] = useState<DocumentData[]>(() => initialDocuments);
   const [activeDocId, setActiveDocId] = useState<string>(() => initialActiveDocId);
   const [editorKey, setEditorKey] = useState(0);
-  const [hasRestoredDocuments, setHasRestoredDocuments] = useState(() => hasMeaningfulSavedDocuments(initialSavedData));
+  const [hasRestoredDocuments, setHasRestoredDocuments] = useState(() => hasMeaningfulSavedDocuments(initialBootstrapData));
   const [autoSaveState, setAutoSaveState] = useState<AutoSaveIndicatorState>(() => ({
     error: null,
-    lastSavedAt: initialSavedData?.lastSaved ?? null,
-    status: initialSavedData ? "saved" : "saving",
+    lastSavedAt: initialBootstrapData?.lastSaved ?? null,
+    status: initialBootstrapData ? "saved" : "saving",
   }));
+  const [isRecovering, setIsRecovering] = useState(() => hasStoredRecoveryHints && !initialBootstrapData);
+  const [recoveryFailure, setRecoveryFailure] = useState<RecoveryFailureState | null>(null);
+  const [unexpectedReloadState, setUnexpectedReloadState] = useState<UnexpectedReloadState | null>(null);
   const documentsRef = useRef(initialDocuments);
   const activeDocIdRef = useRef(initialActiveDocId);
   const dirtyDocumentIdsRef = useRef<Set<string>>(new Set(initialDocuments.map((document) => document.id)));
   const hasUserMutatedRef = useRef(false);
-  const lastSavedAtRef = useRef<number | null>(initialSavedData?.lastSaved ?? null);
+  const lastSavedAtRef = useRef<number | null>(initialBootstrapData?.lastSaved ?? null);
   const lastSavedSnapshotKeyRef = useRef<string | null>(
-    initialSavedData?.documents?.length
+    initialBootstrapData?.documents?.length
       ? JSON.stringify({
         activeDocId: initialActiveDocId,
         documents: initialDocuments,
@@ -74,20 +131,47 @@ export const useDocumentManager = () => {
   );
 
   const activeDoc = useMemo(
-    () => documents.find((doc) => doc.id === activeDocId) || documents[0],
+    () => documents.find((doc) => doc.id === activeDocId) || documents[0] || RECOVERY_PLACEHOLDER_DOCUMENT,
     [documents, activeDocId]
   );
 
-  const autoSaveData = useMemo<AutoSaveData>(() => ({
+  const autoSaveData = useMemo<AutoSaveData | null>(() => documents.length > 0 ? ({
     version: 2,
     documents,
     activeDocId,
-    lastSaved: autoSaveState.lastSavedAt ?? initialSavedData?.lastSaved ?? 0,
-  }), [activeDocId, autoSaveState.lastSavedAt, documents, initialSavedData?.lastSaved]);
+    lastSaved: autoSaveState.lastSavedAt ?? initialBootstrapData?.lastSaved ?? 0,
+  }) : null, [activeDocId, autoSaveState.lastSavedAt, documents, initialBootstrapData?.lastSaved]);
   const shouldHydrateFromStorage = useMemo(
-    () => Boolean(initialSavedData) || Boolean(readAutosavePointer()),
-    [initialSavedData],
+    () => Boolean(initialBootstrapData) || Boolean(readAutosavePointer()) || hasStoredRecoveryHints,
+    [hasStoredRecoveryHints, initialBootstrapData],
   );
+
+  const deriveUnexpectedReloadState = useCallback((restoredData: AutoSaveData | null) => {
+    if (!isDeployedRuntime()) {
+      return null;
+    }
+
+    const bootInfo = readRuntimeBootInfo();
+    const lastSaveMarker = readLastSuccessfulAutosaveMarker();
+    const restoreSelection = readRestoreSelection();
+
+    if (!bootInfo?.hasPreviousBootInTab || !lastSaveMarker?.isMeaningful) {
+      return null;
+    }
+
+    const recoveredMeaningful = hasMeaningfulSavedDocuments(restoredData)
+      || Boolean(restoreSelection?.isMeaningful);
+
+    return {
+      buildChanged: Boolean(
+        bootInfo.previousFrontendBuildId
+        && bootInfo.previousFrontendBuildId !== bootInfo.frontendBuildId,
+      ),
+      kind: recoveredMeaningful ? "recovered" : "lost",
+      navigationType: bootInfo.navigationType,
+      restoreSource: restoreSelection?.source || "none",
+    } satisfies UnexpectedReloadState;
+  }, []);
 
   const markDocumentDirty = useCallback((documentId: string) => {
     hasUserMutatedRef.current = true;
@@ -159,35 +243,64 @@ export const useDocumentManager = () => {
   }, [autoSaveState.lastSavedAt]);
 
   useEffect(() => {
+    const bootInfo = readRuntimeBootInfo();
     recordAutosaveDebugEvent("editor_boot", {
       activeDocId: initialActiveDocId,
+      buildChanged: Boolean(
+        bootInfo?.previousFrontendBuildId
+        && bootInfo.previousFrontendBuildId !== bootInfo.frontendBuildId,
+      ),
+      bootId: bootInfo?.bootId ?? null,
       docCount: initialDocuments.length,
-      hasInitialSavedData: Boolean(initialSavedData),
+      hasInitialSavedData: Boolean(initialBootstrapData),
+      hasStoredRecoveryHints,
       hasPointer: Boolean(readAutosavePointer()),
-      restoredDocuments: hasMeaningfulSavedDocuments(initialSavedData),
+      navigationType: bootInfo?.navigationType ?? "unknown",
+      restoredDocuments: hasMeaningfulSavedDocuments(initialBootstrapData),
     });
-  }, [initialActiveDocId, initialDocuments.length, initialSavedData]);
+  }, [hasStoredRecoveryHints, initialActiveDocId, initialBootstrapData, initialDocuments.length]);
 
   useEffect(() => {
     if (!shouldHydrateFromStorage) {
+      setRecoveryFailure(null);
+      setUnexpectedReloadState(deriveUnexpectedReloadState(initialBootstrapData));
+      setIsRecovering(false);
       return;
     }
 
     let cancelled = false;
 
     const hydrateDocuments = async () => {
+      setIsRecovering(true);
       recordAutosaveDebugEvent("hydrate_start", {
-        hasInitialSavedData: Boolean(initialSavedData),
+        hasInitialSavedData: Boolean(initialBootstrapData),
+        hasStoredRecoveryHints,
         hasPointer: Boolean(readAutosavePointer()),
       });
-      const hydratedData = await hydrateSavedData();
+      const hydratedResult = await hydrateSavedData();
+      const hydratedData = hydratedResult.data;
+      const treatAsRecoveryFailure = hydratedResult.hadRecoveryHints && !hydratedResult.isMeaningful;
 
       if (
         cancelled
         || !hydratedData
         || hasUserMutatedRef.current
         || hydratedData.documents.length === 0
+        || treatAsRecoveryFailure
       ) {
+        if (!cancelled) {
+          setIsRecovering(false);
+          setUnexpectedReloadState(deriveUnexpectedReloadState(hydratedData));
+          setRecoveryFailure(
+            hydratedResult.hadRecoveryHints
+              ? {
+                candidateCount: hydratedResult.candidateCount,
+                hadRecoveryHints: hydratedResult.hadRecoveryHints,
+                source: hydratedResult.source,
+              }
+              : null,
+          );
+        }
         recordAutosaveDebugEvent("hydrate_result", {
           cancelled,
           docCount: hydratedData?.documents.length ?? 0,
@@ -195,6 +308,8 @@ export const useDocumentManager = () => {
             ? "cancelled"
             : hasUserMutatedRef.current
               ? "ignored_after_mutation"
+              : treatAsRecoveryFailure
+                ? "meaningful_restore_missing"
               : "no_data",
         });
         return;
@@ -226,12 +341,15 @@ export const useDocumentManager = () => {
       setDocuments(nextDocuments);
       setActiveDocId(nextActiveDocId);
       setHasRestoredDocuments(hasMeaningfulSavedDocuments(hydratedData));
+      setRecoveryFailure(null);
+      setIsRecovering(false);
       setAutoSaveState({
         error: null,
         lastSavedAt: hydratedData.lastSaved,
         status: "saved",
       });
       setEditorKey((key) => key + 1);
+      setUnexpectedReloadState(deriveUnexpectedReloadState(hydratedData));
       recordAutosaveDebugEvent("hydrate_result", {
         activeDocId: nextActiveDocId,
         docCount: nextDocuments.length,
@@ -244,7 +362,7 @@ export const useDocumentManager = () => {
     return () => {
       cancelled = true;
     };
-  }, [clearDirtyDocuments, initialSavedData, shouldHydrateFromStorage]);
+  }, [clearDirtyDocuments, deriveUnexpectedReloadState, hasStoredRecoveryHints, initialBootstrapData, shouldHydrateFromStorage]);
 
   const persistSnapshot = useCallback((
     nextDocuments: DocumentData[],
@@ -255,6 +373,10 @@ export const useDocumentManager = () => {
       useUnloadFallback?: boolean;
     },
   ) => {
+    if (nextDocuments.length === 0) {
+      return { ok: true, savedAt: lastSavedOverride ?? Date.now() };
+    }
+
     const snapshot = {
       version: 2,
       documents: nextDocuments,
@@ -298,6 +420,10 @@ export const useDocumentManager = () => {
   }, [autoSaveState.lastSavedAt, clearDirtyDocuments]);
 
   const saveImmediate = useCallback(() => {
+    if (documents.length === 0) {
+      return;
+    }
+
     persistSnapshot(documents, activeDocId, undefined, { reason: "manual" });
   }, [activeDocId, documents, persistSnapshot]);
 
@@ -315,6 +441,9 @@ export const useDocumentManager = () => {
     activeDocIdRef.current = replacementDocument.id;
     dirtyDocumentIdsRef.current = new Set([replacementDocument.id]);
     hasUserMutatedRef.current = true;
+    setRecoveryFailure(null);
+    setIsRecovering(false);
+    setUnexpectedReloadState(null);
     setDocuments(nextDocuments);
     setActiveDocId(replacementDocument.id);
     setEditorKey((key) => key + 1);
@@ -369,6 +498,10 @@ export const useDocumentManager = () => {
   }, [documents]);
 
   const updateActiveDoc = useCallback((patch: Partial<DocumentData>) => {
+    if (documents.length === 0) {
+      return;
+    }
+
     const hasChanges = Object.entries(patch).some(([key, value]) => !areValuesEqual(activeDoc[key as keyof DocumentData], value));
 
     if (!hasChanges) {
@@ -399,9 +532,13 @@ export const useDocumentManager = () => {
     );
     markDocumentDirty(activeDocId);
     markAutosavePending();
-  }, [activeDoc, activeDocId, markAutosavePending, markDocumentDirty]);
+  }, [activeDoc, activeDocId, documents.length, markAutosavePending, markDocumentDirty]);
 
   const updateDocument = useCallback((documentId: string, patch: Partial<DocumentData>) => {
+    if (documents.length === 0) {
+      return;
+    }
+
     const targetDocument = documents.find((document) => document.id === documentId);
 
     if (!targetDocument) {
@@ -433,6 +570,10 @@ export const useDocumentManager = () => {
   }, [documents, markAutosavePending, markDocumentDirty]);
 
   const handleContentChange = useCallback((content: string) => {
+    if (documents.length === 0) {
+      return;
+    }
+
     const sourceSnapshots = {
       ...(activeDoc.sourceSnapshots || {}),
       [activeDoc.mode]: content,
@@ -465,7 +606,7 @@ export const useDocumentManager = () => {
     );
     markDocumentDirty(activeDocId);
     markAutosavePending();
-  }, [activeDoc, activeDocId, markAutosavePending, markDocumentDirty]);
+  }, [activeDoc, activeDocId, documents.length, markAutosavePending, markDocumentDirty]);
 
   const createDocument = useCallback((options: CreateDocumentOptions = {}) => {
     const {
@@ -513,6 +654,9 @@ export const useDocumentManager = () => {
     documentsRef.current = nextDocuments;
     activeDocIdRef.current = newDoc.id;
     markDocumentsDirty(nextDocuments.map((document) => document.id));
+    setRecoveryFailure(null);
+    setIsRecovering(false);
+    setUnexpectedReloadState(null);
     setDocuments(nextDocuments);
     setActiveDocId(newDoc.id);
     setEditorKey((key) => key + 1);
@@ -571,13 +715,21 @@ export const useDocumentManager = () => {
   }, [persistSnapshot]);
 
   const selectDocument = useCallback((id: string) => {
+    if (documents.length === 0) {
+      return;
+    }
+
     saveImmediate();
     hasUserMutatedRef.current = true;
     setActiveDocId(id);
     setEditorKey((key) => key + 1);
-  }, [saveImmediate]);
+  }, [documents.length, saveImmediate]);
 
   const closeDocument = useCallback((id: string) => {
+    if (documents.length === 0) {
+      return;
+    }
+
     setDocuments((previousDocuments) => {
       if (previousDocuments.length <= 1) {
       return previousDocuments;
@@ -599,9 +751,13 @@ export const useDocumentManager = () => {
     });
     hasUserMutatedRef.current = true;
     markAutosavePending();
-  }, [activeDocId, markAutosavePending]);
+  }, [activeDocId, documents.length, markAutosavePending]);
 
   const deleteDocument = useCallback((id: string) => {
+    if (documents.length === 0) {
+      return;
+    }
+
     let nextActiveDocumentId: string | null = null;
     let shouldResetEditor = false;
 
@@ -661,9 +817,12 @@ export const useDocumentManager = () => {
     editorKey,
     handleContentChange,
     hasRestoredDocuments,
+    isRecovering,
+    recoveryFailure,
     renameDocument,
     resetDocuments,
     selectDocument,
+    unexpectedReloadState,
     updateDocument,
     updateActiveDoc,
   };

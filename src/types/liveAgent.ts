@@ -51,6 +51,16 @@ export interface AgentEvidence {
   excerpt?: string;
 }
 
+export type AgentDeliveryMode = "direct_apply" | "review_first";
+
+export interface AgentResolvedReference {
+  autoInferred?: boolean;
+  documentId?: string;
+  fileId?: string;
+  kind: "active_document" | "drive_document" | "local_document";
+  label: string;
+}
+
 export type AgentSectionEdit =
   | {
       kind: "replace_document_body";
@@ -179,7 +189,7 @@ export interface AgentTurnResponse {
 export type AgentEffect =
   | { type: "reply_only" }
   | { type: "ask_followup" }
-  | { type: "draft_current_document"; changeSetTitle: string; summary: string }
+  | { type: "draft_current_document"; changeSetTitle: string; deliveryMode: AgentDeliveryMode; summary: string }
   | { type: "draft_new_document"; title: string; summary: string }
   | { type: "show_drive_candidates"; query: string }
   | { type: "ready_to_import_drive_file"; fileId: string; fileName: string }
@@ -190,6 +200,7 @@ export type AgentEffect =
       createDocumentAfter?: boolean;
       objective?: string;
       prompt?: string;
+      targetFileId?: string;
       targetDocumentId?: string;
       targetDocumentName?: string;
     };
@@ -209,11 +220,13 @@ export type AgentArtifact =
         inconsistent: number;
         removed: number;
       };
+      resolvedReferences: AgentResolvedReference[];
     }
   | {
       id: string;
       kind: "draft_preview";
       draft: AgentCurrentDocumentDraft | AgentNewDocumentDraft;
+      resolvedReferences: AgentResolvedReference[];
     }
   | {
       id: string;
@@ -221,20 +234,25 @@ export type AgentArtifact =
       capability: Extract<AgentDelegatedCapability, "compare_documents" | "suggest_document_updates">;
       candidates: AgentAvailableTargetDocument[];
       prompt: string;
+      resolvedReferences: AgentResolvedReference[];
     }
   | {
       id: string;
       kind: "drive_candidates";
       candidates: AgentDriveCandidate[];
       query?: string;
+      resolvedReferences: AgentResolvedReference[];
     }
   | {
       id: string;
       kind: "patch_result";
-      capability: Extract<AgentDelegatedCapability, "generate_section" | "suggest_document_updates">;
+      capability: Extract<AgentDelegatedCapability, "generate_section" | "suggest_document_updates"> | "update_current_document";
+      deliveryMode: AgentDeliveryMode;
+      directApplySucceeded?: boolean;
       patchCount: number;
       patchSet: DocumentPatchSet | null;
       patchSetTitle: string;
+      resolvedReferences: AgentResolvedReference[];
       reviewOpened: boolean;
       targetDocumentId?: string;
       targetDocumentName?: string;
@@ -243,6 +261,7 @@ export type AgentArtifact =
       id: string;
       kind: "procedure";
       result: ProcedureExtractionResult;
+      resolvedReferences: AgentResolvedReference[];
     }
   | {
       id: string;
@@ -251,6 +270,7 @@ export type AgentArtifact =
       documentCreated?: boolean;
       objective: string;
       result: SummarizeDocumentResponse;
+      resolvedReferences: AgentResolvedReference[];
       sourceDocumentId: string;
       sourceDocumentName: string;
     }
@@ -266,4 +286,5 @@ export type AgentArtifact =
       patchSet: DocumentPatchSet | null;
       patchSetTitle: string;
       rationale: string;
+      resolvedReferences: AgentResolvedReference[];
     };

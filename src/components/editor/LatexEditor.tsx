@@ -14,6 +14,7 @@ import { applyEditorSeed } from "./editorSeedSync";
 import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
 import { latexToHtml } from "./utils/htmlToLatex";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
+import { useRichTextDarkModeDisplayOverride } from "./useRichTextDarkModeDisplayOverride";
 import LatexHighlightEditor from "./LatexHighlightEditor";
 import { exportDocsyToLatex } from "@/lib/latex/exportDocsyToLatex";
 import { importLatexToDocsy } from "@/lib/latex/importLatexToDocsy";
@@ -293,6 +294,8 @@ const LatexEditor = ({
     },
     editorProps,
   }, [advancedBlocksEnabled, documentFeaturesEnabled, extensionsReady, shouldHoldEditor]);
+
+  useRichTextDarkModeDisplayOverride(editor);
 
   useEffect(() => {
     editorRef.current = editor;

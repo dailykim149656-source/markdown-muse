@@ -16,6 +16,7 @@ import {
   parseRequestedFieldAssignments,
   type DocumentFieldCandidate,
 } from "./extractFieldCandidates";
+import { buildAgentPreRouteHints } from "./preRouteAgentTurn";
 import type {
   AgentExecutionContext,
   AgentExecutionResult,
@@ -193,14 +194,18 @@ const createDelegatedCapabilityResponse = ({
   createDocumentAfter,
   objective,
   prompt,
+  targetFileId,
   targetDocument,
+  targetDocumentName,
 }: {
   capability: AgentDelegatedCapability;
   context: AgentExecutionContext;
   createDocumentAfter?: boolean;
   objective?: string;
   prompt?: string;
+  targetFileId?: string;
   targetDocument?: AgentAvailableTargetDocument | null;
+  targetDocumentName?: string;
 }): RawAgentTurnResponse => ({
   assistantText: (() => {
     if (capability === "compare_documents" && !targetDocument) {
@@ -266,8 +271,9 @@ const createDelegatedCapabilityResponse = ({
     createDocumentAfter,
     objective,
     prompt,
+    targetFileId,
     targetDocumentId: targetDocument?.documentId,
-    targetDocumentName: targetDocument?.fileName,
+    targetDocumentName: targetDocument?.fileName || targetDocumentName,
     type: "delegate_ai_capability",
   },
 });
@@ -564,6 +570,7 @@ const buildSectionDraftFromUpdatedMarkdown = ({
         ko: `\uC139\uC158 \uC5C5\uB370\uC774\uD2B8: ${range.headingTitle}`,
         locale,
       }),
+      deliveryMode: "direct_apply",
       summary: buildAssistantText({
         en: `Review the requested field changes in "${range.headingTitle}".`,
         ko: `\"${range.headingTitle}\" \uC139\uC158\uC758 \uD544\uB4DC \uBCC0\uACBD\uC744 \uAC80\uD1A0\uD558\uC138\uC694.`,
@@ -1091,18 +1098,139 @@ const executeGeneralReply = async (context: AgentExecutionContext, planner: Agen
 const executeDelegatedAction = (
   context: AgentExecutionContext,
   planner: AgentPlannerResponse & { action: AgentDelegatedCapability },
-): AgentExecutionResult => {
+): Promise<AgentExecutionResult> | AgentExecutionResult => {
+  const preRouteHints = buildAgentPreRouteHints({
+    driveReferences: context.driveReferences,
+    latestUserMessage: context.latestUserMessage,
+    request: context.request,
+  });
   const delegatedTarget = planner.action === "compare_documents" || planner.action === "suggest_document_updates"
-    ? resolveDelegatedTargetDocument({
-      latestUserMessage: context.latestUserMessage,
-      planner,
-      request: context.request,
-    })
+    ? (
+      planner.target?.documentId
+        ? context.request.availableTargetDocuments.find((document) => document.documentId === planner.target?.documentId) || null
+        : preRouteHints.localTarget
+    )
     : null;
   const objective = planner.arguments?.prompt?.trim() || context.latestUserMessage.trim();
   const createDocumentAfter = planner.action === "summarize_document"
     ? Boolean(planner.arguments?.createDocumentAfter) || SUMMARY_DOCUMENT_REQUEST_PATTERN.test(context.latestUserMessage)
     : undefined;
+
+  if (
+    (planner.action === "compare_documents" || planner.action === "suggest_document_updates")
+    && !delegatedTarget
+  ) {
+    if (preRouteHints.ambiguousLocalTargets.length > 0) {
+      return {
+        availableImportTargets: [],
+        driveCandidates: [],
+        rawResponse: createDelegatedCapabilityResponse({
+          capability: planner.action,
+          context,
+          objective,
+          prompt: objective,
+          targetDocument: null,
+        }),
+        telemetry: {
+          executorAction: planner.action,
+        },
+      };
+    }
+
+    const delegatedDriveReference = planner.target?.fileId
+      ? context.driveReferences.find((reference) => reference.fileId === planner.target?.fileId) || null
+      : preRouteHints.driveReferenceTarget;
+
+    if (delegatedDriveReference) {
+      return {
+        availableImportTargets: [],
+        driveCandidates: [],
+        rawResponse: createDelegatedCapabilityResponse({
+          capability: planner.action,
+          context,
+          objective,
+          prompt: objective,
+          targetDocument: null,
+          targetFileId: delegatedDriveReference.fileId,
+          targetDocumentName: delegatedDriveReference.fileName,
+        }),
+        telemetry: {
+          executorAction: planner.action,
+        },
+      };
+    }
+
+    if (context.workspaceConnected) {
+      return searchDriveDocuments({
+        latestUserMessage: objective,
+        request: context.httpRequest,
+      }).then((driveCandidates) => {
+        const driveHints = buildAgentPreRouteHints({
+          driveReferences: driveCandidates,
+          latestUserMessage: context.latestUserMessage,
+          request: context.request,
+        });
+
+        if (driveHints.driveReferenceTarget) {
+          return {
+            availableImportTargets: [],
+            driveCandidates,
+            rawResponse: createDelegatedCapabilityResponse({
+              capability: planner.action,
+              context,
+              objective,
+              prompt: objective,
+              targetDocument: null,
+              targetFileId: driveHints.driveReferenceTarget.fileId,
+              targetDocumentName: driveHints.driveReferenceTarget.fileName,
+            }),
+            telemetry: {
+              executorAction: planner.action,
+            },
+          };
+        }
+
+        if (driveCandidates.length > 0) {
+          return {
+            availableImportTargets: buildAvailableImportTargets({
+              driveCandidates,
+              driveReferences: context.driveReferences,
+            }),
+            driveCandidates,
+            rawResponse: {
+              assistantText: buildAssistantText({
+                en: "I found Drive candidates that may help with this request. Import one to continue.",
+                ko: "\uC774 \uC694\uCCAD\uC5D0 \uC4F8 \uC218 \uC788\uB294 Drive \uD6C4\uBCF4\uB97C \uCC3E\uC558\uC2B5\uB2C8\uB2E4. \uD558\uB098\uB97C \uAC00\uC838\uC640 \uACC4\uC18D\uD558\uC138\uC694.",
+                locale: context.request.locale,
+              }),
+              effect: {
+                query: objective,
+                type: "show_drive_candidates",
+              },
+            },
+            telemetry: {
+              executorAction: planner.action,
+            },
+          };
+        }
+
+        return {
+          availableImportTargets: [],
+          driveCandidates: [],
+          rawResponse: createDelegatedCapabilityResponse({
+            capability: planner.action,
+            context,
+            objective,
+            prompt: objective,
+            targetDocument: null,
+          }),
+          telemetry: {
+            executorAction: planner.action,
+          },
+        };
+      });
+    }
+  }
 
   return {
     availableImportTargets: [],

@@ -32,6 +32,7 @@ import {
 describe("autosave v3 migration", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.clearAllMocks();
     mockReadAutosaveV3Snapshot.mockResolvedValue(null);
     mockWriteAutosaveV3Snapshot.mockResolvedValue(true);
@@ -39,6 +40,7 @@ describe("autosave v3 migration", () => {
 
   afterEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it("hydrates a legacy v2 payload into the v3 store", async () => {
@@ -63,7 +65,8 @@ describe("autosave v3 migration", () => {
 
     const hydrated = await hydrateSavedData();
 
-    expect(hydrated?.activeDocId).toBe("doc-1");
+    expect(hydrated.data?.activeDocId).toBe("doc-1");
+    expect(hydrated.source).toBe("local");
     expect(mockWriteAutosaveV3Snapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         activeDocId: "doc-1",
@@ -152,7 +155,9 @@ describe("autosave v3 migration", () => {
 
     const hydrated = await hydrateSavedData();
 
-    expect(hydrated?.documents[0]?.content).toBe("# Newer");
+    expect(hydrated.data?.documents[0]?.content).toBe("# Newer");
+    expect(hydrated.isMeaningful).toBe(true);
+    expect(hydrated.source).toBe("local");
     expect(mockWriteAutosaveV3Snapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         activeDocId: "doc-3",
@@ -196,5 +201,108 @@ describe("autosave v3 migration", () => {
 
     expect(result.ok).toBe(true);
     expect(localStorage.getItem(DOCSY_AUTOSAVE_STORAGE_KEY)).toContain("Large Draft");
+  });
+
+  it("prefers a meaningful unload snapshot over blank persisted candidates", async () => {
+    const unloadContent = "# Unload winner";
+
+    saveDataForUnload({
+      activeDocId: "doc-5",
+      documents: [{
+        ast: null,
+        content: unloadContent,
+        createdAt: 1,
+        id: "doc-5",
+        metadata: {},
+        mode: "markdown",
+        name: "Recovered Draft",
+        sourceSnapshots: { markdown: unloadContent },
+        storageKind: "docsy",
+        tiptapJson: null,
+        updatedAt: 4,
+      }],
+      lastSaved: 300,
+      version: 2,
+    }, {
+      reason: "beforeunload",
+    });
+
+    localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify({
+      activeDocId: "blank-doc",
+      documents: [{
+        ast: null,
+        content: "",
+        createdAt: 1,
+        id: "blank-doc",
+        metadata: {},
+        mode: "markdown",
+        name: "Untitled",
+        sourceSnapshots: { markdown: "" },
+        storageKind: "docsy",
+        tiptapJson: null,
+        updatedAt: 5,
+      }],
+      lastSaved: 400,
+      version: 2,
+    }));
+    mockReadAutosaveV3Snapshot.mockResolvedValue({
+      activeDocId: "blank-v3",
+      documents: [{
+        ast: null,
+        content: "",
+        createdAt: 1,
+        id: "blank-v3",
+        metadata: {},
+        mode: "markdown",
+        name: "Untitled",
+        sourceSnapshots: { markdown: "" },
+        storageKind: "docsy",
+        tiptapJson: null,
+        updatedAt: 6,
+      }],
+      lastSaved: 500,
+      version: 2,
+    });
+
+    const hydrated = await hydrateSavedData();
+
+    expect(hydrated.data?.documents[0]?.content).toBe(unloadContent);
+    expect(hydrated.data?.documents[0]?.name).toBe("Recovered Draft");
+    expect(hydrated.source).toBe("unload");
+  });
+
+  it("reports an empty recovery result instead of promoting a blank candidate over prior meaningful work", async () => {
+    localStorage.setItem(DOCSY_AUTOSAVE_STORAGE_KEY, JSON.stringify({
+      activeDocId: "blank-doc",
+      documents: [{
+        ast: null,
+        content: "",
+        createdAt: 1,
+        id: "blank-doc",
+        metadata: {},
+        mode: "markdown",
+        name: "Untitled",
+        sourceSnapshots: { markdown: "" },
+        storageKind: "docsy",
+        tiptapJson: null,
+        updatedAt: 5,
+      }],
+      lastSaved: 400,
+      version: 2,
+    }));
+    sessionStorage.setItem("docsy-autosave-last-save-marker", JSON.stringify({
+      activeDocId: "doc-prev",
+      contentHash: "meaningful-hash",
+      docCount: 2,
+      isMeaningful: true,
+      lastSaved: 450,
+      reason: "autosave",
+    }));
+
+    const hydrated = await hydrateSavedData();
+
+    expect(hydrated.data).toBeNull();
+    expect(hydrated.isMeaningful).toBe(false);
+    expect(hydrated.source).toBe("none");
   });
 });

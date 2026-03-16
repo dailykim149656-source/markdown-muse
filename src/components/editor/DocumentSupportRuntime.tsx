@@ -10,7 +10,8 @@ import type { DocumentPatch, DocumentPatchSet, PatchApplyReport } from "@/types/
 
 export interface DocumentSupportRuntimeState {
   acceptedPatchCount: number;
-  applyReviewedPatches: () => Promise<void>;
+  autoApplyPatchSet: (patchSet: DocumentPatchSet) => Promise<boolean>;
+  applyReviewedPatches: () => Promise<boolean>;
   clearPatchSet: () => void;
   closePatchReview: () => void;
   handleAcceptPatch: (patch: DocumentPatch) => void;
@@ -73,6 +74,7 @@ const DocumentSupportRuntime = ({
   useEffect(() => {
     onStateChange({
       acceptedPatchCount: patchReview.acceptedPatchCount,
+      autoApplyPatchSet: patchReview.autoApplyPatchSet,
       applyReviewedPatches: patchReview.applyReviewedPatches,
       clearPatchSet: patchReview.clearPatchSet,
       closePatchReview: patchReview.closePatchReview,
@@ -96,6 +98,7 @@ const DocumentSupportRuntime = ({
   }, [
     onStateChange,
     patchReview.acceptedPatchCount,
+    patchReview.autoApplyPatchSet,
     patchReview.applyReviewedPatches,
     patchReview.clearPatchSet,
     patchReview.closePatchReview,

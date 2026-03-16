@@ -32,6 +32,10 @@ const createLiveAgentState = (): LiveAgentRuntimeState => ({
     id: "artifact-1",
     kind: "drive_candidates",
     query: "rollback runbook",
+    resolvedReferences: [{
+      kind: "active_document",
+      label: "Current Doc",
+    }],
   }],
   availableLocalReferences: [],
   availableTargetDocuments: [],

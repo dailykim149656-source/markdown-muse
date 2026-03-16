@@ -77,6 +77,19 @@ const ArtifactCard = ({
   liveAgent: LiveAgentRuntimeState;
 }) => {
   const { t } = useI18n();
+  const renderResolvedReferences = () => (
+    <div className="flex flex-wrap gap-2">
+      {artifact.resolvedReferences.map((reference, index) => (
+        <span
+          className="rounded-full border border-border/60 bg-background px-2 py-1 text-[11px] text-muted-foreground"
+          key={`${artifact.id}-ref-${index}`}
+        >
+          {reference.kind === "active_document" ? t("aiDialog.agent.currentDocumentBadge") : t("aiDialog.agent.referenceBadge")}
+          : {reference.label}
+        </span>
+      ))}
+    </div>
+  );
 
   if (artifact.kind === "summary") {
     return (
@@ -109,6 +122,7 @@ const ArtifactCard = ({
             </ul>
           </div>
         ) : null}
+        {renderResolvedReferences()}
       </div>
     );
   }
@@ -138,6 +152,7 @@ const ArtifactCard = ({
           <p>{t("aiDialog.compare.inconsistent", { count: artifact.comparisonCounts.inconsistent })}</p>
         </div>
         <p className="text-xs text-muted-foreground">{t("aiDialog.compare.loadedPatches", { count: artifact.patchCount })}</p>
+        {renderResolvedReferences()}
       </div>
     );
   }
@@ -168,6 +183,7 @@ const ArtifactCard = ({
           ))}
         </ul>
         <p className="text-xs text-muted-foreground">{artifact.rationale}</p>
+        {renderResolvedReferences()}
       </div>
     );
   }
@@ -184,6 +200,7 @@ const ArtifactCard = ({
             <li key={step.stepId}>{step.text}</li>
           ))}
         </ol>
+        {renderResolvedReferences()}
       </div>
     );
   }
@@ -191,7 +208,13 @@ const ArtifactCard = ({
   if (artifact.kind === "patch_result") {
     const title = artifact.capability === "generate_section"
       ? t("aiDialog.agent.sectionPatchReady")
-      : t("aiDialog.agent.updatePatchReady");
+      : artifact.capability === "update_current_document"
+        ? (
+          artifact.deliveryMode === "direct_apply" && artifact.directApplySucceeded
+            ? t("aiDialog.agent.currentDocumentApplied")
+            : t("aiDialog.agent.currentDocumentReviewReady")
+        )
+        : t("aiDialog.agent.updatePatchReady");
 
     return (
       <div className="space-y-3 rounded-lg border border-blue-500/30 bg-blue-500/5 p-4 text-sm">
@@ -210,7 +233,16 @@ const ArtifactCard = ({
             {t("aiDialog.agent.openPatchReview")}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">{t("aiDialog.agent.reviewOpened")}</p>
+        <p className="text-xs text-muted-foreground">
+          {artifact.deliveryMode === "direct_apply"
+            ? (
+              artifact.directApplySucceeded
+                ? t("aiDialog.agent.directApplySucceeded")
+                : t("aiDialog.agent.directApplyFailed")
+            )
+            : t("aiDialog.agent.reviewOpened")}
+        </p>
+        {renderResolvedReferences()}
       </div>
     );
   }
@@ -226,6 +258,7 @@ const ArtifactCard = ({
           <div className="font-medium">{title}</div>
           <div className="text-xs text-muted-foreground">{artifact.prompt}</div>
         </div>
+        {renderResolvedReferences()}
         <div className="flex flex-wrap gap-2">
           {artifact.candidates.map((candidate) => (
             <Button
@@ -281,6 +314,7 @@ const ArtifactCard = ({
             </div>
           ))}
         </div>
+        {renderResolvedReferences()}
       </div>
     );
   }
@@ -468,6 +502,11 @@ const AiAgentTab = ({
 
         <div className="space-y-3">
           <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">{t("aiDialog.agent.localReferences")}</div>
+          {liveAgent.selectedLocalReferenceIds.length > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t("aiDialog.agent.localReferencesIncluded")}
+            </p>
+          ) : null}
           <div className="space-y-2">
             {liveAgent.availableLocalReferences.length === 0 ? (
               <div className="rounded-md border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">

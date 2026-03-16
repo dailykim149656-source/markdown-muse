@@ -9,7 +9,7 @@ import { buildComparisonPatchSet, compareDocuments } from "@/lib/ai/compareDocum
 import { useI18n } from "@/i18n/useI18n";
 import type { DocumentComparisonResult } from "@/lib/ai/compareDocuments";
 import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
-import type { TocSuggestionConflictCode } from "@/lib/ai/tocGeneration";
+import type { TocSkippedEntry, TocSuggestionConflictCode } from "@/lib/ai/tocGeneration";
 import type { DocumentData } from "@/types/document";
 import type { DocumentPatchSet } from "@/types/documentPatch";
 import type {
@@ -44,10 +44,13 @@ export interface TocPreviewResult {
   entries: GenerateTocEntry[];
   hasLoadablePatch: boolean;
   maxDepth: 1 | 2 | 3;
+  matchedCount: number;
   patchCount: number;
   patchSet: DocumentPatchSet | null;
   patchSetTitle: string;
+  promotedCount: number;
   rationale: string;
+  skippedEntries: TocSkippedEntry[];
 }
 
 export interface SectionGenerationResult {
@@ -365,10 +368,13 @@ export const useAiAssistant = ({
         entries: result.entries,
         hasLoadablePatch: patchSet.patches.length > 0,
         maxDepth: result.maxDepth,
+        matchedCount: analysis.matchedCount,
         patchCount: patchSet.patches.length,
-        patchSet,
+        patchSet: patchSet.patches.length > 0 ? patchSet : null,
         patchSetTitle: patchSet.title,
+        promotedCount: analysis.promotedCount,
         rationale: result.rationale,
+        skippedEntries: analysis.skippedEntries,
       } satisfies TocPreviewResult;
 
       setTocPreview(preview);
@@ -415,8 +421,11 @@ export const useAiAssistant = ({
           conflicts: analysis.conflicts,
           hasLoadablePatch: false,
           maxDepth,
+          matchedCount: analysis.matchedCount,
           patchCount: 0,
           patchSet: null,
+          promotedCount: analysis.promotedCount,
+          skippedEntries: analysis.skippedEntries,
         }
         : current);
       return null;
@@ -431,6 +440,9 @@ export const useAiAssistant = ({
         maxDepth,
         patchCount: patchSet.patches.length,
         patchSet,
+        matchedCount: analysis.matchedCount,
+        promotedCount: analysis.promotedCount,
+        skippedEntries: analysis.skippedEntries,
       }
       : current);
     toast.success(t("hooks.ai.tocPatchLoaded"));

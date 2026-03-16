@@ -6,10 +6,12 @@ import { useDocumentManager } from "@/hooks/useDocumentManager";
 describe("useDocumentManager", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   afterEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
   });
 
   it("replaces the final document with a fresh blank draft when deleted", () => {
@@ -272,5 +274,28 @@ describe("useDocumentManager", () => {
       name: "Untitled",
     }));
     expect(result.current.hasRestoredDocuments).toBe(false);
+  });
+
+  it("does not bootstrap a blank document when recovery hints indicate prior meaningful work", async () => {
+    const blankDocument = createNewDocument();
+    saveData({
+      activeDocId: blankDocument.id,
+      documents: [blankDocument],
+      lastSaved: Date.now(),
+      version: 2,
+    });
+    sessionStorage.setItem("docsy-autosave-last-save-marker", JSON.stringify({
+      activeDocId: "doc-prev",
+      contentHash: "meaningful-hash",
+      docCount: 3,
+      isMeaningful: true,
+      lastSaved: Date.now(),
+      reason: "autosave",
+    }));
+
+    const { result } = renderHook(() => useDocumentManager());
+
+    expect(result.current.documents).toHaveLength(0);
+    expect(result.current.isRecovering || result.current.recoveryFailure).toBeTruthy();
   });
 });

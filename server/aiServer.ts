@@ -10,11 +10,13 @@ import {
 } from "../src/lib/ai/summaryContracts";
 import { buildActionPrompt } from "./modules/agent/buildActionPrompt";
 import { buildActiveDocumentRetrievalContext } from "./modules/agent/buildActiveDocumentRetrievalContext";
+import { normalizeGenerateTocResponse } from "./modules/ai/normalizeGenerateTocResponse";
 import {
   buildPlannerPrompt,
   plannerNeedsFollowup,
 } from "./modules/agent/buildPlannerPrompt";
 import { executePlannedAction } from "./modules/agent/executePlannedAction";
+import { buildAgentPreRouteHints } from "./modules/agent/preRouteAgentTurn";
 import { actionResponseSchema, normalizeActionResponse } from "./modules/agent/actionResponse";
 import {
   agentPlannerResponseSchema,
@@ -316,10 +318,12 @@ const generateTocResponseSchema = {
     entries: {
       items: {
         properties: {
+          anchorStrategy: { type: schemaType.STRING },
+          anchorText: { type: schemaType.STRING },
           level: { type: schemaType.INTEGER },
           title: { type: schemaType.STRING },
         },
-        required: ["level", "title"],
+        required: ["title", "level", "anchorStrategy", "anchorText"],
         type: schemaType.OBJECT,
       },
       type: schemaType.ARRAY,
@@ -529,6 +533,11 @@ ${localePromptSuffix(locale)}
 Rules:
 - Suggest a concise table of contents that reflects the current document structure.
 - Prefer headings that already exist in the document.
+- For each entry, return an anchorStrategy of "existing_heading", "promote_block", or "unmatched".
+- Return anchorText as a short exact excerpt copied from an existing heading or promotable document block.
+- Use "existing_heading" only when the anchorText is the exact current heading text to reuse.
+- Use "promote_block" only when the anchorText is a short exact excerpt from a non-heading document block that should become a heading.
+- Use "unmatched" with an empty anchorText when you cannot safely anchor the entry to the current document.
 - Keep levels within 1 to 3.
 - Choose maxDepth between 1 and 3.
 - Every attribution must reference only the supplied chunk ids.
@@ -544,24 +553,15 @@ ${JSON.stringify(chunks, null, 2)}
 const handleGenerateToc = async (request: GenerateTocRequest): Promise<GenerateTocResponse> => {
   assertMarkdownDocument(request);
   const { chunks } = buildTocGrounding(request);
-  const result = await generateMultimodalStructuredJson<GenerateTocResponse>({
+  const rawResult = await generateMultimodalStructuredJson<GenerateTocResponse>({
     images: getRequestImages(request),
     prompt: buildTocPrompt(request, chunks, resolveAiLocale(request.locale)),
     responseSchema: generateTocResponseSchema,
   });
+  const result = normalizeGenerateTocResponse(rawResult);
 
   validateAttributions(chunks, result.attributions);
-
-  return {
-    ...result,
-    entries: result.entries
-      .map((entry) => ({
-        level: (entry.level <= 1 ? 1 : entry.level >= 3 ? 3 : 2) as 1 | 2 | 3,
-        title: entry.title.trim(),
-      }))
-      .filter((entry) => entry.title.length > 0),
-    maxDepth: (result.maxDepth <= 1 ? 1 : result.maxDepth >= 3 ? 3 : 2) as 1 | 2 | 3,
-  };
+  return result;
 };
 
 const handleProposeAction = async (request: ProposeEditorActionRequest): Promise<ProposeEditorActionResponse> => {
@@ -772,6 +772,12 @@ export const handleAgentTurn = async (
     }
   }
 
+  const preRouteHints = buildAgentPreRouteHints({
+    driveReferences,
+    latestUserMessage,
+    request,
+  });
+
   let planner;
 
   try {
@@ -779,6 +785,7 @@ export const handleAgentTurn = async (
       images: getRequestImages(request),
       prompt: buildPlannerPrompt({
         driveReferences,
+        preRouteHints,
         retrievalContext,
         request,
         workspaceConnected,
@@ -786,6 +793,58 @@ export const handleAgentTurn = async (
       responseSchema: agentPlannerResponseSchema,
     });
     planner = normalizePlannerResponse(rawPlannerResponse);
+
+    if (
+      preRouteHints.activeDocumentPinned
+      && request.activeDocument
+      && !planner.target?.documentId
+      && (
+        planner.action === "update_current_document"
+        || planner.action === "summarize_document"
+        || planner.action === "generate_section"
+        || planner.action === "generate_toc"
+        || planner.action === "extract_procedure"
+      )
+    ) {
+      planner = {
+        ...planner,
+        target: {
+          ...planner.target,
+          documentId: request.activeDocument.documentId,
+          documentName: request.activeDocument.fileName,
+        },
+      };
+    }
+
+    if (
+      !planner.target?.documentId
+      && preRouteHints.localTarget
+      && (planner.action === "compare_documents" || planner.action === "suggest_document_updates")
+    ) {
+      planner = {
+        ...planner,
+        target: {
+          ...planner.target,
+          documentId: preRouteHints.localTarget.documentId,
+          documentName: preRouteHints.localTarget.fileName,
+        },
+      };
+    }
+
+    if (
+      !planner.target?.fileId
+      && preRouteHints.driveReferenceTarget
+      && (planner.action === "compare_documents" || planner.action === "suggest_document_updates" || planner.action === "prepare_drive_import")
+    ) {
+      planner = {
+        ...planner,
+        target: {
+          ...planner.target,
+          fileId: preRouteHints.driveReferenceTarget.fileId,
+          fileName: preRouteHints.driveReferenceTarget.fileName,
+        },
+      };
+    }
   } catch (error) {
     return normalizeAgentTurnResponse({
       availableImportTargets: [],

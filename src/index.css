@@ -169,6 +169,11 @@
   background: hsl(var(--editor-selection));
 }
 
+.dark .tiptap-editor .ProseMirror[data-docsy-dark-color-override="true"],
+.dark .tiptap-editor .ProseMirror [data-docsy-dark-color-override="true"] {
+  color: hsl(var(--foreground)) !important;
+}
+
 .tiptap-editor .ProseMirror ul[data-type="taskList"] {
   @apply list-none pl-0;
 }

@@ -12,6 +12,7 @@ import { useEditorExtensions } from "./editorConfig";
 import { rememberEditorSelection } from "./editorSelectionMemory";
 import { applyEditorSeed } from "./editorSeedSync";
 import { SourcePanel, SplitEditorLayout } from "./SourcePanel";
+import { useRichTextDarkModeDisplayOverride } from "./useRichTextDarkModeDisplayOverride";
 import { createMarkedInstance, createTurndownService } from "./utils/markdownRoundtrip";
 import { DEFAULT_MARKDOWN_TAB_SIZE, applyMarkdownTabIndent } from "./utils/markdownTabIndent";
 import { isUsableTiptapDocument } from "@/lib/ast/tiptapUsability";
@@ -208,6 +209,8 @@ const MarkdownEditor = ({
     },
     editorProps,
   }, [advancedBlocksEnabled, documentFeaturesEnabled, extensionsReady, shouldHoldEditor]);
+
+  useRichTextDarkModeDisplayOverride(editor);
 
   useEffect(() => {
     if (!editor || shouldHoldEditor) {

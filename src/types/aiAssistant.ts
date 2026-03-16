@@ -59,6 +59,8 @@ export interface GenerateSectionResponse {
 }
 
 export interface GenerateTocEntry {
+  anchorStrategy: "existing_heading" | "promote_block" | "unmatched";
+  anchorText: string;
   level: 1 | 2 | 3;
   title: string;
 }

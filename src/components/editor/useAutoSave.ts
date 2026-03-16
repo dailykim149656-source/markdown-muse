@@ -4,11 +4,20 @@ import type { WorkspaceBinding } from "@/types/workspace";
 import {
   clearAutosavePointer,
   clearAutosaveV3Snapshot,
+  readAutosavePointer,
   readAutosaveV3Snapshot,
   writeAutosavePointer,
   writeAutosaveV3Snapshot,
 } from "@/lib/documents/autosaveV3Store";
-import { recordAutosaveDebugEvent } from "@/lib/documents/autosaveDebug";
+import {
+  getAutosaveSnapshotHash,
+  readLastSuccessfulAutosaveMarker,
+  readUnloadRecoverySnapshot,
+  recordAutosaveDebugEvent,
+  writeLastSuccessfulAutosaveMarker,
+  writeRestoreSelection,
+  writeUnloadRecoverySnapshot,
+} from "@/lib/documents/autosaveDebug";
 import { migrateStoredDocumentData } from "@/lib/documents/storedDocument";
 
 export const DOCSY_AUTOSAVE_STORAGE_KEY = "docsy-autosave-v2";
@@ -89,6 +98,16 @@ export const hasMeaningfulSavedDocuments = (data: AutoSaveData | null | undefine
   );
 };
 
+const hasMeaningfulRecoveryHint = () => {
+  const lastSaveMarker = readLastSuccessfulAutosaveMarker();
+  const unloadSnapshot = readUnloadRecoverySnapshot();
+
+  return Boolean(
+    (lastSaveMarker?.isMeaningful && lastSaveMarker.lastSaved)
+    || hasMeaningfulSavedDocuments(unloadSnapshot),
+  );
+};
+
 const getDocumentSignature = (document: DocumentData) => JSON.stringify({
   content: document.content,
   createdAt: document.createdAt,
@@ -109,7 +128,7 @@ const shouldPersistLocalFallback = (data: AutoSaveData) => {
   return data.documents.length <= 12 && totalContentLength <= 50_000;
 };
 
-const dedupeDocuments = (documents: DocumentData[], activeDocId: string) => {
+const dedupeDocuments = (documents: DocumentData[], activeDocId: string): AutoSaveData | null => {
   const documentsById = new Map<string, DocumentData>();
 
   for (const document of documents) {
@@ -150,14 +169,7 @@ const dedupeDocuments = (documents: DocumentData[], activeDocId: string) => {
   }
 
   if (normalizedDocuments.length === 0) {
-    const fallback = createNewDocument();
-
-    return {
-      activeDocId: fallback.id,
-      documents: [fallback],
-      lastSaved: Date.now(),
-      version: 2 as const,
-    } satisfies AutoSaveData;
+    return null;
   }
 
   normalizedDocuments = normalizedDocuments.sort((left, right) => left.createdAt - right.createdAt);
@@ -237,8 +249,14 @@ export const migrateLegacyAutoSaveData = (raw: unknown): AutoSaveData | null => 
     return null;
   }
 
+  const deduped = dedupeDocuments(documents, raw.activeDocId);
+
+  if (!deduped) {
+    return null;
+  }
+
   return {
-    ...dedupeDocuments(documents, raw.activeDocId),
+    ...deduped,
     lastSaved: typeof raw.lastSaved === "number" ? raw.lastSaved : Date.now(),
   };
 };
@@ -288,31 +306,43 @@ const readLocalSavedData = ({ touchLastSaved = true }: ReadLocalSavedDataOptions
 export const loadSavedData = (): AutoSaveData | null =>
   readLocalSavedData({ touchLastSaved: true });
 
-const choosePreferredSnapshot = (
-  v3Snapshot: AutoSaveData | null,
-  localSnapshot: AutoSaveData | null,
-) => {
-  if (v3Snapshot && localSnapshot) {
-    return localSnapshot.lastSaved > v3Snapshot.lastSaved
-      ? { data: localSnapshot, source: "local" as const }
-      : { data: v3Snapshot, source: "v3" as const };
+export const hasRecoverableStoredData = () => {
+  const localSnapshot = readLocalSavedData({ touchLastSaved: false });
+  if (hasMeaningfulSavedDocuments(localSnapshot) || hasMeaningfulRecoveryHint()) {
+    return true;
   }
 
-  if (localSnapshot) {
-    return {
-      data: localSnapshot,
-      source: "local" as const,
-    };
+  return !localSnapshot && Boolean(readAutosavePointer());
+};
+
+interface SnapshotCandidate {
+  data: AutoSaveData;
+  source: "local" | "unload" | "v3";
+}
+
+const getSnapshotSourceRank = (source: SnapshotCandidate["source"]) => {
+  switch (source) {
+    case "unload":
+      return 3;
+    case "local":
+      return 2;
+    default:
+      return 1;
+  }
+};
+
+const choosePreferredSnapshot = (candidates: SnapshotCandidate[]) => {
+  if (candidates.length === 0) {
+    return null;
   }
 
-  if (v3Snapshot) {
-    return {
-      data: v3Snapshot,
-      source: "v3" as const,
-    };
-  }
+  const meaningfulCandidates = candidates.filter((candidate) => hasMeaningfulSavedDocuments(candidate.data));
+  const pool = meaningfulCandidates.length > 0 ? meaningfulCandidates : candidates;
 
-  return null;
+  return [...pool].sort((left, right) => (
+    right.data.lastSaved - left.data.lastSaved
+    || getSnapshotSourceRank(right.source) - getSnapshotSourceRank(left.source)
+  ))[0];
 };
 
 const persistLocalFallbackSnapshot = (
@@ -332,28 +362,86 @@ const persistLocalFallbackSnapshot = (
   return false;
 };
 
-export const hydrateSavedData = async (): Promise<AutoSaveData | null> => {
+export interface HydratedSavedDataResult {
+  candidateCount: number;
+  data: AutoSaveData | null;
+  hadRecoveryHints: boolean;
+  isMeaningful: boolean;
+  source: "local" | "none" | "unload" | "v3";
+}
+
+export const hydrateSavedData = async (): Promise<HydratedSavedDataResult> => {
   const v3Snapshot = (() => {
     const snapshot = readAutosaveV3Snapshot();
     return snapshot;
   })();
   const localSnapshot = readLocalSavedData({ touchLastSaved: false });
+  const unloadSnapshot = readUnloadRecoverySnapshot();
+  const previousSaveMarker = readLastSuccessfulAutosaveMarker();
+  const hadRecoveryHints = hasMeaningfulRecoveryHint();
   const hydratedV3Snapshot = await v3Snapshot;
   const normalizedV3Snapshot = hydratedV3Snapshot
-    ? {
-      ...dedupeDocuments(hydratedV3Snapshot.documents.map(migrateStoredDocumentData), hydratedV3Snapshot.activeDocId),
-      lastSaved: hydratedV3Snapshot.lastSaved,
-    }
+    ? dedupeDocuments(hydratedV3Snapshot.documents.map(migrateStoredDocumentData), hydratedV3Snapshot.activeDocId)
     : null;
-  const preferred = choosePreferredSnapshot(normalizedV3Snapshot, localSnapshot);
+  const candidates = [
+    unloadSnapshot ? {
+      data: {
+        ...(dedupeDocuments(unloadSnapshot.documents.map(migrateStoredDocumentData), unloadSnapshot.activeDocId) || {
+          activeDocId: unloadSnapshot.activeDocId,
+          documents: [],
+          lastSaved: unloadSnapshot.lastSaved,
+          version: DOCSY_AUTOSAVE_VERSION,
+        }),
+        lastSaved: unloadSnapshot.lastSaved,
+      },
+      source: "unload" as const,
+    } : null,
+    localSnapshot ? { data: localSnapshot, source: "local" as const } : null,
+    normalizedV3Snapshot ? {
+      data: {
+        ...normalizedV3Snapshot,
+        lastSaved: hydratedV3Snapshot?.lastSaved ?? normalizedV3Snapshot.lastSaved,
+      },
+      source: "v3" as const,
+    } : null,
+  ].filter((candidate): candidate is SnapshotCandidate =>
+    Boolean(candidate) && candidate.data.documents.length > 0);
+  const preferred = choosePreferredSnapshot(candidates);
+  const shouldRejectBlankPreferred = Boolean(
+    hadRecoveryHints
+    && preferred
+    && !hasMeaningfulSavedDocuments(preferred.data),
+  );
 
-  if (!preferred) {
+  if (!preferred || shouldRejectBlankPreferred) {
+    writeRestoreSelection({
+      contentHash: "none",
+      docCount: 0,
+      isMeaningful: false,
+      lastSaved: null,
+      source: "none",
+    });
+    recordAutosaveDebugEvent("restore_source_selected", {
+      candidateCount: candidates.length,
+      hadRecoveryHints,
+      previousPreferredSource: preferred?.source ?? null,
+      previousSaveMarkerHash: previousSaveMarker?.contentHash ?? null,
+      source: "none",
+    });
     recordAutosaveDebugEvent("hydrate_result", {
+      hadRecoveryHints,
+      unloadLastSaved: unloadSnapshot?.lastSaved ?? null,
       localLastSaved: localSnapshot?.lastSaved ?? null,
       source: "none",
       v3LastSaved: normalizedV3Snapshot?.lastSaved ?? null,
     });
-    return null;
+    return {
+      candidateCount: 0,
+      data: null,
+      hadRecoveryHints,
+      isMeaningful: false,
+      source: "none",
+    };
   }
 
   const preferredSnapshot = {
@@ -361,6 +449,13 @@ export const hydrateSavedData = async (): Promise<AutoSaveData | null> => {
     lastSaved: preferred.data.lastSaved || Date.now(),
     version: DOCSY_AUTOSAVE_VERSION,
   } satisfies AutoSaveData;
+  const restoreSelection = {
+    contentHash: getAutosaveSnapshotHash(preferredSnapshot),
+    docCount: preferredSnapshot.documents.length,
+    isMeaningful: hasMeaningfulSavedDocuments(preferredSnapshot),
+    lastSaved: preferredSnapshot.lastSaved,
+    source: preferred.source,
+  } as const;
 
   try {
     persistLocalFallbackSnapshot(preferredSnapshot);
@@ -374,6 +469,17 @@ export const hydrateSavedData = async (): Promise<AutoSaveData | null> => {
   } catch {
     // best effort local fallback alignment
   }
+
+  writeRestoreSelection(restoreSelection);
+  recordAutosaveDebugEvent("restore_source_selected", {
+    candidateCount: candidates.length,
+    contentHash: restoreSelection.contentHash,
+    hadRecoveryHints,
+    isMeaningful: restoreSelection.isMeaningful,
+    lastSaved: restoreSelection.lastSaved,
+    previousSaveMarkerHash: previousSaveMarker?.contentHash ?? null,
+    source: restoreSelection.source,
+  });
 
   const shouldRefreshV3 = preferred.source !== "v3"
     || !normalizedV3Snapshot
@@ -400,13 +506,22 @@ export const hydrateSavedData = async (): Promise<AutoSaveData | null> => {
 
   recordAutosaveDebugEvent("hydrate_result", {
     docCount: preferredSnapshot.documents.length,
+    hadRecoveryHints,
     localLastSaved: localSnapshot?.lastSaved ?? null,
     selectedLastSaved: preferredSnapshot.lastSaved,
+    sourceHash: restoreSelection.contentHash,
     source: preferred.source,
+    unloadLastSaved: unloadSnapshot?.lastSaved ?? null,
     v3LastSaved: normalizedV3Snapshot?.lastSaved ?? null,
   });
 
-  return preferredSnapshot;
+  return {
+    candidateCount: candidates.length,
+    data: preferredSnapshot,
+    hadRecoveryHints,
+    isMeaningful: restoreSelection.isMeaningful,
+    source: preferred.source,
+  };
 };
 
 export const clearSavedData = () => {
@@ -452,6 +567,13 @@ export const saveData = (data: AutoSaveData, options: SaveDataOptions = {}): Aut
   const normalized = dedupeDocuments(data.documents.map(migrateStoredDocumentData), data.activeDocId);
   const reason = options.reason ?? "manual";
 
+  if (!normalized) {
+    return {
+      error: "Autosave skipped because there are no restorable documents.",
+      ok: false,
+    };
+  }
+
   try {
     const savedSnapshot = {
       ...normalized,
@@ -471,9 +593,12 @@ export const saveData = (data: AutoSaveData, options: SaveDataOptions = {}): Aut
 
     localStorage.removeItem(DOCSY_LEGACY_AUTOSAVE_STORAGE_KEY);
     writeAutosavePointer(pointer);
+    writeLastSuccessfulAutosaveMarker(savedSnapshot, { reason });
     recordAutosaveDebugEvent("autosave_saved", {
       activeDocId: savedSnapshot.activeDocId,
+      contentHash: getAutosaveSnapshotHash(savedSnapshot),
       docCount: savedSnapshot.documents.length,
+      isMeaningful: hasMeaningfulSavedDocuments(savedSnapshot),
       localFallbackWritten,
       reason,
       savedAt,
@@ -516,10 +641,22 @@ export const saveData = (data: AutoSaveData, options: SaveDataOptions = {}): Aut
 };
 
 export const saveDataForUnload = (data: AutoSaveData, options: Omit<SaveDataOptions, "forceLocalFallback"> = {}) =>
-  saveData(data, {
-    ...options,
-    forceLocalFallback: true,
-  });
+  (() => {
+    const result = saveData(data, {
+      ...options,
+      forceLocalFallback: true,
+    });
+
+    if (!isAutoSaveWriteFailure(result)) {
+      writeUnloadRecoverySnapshot({
+        ...data,
+        lastSaved: result.savedAt,
+        version: DOCSY_AUTOSAVE_VERSION,
+      });
+    }
+
+    return result;
+  })();
 
 interface UseAutoSaveOptions {
   getDirtyDocumentIds?: () => string[];
