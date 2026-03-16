@@ -520,6 +520,19 @@ jobs:
           echo "Direct Cloud Run AI runtime smoke check failed after 10 attempts."
           exit 1
 
+      - name: Dump recent AI Cloud Run error logs on smoke failure
+        if: ${{ failure() }}
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          echo "Dumping recent Cloud Run error logs for ${AI_SERVICE_NAME} in ${GCP_REGION}"
+          gcloud run services logs read "${AI_SERVICE_NAME}" \
+            --region "${GCP_REGION}" \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --freshness=30m \
+            --limit=50 \
+            --log-filter="severity>=ERROR"
+
       - name: Verify AI to TeX proxy health
         run: |
           set -euo pipefail
