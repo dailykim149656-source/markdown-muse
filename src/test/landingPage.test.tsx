@@ -66,6 +66,12 @@ describe("Landing page", () => {
   it("renders grouped format support and the profile callout", () => {
     renderWithI18n("en");
 
+    expect(screen.getByText("Docsy can drive the visible workflow, not just describe it")).toBeInTheDocument();
+    expect(screen.getByText("Capture the live viewport")).toBeInTheDocument();
+    expect(screen.getByText("Gemini chooses one UI action")).toBeInTheDocument();
+    expect(screen.getByText("Docsy executes and hands off to review")).toBeInTheDocument();
+    expect(screen.getByText(/let Docsy observe the live UI/i)).toBeInTheDocument();
+    expect(screen.getByText(/Use the guide to learn the Visual Navigator flow/i)).toBeInTheDocument();
     expect(screen.getByText("Edit now")).toBeInTheDocument();
     expect(screen.getByText("Import / export")).toBeInTheDocument();
     expect(screen.getByText(".docsy")).toBeInTheDocument();

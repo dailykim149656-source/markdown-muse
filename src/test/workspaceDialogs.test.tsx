@@ -89,7 +89,7 @@ describe("WorkspaceImportDialog", () => {
     );
 
     expect(screen.getByText("Import from Google Drive")).toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Import from Google Drive" })).toHaveClass("max-w-4xl");
+    expect(screen.getByRole("dialog", { name: "Import from Google Drive" })).toHaveClass("max-w-[95vw]");
     expect(screen.getByText("Runbook")).toBeInTheDocument();
     expect(screen.getByText(/Modified/)).toBeInTheDocument();
 

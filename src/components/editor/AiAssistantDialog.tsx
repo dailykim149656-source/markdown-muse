@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Sparkles } from "lucide-react";
 import AiAgentTab from "@/components/editor/AiAgentTab";
 import VisualNavigatorTab from "@/components/editor/VisualNavigatorTab";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import type { VisualNavigatorRuntimeState } from "@/hooks/useVisualNavigator";
 import { useI18n } from "@/i18n/useI18n";
 import type { ProcedureExtractionResult } from "@/lib/ai/procedureExtraction";
 import type { AiBusyAction, PatchPreviewResult, TocPreviewResult } from "@/hooks/useAiAssistant";
+import type { DocumentComparisonDelta } from "@/lib/ai/compareDocuments";
 import type { SummarizeDocumentResponse } from "@/types/aiAssistant";
 import type { DocumentData } from "@/types/document";
 
@@ -29,6 +30,7 @@ interface AiAssistantDialogProps {
   busyAction: AiBusyAction;
   compareCandidates: DocumentData[];
   comparePreview: PatchPreviewResult | null;
+  initialTab?: "agent" | "navigator" | "summary" | "generate" | "toc" | "compare" | "update" | "procedure";
   lastSummaryObjective: string | null;
   liveAgent: LiveAgentRuntimeState;
   onCompare: (targetDocumentId: string) => Promise<unknown> | unknown;
@@ -75,14 +77,89 @@ const getTocEntryAccent = (level: 1 | 2 | 3) => {
   }
 };
 
+const DETAIL_CARD_STYLE: Record<DocumentComparisonDelta["kind"], string> = {
+  added: "border-emerald-500/25 bg-emerald-500/5",
+  changed: "border-blue-500/25 bg-blue-500/5",
+  inconsistent: "border-destructive/35 bg-destructive/5",
+  removed: "border-amber-500/35 bg-amber-500/5",
+};
+
+const DETAIL_PILL_STYLE: Record<DocumentComparisonDelta["kind"], string> = {
+  added: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  changed: "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300",
+  inconsistent: "border-destructive/30 bg-destructive/10 text-destructive",
+  removed: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+};
+
+const getComparisonDeltaTitle = (delta: DocumentComparisonDelta) =>
+  delta.target?.title || delta.source?.title;
+
+const DeltaBodyPanel = ({
+  label,
+  text,
+}: {
+  label: string;
+  text: string;
+}) => (
+  <div className="space-y-2">
+    <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+      {label}
+    </div>
+    <div className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/80 px-3 py-2 text-xs leading-5 text-foreground">
+      {text}
+    </div>
+  </div>
+);
+
+const ComparisonDeltaCard = ({
+  delta,
+  sourceDocumentName,
+  targetDocumentName,
+}: {
+  delta: DocumentComparisonDelta;
+  sourceDocumentName: string;
+  targetDocumentName: string;
+}) => {
+  const { t } = useI18n();
+  const title = getComparisonDeltaTitle(delta) || t("aiDialog.details.untitledSection");
+  const showSimilarity = delta.kind === "changed" || delta.kind === "inconsistent";
+
+  return (
+    <article className={`rounded-lg border px-3 py-3 ${DETAIL_CARD_STYLE[delta.kind]}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded-full border px-2 py-1 text-[10px] ${DETAIL_PILL_STYLE[delta.kind]}`}>
+          {t(`aiDialog.details.kind.${delta.kind}`)}
+        </span>
+        {showSimilarity ? (
+          <span className="text-[10px] text-muted-foreground">
+            {t("aiDialog.details.similarity", { score: delta.similarityScore.toFixed(2) })}
+          </span>
+        ) : null}
+      </div>
+      <div className="mt-2 text-sm font-semibold text-foreground">{title}</div>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">{delta.summary}</p>
+      <div className={`mt-3 grid gap-3 ${delta.source && delta.target ? "lg:grid-cols-2" : "grid-cols-1"}`}>
+        {delta.source ? <DeltaBodyPanel label={sourceDocumentName} text={delta.source.text} /> : null}
+        {delta.target ? <DeltaBodyPanel label={targetDocumentName} text={delta.target.text} /> : null}
+      </div>
+    </article>
+  );
+};
+
 const PreviewSummary = ({
   comparison,
   patchCount,
   patchSetTitle,
+  sourceDocumentName,
   targetDocumentName,
   title,
-}: PatchPreviewResult & { title: string }) => {
+}: PatchPreviewResult & { sourceDocumentName: string; title: string }) => {
   const { t } = useI18n();
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  useEffect(() => {
+    setDetailsOpen(false);
+  }, [comparison]);
 
   return (
     <section className="rounded-lg border border-border p-4">
@@ -98,6 +175,42 @@ const PreviewSummary = ({
           <p className="text-muted-foreground">{t("aiDialog.compare.inconsistent", { count: comparison.counts.inconsistent })}</p>
         </div>
       </div>
+      <Button
+        aria-expanded={detailsOpen}
+        className="mt-4 w-full justify-between gap-2"
+        onClick={() => setDetailsOpen((current) => !current)}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        {detailsOpen ? t("aiDialog.details.hide") : t("aiDialog.details.show")}
+        {detailsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </Button>
+      {detailsOpen ? (
+        <div className="mt-4 border-t border-border/60 pt-4">
+          <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+            {t("aiDialog.details.title")}
+          </div>
+          {comparison.deltas.length === 0 ? (
+            <div className="mt-3 rounded-md border border-dashed border-border/60 px-3 py-3 text-xs text-muted-foreground">
+              {t("aiDialog.details.empty")}
+            </div>
+          ) : (
+            <ScrollArea className="mt-3 max-h-[26rem] pr-3">
+              <div className="space-y-3">
+                {comparison.deltas.map((delta) => (
+                  <ComparisonDeltaCard
+                    delta={delta}
+                    key={delta.deltaId}
+                    sourceDocumentName={sourceDocumentName}
+                    targetDocumentName={targetDocumentName}
+                  />
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </div>
+      ) : null}
     </section>
   );
 };
@@ -119,6 +232,7 @@ const AiAssistantDialog = ({
   busyAction,
   compareCandidates,
   comparePreview,
+  initialTab = "agent",
   lastSummaryObjective,
   liveAgent,
   onCompare,
@@ -169,7 +283,7 @@ const AiAssistantDialog = ({
           <DialogDescription>{t("aiDialog.description")}</DialogDescription>
         </DialogHeader>
 
-        <Tabs className="space-y-4" defaultValue="agent">
+        <Tabs className="space-y-4" defaultValue={initialTab}>
           {aiUnavailableMessage && (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
               {aiUnavailableMessage}
@@ -510,7 +624,11 @@ const AiAssistantDialog = ({
                 </section>
 
                 {comparePreview ? (
-                  <PreviewSummary {...comparePreview} title={t("aiDialog.compare.previewTitle")} />
+                  <PreviewSummary
+                    {...comparePreview}
+                    sourceDocumentName={activeDocumentName}
+                    title={t("aiDialog.compare.previewTitle")}
+                  />
                 ) : (
                   <section className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
                     {t("aiDialog.compare.empty")}
@@ -558,7 +676,11 @@ const AiAssistantDialog = ({
                 </section>
 
                 {updateSuggestionPreview ? (
-                  <PreviewSummary {...updateSuggestionPreview} title={t("aiDialog.update.previewTitle")} />
+                  <PreviewSummary
+                    {...updateSuggestionPreview}
+                    sourceDocumentName={activeDocumentName}
+                    title={t("aiDialog.update.previewTitle")}
+                  />
                 ) : (
                   <section className="rounded-lg border border-border p-4 text-sm text-muted-foreground">
                     {t("aiDialog.update.empty")}

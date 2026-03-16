@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Languages, Link2, Moon, Network, RefreshCw, ShieldCheck, Search, Sun } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, ChevronDown, ChevronUp, Languages, Link2, Moon, MousePointerClick, Network, RefreshCw, ShieldCheck, Search, Sun } from "lucide-react";
 import docslyLogo from "@/assets/docsly-logo.png";
 import docslyLogoSmall from "@/assets/docsly-logo-small.png";
 import marketingEditorSurface from "@/assets/marketing-editor-surface.png";
@@ -80,6 +80,11 @@ const Guide = () => {
     visibleScenarioItems.length > 0 || visibleSections.length > 0 || visibleFaqItems.length > 0;
   const surfaceGallery = useMemo(() => ([
     {
+      description: t("guide.currentBuildNavigatorDescription"),
+      image: marketingGoogleWorkspaceSurface,
+      title: t("guide.currentBuildNavigatorTitle"),
+    },
+    {
       description: t("guide.currentBuildReviewDescription"),
       image: marketingPatchReviewSurface,
       title: t("guide.currentBuildReviewTitle"),
@@ -106,6 +111,11 @@ const Guide = () => {
     },
   ]), [guideContent.guidePage.visualTourDescription, guideContent.guidePage.visualTourTitle, t]);
   const sectionSurfaceMap = useMemo<Record<string, { description: string; image: string; title: string }>>(() => ({
+    "visual-navigator": {
+      description: t("guide.currentBuildNavigatorDescription"),
+      image: marketingGoogleWorkspaceSurface,
+      title: t("guide.currentBuildNavigatorTitle"),
+    },
     "first-document": {
       description: guideContent.guidePage.visualTourDescription,
       image: marketingEditorSurface,
@@ -293,8 +303,13 @@ const Guide = () => {
             </p>
           </div>
 
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
             {[
+              {
+                description: t("guide.currentBuildNavigatorDescription"),
+                icon: MousePointerClick,
+                title: t("guide.currentBuildNavigatorTitle"),
+              },
               {
                 description: t("guide.currentBuildReviewDescription"),
                 icon: ShieldCheck,

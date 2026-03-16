@@ -1,11 +1,13 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import AiAssistantDialog from "@/components/editor/AiAssistantDialog";
 import KeyboardShortcutsModal from "@/components/editor/KeyboardShortcutsModal";
 import PatchReviewDialog from "@/components/editor/PatchReviewDialog";
 import ShareLinkDialog from "@/components/editor/ShareLinkDialog";
+import type { PatchPreviewResult } from "@/hooks/useAiAssistant";
 import { I18nContext } from "@/i18n/I18nProvider";
+import type { DocumentComparisonDelta } from "@/lib/ai/compareDocuments";
 
 vi.mock("qrcode", () => ({
   default: {
@@ -44,6 +46,85 @@ const visualNavigatorStub = {
   stopReason: null,
   stopRun: vi.fn(),
 };
+
+const liveAgentStub: ComponentProps<typeof AiAssistantDialog>["liveAgent"] = {
+  addDriveReference: vi.fn(),
+  artifacts: [],
+  availableLocalReferences: [],
+  availableTargetDocuments: [],
+  composerText: "",
+  confirmPendingAction: vi.fn(),
+  createSummaryDocumentFromArtifact: vi.fn(),
+  discardPendingAction: vi.fn(),
+  isSubmitting: false,
+  latestDraftPreview: null,
+  latestDriveCandidates: [],
+  latestError: null,
+  latestStatus: null,
+  messages: [],
+  openArtifactPatchReview: vi.fn(),
+  pendingConfirmation: null,
+  queueDriveImport: vi.fn(),
+  removeDriveReference: vi.fn(),
+  resolveArtifactDocumentTarget: vi.fn(),
+  resetThread: vi.fn(),
+  selectedDriveReferences: [],
+  selectedLocalReferenceIds: [],
+  sendMessage: vi.fn(),
+  setComposerText: vi.fn(),
+  threadId: "thread-1",
+  toggleLocalReference: vi.fn(),
+};
+
+const defaultAiAssistantDialogProps: ComponentProps<typeof AiAssistantDialog> = {
+  activeDocumentName: "Active Doc",
+  aiUnavailableMessage: null,
+  busyAction: null,
+  compareCandidates: [],
+  comparePreview: null,
+  lastSummaryObjective: null,
+  liveAgent: liveAgentStub,
+  onCompare: vi.fn(),
+  onCreateSummaryDocument: vi.fn(),
+  onExtractProcedure: vi.fn(),
+  onGenerateSection: vi.fn(),
+  onGenerateToc: vi.fn(),
+  onLoadTocPatch: vi.fn(),
+  onOpenChange: vi.fn(),
+  onSuggestUpdates: vi.fn(),
+  onSummarize: vi.fn(),
+  open: true,
+  procedureResult: null,
+  richTextAvailable: true,
+  summaryResult: null,
+  tocPreview: null,
+  updateSuggestionPreview: null,
+  visualNavigator: visualNavigatorStub,
+};
+
+const buildPreview = (
+  deltas: DocumentComparisonDelta[],
+  targetDocumentName = "Reference Doc",
+): PatchPreviewResult => ({
+  comparison: {
+    counts: deltas.reduce((counts, delta) => {
+      counts[delta.kind] += 1;
+      return counts;
+    }, {
+      added: 0,
+      changed: 0,
+      inconsistent: 0,
+      removed: 0,
+    }),
+    deltas,
+    sourceDocumentId: "doc-active",
+    targetDocumentId: "doc-reference",
+  },
+  patchCount: deltas.length,
+  patchSet: null,
+  patchSetTitle: "Comparison patch set",
+  targetDocumentName,
+});
 
 describe("Dialog smoke paths", () => {
   it("renders ShareLinkDialog when opened", () => {
@@ -146,55 +227,8 @@ describe("Dialog smoke paths", () => {
   it("renders AiAssistantDialog when opened", () => {
     renderWithI18n(
       <AiAssistantDialog
-        activeDocumentName="Active Doc"
-        busyAction={null}
-        compareCandidates={[]}
-        comparePreview={null}
-        liveAgent={{
-          addDriveReference: vi.fn(),
-          artifacts: [],
-          availableLocalReferences: [],
-          availableTargetDocuments: [],
-          composerText: "",
-          confirmPendingAction: vi.fn(),
-          createSummaryDocumentFromArtifact: vi.fn(),
-          discardPendingAction: vi.fn(),
-          isSubmitting: false,
-          latestDraftPreview: null,
-          latestDriveCandidates: [],
-          latestError: null,
-          latestStatus: null,
-          messages: [],
-          openArtifactPatchReview: vi.fn(),
-          pendingConfirmation: null,
-          queueDriveImport: vi.fn(),
-          removeDriveReference: vi.fn(),
-          resolveArtifactDocumentTarget: vi.fn(),
-          resetThread: vi.fn(),
-          selectedDriveReferences: [],
-          selectedLocalReferenceIds: [],
-          sendMessage: vi.fn(),
-          setComposerText: vi.fn(),
-          threadId: "thread-1",
-          toggleLocalReference: vi.fn(),
-        }}
-        onCompare={vi.fn()}
-        onCreateSummaryDocument={vi.fn()}
-        onExtractProcedure={vi.fn()}
-        onGenerateSection={vi.fn()}
-        onGenerateToc={vi.fn()}
-        onLoadTocPatch={vi.fn()}
-        onOpenChange={vi.fn()}
-        onSuggestUpdates={vi.fn()}
-        onSummarize={vi.fn()}
-        lastSummaryObjective={null}
-        open
-        procedureResult={null}
+        {...defaultAiAssistantDialogProps}
         richTextAvailable={false}
-        summaryResult={null}
-        tocPreview={null}
-        updateSuggestionPreview={null}
-        visualNavigator={visualNavigatorStub}
       />,
     );
 
@@ -202,64 +236,146 @@ describe("Dialog smoke paths", () => {
     expect(screen.getByRole("tab", { name: "Agent" })).toBeInTheDocument();
   });
 
-  it("disables AI action buttons when Gemini is unavailable", async () => {
+  it("disables AI action buttons when Gemini is unavailable", () => {
     renderWithI18n(
       <AiAssistantDialog
-        activeDocumentName="Active Doc"
+        {...defaultAiAssistantDialogProps}
         aiUnavailableMessage="Gemini가 연결되어 있지 않습니다."
-        busyAction={null}
-        compareCandidates={[]}
-        comparePreview={null}
-        liveAgent={{
-          addDriveReference: vi.fn(),
-          artifacts: [],
-          availableLocalReferences: [],
-          availableTargetDocuments: [],
-          composerText: "",
-          confirmPendingAction: vi.fn(),
-          createSummaryDocumentFromArtifact: vi.fn(),
-          discardPendingAction: vi.fn(),
-          isSubmitting: false,
-          latestDraftPreview: null,
-          latestDriveCandidates: [],
-          latestError: null,
-          latestStatus: null,
-          messages: [],
-          openArtifactPatchReview: vi.fn(),
-          pendingConfirmation: null,
-          queueDriveImport: vi.fn(),
-          removeDriveReference: vi.fn(),
-          resolveArtifactDocumentTarget: vi.fn(),
-          resetThread: vi.fn(),
-          selectedDriveReferences: [],
-          selectedLocalReferenceIds: [],
-          sendMessage: vi.fn(),
-          setComposerText: vi.fn(),
-          threadId: "thread-1",
-          toggleLocalReference: vi.fn(),
-        }}
-        onCompare={vi.fn()}
-        onCreateSummaryDocument={vi.fn()}
-        onExtractProcedure={vi.fn()}
-        onGenerateSection={vi.fn()}
-        onGenerateToc={vi.fn()}
-        onLoadTocPatch={vi.fn()}
-        onOpenChange={vi.fn()}
-        onSuggestUpdates={vi.fn()}
-        onSummarize={vi.fn()}
-        lastSummaryObjective={null}
-        open
-        procedureResult={null}
-        richTextAvailable
-        summaryResult={null}
-        tocPreview={null}
-        updateSuggestionPreview={null}
-        visualNavigator={visualNavigatorStub}
       />,
     );
 
     expect(screen.getAllByText("Gemini가 연결되어 있지 않습니다.").length).toBeGreaterThan(0);
     expect(screen.getByRole("tab", { name: "aiDialog.tabs.summary" })).toBeInTheDocument();
+  });
+
+  it("reveals changed comparison details only when requested", () => {
+    const changedDelta: DocumentComparisonDelta = {
+      deltaId: "delta-compare",
+      kind: "changed",
+      similarityScore: 0.72,
+      source: {
+        chunkIds: ["chunk-source-1"],
+        ingestionId: "doc-active",
+        level: 2,
+        path: ["Overview", "Changed section"],
+        sectionId: "source-section",
+        text: "Old body paragraph",
+        title: "Changed section",
+      },
+      summary: "Changed section summary",
+      target: {
+        chunkIds: ["chunk-target-1"],
+        ingestionId: "doc-reference",
+        level: 2,
+        path: ["Overview", "Changed section"],
+        sectionId: "target-section",
+        text: "New body paragraph",
+        title: "Changed section",
+      },
+    };
+
+    renderWithI18n(
+      <AiAssistantDialog
+        {...defaultAiAssistantDialogProps}
+        comparePreview={buildPreview([changedDelta])}
+        initialTab="compare"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "aiDialog.details.show" })).toBeInTheDocument();
+    expect(screen.queryByText("Changed section")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "aiDialog.details.show" }));
+
+    expect(screen.getByText("Changed section")).toBeInTheDocument();
+    expect(screen.getByText("Changed section summary")).toBeInTheDocument();
+    expect(screen.getByText("Old body paragraph")).toBeInTheDocument();
+    expect(screen.getByText("New body paragraph")).toBeInTheDocument();
+    expect(screen.getByText("aiDialog.details.similarity")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "aiDialog.details.hide" }));
+    expect(screen.queryByText("Changed section")).not.toBeInTheDocument();
+  });
+
+  it("shows target-only details for added update sections", () => {
+    const addedDelta: DocumentComparisonDelta = {
+      deltaId: "delta-added",
+      kind: "added",
+      similarityScore: 0,
+      summary: "Added section summary",
+      target: {
+        chunkIds: ["chunk-target-1"],
+        ingestionId: "doc-reference",
+        level: 2,
+        path: ["Appendix", "Added section"],
+        sectionId: "target-section",
+        text: "Target-only body",
+        title: "Added section",
+      },
+    };
+
+    renderWithI18n(
+      <AiAssistantDialog
+        {...defaultAiAssistantDialogProps}
+        initialTab="update"
+        updateSuggestionPreview={buildPreview([addedDelta])}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "aiDialog.details.show" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "aiDialog.details.show" }));
+
+    expect(screen.getByText("Added section")).toBeInTheDocument();
+    expect(screen.getByText("Target-only body")).toBeInTheDocument();
+    expect(screen.queryByText("Source-only body")).not.toBeInTheDocument();
+  });
+
+  it("shows source-only details for removed update sections", () => {
+    const removedDelta: DocumentComparisonDelta = {
+      deltaId: "delta-removed",
+      kind: "removed",
+      similarityScore: 0,
+      source: {
+        chunkIds: ["chunk-source-1"],
+        ingestionId: "doc-active",
+        level: 2,
+        path: ["Appendix", "Removed section"],
+        sectionId: "source-section",
+        text: "Source-only body",
+        title: "Removed section",
+      },
+      summary: "Removed section summary",
+    };
+
+    renderWithI18n(
+      <AiAssistantDialog
+        {...defaultAiAssistantDialogProps}
+        initialTab="update"
+        updateSuggestionPreview={buildPreview([removedDelta])}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "aiDialog.details.show" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "aiDialog.details.show" }));
+
+    expect(screen.getByText("Removed section")).toBeInTheDocument();
+    expect(screen.getByText("Source-only body")).toBeInTheDocument();
+    expect(screen.queryByText("Target-only body")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty state when a preview has no detailed deltas", () => {
+    renderWithI18n(
+      <AiAssistantDialog
+        {...defaultAiAssistantDialogProps}
+        initialTab="update"
+        updateSuggestionPreview={buildPreview([])}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "aiDialog.details.show" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "aiDialog.details.show" }));
+
+    expect(screen.getByText("aiDialog.details.empty")).toBeInTheDocument();
   });
 
   it("renders KeyboardShortcutsModal when opened", () => {

@@ -1644,6 +1644,19 @@ const replaceScenarioItem = (
   nextItem: GuideScenarioItem,
 ) => items.map((item) => (item.title === title ? nextItem : item));
 
+const mergeScenarioItems = (
+  items: GuideScenarioItem[],
+  additions: GuideScenarioItem[],
+  position: "append" | "prepend" = "append",
+): GuideScenarioItem[] => {
+  const additionTitles = new Set(additions.map((item) => item.title));
+  const filtered = items.filter((item) => !additionTitles.has(item.title));
+
+  return position === "prepend"
+    ? [...additions, ...filtered]
+    : [...filtered, ...additions];
+};
+
 const enProfilesSection: GuideSection = {
   audience: ["beginner", "advanced"],
   bullets: [
@@ -1766,6 +1779,37 @@ const enShareAndExportSection: GuideSection = {
   title: "Share and export",
 };
 
+const enVisualNavigatorSection: GuideSection = {
+  audience: ["advanced"],
+  bullets: [
+    "Visual Navigator lives inside AI Assistant and uses the real visible Docsy viewport instead of a synthetic editor summary.",
+    "In v1 it is browser-only, Docsy-only, and screenshot-based, so it works inside the current web UI rather than across arbitrary websites or desktop apps.",
+    "Gemini chooses one bounded browser action at a time, which keeps the run visible, interruptible, and easier to review.",
+    "The navigator can open workflow surfaces such as Google Workspace or Patch Review, but document mutations still hand off into the existing review-first flow.",
+  ],
+  id: "visual-navigator",
+  steps: [
+    "Switch to Advanced, open AI Assistant, and select the Navigator tab.",
+    "Enter a visible UI task such as opening Google Workspace or Patch Review.",
+    "Let Docsy capture the current viewport, ask Gemini for one next action, execute it, and repeat until the flow is complete or follow-up is needed.",
+  ],
+  summary: "Visual Navigator is the new browser-side surface that lets Docsy act on the current UI instead of only describing what should happen next.",
+  title: "Visual Navigator",
+};
+
+const enVisualNavigatorScenario: GuideScenarioItem = {
+  audience: ["advanced"],
+  caution: "Treat it as a Docsy UI operator, not a universal agent. In v1 it only works on the visible Docsy web UI and only through bounded screenshot-driven steps.",
+  role: "Someone who wants Docsy to operate the visible UI for them",
+  steps: [
+    "Switch to Advanced and open AI Assistant.",
+    "Use the Navigator tab to request a concrete UI task such as opening Google Workspace or Patch Review.",
+    "Watch the overlay history, then continue the document workflow through review-first surfaces.",
+  ],
+  summary: "This is the fastest way to understand the new UI Navigator capability without leaving the existing Docsy workflow.",
+  title: "Open a workflow surface through the navigator",
+};
+
 const enUpdatedGuideContent: GuideContent = {
   ...enGuideContentLatest,
   guidePage: {
@@ -1785,10 +1829,14 @@ const enUpdatedGuideContent: GuideContent = {
           answer: "The safest order is Beginner drafting first, then Advanced review surfaces when you need History, Patch Review, AI, or structured JSON and YAML, and only after that the workspace-level tools like Knowledge, Graph, and Suggestion Queue.",
           question: "What should I learn first?",
         },
+        {
+          answer: "In Docsy, UI Navigator means the Visual Navigator inside AI Assistant. It captures the live visible Docsy viewport, asks Gemini for one bounded browser action, and can open workflow surfaces such as Google Workspace or Patch Review. It is not a universal cross-app agent.",
+          question: "What does UI Navigator mean in Docsy?",
+        },
       ],
       "prepend",
     ),
-    heroDescription: "This guide explains Docsy in task order, starting with the default Beginner surface and then moving into Advanced review, Google Workspace, and multi-document maintenance only when they become necessary.",
+    heroDescription: "This guide explains Docsy in task order, starting with the default Beginner surface, then the new Visual Navigator, and then moving into Advanced review, Google Workspace, and multi-document maintenance only when they become necessary.",
     recommendedPathDescription: "If this is your first time using Docsy, start with the simpler Beginner surface first and only unlock Advanced review or maintenance tools when the task actually needs them.",
     recommendedPathSteps: [
       "Create the first document in Beginner from a template or blank file.",
@@ -1797,24 +1845,29 @@ const enUpdatedGuideContent: GuideContent = {
       "Open Knowledge, Graph, and Suggestion Queue only when related-document maintenance begins.",
       "Use Google Workspace import, export, save, and sync warnings when the source of truth lives in Google Docs.",
     ],
-    scenarioItems: replaceScenarioItem(
-      enGuideContentLatest.guidePage.scenarioItems,
-      "Fast single-document writing",
-      {
-        audience: ["beginner"],
-        caution: "Do not switch into Advanced just because the controls exist. Stay in Beginner unless the task truly needs review, history, or structured editing.",
-        role: "Someone who needs to finish one document quickly",
-        steps: [
-          "Start in Beginner from a template or blank file.",
-          "Use basic editing, tabs, and share or export surfaces only.",
-          "Switch to Advanced later only if review, history, or structured JSON and YAML become necessary.",
-        ],
-        summary: "This is the safest first-session path. Finish the draft in Beginner first, then expand only when the workflow becomes more complex.",
-        title: "Fast single-document writing",
-      },
+    scenarioItems: mergeScenarioItems(
+      replaceScenarioItem(
+        enGuideContentLatest.guidePage.scenarioItems,
+        "Fast single-document writing",
+        {
+          audience: ["beginner"],
+          caution: "Do not switch into Advanced just because the controls exist. Stay in Beginner unless the task truly needs review, history, or structured editing.",
+          role: "Someone who needs to finish one document quickly",
+          steps: [
+            "Start in Beginner from a template or blank file.",
+            "Use basic editing, tabs, and share or export surfaces only.",
+            "Switch to Advanced later only if review, history, or structured JSON and YAML become necessary.",
+          ],
+          summary: "This is the safest first-session path. Finish the draft in Beginner first, then expand only when the workflow becomes more complex.",
+          title: "Fast single-document writing",
+        },
+      ),
+      [enVisualNavigatorScenario],
+      "prepend",
     ),
     sections: [
       enProfilesSection,
+      enVisualNavigatorSection,
       enWorkspaceManagementSection,
       enLatexValidationSection,
       enVersioningSection,
@@ -1824,6 +1877,10 @@ const enUpdatedGuideContent: GuideContent = {
     ].reduce((sections, nextSection) => {
       if (nextSection.id === "profiles-and-availability") {
         return insertGuideSectionAfter(sections, "getting-started", nextSection);
+      }
+
+      if (nextSection.id === "visual-navigator") {
+        return insertGuideSectionAfter(sections, "profiles-and-availability", nextSection);
       }
 
       if (nextSection.id === "workspace-management") {
@@ -1851,8 +1908,8 @@ const enUpdatedGuideContent: GuideContent = {
       if (card.title === "Google Workspace") {
         return {
           ...card,
-          description: "A live Google Docs bridge for Drive Import, rescan, refresh, export-to-new-doc, and save-back-to-linked-doc workflows.",
-          useWhen: "The source of truth lives in Google Docs and you need import, export, save, warning, or conflict state to stay visible.",
+          description: "A live Google Docs bridge that the Visual Navigator can open before Drive Import, rescan, refresh, export-to-new-doc, and save-back-to-linked-doc workflows begin.",
+          useWhen: "The source of truth lives in Google Docs and you want the navigator to open the right workflow surface before sync, import, export, or save decisions.",
         };
       }
 
@@ -1895,7 +1952,7 @@ const enUpdatedGuideContent: GuideContent = {
       if (card.title === "Review changes safely") {
         return {
           ...card,
-          description: "Switch to Advanced only when History, Patch Review, AI, or structured JSON and YAML are actually needed.",
+          description: "Switch to Advanced only when History, Patch Review, AI, Visual Navigator, or structured JSON and YAML are actually needed.",
         };
       }
 
@@ -2038,6 +2095,42 @@ const koShareAndExportSection: GuideSection = {
   ],
   summary: "내보내기 surface는 단순 다운로드 버튼보다 넓습니다. 빠른 공유, clipboard interchange, durable Docsy state, output-only deliverable을 함께 포함합니다.",
   title: "공유와 내보내기",
+};
+
+const koVisualNavigatorSection: GuideSection = {
+  audience: ["advanced"],
+  bullets: [
+    "Visual Navigator는 AI Assistant 안에 있으며, 합성된 편집기 요약이 아니라 실제로 보이는 Docsy viewport를 기준으로 동작합니다.",
+    "v1은 browser-only, Docsy-only, screenshot 기반이므로 임의의 웹사이트나 데스크톱 앱 전체를 조작하는 범용 agent는 아닙니다.",
+    "Gemini는 한 번에 하나의 bounded browser action만 선택하므로 실행 흐름이 눈에 보이고, 중단하거나 따라가기도 쉽습니다.",
+    "navigator는 Google Workspace나 Patch Review 같은 workflow surface를 열 수 있지만, 문서 변경의 최종 수락은 기존 review-first 흐름으로 넘겨집니다.",
+  ],
+  id: "visual-navigator",
+  steps: [
+    "Advanced로 전환한 뒤 AI Assistant를 열고 Navigator 탭으로 이동합니다.",
+    "Google Workspace나 Patch Review를 여는 것처럼 화면에서 보이는 UI task를 구체적으로 입력합니다.",
+    "Docsy가 현재 viewport를 캡처하고, Gemini가 다음 action 하나를 고르고, 실행과 재캡처를 반복하는 흐름을 확인합니다.",
+  ],
+  summary: "Visual Navigator는 다음에 무엇을 해야 하는지 설명하는 데서 끝나지 않고, 현재 보이는 Docsy UI를 실제로 움직이게 하는 browser-side surface입니다.",
+  title: "Visual Navigator",
+};
+
+const koVisualNavigatorFaq: GuideFaqItem = {
+  answer: "Docsy에서 UI Navigator는 AI Assistant 안의 Visual Navigator를 뜻합니다. 실제로 보이는 Docsy viewport를 캡처하고, Gemini가 다음 bounded browser action 하나를 고르며, Google Workspace나 Patch Review 같은 surface를 열 수 있습니다. 범용 cross-app agent는 아닙니다.",
+  question: "Docsy에서 UI Navigator는 정확히 무엇을 뜻하나요?",
+};
+
+const koVisualNavigatorScenario: GuideScenarioItem = {
+  audience: ["advanced"],
+  caution: "범용 agent처럼 생각하지 말고 Docsy UI operator로 이해하는 것이 맞습니다. v1은 현재 보이는 Docsy 웹 UI 안에서만 bounded screenshot-driven step으로 동작합니다.",
+  role: "Docsy가 보이는 UI를 대신 조작해 주길 원하는 사용자",
+  steps: [
+    "Advanced로 전환하고 AI Assistant를 엽니다.",
+    "Navigator 탭에서 Google Workspace나 Patch Review를 여는 것처럼 구체적인 UI task를 요청합니다.",
+    "overlay history를 보면서 실행을 따라가고, 이후 문서 변경은 review-first surface에서 계속 처리합니다.",
+  ],
+  summary: "새로운 UI Navigator 기능을 가장 빠르게 이해하는 방법은 기존 Docsy workflow 안에서 surface 하나를 navigator로 열어 보는 것입니다.",
+  title: "navigator로 workflow surface 열기",
 };
 
 const koUpdatedGuideContent: GuideContent = {
@@ -2192,5 +2285,28 @@ const koUpdatedGuideContent: GuideContent = {
   },
 };
 
+const koGuideContentWithNavigator: GuideContent = {
+  ...koUpdatedGuideContent,
+  guidePage: {
+    ...koUpdatedGuideContent.guidePage,
+    faqItems: mergeGuideFaqItems(
+      koUpdatedGuideContent.guidePage.faqItems,
+      [koVisualNavigatorFaq],
+      "prepend",
+    ),
+    heroDescription: "이 가이드는 Docsy를 실제 작업 순서로 설명합니다. 기본 Beginner surface에서 시작한 뒤, 새 Visual Navigator를 거쳐, 필요할 때만 Advanced review, Google Workspace, multi-document maintenance로 확장하는 흐름을 기준으로 정리했습니다.",
+    scenarioItems: mergeScenarioItems(
+      koUpdatedGuideContent.guidePage.scenarioItems,
+      [koVisualNavigatorScenario],
+      "prepend",
+    ),
+    sections: insertGuideSectionAfter(
+      koUpdatedGuideContent.guidePage.sections,
+      "profiles-and-availability",
+      koVisualNavigatorSection,
+    ),
+  },
+};
+
 export const getGuideContent = (locale: Locale): GuideContent =>
-  locale === "ko" ? koUpdatedGuideContent : enUpdatedGuideContent;
+  locale === "ko" ? koGuideContentWithNavigator : enUpdatedGuideContent;

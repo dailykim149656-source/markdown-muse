@@ -54,7 +54,7 @@ const WorkspaceImportDialog = ({
   query,
 }: WorkspaceImportDialogProps) => (
   <Dialog onOpenChange={onOpenChange} open={open}>
-    <DialogContent className="max-w-4xl">
+    <DialogContent className="max-w-[95vw]">
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2">
           <FileDown className="h-5 w-5" />

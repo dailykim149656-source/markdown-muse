@@ -156,6 +156,23 @@ const Landing = () => {
       title: t("landing.profiles.advancedTitle"),
     },
   ]), [t]);
+  const navigatorSteps = useMemo(() => ([
+    {
+      description: t("landing.navigator.captureDescription"),
+      icon: Layout,
+      title: t("landing.navigator.captureTitle"),
+    },
+    {
+      description: t("landing.navigator.chooseDescription"),
+      icon: Sparkles,
+      title: t("landing.navigator.chooseTitle"),
+    },
+    {
+      description: t("landing.navigator.executeDescription"),
+      icon: Shield,
+      title: t("landing.navigator.executeTitle"),
+    },
+  ]), [t]);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
@@ -316,6 +333,61 @@ const Landing = () => {
           </motion.div>
         </div>
       </motion.section>
+
+      <section className="px-6 pb-16 sm:px-10">
+        <div className="mx-auto max-w-6xl rounded-3xl border border-border bg-card p-6 shadow-sm sm:p-8">
+          <motion.div
+            className="mb-8 text-center"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            <span className="mb-4 inline-block rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+              {t("landing.navigator.badge")}
+            </span>
+            <h2 className="mb-4 text-3xl font-bold sm:text-4xl">{t("landing.navigator.title")}</h2>
+            <p className="mx-auto max-w-3xl text-lg text-muted-foreground">{t("landing.navigator.description")}</p>
+          </motion.div>
+
+          <motion.div
+            className="grid gap-5 md:grid-cols-3"
+            initial="hidden"
+            variants={staggerContainer}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            {navigatorSteps.map(({ description, icon: Icon, title }, index) => (
+              <motion.div
+                className="rounded-2xl border border-border/70 bg-muted/20 p-5"
+                custom={index}
+                key={title}
+                variants={fadeUp}
+              >
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500/15 to-sky-500/15 text-emerald-600 dark:text-emerald-400">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <h3 className="text-lg font-semibold">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+              </motion.div>
+            ))}
+          </motion.div>
+
+          <motion.div
+            className="mt-6 flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/20 px-5 py-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between"
+            initial="hidden"
+            variants={fadeUp}
+            viewport={{ margin: "-60px", once: true }}
+            whileInView="visible"
+          >
+            <p className="max-w-3xl leading-6">{t("landing.navigator.guideHint")}</p>
+            <Button className="shrink-0 rounded-xl" onClick={() => navigate("/guide")} size="sm" variant="outline">
+              {t("guide.nav")}
+              <ArrowRight className="ml-2 h-3.5 w-3.5" />
+            </Button>
+          </motion.div>
+        </div>
+      </section>
 
       <section className="px-6 pb-16 sm:px-10">
         <div className="mx-auto max-w-6xl">
