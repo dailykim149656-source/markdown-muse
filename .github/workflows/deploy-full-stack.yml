@@ -274,6 +274,12 @@ jobs:
           ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
           echo "Active gcloud account: ${ACTIVE_ACCOUNT}"
 
+      - name: Ensure AI runtime resources
+        id: ai-resources
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: bash scripts/gcp/ensure-ai-runtime-resources.sh
+
       - name: Deploy AI service via Cloud Build
         id: ai
         run: |

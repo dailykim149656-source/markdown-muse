@@ -822,6 +822,23 @@ const buildAgentStatusResponse = ({
   },
 });
 
+const logGeminiRequestFailure = ({
+  error,
+  phase,
+  requestId,
+}: {
+  error: unknown;
+  phase: "executor" | "planner";
+  requestId: string;
+}) => {
+  const statusCode = getGeminiErrorStatusCode(error);
+  const message = sanitizeLogMessage(error instanceof Error ? error.message : String(error));
+  console.error(
+    `[LiveAgent] Gemini ${phase} failed requestId=${requestId} statusCode=${statusCode ?? "unknown"} message=${message}`,
+    error,
+  );
+};
+
 const buildPlannerFollowupResponse = ({
   locale,
   planner,
@@ -1037,6 +1054,11 @@ export const handleAgentTurn = async (
       };
     }
   } catch (error) {
+    logGeminiRequestFailure({
+      error,
+      phase: "planner",
+      requestId,
+    });
     return normalizeAgentTurnResponse({
       availableImportTargets: [],
       driveCandidates: [],
@@ -1097,6 +1119,11 @@ export const handleAgentTurn = async (
 
     return normalizedResponse;
   } catch (error) {
+    logGeminiRequestFailure({
+      error,
+      phase: "executor",
+      requestId,
+    });
     return normalizeAgentTurnResponse({
       availableImportTargets: [],
       driveCandidates: [],

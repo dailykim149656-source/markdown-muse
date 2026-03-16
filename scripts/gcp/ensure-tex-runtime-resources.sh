@@ -12,7 +12,17 @@ require_env() {
 
 require_env "PROJECT_ID"
 require_env "GCP_REGION"
-require_env "RUN_SERVICE_ACCOUNT"
+
+RUN_SERVICE_ACCOUNT="${RUN_SERVICE_ACCOUNT:-}"
+if [[ -z "${RUN_SERVICE_ACCOUNT}" ]]; then
+  PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
+  if [[ -z "${PROJECT_NUMBER}" ]]; then
+    echo "Unable to resolve project number for ${PROJECT_ID}." >&2
+    exit 1
+  fi
+
+  RUN_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+fi
 
 TEX_PREVIEW_BUCKET="${TEX_PREVIEW_BUCKET:-${PROJECT_ID}-docsy-tex-preview}"
 TEX_TASK_QUEUE="${TEX_TASK_QUEUE:-tex-compile}"
