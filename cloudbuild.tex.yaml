@@ -94,16 +94,6 @@ steps:
           --service-account="${_RUN_SERVICE_ACCOUNT}" \
           --env-vars-file=/workspace/tex-service-env.yaml \
           --update-secrets="TEX_SERVICE_AUTH_TOKEN=${_TEX_SERVICE_AUTH_TOKEN_SECRET}:latest"
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
-    entrypoint: gcloud
-    args:
-      - run
-      - services
-      - add-iam-policy-binding
-      - ${_SERVICE_NAME}
-      - --region=${_REGION}
-      - --member=serviceAccount:${_CALLER_SERVICE_ACCOUNT}
-      - --role=roles/run.invoker
 substitutions:
   _REGION: asia-northeast3
   _SERVICE_NAME: docsy-tex
@@ -131,7 +121,6 @@ substitutions:
   _TEX_SERVICE_AUTH_TOKEN_SECRET: tex-service-auth-token
   _NODE_OPTIONS: "--max-old-space-size=512"
   _WORKER_NODE_OPTIONS: "--max-old-space-size=512"
-  _CALLER_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
   _RUN_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
 images:
   - ${_IMAGE_URI}

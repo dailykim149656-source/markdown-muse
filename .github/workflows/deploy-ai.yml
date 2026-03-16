@@ -290,6 +290,8 @@ jobs:
           done
 
       - name: Verify AI runtime smoke on direct Cloud Run URL
+        id: ai_runtime_smoke
+        continue-on-error: true
         run: |
           set -euo pipefail
           for i in {1..10}; do
@@ -305,7 +307,7 @@ jobs:
           exit 1
 
       - name: Dump recent AI Cloud Run error logs on smoke failure
-        if: ${{ failure() }}
+        if: ${{ always() && steps.ai_runtime_smoke.outcome == 'failure' }}
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -314,8 +316,13 @@ jobs:
             --region "${GCP_REGION}" \
             --project "${{ secrets.GCP_PROJECT_ID }}" \
             --freshness=30m \
-            --limit=50 \
-            --log-filter="severity>=ERROR"
+            --limit=100
+
+      - name: Fail if AI runtime smoke failed
+        if: ${{ always() && steps.ai_runtime_smoke.outcome == 'failure' }}
+        run: |
+          echo "AI runtime smoke failed. See the Cloud Run log dump above for the underlying Gemini error."
+          exit 1
 
       - name: Verify AI to TeX proxy health
         run: |

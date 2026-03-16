@@ -152,7 +152,7 @@ jobs:
           echo "  app_token_secret: ${TEX_SERVICE_AUTH_TOKEN_SECRET}"
 
           IMAGE_URI="${GCP_REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPOSITORY}/${TEX_SERVICE_NAME}:latest"
-          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_SERVICE_NAME=%s|_WORKER_SERVICE_NAME=%s|_TEX_COMPILE_TIMEOUT_MS=%s|_TEX_MAX_SOURCE_BYTES=%s|_TEX_MAX_REQUEST_BYTES=%s|_TEX_MAX_CONCURRENCY=%s|_TEX_ALLOW_ALL_PACKAGES=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_PREVIEW_BUCKET=%s|_TEX_PREVIEW_URL_TTL_SECONDS=%s|_TEX_TASK_QUEUE=%s|_TEX_TASK_LOCATION=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_RUN_SERVICE_ACCOUNT=%s|_CALLER_SERVICE_ACCOUNT=%s' \
+          SUBSTITUTIONS=$(printf '^|^_IMAGE_URI=%s|_REGION=%s|_SERVICE_NAME=%s|_WORKER_SERVICE_NAME=%s|_TEX_COMPILE_TIMEOUT_MS=%s|_TEX_MAX_SOURCE_BYTES=%s|_TEX_MAX_REQUEST_BYTES=%s|_TEX_MAX_CONCURRENCY=%s|_TEX_ALLOW_ALL_PACKAGES=%s|_TEX_ALLOW_RAW_DOCUMENT=%s|_TEX_ALLOW_RESTRICTED_COMMANDS=%s|_TEX_ALLOWED_PACKAGES=%s|_TEX_PREVIEW_BUCKET=%s|_TEX_PREVIEW_URL_TTL_SECONDS=%s|_TEX_TASK_QUEUE=%s|_TEX_TASK_LOCATION=%s|_TEX_SERVICE_AUTH_TOKEN_SECRET=%s|_RUN_SERVICE_ACCOUNT=%s' \
             "$IMAGE_URI" \
             "$GCP_REGION" \
             "$TEX_SERVICE_NAME" \
@@ -170,13 +170,22 @@ jobs:
             "${{ steps.tex-resources.outputs.task_queue }}" \
             "${{ steps.tex-resources.outputs.task_location }}" \
             "$TEX_SERVICE_AUTH_TOKEN_SECRET" \
-            "$RUN_SERVICE_ACCOUNT" \
             "$RUN_SERVICE_ACCOUNT")
 
           gcloud builds submit \
             --config cloudbuild.tex.yaml \
             --substitutions="${SUBSTITUTIONS}" \
             .
+
+          if ! gcloud run services add-iam-policy-binding "${TEX_SERVICE_NAME}" \
+            --region "${GCP_REGION}" \
+            --member "serviceAccount:${RUN_SERVICE_ACCOUNT}" \
+            --role "roles/run.invoker" >/dev/null; then
+            ACTIVE_ACCOUNT="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' | head -n 1)"
+            echo "Unable to grant roles/run.invoker on ${TEX_SERVICE_NAME} to ${RUN_SERVICE_ACCOUNT}."
+            echo "Grant that role with a project admin, or allow ${ACTIVE_ACCOUNT} to update Cloud Run IAM."
+            exit 1
+          fi
 
           TEX_URL="$(gcloud run services describe ${TEX_SERVICE_NAME} --region ${GCP_REGION} --format='value(status.url)')"
 
@@ -506,6 +515,8 @@ jobs:
           done
 
       - name: Verify AI runtime smoke on direct Cloud Run URL
+        id: ai_runtime_smoke
+        continue-on-error: true
         run: |
           set -euo pipefail
           for i in {1..10}; do
@@ -521,7 +532,7 @@ jobs:
           exit 1
 
       - name: Dump recent AI Cloud Run error logs on smoke failure
-        if: ${{ failure() }}
+        if: ${{ always() && steps.ai_runtime_smoke.outcome == 'failure' }}
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -530,8 +541,13 @@ jobs:
             --region "${GCP_REGION}" \
             --project "${{ secrets.GCP_PROJECT_ID }}" \
             --freshness=30m \
-            --limit=50 \
-            --log-filter="severity>=ERROR"
+            --limit=100
+
+      - name: Fail if AI runtime smoke failed
+        if: ${{ always() && steps.ai_runtime_smoke.outcome == 'failure' }}
+        run: |
+          echo "AI runtime smoke failed. See the Cloud Run log dump above for the underlying Gemini error."
+          exit 1
 
       - name: Verify AI to TeX proxy health
         run: |
