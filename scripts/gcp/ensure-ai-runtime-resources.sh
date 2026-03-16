@@ -33,9 +33,14 @@ echo "  required_role: ${VERTEX_API_ROLE}"
 
 SERVICE_STATE=""
 SERVICE_STATE_OUTPUT=""
-if SERVICE_STATE_OUTPUT="$(gcloud services describe "${VERTEX_API_SERVICE}" --project "${PROJECT_ID}" --format='value(state)' 2>&1)"; then
+if SERVICE_STATE_OUTPUT="$(gcloud services list --enabled --project "${PROJECT_ID}" --filter="config.name:${VERTEX_API_SERVICE}" --format='value(config.name)' 2>&1)"; then
   SERVICE_STATE="$(printf '%s' "${SERVICE_STATE_OUTPUT}" | tr -d '\r')"
-  echo "  service_state: ${SERVICE_STATE}"
+  if [[ "${SERVICE_STATE}" == "${VERTEX_API_SERVICE}" ]]; then
+    echo "  service_state: ENABLED"
+  else
+    echo "  service_state: DISABLED"
+    SERVICE_STATE="DISABLED"
+  fi
 else
   echo "Warning: unable to inspect ${VERTEX_API_SERVICE} state for ${PROJECT_ID}." >&2
   echo "${SERVICE_STATE_OUTPUT}" >&2
@@ -66,13 +71,12 @@ if ROLE_CHECK_OUTPUT="$(gcloud projects get-iam-policy "${PROJECT_ID}" --flatten
       --member="serviceAccount:${RUN_SERVICE_ACCOUNT}" \
       --role="${VERTEX_API_ROLE}" \
       2>&1 >/dev/null)"; then
-      echo "${VERTEX_API_ROLE} is not currently bound to ${RUN_SERVICE_ACCOUNT}, and this deploy principal could not grant it." >&2
-      echo "Grant ${VERTEX_API_ROLE} to ${RUN_SERVICE_ACCOUNT} with a project admin before rerunning the deploy." >&2
+      echo "Warning: ${VERTEX_API_ROLE} is not currently bound to ${RUN_SERVICE_ACCOUNT}, and this deploy principal could not grant it." >&2
+      echo "Grant ${VERTEX_API_ROLE} to ${RUN_SERVICE_ACCOUNT} with a project admin if the runtime smoke check still fails." >&2
       echo "${BIND_OUTPUT}" >&2
-      exit 1
+    else
+      echo "  role_binding: granted"
     fi
-
-    echo "  role_binding: granted"
   fi
 else
   echo "Warning: unable to inspect IAM bindings for ${RUN_SERVICE_ACCOUNT} on ${PROJECT_ID}." >&2

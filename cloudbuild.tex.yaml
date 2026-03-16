@@ -24,7 +24,9 @@ steps:
           exit 1
         fi
 
-        if ! gcloud tasks queues describe "${_TEX_TASK_QUEUE}" --location="${_TEX_TASK_LOCATION}" >/dev/null 2>&1; then
+        if [ -z "${_TEX_TASK_QUEUE}" ] || [ -z "${_TEX_TASK_LOCATION}" ]; then
+          echo "Cloud Tasks queue is not configured. TeX service will use local background processing."
+        elif ! gcloud tasks queues describe "${_TEX_TASK_QUEUE}" --location="${_TEX_TASK_LOCATION}" >/dev/null 2>&1; then
           gcloud tasks queues create "${_TEX_TASK_QUEUE}" --location="${_TEX_TASK_LOCATION}"
         fi
 
