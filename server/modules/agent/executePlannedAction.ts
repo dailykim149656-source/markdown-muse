@@ -1152,7 +1152,7 @@ const executeDelegatedAction = (
   const delegatedTarget = planner.action === "compare_documents" || planner.action === "suggest_document_updates"
     ? (
       planner.target?.documentId
-        ? context.request.availableTargetDocuments.find((document) => document.documentId === planner.target?.documentId) || null
+        ? (context.request.availableTargetDocuments || []).find((document) => document.documentId === planner.target?.documentId) || null
         : preRouteHints.localTarget
     )
     : null;

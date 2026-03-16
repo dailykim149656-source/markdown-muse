@@ -38,7 +38,7 @@ const summarizeDriveReferences = (
 }));
 
 const summarizeAvailableTargetDocuments = (request: AgentTurnRequest) =>
-  request.availableTargetDocuments.map((document) => ({
+  (request.availableTargetDocuments || []).map((document) => ({
     documentId: document.documentId,
     fileName: document.fileName,
     mode: document.mode,
