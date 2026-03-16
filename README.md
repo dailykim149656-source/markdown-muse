@@ -53,6 +53,35 @@ Current submission priorities:
 5. The app opens the patch review flow.
 6. The user accepts or rejects the change.
 
+## Architecture Diagram
+
+Docsy's deployed architecture uses a React + Vite frontend served from Firebase Hosting and a separate Node.js AI backend deployed on Cloud Run. The backend accesses Gemini on Vertex AI through the Google GenAI SDK, stores shared Google Workspace session and state data in Firestore, and brokers Google Docs/Drive plus LaTeX service requests without exposing credentials to the browser.
+
+For hackathon submission, export the diagram below as a PNG and upload it via `File Upload`.
+
+```mermaid
+flowchart LR
+  U["User in Browser"] --> FE["Docsy Frontend<br/>React + Vite<br/>Firebase Hosting"]
+
+  FE -->|"/api"| API["Docsy AI Backend<br/>Node.js<br/>Cloud Run"]
+  FE -->|"document context<br/>viewport screenshot<br/>UI action request"| API
+
+  API -->|"Google GenAI SDK"| GEM["Gemini on Vertex AI"]
+  GEM -->|"structured JSON action<br/>patch proposal"| API
+  API -->|"assistant response<br/>patch data"| FE
+
+  API -->|"session + workspace state"| DB["Firestore"]
+  DB -->|"shared state lookup"| API
+
+  API -->|"OAuth + Docs/Drive operations"| GW["Google OAuth + Google Docs/Drive"]
+  GW -->|"auth callback + document data"| API
+
+  API -->|"TeX preview / validate / export"| TEX["TeX Service<br/>separate Cloud Run service"]
+  TEX -->|"job result / PDF / preview"| API
+```
+
+For more detail, see [Hackathon Architecture](docs/architecture-hackathon-2026-03-11.md) and the [GCP deployment guide](docs/gcp-deployment.md).
+
 ## Repository structure
 
 ```text
