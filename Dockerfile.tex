@@ -24,10 +24,12 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+RUN npm run build:server \
+  && npm prune --omit=dev
 
 ENV NODE_ENV=production
 ENV PORT=8081
 
 EXPOSE 8081
 
-CMD ["node", "--import", "tsx", "server/texService.ts"]
+CMD ["node", "server-dist/texService.js"]

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"F:\\\\Docsy-document_editor\\\\markdown-muse\\\\src\\\\components\\\\editor\\\\VisualNavigatorOverlay*\")",
+      "Bash(npx vitest run)",
+      "Bash(npx vitest:*)"
+    ]
+  }
+}

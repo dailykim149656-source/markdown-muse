@@ -329,7 +329,8 @@ const buildTopSectionTargets = ({
       const sectionTitleOverlap = scoreOverlap(terms, range.headingTitle) * 6;
       const fieldBoost = retrievalContext.topFieldCandidates.filter((candidate) => candidate.sectionId === range.sectionId).length * 4;
       const depthBoost = Math.max(0, 4 - range.level);
-      const graphScore = sectionTitleOverlap + fieldBoost + depthBoost + issueBoost + referenceBoost;
+      const structuralBaseScore = 1;
+      const graphScore = structuralBaseScore + sectionTitleOverlap + fieldBoost + depthBoost + issueBoost + referenceBoost;
       const score = retrievalScore + graphScore;
 
       return {

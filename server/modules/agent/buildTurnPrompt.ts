@@ -13,6 +13,10 @@ const localePromptSuffix = (locale: Locale) => (locale === "ko" ? "Respond in Ko
 
 const ENGLISH_NEW_DRAFT_PATTERN = /\b(cover letter|new document|new draft|outline|resume|self-introduction|statement of purpose|template)\b/i;
 const KOREAN_NEW_DRAFT_PATTERN = /(?:\uC790\uAE30\uC18C\uAC1C\uC11C|\uC774\uB825\uC11C|\uC591\uC2DD|\uD15C\uD50C\uB9BF|\uCD08\uC548|\uC0C8\s*\uBB38\uC11C|\uC0C8\s*\uCD08\uC548|\uB9CC\uB4E4\uC5B4\s*\uC918|\uC791\uC131(?:\uD574)?\s*\uC918|\uC0DD\uC131)/u;
+const ENGLISH_SUMMARY_PATTERN = /\b(summarize|summary|recap|synopsis|executive summary)\b/i;
+const KOREAN_SUMMARY_PATTERN = /(?:\uC694\uC57D|\uC815\uB9AC(?:\uD574)?\s*\uC918|\uC815\uB9AC\uD574\s*\uC918|\uC815\uB9AC\uD574\s*\uC8FC\uC138\uC694)/u;
+const ENGLISH_HANDOVER_PATTERN = /\b(handover|handover notes)\b/i;
+const KOREAN_HANDOVER_PATTERN = /(?:\uC778\uC218\uC778\uACC4\uC11C|\uC778\uC218\uC778\uACC4(?:\s*\uB178\uD2B8)?)/u;
 const ENGLISH_CURRENT_DOCUMENT_UPDATE_PATTERN = /\b(update|revise|edit|apply|reflect|fill|set|change|insert|replace)\b[\s\S]{0,80}\b(current document|current doc|document|doc|section|form|template)\b|\b(current document|current doc|document|doc|section|form|template)\b[\s\S]{0,80}\b(update|revise|edit|apply|reflect|fill|set|change|insert|replace)\b/i;
 const KOREAN_CURRENT_DOCUMENT_UPDATE_NOUNS = [
   "\uBB38\uC11C",
@@ -162,6 +166,28 @@ export const isExplicitNewDraftRequest = (latestUserMessage: string) => {
 
 export const hasExplicitNewDraftRequestInConversation = (messages: AgentTurnRequest["messages"]) =>
   messages.some((message) => message.role === "user" && isExplicitNewDraftRequest(message.text));
+
+export const isExplicitSummaryRequest = (latestUserMessage: string) => {
+  const normalized = normalizeIntentText(latestUserMessage);
+  return ENGLISH_SUMMARY_PATTERN.test(normalized) || KOREAN_SUMMARY_PATTERN.test(latestUserMessage);
+};
+
+export const hasSummaryRequestInConversation = (messages: AgentTurnRequest["messages"]) =>
+  messages.some((message) => message.role === "user" && isExplicitSummaryRequest(message.text));
+
+export const findLatestSummaryRequestInConversation = (messages: AgentTurnRequest["messages"]) =>
+  [...messages]
+    .reverse()
+    .find((message) => message.role === "user" && isExplicitSummaryRequest(message.text))
+    ?.text
+    ?.trim() || null;
+
+export const isExplicitHandoverDocumentRequest = (latestUserMessage: string) =>
+  ENGLISH_HANDOVER_PATTERN.test(normalizeIntentText(latestUserMessage))
+  || KOREAN_HANDOVER_PATTERN.test(latestUserMessage);
+
+export const hasHandoverDocumentRequestInConversation = (messages: AgentTurnRequest["messages"]) =>
+  messages.some((message) => message.role === "user" && isExplicitHandoverDocumentRequest(message.text));
 
 export const isExplicitCurrentDocumentUpdateRequest = (latestUserMessage: string) => {
   const normalized = normalizeIntentText(latestUserMessage);

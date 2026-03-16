@@ -28,6 +28,9 @@ steps:
         TEX_ALLOW_RAW_DOCUMENT: "${_TEX_ALLOW_RAW_DOCUMENT}"
         TEX_ALLOW_RESTRICTED_COMMANDS: "${_TEX_ALLOW_RESTRICTED_COMMANDS}"
         TEX_ALLOWED_PACKAGES: "${_TEX_ALLOWED_PACKAGES}"
+        TEX_PREVIEW_BUCKET: "${_TEX_PREVIEW_BUCKET}"
+        TEX_PREVIEW_URL_TTL_SECONDS: "${_TEX_PREVIEW_URL_TTL_SECONDS}"
+        NODE_OPTIONS: "${_NODE_OPTIONS}"
         EOF
 
         gcloud run deploy "${_SERVICE_NAME}" \
@@ -36,6 +39,10 @@ steps:
           --platform=managed \
           --no-allow-unauthenticated \
           --port=8081 \
+          --memory="${_RUN_MEMORY}" \
+          --cpu="${_RUN_CPU}" \
+          --concurrency="${_RUN_CONCURRENCY}" \
+          --max-instances="${_RUN_MAX_INSTANCES}" \
           --ingress=all \
           --service-account="${_RUN_SERVICE_ACCOUNT}" \
           --env-vars-file=/workspace/tex-service-env.yaml \
@@ -53,15 +60,22 @@ steps:
 substitutions:
   _REGION: asia-northeast3
   _SERVICE_NAME: docsy-tex
+  _RUN_MEMORY: 2Gi
+  _RUN_CPU: "1"
+  _RUN_CONCURRENCY: "1"
+  _RUN_MAX_INSTANCES: "5"
   _TEX_COMPILE_TIMEOUT_MS: "15000"
   _TEX_MAX_SOURCE_BYTES: "300000"
-  _TEX_MAX_REQUEST_BYTES: "400000"
-  _TEX_MAX_CONCURRENCY: "2"
+  _TEX_MAX_REQUEST_BYTES: "300000"
+  _TEX_MAX_CONCURRENCY: "1"
   _TEX_ALLOW_ALL_PACKAGES: "true"
   _TEX_ALLOW_RAW_DOCUMENT: "true"
   _TEX_ALLOW_RESTRICTED_COMMANDS: "false"
   _TEX_ALLOWED_PACKAGES: "amsmath,amssymb,amsthm,array,booktabs,caption,enumitem,etoolbox,fancyhdr,float,fontspec,geometry,graphicx,hyperref,inputenc,latexsym,listings,longtable,makecell,mathtools,multirow,setspace,soul,tabularx,tcolorbox,titlesec,ulem,xcolor,xeCJK"
+  _TEX_PREVIEW_BUCKET: ""
+  _TEX_PREVIEW_URL_TTL_SECONDS: "900"
   _TEX_SERVICE_AUTH_TOKEN_SECRET: tex-service-auth-token
+  _NODE_OPTIONS: "--max-old-space-size=384"
   _CALLER_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
   _RUN_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
 images:

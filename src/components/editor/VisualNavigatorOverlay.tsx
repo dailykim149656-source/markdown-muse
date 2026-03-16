@@ -1,22 +1,121 @@
-import { Loader2, Navigation, ShieldAlert, Square, X } from "lucide-react";
+import { Loader2, MoreHorizontal, Navigation, ShieldAlert, Sparkles, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { VisualNavigatorRuntimeState } from "@/hooks/useVisualNavigator";
+import type { NavigatorGoalSuggestion } from "@/types/visualNavigator";
+import { cn } from "@/lib/utils";
 
 interface VisualNavigatorOverlayProps {
+  onOpenFullNavigator?: () => void;
   visualNavigator: VisualNavigatorRuntimeState;
 }
 
+const MAX_QUICK_GOALS = 4;
+
+const QuickGoalChip = ({
+  goal,
+  onSelect,
+}: {
+  goal: NavigatorGoalSuggestion & { deemphasized?: boolean };
+  onSelect: (goal: NavigatorGoalSuggestion) => void;
+}) => (
+  <button
+    className={cn(
+      "rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium transition-colors hover:bg-accent/40",
+      goal.deemphasized ? "opacity-65" : null,
+    )}
+    onClick={() => void onSelect(goal)}
+    type="button"
+  >
+    {goal.label}
+  </button>
+);
+
 const VisualNavigatorOverlay = ({
+  onOpenFullNavigator,
   visualNavigator,
 }: VisualNavigatorOverlayProps) => {
-  const shouldRender = visualNavigator.isRunning
+  const isActive = visualNavigator.isRunning
     || visualNavigator.pendingConfirmation !== null
     || visualNavigator.history.length > 0
     || visualNavigator.stopReason !== null
     || visualNavigator.lastError !== null;
 
-  if (!shouldRender) {
-    return null;
+  const hasPostCompletionSuggestion = !visualNavigator.isRunning
+    && visualNavigator.postCompletionSuggestion !== null;
+
+  if (!isActive && !visualNavigator.quickStartExpanded) {
+    return (
+      <div
+        className="fixed bottom-4 right-4 z-[80]"
+        data-visual-ignore="true"
+        data-visual-target="visual-navigator-overlay"
+      >
+        <button
+          className="flex items-center gap-2 rounded-full border border-border bg-background/95 px-3 py-2 text-xs font-medium shadow-lg backdrop-blur transition-colors hover:bg-accent/40"
+          onClick={() => visualNavigator.setQuickStartExpanded(true)}
+          type="button"
+        >
+          <Navigation className="h-3.5 w-3.5" />
+          Navigator
+        </button>
+      </div>
+    );
+  }
+
+  if (!isActive && visualNavigator.quickStartExpanded) {
+    const quickGoals = [
+      ...visualNavigator.recentGoals.slice(0, 3),
+      ...visualNavigator.presetGoals.filter(
+        (p) => !p.deemphasized && !visualNavigator.recentGoals.some((r) => r.intent === p.intent),
+      ),
+    ].slice(0, MAX_QUICK_GOALS);
+
+    return (
+      <div
+        className="fixed bottom-4 right-4 z-[80] w-[22rem] rounded-2xl border border-border bg-background/95 shadow-2xl backdrop-blur"
+        data-visual-ignore="true"
+        data-visual-target="visual-navigator-overlay"
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Navigation className="h-4 w-4" />
+            Visual Navigator
+          </div>
+          <div className="flex items-center gap-1">
+            {onOpenFullNavigator && (
+              <Button className="h-7 w-7 p-0" onClick={onOpenFullNavigator} size="sm" type="button" variant="ghost">
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            <Button className="h-7 w-7 p-0" onClick={() => visualNavigator.setQuickStartExpanded(false)} size="sm" type="button" variant="ghost">
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-3 px-4 py-3">
+          <Button
+            className="w-full"
+            onClick={() => void visualNavigator.runAutoSuggest()}
+            size="sm"
+            type="button"
+          >
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            Auto
+          </Button>
+          {quickGoals.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {quickGoals.map((goal, index) => (
+                <QuickGoalChip
+                  goal={goal}
+                  key={`quick-${index}-${goal.intent}`}
+                  onSelect={visualNavigator.runGoal}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -75,7 +174,34 @@ const VisualNavigatorOverlay = ({
             </div>
           </div>
         )}
-        {(visualNavigator.lastError || visualNavigator.stopReason) && !visualNavigator.isRunning && (
+        {hasPostCompletionSuggestion && (
+          <div className="space-y-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
+            <div className="flex items-start gap-2">
+              <Sparkles className="mt-0.5 h-4 w-4 shrink-0" />
+              <p>Next: {visualNavigator.postCompletionSuggestion!.label}</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                onClick={() => void visualNavigator.runGoal(visualNavigator.postCompletionSuggestion!)}
+                size="sm"
+                type="button"
+              >
+                Run
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => visualNavigator.clearHistory()}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
+        {(visualNavigator.lastError || visualNavigator.stopReason) && !visualNavigator.isRunning && !hasPostCompletionSuggestion && (
           <div className="rounded-lg border border-border/70 px-3 py-2 text-sm">
             {visualNavigator.lastError || visualNavigator.stopReason}
           </div>

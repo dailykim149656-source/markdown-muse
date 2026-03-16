@@ -143,6 +143,7 @@ describe("normalizeAgentTurnResponse", () => {
         effect: {
           capability: "summarize_document",
           createDocumentAfter: true,
+          createDocumentKind: "handover",
           objective: "Summarize the current document.",
           type: "delegate_ai_capability",
         },
@@ -152,6 +153,7 @@ describe("normalizeAgentTurnResponse", () => {
     expect(response.effect).toEqual({
       capability: "summarize_document",
       createDocumentAfter: true,
+      createDocumentKind: "handover",
       objective: "Summarize the current document.",
       prompt: undefined,
       targetFileId: undefined,
@@ -159,6 +161,6 @@ describe("normalizeAgentTurnResponse", () => {
       targetDocumentName: undefined,
       type: "delegate_ai_capability",
     });
-    expect(response.assistantMessage.text).toContain("summary document");
+    expect(response.assistantMessage.text).toContain("handover document");
   });
 });

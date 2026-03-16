@@ -21,19 +21,40 @@ interface EditorSelectionMemoryEntry {
 
 const editorSelectionMemory = new WeakMap<Editor, EditorSelectionMemoryEntry>();
 
+const getMountedEditorView = (editor: Editor) => {
+  if (typeof HTMLElement === "undefined") {
+    return null;
+  }
+
+  try {
+    const view = editor.view;
+    const root = view.dom;
+
+    if (!(root instanceof HTMLElement)) {
+      return null;
+    }
+
+    return { root, view };
+  } catch {
+    return null;
+  }
+};
+
 const createSelectionSnapshot = (editor: Editor): EditorSelectionSnapshot => {
+  const mountedView = getMountedEditorView(editor);
   const domSelection = typeof window !== "undefined" ? window.getSelection() : null;
   if (
-    domSelection
+    mountedView
+    && domSelection
     && domSelection.rangeCount > 0
     && domSelection.anchorNode
     && domSelection.focusNode
-    && editor.view.dom.contains(domSelection.anchorNode)
-    && editor.view.dom.contains(domSelection.focusNode)
+    && mountedView.root.contains(domSelection.anchorNode)
+    && mountedView.root.contains(domSelection.focusNode)
   ) {
     try {
-      const anchorPosition = editor.view.posAtDOM(domSelection.anchorNode, domSelection.anchorOffset);
-      const focusPosition = editor.view.posAtDOM(domSelection.focusNode, domSelection.focusOffset);
+      const anchorPosition = mountedView.view.posAtDOM(domSelection.anchorNode, domSelection.anchorOffset);
+      const focusPosition = mountedView.view.posAtDOM(domSelection.focusNode, domSelection.focusOffset);
       const selection = TextSelection.create(
         editor.state.doc,
         Math.min(anchorPosition, focusPosition),

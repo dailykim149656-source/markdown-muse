@@ -12,7 +12,7 @@ export interface AiAssistantScreenshotPayload {
   capturedAt: number;
   dataBase64: string;
   height: number;
-  mimeType: "image/png";
+  mimeType: "image/jpeg" | "image/png";
   width: number;
 }
 

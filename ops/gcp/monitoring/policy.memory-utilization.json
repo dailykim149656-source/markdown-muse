@@ -1,0 +1,29 @@
+{
+  "alertStrategy": {
+    "autoClose": "1800s"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "conditionThreshold": {
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "perSeriesAligner": "ALIGN_MEAN"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "duration": "300s",
+        "filter": "resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"__SERVICE_NAME__\" AND resource.label.\"location\"=\"__REGION__\" AND metric.type=\"run.googleapis.com/container/memory/utilizations\"",
+        "thresholdValue": 0.85,
+        "trigger": {
+          "count": 1
+        }
+      },
+      "displayName": "__SERVICE_NAME__ 5m mean memory utilization > 85%"
+    }
+  ],
+  "displayName": "Cloud Run memory utilization high (__SERVICE_NAME__)",
+  "enabled": true,
+  "notificationChannels": []
+}

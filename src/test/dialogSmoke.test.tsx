@@ -29,22 +29,32 @@ const renderWithI18n = (ui: ReactNode) =>
   );
 
 const visualNavigatorStub = {
+  advancedCommandOpen: false,
   canStart: false,
   clearHistory: vi.fn(),
   confirmPendingAction: vi.fn(),
   history: [],
+  isRefreshingSuggestions: false,
   intent: "",
   isRunning: false,
   lastConfidence: null,
   lastError: null,
   lastRationale: null,
   pendingConfirmation: null,
+  presetGoals: [],
+  recentGoals: [],
+  refreshSuggestions: vi.fn(),
   rejectPendingAction: vi.fn(),
+  runGoal: vi.fn(),
+  selectedGoalIntent: null,
+  setAdvancedCommandOpen: vi.fn(),
   setIntent: vi.fn(),
   startRun: vi.fn(),
   statusText: null,
   stopReason: null,
   stopRun: vi.fn(),
+  suggestedGoals: [],
+  suggestionsError: null,
 };
 
 const liveAgentStub: ComponentProps<typeof AiAssistantDialog>["liveAgent"] = {

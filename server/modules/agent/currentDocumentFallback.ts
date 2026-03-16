@@ -83,7 +83,7 @@ export const buildDeterministicCurrentDocumentDraftResponse = ({
   locale?: Locale;
   request: AgentTurnRequest;
 }): RawAgentTurnResponse | null => {
-  if (!request.activeDocument || request.activeDocument.existingHeadings.length > 0) {
+  if (!request.activeDocument) {
     return null;
   }
 

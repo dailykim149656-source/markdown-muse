@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { exportTexPdf, getTexHealth, previewTex } from "@/lib/ai/texClient";
+import { exportTexPdf, getTexHealth, previewTex, validateTex } from "@/lib/ai/texClient";
 import { useI18n } from "@/i18n/useI18n";
 import type { EditorMode } from "@/types/document";
 import type {
@@ -26,11 +26,13 @@ interface TexValidationState {
   health: TexHealthResponse | null;
   lastValidatedAt: number | null;
   logSummary: string;
+  previewExpiresAt: number | null;
   previewUrl: string | null;
   status: TexValidationStatus;
 }
 
 const DEBOUNCE_MS = 1500;
+const PREVIEW_IDLE_MS = 5000;
 
 const createInitialState = (): TexValidationState => ({
   compileMs: null,
@@ -38,6 +40,7 @@ const createInitialState = (): TexValidationState => ({
   health: null,
   lastValidatedAt: null,
   logSummary: "",
+  previewExpiresAt: null,
   previewUrl: null,
   status: "idle",
 });
@@ -66,10 +69,13 @@ export const useTexValidation = ({
   const { t } = useI18n();
   const [state, setState] = useState<TexValidationState>(createInitialState);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const validationAbortControllerRef = useRef<AbortController | null>(null);
+  const previewAbortControllerRef = useRef<AbortController | null>(null);
   const lastValidatedHashRef = useRef<string | null>(null);
+  const lastPreviewedHashRef = useRef<string | null>(null);
+  const lastPreviewExpiresAtRef = useRef<number | null>(null);
   const healthLoadedRef = useRef(false);
-  const previewObjectUrlRef = useRef<string | null>(null);
+  const healthRef = useRef<TexHealthResponse | null>(null);
   const validationEnabled = mode === "markdown" || mode === "latex" || mode === "html";
   const sourceType = useMemo<TexSourceType>(
     () => (mode === "latex" ? "raw-latex" : "generated-latex"),
@@ -88,34 +94,41 @@ export const useTexValidation = ({
   }, []);
 
   const applyPreviewResult = useCallback((result: TexPreviewResponse) => {
-    if (result.ok && result.pdfBase64) {
-      if (previewObjectUrlRef.current) {
-        URL.revokeObjectURL(previewObjectUrlRef.current);
-      }
-
-      const binary = Uint8Array.from(atob(result.pdfBase64), (char) => char.charCodeAt(0));
-      previewObjectUrlRef.current = URL.createObjectURL(new Blob([binary], { type: "application/pdf" }));
+    if (result.ok && result.previewExpiresAt) {
+      lastPreviewExpiresAtRef.current = result.previewExpiresAt;
     }
 
-    setState((current) => ({
-      ...current,
-      compileMs: result.compileMs,
-      diagnostics: result.diagnostics,
-      lastValidatedAt: Date.now(),
-      logSummary: result.logSummary,
-      previewUrl: result.ok && previewObjectUrlRef.current ? previewObjectUrlRef.current : current.previewUrl,
-      status: result.ok ? "success" : "error",
-    }));
+    setState((current) => {
+      const clearedExpiredPreview = result.ok
+        && !result.previewUrl
+        && (current.previewExpiresAt || 0) <= Date.now();
+
+      return {
+        ...current,
+        ...(clearedExpiredPreview ? {
+          previewExpiresAt: null,
+          previewUrl: null,
+        } : {}),
+        compileMs: result.compileMs,
+        diagnostics: result.diagnostics,
+        lastValidatedAt: Date.now(),
+        logSummary: result.logSummary,
+        previewExpiresAt: result.ok ? result.previewExpiresAt || current.previewExpiresAt : current.previewExpiresAt,
+        previewUrl: result.ok && result.previewUrl ? result.previewUrl : current.previewUrl,
+        status: result.ok ? "success" : "error",
+      };
+    });
   }, []);
 
   const ensureTexHealth = useCallback(async () => {
     if (healthLoadedRef.current) {
-      return state.health;
+      return healthRef.current;
     }
 
     try {
       const health = await getTexHealth();
       healthLoadedRef.current = true;
+      healthRef.current = health;
       setState((current) => ({
         ...current,
         health,
@@ -126,25 +139,22 @@ export const useTexValidation = ({
       return health;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to reach the XeLaTeX validation service.";
+      healthRef.current = {
+        configured: false,
+        engine: "xelatex",
+        ok: false,
+      };
       setState((current) => ({
         ...current,
         compileMs: null,
         diagnostics: [],
-        health: {
-          configured: false,
-          engine: "xelatex",
-          ok: false,
-        },
+        health: healthRef.current,
         logSummary: message,
         status: "error",
       }));
-      return {
-        configured: false,
-        engine: "xelatex" as const,
-        ok: false,
-      };
+      return healthRef.current;
     }
-  }, [state.health, validationEnabled]);
+  }, [validationEnabled]);
 
   const runValidation = useCallback(async (reason: "auto" | "manual") => {
     if (!validationEnabled || !latexSource.trim()) {
@@ -173,9 +183,9 @@ export const useTexValidation = ({
       return;
     }
 
-    abortControllerRef.current?.abort();
+    validationAbortControllerRef.current?.abort();
     const nextAbortController = new AbortController();
-    abortControllerRef.current = nextAbortController;
+    validationAbortControllerRef.current = nextAbortController;
 
     setState((current) => ({
       ...current,
@@ -183,7 +193,7 @@ export const useTexValidation = ({
     }));
 
     try {
-      const result = await previewTex({
+      const result = await validateTex({
         contentHash,
         documentName,
         latex: latexSource,
@@ -197,7 +207,7 @@ export const useTexValidation = ({
       }
 
       lastValidatedHashRef.current = contentHash;
-      applyPreviewResult(result);
+      applyValidationResult(result);
     } catch (error) {
       if (nextAbortController.signal.aborted) {
         return;
@@ -217,7 +227,53 @@ export const useTexValidation = ({
         toast.error(message);
       }
     }
-  }, [applyPreviewResult, documentName, ensureTexHealth, latexSource, sourceType, t, validationEnabled]);
+  }, [applyValidationResult, documentName, ensureTexHealth, latexSource, sourceType, t, validationEnabled]);
+
+  const runPreview = useCallback(async () => {
+    if (!validationEnabled || !latexSource.trim()) {
+      return;
+    }
+
+    const health = await ensureTexHealth();
+
+    if (!health?.ok) {
+      return;
+    }
+
+    const contentHash = await hashLatexSource(latexSource);
+    const previewStillFresh = lastPreviewExpiresAtRef.current !== null
+      && lastPreviewExpiresAtRef.current > Date.now() + 60_000;
+
+    if (lastPreviewedHashRef.current === contentHash && previewStillFresh) {
+      return;
+    }
+
+    previewAbortControllerRef.current?.abort();
+    const nextAbortController = new AbortController();
+    previewAbortControllerRef.current = nextAbortController;
+
+    try {
+      const result = await previewTex({
+        contentHash,
+        documentName,
+        latex: latexSource,
+        sourceType,
+      }, {
+        signal: nextAbortController.signal,
+      });
+
+      if (nextAbortController.signal.aborted) {
+        return;
+      }
+
+      lastPreviewedHashRef.current = contentHash;
+      applyPreviewResult(result);
+    } catch {
+      if (nextAbortController.signal.aborted) {
+        return;
+      }
+    }
+  }, [applyPreviewResult, documentName, ensureTexHealth, latexSource, sourceType, validationEnabled]);
 
   useEffect(() => {
     if (!validationEnabled) {
@@ -235,26 +291,37 @@ export const useTexValidation = ({
 
     return () => {
       window.clearTimeout(timeout);
-      abortControllerRef.current?.abort();
+      validationAbortControllerRef.current?.abort();
     };
   }, [latexSource, runValidation, validationEnabled]);
 
   useEffect(() => {
+    if (!validationEnabled || !latexSource.trim()) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void runPreview();
+    }, PREVIEW_IDLE_MS);
+
+    return () => {
+      window.clearTimeout(timeout);
+      previewAbortControllerRef.current?.abort();
+    };
+  }, [latexSource, runPreview, validationEnabled]);
+
+  useEffect(() => {
     healthLoadedRef.current = false;
+    healthRef.current = null;
     lastValidatedHashRef.current = null;
+    lastPreviewedHashRef.current = null;
+    lastPreviewExpiresAtRef.current = null;
     setState((current) => ({
       ...createInitialState(),
       health: current.health,
       status: validationEnabled ? "idle" : "disabled",
     }));
   }, [documentName, sourceType, validationEnabled]);
-
-  useEffect(() => () => {
-    if (previewObjectUrlRef.current) {
-      URL.revokeObjectURL(previewObjectUrlRef.current);
-      previewObjectUrlRef.current = null;
-    }
-  }, []);
 
   const downloadCompiledPdf = useCallback(async () => {
     if (!validationEnabled || !latexSource.trim()) {

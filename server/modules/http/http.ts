@@ -22,6 +22,21 @@ interface RequestBodyOptions {
   maxBytes?: number;
 }
 
+const OBSERVED_REQUEST_BYTES = Symbol("docsyObservedRequestBytes");
+
+const parseContentLengthHeader = (value: number | string | string[] | undefined) => {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.floor(value);
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value.trim(), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+};
+
 const getAllowedOrigins = () => {
   const configured = process.env.AI_ALLOWED_ORIGIN || "http://localhost:8080";
   return parseConfiguredAllowedOrigins(configured);
@@ -148,10 +163,34 @@ const resolveMaxRequestBytes = (options?: RequestBodyOptions) => {
     : null;
 };
 
+export const getRequestContentLength = (request: IncomingMessage) =>
+  parseContentLengthHeader(request.headers["content-length"]);
+
+const setObservedRequestBytes = (request: IncomingMessage, totalBytes: number) => {
+  Object.defineProperty(request, OBSERVED_REQUEST_BYTES, {
+    configurable: true,
+    enumerable: false,
+    value: totalBytes,
+    writable: true,
+  });
+};
+
+export const getObservedRequestBytes = (request: IncomingMessage) => {
+  const observedValue = Reflect.get(request, OBSERVED_REQUEST_BYTES);
+  return typeof observedValue === "number" && Number.isFinite(observedValue)
+    ? observedValue
+    : null;
+};
+
 const readRequestBody = async (request: IncomingMessage, options?: RequestBodyOptions) => {
   const chunks: Buffer[] = [];
   const maxBytes = resolveMaxRequestBytes(options);
+  const contentLength = getRequestContentLength(request);
   let totalBytes = 0;
+
+  if (maxBytes !== null && contentLength !== null && contentLength > maxBytes) {
+    throw new HttpError(413, `Request body exceeds ${maxBytes} bytes.`);
+  }
 
   for await (const chunk of request) {
     const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
@@ -163,6 +202,8 @@ const readRequestBody = async (request: IncomingMessage, options?: RequestBodyOp
 
     chunks.push(bufferChunk);
   }
+
+  setObservedRequestBytes(request, totalBytes);
 
   return Buffer.concat(chunks).toString("utf8");
 };

@@ -18,6 +18,8 @@ const EXACT_POLICIES: Record<string, RateLimitPolicy> = {
   "POST /api/auth/google/connect": { bucket: "auth-connect", limit: 8, windowMs: 600_000 },
   "POST /api/auth/google/disconnect": { bucket: "auth-disconnect", limit: 20, windowMs: 60_000 },
   "POST /api/ai/agent/turn": { bucket: "ai-agent-turn", limit: 10, windowMs: 60_000 },
+  "POST /api/ai/navigator/suggest-goals": { bucket: "ai-navigator-suggest", limit: 10, windowMs: 60_000 },
+  "POST /api/ai/navigator/turn": { bucket: "ai-navigator-turn", limit: 20, windowMs: 60_000 },
   "POST /api/ai/autosave-diff-summary": { bucket: "ai-autosave-summary", limit: 20, windowMs: 60_000 },
   "POST /api/ai/generate-section": { bucket: "ai-generate-section", limit: 20, windowMs: 60_000 },
   "POST /api/ai/generate-toc": { bucket: "ai-generate-toc", limit: 20, windowMs: 60_000 },

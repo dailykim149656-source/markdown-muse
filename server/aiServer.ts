@@ -1,4 +1,5 @@
 ﻿import { createServer } from "node:http";
+import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { normalizeIngestionRequest } from "../src/lib/ingestion/normalizeIngestionRequest";
 import { keywordRetrieve } from "../src/lib/retrieval/keywordRetrieval";
@@ -17,6 +18,12 @@ import {
 } from "./modules/agent/buildPlannerPrompt";
 import { executePlannedAction } from "./modules/agent/executePlannedAction";
 import { buildAgentPreRouteHints } from "./modules/agent/preRouteAgentTurn";
+import {
+  findLatestSummaryRequestInConversation,
+  hasExplicitCurrentDocumentUpdateRequestInConversation,
+  hasHandoverDocumentRequestInConversation,
+  hasSummaryRequestInConversation,
+} from "./modules/agent/buildTurnPrompt";
 import { actionResponseSchema, normalizeActionResponse } from "./modules/agent/actionResponse";
 import {
   agentPlannerResponseSchema,
@@ -63,7 +70,17 @@ import {
   sanitizeLogMessage,
 } from "./modules/http/aiDiagnostics";
 import { handleListenError } from "./modules/http/handleListenError";
+import {
+  getApproximateBase64ByteLength,
+  logRequestCompletion,
+  logRequestStart,
+} from "./modules/http/requestObservability";
+import { buildGoalSuggestionPrompt } from "./modules/navigator/buildGoalSuggestionPrompt";
 import { buildNavigatorPrompt } from "./modules/navigator/buildNavigatorPrompt";
+import {
+  navigatorGoalSuggestionResponseSchema,
+  normalizeNavigatorGoalSuggestionResponse,
+} from "./modules/navigator/goalSuggestionResponse";
 import {
   navigatorTurnResponseSchema,
   normalizeNavigatorTurnResponse,
@@ -109,6 +126,10 @@ import type {
   TexValidateRequest,
 } from "../src/types/tex";
 import type { NavigatorTurnRequest, NavigatorTurnResponse } from "../src/types/visualNavigator";
+import type {
+  NavigatorGoalSuggestionRequest,
+  NavigatorGoalSuggestionResponse,
+} from "../src/types/visualNavigator";
 
 console.log("[AI Server] Initializing modules...");
 process.env.AI_MAX_REQUEST_BYTES = process.env.AI_MAX_REQUEST_BYTES || "2097152";
@@ -152,6 +173,64 @@ const resolveAiLocale = (value: string | undefined): Locale => (value === "ko" ?
 
 const localePromptSuffix = (locale: Locale) => (locale === "ko" ? "Respond in Korean." : "Respond in English.");
 
+const getMarkdownByteLength = (markdown: string | undefined) => Buffer.byteLength(markdown || "", "utf8");
+
+const getScreenshotByteLength = (
+  request:
+    | AgentTurnRequest
+    | NavigatorGoalSuggestionRequest
+    | NavigatorTurnRequest
+    | SummarizeDocumentRequest
+    | GenerateSectionRequest
+    | GenerateTocRequest
+    | ProposeEditorActionRequest,
+) => getApproximateBase64ByteLength(request.screenshot?.dataBase64);
+
+const buildAiRequestLogContext = (
+  request:
+    | AgentTurnRequest
+    | NavigatorGoalSuggestionRequest
+    | NavigatorTurnRequest
+    | SummarizeDocumentRequest
+    | GenerateSectionRequest
+    | GenerateTocRequest
+    | ProposeEditorActionRequest
+    | TexAutoFixRequest
+    | TexExportPdfRequest
+    | TexPreviewRequest
+    | TexValidateRequest,
+) => {
+  if ("document" in request) {
+    return {
+      markdownBytes: getMarkdownByteLength(request.document.markdown),
+      screenshotBytes: getScreenshotByteLength(request),
+    };
+  }
+
+  if ("activeDocument" in request) {
+    return {
+      loadedDriveDocs: 0,
+      markdownBytes: getMarkdownByteLength(request.activeDocument?.markdown),
+      screenshotBytes: getScreenshotByteLength(request),
+      selectedDriveRefs: request.driveReferenceFileIds.length,
+    };
+  }
+
+  if ("intent" in request && "ui" in request) {
+    return {
+      screenshotBytes: getScreenshotByteLength(request),
+    };
+  }
+
+  if ("latex" in request) {
+    return {
+      latexBytes: Buffer.byteLength(request.latex, "utf8"),
+    };
+  }
+
+  return {};
+};
+
 const assertMarkdownDocument = (
   request: SummarizeDocumentRequest | GenerateSectionRequest | GenerateTocRequest | ProposeEditorActionRequest,
 ) => {
@@ -160,19 +239,24 @@ const assertMarkdownDocument = (
   }
 };
 
-const assertNavigatorRequest = (request: NavigatorTurnRequest) => {
-  if (!request.intent.trim()) {
-    throw new HttpError(400, "Navigator intent is required.");
-  }
-
+const assertNavigatorScreenshotRequest = (request: NavigatorGoalSuggestionRequest | NavigatorTurnRequest) => {
   if (!request.screenshot?.dataBase64?.trim() || !request.screenshot.mimeType?.trim()) {
     throw new HttpError(400, "Navigator screenshot is required.");
   }
 };
 
+const assertNavigatorRequest = (request: NavigatorTurnRequest) => {
+  if (!request.intent.trim()) {
+    throw new HttpError(400, "Navigator intent is required.");
+  }
+
+  assertNavigatorScreenshotRequest(request);
+};
+
 const getRequestImages = (
   request:
     | AgentTurnRequest
+    | NavigatorGoalSuggestionRequest
     | NavigatorTurnRequest
     | SummarizeDocumentRequest
     | GenerateSectionRequest
@@ -576,6 +660,23 @@ const handleProposeAction = async (request: ProposeEditorActionRequest): Promise
   return normalizeActionResponse(response, request);
 };
 
+export const handleNavigatorGoalSuggestions = async (
+  request: NavigatorGoalSuggestionRequest,
+): Promise<NavigatorGoalSuggestionResponse> => {
+  assertNavigatorScreenshotRequest(request);
+  const locale = resolveAiLocale(request.locale);
+  const response = await generateMultimodalStructuredJson({
+    images: getRequestImages(request),
+    prompt: buildGoalSuggestionPrompt(request, locale),
+    responseSchema: navigatorGoalSuggestionResponseSchema,
+  });
+
+  return normalizeNavigatorGoalSuggestionResponse({
+    request,
+    response,
+  });
+};
+
 export const handleNavigatorTurn = async (
   request: NavigatorTurnRequest,
 ): Promise<NavigatorTurnResponse> => {
@@ -606,6 +707,45 @@ const findLatestUserMessage = (request: AgentTurnRequest) => {
 
   return latestUserMessage;
 };
+
+interface AgentConversationIntentHints {
+  currentDocumentSummaryRequested: boolean;
+  currentDocumentUpdateRequested: boolean;
+  handoverDocumentRequested: boolean;
+  latestSummaryRequest: string | null;
+  summaryDocumentRequested: boolean;
+}
+
+const DOCUMENT_FOLLOWUP_PATTERN = /\b(?:document|doc|source document|target document|summary document|section|heading|field|which part|where)\b|(?:요약할\s*문서|대상\s*문서|원본\s*문서|소스\s*문서|비교할\s*문서|참조\s*문서|어떤\s*섹션|어느\s*부분|어떤\s*필드|어느\s*헤딩)/iu;
+const SUMMARY_DOCUMENT_PATTERN = /(summary document|separate summary|document the summary|요약 문서|문서화|따로 문서|별도 문서)/i;
+
+const buildConversationIntentHints = (request: AgentTurnRequest): AgentConversationIntentHints => {
+  const latestSummaryRequest = findLatestSummaryRequestInConversation(request.messages);
+
+  return {
+    currentDocumentSummaryRequested: Boolean(request.activeDocument) && hasSummaryRequestInConversation(request.messages),
+    currentDocumentUpdateRequested: Boolean(request.activeDocument)
+      && hasExplicitCurrentDocumentUpdateRequestInConversation(request.messages),
+    handoverDocumentRequested: hasHandoverDocumentRequestInConversation(request.messages),
+    latestSummaryRequest,
+    summaryDocumentRequested: Boolean(latestSummaryRequest && SUMMARY_DOCUMENT_PATTERN.test(latestSummaryRequest)),
+  };
+};
+
+const shouldUseActiveDocumentOverride = ({
+  planner,
+  preRouteHints,
+  request,
+}: {
+  planner: ReturnType<typeof normalizePlannerResponse>;
+  preRouteHints: ReturnType<typeof buildAgentPreRouteHints>;
+  request: AgentTurnRequest;
+}) => Boolean(request.activeDocument)
+  && !preRouteHints.localTarget
+  && !preRouteHints.driveReferenceTarget
+  && preRouteHints.ambiguousLocalTargets.length === 0
+  && preRouteHints.ambiguousDriveReferences.length === 0
+  && planner.missingInformation.length > 0;
 
 const buildAgentStatusMessage = ({
   kind,
@@ -747,6 +887,7 @@ export const handleAgentTurn = async (
   httpRequest: import("node:http").IncomingMessage,
   request: AgentTurnRequest,
   requestId = randomUUID(),
+  requestLogContext?: { loadedDriveDocs?: number },
 ): Promise<AgentTurnResponse> => {
   const latestUserMessage = findLatestUserMessage(request);
   const locale = request.locale ? resolveAiLocale(request.locale) : undefined;
@@ -766,9 +907,15 @@ export const handleAgentTurn = async (
           fileId: reference.fileId,
           fileName: reference.fileName,
         }));
+      if (requestLogContext) {
+        requestLogContext.loadedDriveDocs = driveReferences.length;
+      }
     } catch (error) {
       console.warn(`[LiveAgent] failed to load selected drive references before planning requestId=${requestId}`, error);
       driveReferences = [];
+      if (requestLogContext) {
+        requestLogContext.loadedDriveDocs = 0;
+      }
     }
   }
 
@@ -777,6 +924,7 @@ export const handleAgentTurn = async (
     latestUserMessage,
     request,
   });
+  const conversationIntent = buildConversationIntentHints(request);
 
   let planner;
 
@@ -784,6 +932,7 @@ export const handleAgentTurn = async (
     const rawPlannerResponse = await generateMultimodalStructuredJson({
       images: getRequestImages(request),
       prompt: buildPlannerPrompt({
+        conversationIntent,
         driveReferences,
         preRouteHints,
         retrievalContext,
@@ -793,6 +942,53 @@ export const handleAgentTurn = async (
       responseSchema: agentPlannerResponseSchema,
     });
     planner = normalizePlannerResponse(rawPlannerResponse);
+
+    if (
+      shouldUseActiveDocumentOverride({
+        planner,
+        preRouteHints,
+        request,
+      })
+      && conversationIntent.currentDocumentSummaryRequested
+    ) {
+      planner = {
+        ...planner,
+        action: "summarize_document",
+        arguments: {
+          ...planner.arguments,
+          createDocumentAfter: Boolean(planner.arguments?.createDocumentAfter)
+            || conversationIntent.summaryDocumentRequested
+            || conversationIntent.handoverDocumentRequested,
+          prompt: planner.arguments?.prompt || conversationIntent.latestSummaryRequest || latestUserMessage,
+        },
+        missingInformation: [],
+        reason: "Summarize the active document.",
+        target: {
+          ...planner.target,
+          documentId: request.activeDocument?.documentId,
+          documentName: request.activeDocument?.fileName,
+        },
+      };
+    } else if (
+      shouldUseActiveDocumentOverride({
+        planner,
+        preRouteHints,
+        request,
+      })
+      && conversationIntent.currentDocumentUpdateRequested
+    ) {
+      planner = {
+        ...planner,
+        action: "update_current_document",
+        missingInformation: [],
+        reason: "Update the active document.",
+        target: {
+          ...planner.target,
+          documentId: request.activeDocument?.documentId,
+          documentName: request.activeDocument?.fileName,
+        },
+      };
+    }
 
     if (
       preRouteHints.activeDocumentPinned
@@ -922,7 +1118,17 @@ export const handleAgentTurn = async (
 
 const server = createServer(async (request, response) => {
   const requestId = randomUUID();
+  const startedAt = Date.now();
+  let route = request.url || "/";
+  let responseStatus = 500;
+  let requestLogExtra: Record<string, boolean | number | string | null | undefined> | undefined;
   console.log(`[AI Server] [${requestId}] ${request.method} ${request.url}`);
+  logRequestStart({
+    request,
+    requestId,
+    route,
+    service: "ai",
+  });
 
   try {
     if (!request.url) {
@@ -930,15 +1136,18 @@ const server = createServer(async (request, response) => {
     }
 
     if (request.method === "OPTIONS") {
+      responseStatus = 200;
       writeHttpResponse(response, json({ ok: true }, 200, request.headers.origin));
       return;
     }
 
     const requestUrl = getRequestUrl(request);
+    route = requestUrl.pathname;
 
     // Health check - ABSOLUTELY FIRST
     if (request.method === "GET" && (requestUrl.pathname === "/api/ai/health" || requestUrl.pathname === "/health")) {
       console.log(`[AI Server] [${requestId}] Health check passed`);
+      responseStatus = 200;
       writeHttpResponse(response, json(buildPublicAiHealthPayload({
         configured: isGeminiConfigured(),
       }), 200, request.headers.origin));
@@ -951,6 +1160,7 @@ const server = createServer(async (request, response) => {
       }
 
       const googleOAuthSummary = getGoogleOAuthRuntimeSummary();
+      responseStatus = 200;
       writeHttpResponse(response, json(buildInternalAiHealthPayload({
         allowedOrigins: ALLOWED_ORIGINS,
         configured: isGeminiConfigured(),
@@ -988,6 +1198,7 @@ const server = createServer(async (request, response) => {
         console.warn(
           `[AI Server] [${requestId}] rate_limited bucket=${rateLimitPolicy.bucket} path=${requestUrl.pathname}`,
         );
+        responseStatus = 429;
         writeHttpResponse(response, json({
           error: "Rate limit exceeded.",
         }, 429, request.headers.origin, {
@@ -999,6 +1210,7 @@ const server = createServer(async (request, response) => {
 
     if (request.method === "POST" && requestUrl.pathname === "/api/security/csp-report") {
       await handleCspReport(request, requestId);
+      responseStatus = 204;
       writeHttpResponse(response, empty(204, request.headers.origin));
       return;
     }
@@ -1006,6 +1218,7 @@ const server = createServer(async (request, response) => {
     const shareRouteResult = await handleShareRoute(request);
     if (shareRouteResult) {
       console.log(`[AI Server] [${requestId}] Share route matched`);
+      responseStatus = shareRouteResult.statusCode;
       writeHttpResponse(response, shareRouteResult);
       return;
     }
@@ -1014,6 +1227,7 @@ const server = createServer(async (request, response) => {
     const authRouteResult = await handleAuthRoute(request);
     if (authRouteResult) {
       console.log(`[AI Server] [${requestId}] Auth route matched`);
+      responseStatus = authRouteResult.statusCode;
       writeHttpResponse(response, authRouteResult);
       return;
     }
@@ -1022,6 +1236,7 @@ const server = createServer(async (request, response) => {
     const workspaceRouteResult = await handleWorkspaceRoute(request);
     if (workspaceRouteResult) {
       console.log(`[AI Server] [${requestId}] Workspace route matched`);
+      responseStatus = workspaceRouteResult.statusCode;
       writeHttpResponse(response, workspaceRouteResult);
       return;
     }
@@ -1029,6 +1244,8 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/ai/summarize") {
       const payload = await parseRequestBody<SummarizeDocumentRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleSummarize(payload);
+      requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
@@ -1036,13 +1253,17 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/ai/autosave-diff-summary") {
       const payload = await parseRequestBody<AutosaveDiffSummaryRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleAutosaveDiffSummary(payload);
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "POST" && request.url === "/api/ai/agent/turn") {
       const payload = await parseRequestBody<AgentTurnRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
-      const result = await handleAgentTurn(request, payload, requestId);
+      const agentRequestLogContext = buildAiRequestLogContext(payload);
+      const result = await handleAgentTurn(request, payload, requestId, agentRequestLogContext);
+      requestLogExtra = agentRequestLogContext;
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
@@ -1050,6 +1271,17 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/ai/navigator/turn") {
       const payload = await parseRequestBody<NavigatorTurnRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleNavigatorTurn(payload);
+      requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 200;
+      writeHttpResponse(response, json(result, 200, request.headers.origin));
+      return;
+    }
+
+    if (request.method === "POST" && request.url === "/api/ai/navigator/suggest-goals") {
+      const payload = await parseRequestBody<NavigatorGoalSuggestionRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
+      const result = await handleNavigatorGoalSuggestions(payload);
+      requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
@@ -1057,6 +1289,8 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/ai/generate-section") {
       const payload = await parseRequestBody<GenerateSectionRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleGenerateSection(payload);
+      requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
@@ -1064,6 +1298,8 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/ai/generate-toc") {
       const payload = await parseRequestBody<GenerateTocRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleGenerateToc(payload);
+      requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
@@ -1071,6 +1307,8 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/ai/propose-action") {
       const payload = await parseRequestBody<ProposeEditorActionRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleProposeAction(payload);
+      requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
@@ -1078,12 +1316,15 @@ const server = createServer(async (request, response) => {
     if (request.method === "POST" && request.url === "/api/ai/tex/fix") {
       const payload = await parseRequestBody<TexAutoFixRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       const result = await handleTexAutoFix(payload);
+      requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
 
     if (request.method === "GET" && request.url === "/api/tex/health") {
       const result = await getTexServiceHealth();
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
@@ -1092,6 +1333,8 @@ const server = createServer(async (request, response) => {
       const payload = await parseRequestBody<TexValidateRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await validateTexWithService(payload);
+      requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
@@ -1100,6 +1343,8 @@ const server = createServer(async (request, response) => {
       const payload = await parseRequestBody<TexPreviewRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await previewTexWithService(payload);
+      requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 200;
       writeHttpResponse(response, json(result, 200, request.headers.origin));
       return;
     }
@@ -1108,6 +1353,8 @@ const server = createServer(async (request, response) => {
       const payload = await parseRequestBody<TexExportPdfRequest>(request, { maxBytes: MAX_REQUEST_BYTES });
       assertTexCompilationAllowed({ latex: payload.latex, sourceType: payload.sourceType });
       const result = await exportTexPdf(payload);
+      requestLogExtra = buildAiRequestLogContext(payload);
+      responseStatus = 200;
       writeHttpResponse(response, binary(result.body, result.contentType, 200, request.headers.origin, {
         "Content-Disposition": result.contentDisposition || "attachment; filename=\"document.pdf\"",
       }));
@@ -1130,7 +1377,18 @@ const server = createServer(async (request, response) => {
       console.error(`[AI Server] [${requestId}] Error [${statusCode}]: ${sanitizedMessage}`, error);
     }
 
+    responseStatus = statusCode;
     writeHttpResponse(response, json({ error: publicMessage }, statusCode, request.headers.origin));
+  } finally {
+    logRequestCompletion({
+      extra: requestLogExtra,
+      request,
+      requestId,
+      route,
+      service: "ai",
+      startedAt,
+      statusCode: responseStatus,
+    });
   }
 });
 
@@ -1153,5 +1411,3 @@ if (process.env.VITEST !== "true") {
     console.log(`[AI Server] Listening on http://0.0.0.0:${PORT}`);
   });
 }
-
-

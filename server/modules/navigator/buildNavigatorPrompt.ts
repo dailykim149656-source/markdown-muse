@@ -1,7 +1,14 @@
 import type { Locale } from "../../../src/i18n/types";
-import type { NavigatorTurnRequest } from "../../../src/types/visualNavigator";
+import type { NavigatorHistoryEntry, NavigatorTurnRequest } from "../../../src/types/visualNavigator";
 
 const localePromptSuffix = (locale: Locale) => (locale === "ko" ? "Respond in Korean." : "Respond in English.");
+
+const condenseHistory = (history: NavigatorHistoryEntry[]) =>
+  history.map((entry) => ({
+    action: entry.action.type,
+    outcome: entry.outcome,
+    target: entry.targetDescription,
+  }));
 
 export const buildNavigatorPrompt = (
   request: NavigatorTurnRequest,
@@ -42,12 +49,9 @@ ${request.ui.focusedElement || "none"}
 Open modal state:
 ${JSON.stringify(request.ui.modals, null, 2)}
 
-Visible labels:
-${JSON.stringify(request.ui.visibleLabels, null, 2)}
-
 Visible stable targets:
 ${JSON.stringify(request.ui.visibleTargets, null, 2)}
 
 Recent execution history:
-${JSON.stringify(request.recentHistory, null, 2)}
+${JSON.stringify(condenseHistory(request.recentHistory))}
 `.trim();

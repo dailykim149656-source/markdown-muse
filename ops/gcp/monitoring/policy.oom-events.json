@@ -1,0 +1,30 @@
+{
+  "alertStrategy": {
+    "autoClose": "1800s"
+  },
+  "combiner": "OR",
+  "conditions": [
+    {
+      "conditionThreshold": {
+        "aggregations": [
+          {
+            "alignmentPeriod": "300s",
+            "crossSeriesReducer": "REDUCE_SUM",
+            "perSeriesAligner": "ALIGN_DELTA"
+          }
+        ],
+        "comparison": "COMPARISON_GT",
+        "duration": "0s",
+        "filter": "metric.type=\"logging.googleapis.com/user/__OOM_METRIC_NAME__\"",
+        "thresholdValue": 0,
+        "trigger": {
+          "count": 1
+        }
+      },
+      "displayName": "__SERVICE_NAME__ OOM or abnormal restart events > 0"
+    }
+  ],
+  "displayName": "Cloud Run OOM or restart events (__SERVICE_NAME__)",
+  "enabled": true,
+  "notificationChannels": []
+}

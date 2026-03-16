@@ -1,0 +1,65 @@
+{
+  "displayName": "Docsy Cloud Run Memory",
+  "mosaicLayout": {
+    "columns": 12,
+    "tiles": [
+      {
+        "height": 4,
+        "width": 12,
+        "xPos": 0,
+        "yPos": 0,
+        "widget": {
+          "title": "Cloud Run memory utilization",
+          "xyChart": {
+            "chartOptions": {
+              "mode": "COLOR"
+            },
+            "dataSets": [
+              {
+                "legendTemplate": "docsy",
+                "minAlignmentPeriod": "60s",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    },
+                    "filter": "resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"docsy\" AND resource.label.\"location\"=\"__REGION__\" AND metric.type=\"run.googleapis.com/container/memory/utilizations\""
+                  }
+                }
+              },
+              {
+                "legendTemplate": "docsy-tex",
+                "minAlignmentPeriod": "60s",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "timeSeriesFilter": {
+                    "aggregation": {
+                      "alignmentPeriod": "60s",
+                      "perSeriesAligner": "ALIGN_MEAN"
+                    },
+                    "filter": "resource.type=\"cloud_run_revision\" AND resource.label.\"service_name\"=\"docsy-tex\" AND resource.label.\"location\"=\"__REGION__\" AND metric.type=\"run.googleapis.com/container/memory/utilizations\""
+                  }
+                }
+              }
+            ],
+            "thresholds": [
+              {
+                "label": "85%",
+                "targetAxis": "Y1",
+                "value": 0.85
+              }
+            ],
+            "yAxis": {
+              "label": "Utilization",
+              "scale": "LINEAR"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

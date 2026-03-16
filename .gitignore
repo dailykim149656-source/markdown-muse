@@ -10,6 +10,7 @@ lerna-debug.log*
 # Node / TypeScript
 node_modules
 dist
+server-dist
 dist-ssr
 .vite
 coverage
@@ -52,5 +53,6 @@ temp-*.js
 temp-*.ts
 temp-*.tsx
 test-results
+output/gcp-monitoring/
 playwright-report
 .playwright-*.png

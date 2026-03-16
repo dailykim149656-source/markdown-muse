@@ -6,10 +6,12 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
+RUN npm run build:server \
+  && npm prune --omit=dev
 
 ENV NODE_ENV=production
 ENV PORT=8080
 
 EXPOSE 8080
 
-CMD ["node", "--import", "tsx", "server/aiServer.ts"]
+CMD ["node", "server-dist/aiServer.js"]

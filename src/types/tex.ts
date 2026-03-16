@@ -34,7 +34,8 @@ export interface TexPreviewRequest {
 }
 
 export interface TexPreviewResponse extends TexValidateResponse {
-  pdfBase64?: string;
+  previewExpiresAt?: number;
+  previewUrl?: string;
 }
 
 export interface TexExportPdfRequest {

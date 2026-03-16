@@ -92,6 +92,13 @@ const ArtifactCard = ({
   );
 
   if (artifact.kind === "summary") {
+    const createDocumentLabel = artifact.createDocumentKind === "handover"
+      ? t("aiDialog.summary.createHandoverDocument")
+      : t("aiDialog.summary.createDocument");
+    const createdLabel = artifact.createDocumentKind === "handover"
+      ? t("aiDialog.agent.handoverDocumentCreated")
+      : t("aiDialog.agent.summaryDocumentCreated");
+
     return (
       <div className="space-y-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm">
         <div className="flex items-start justify-between gap-3">
@@ -107,8 +114,8 @@ const ArtifactCard = ({
             variant="outline"
           >
             {artifact.documentCreated
-              ? t("aiDialog.agent.summaryDocumentCreated")
-              : t("aiDialog.summary.createDocument")}
+              ? createdLabel
+              : createDocumentLabel}
           </Button>
         </div>
         <p className="whitespace-pre-wrap text-foreground">{artifact.result.summary}</p>

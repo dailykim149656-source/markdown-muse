@@ -272,11 +272,14 @@ const findInteractiveAncestor = (element: Element | null): HTMLElement | null =>
 
 export const resolveNavigatorActionTarget = (target: NavigatorActionTarget): NavigatorResolveResult => {
   const candidates = getInteractiveCandidates()
-    .map((element) => ({
-      descriptor: describeNavigatorElement(element),
-      element,
-      score: scoreDescriptor(describeNavigatorElement(element), target),
-    }))
+    .map((element) => {
+      const descriptor = describeNavigatorElement(element);
+      return {
+        descriptor,
+        element,
+        score: scoreDescriptor(descriptor, target),
+      };
+    })
     .filter((candidate) => candidate.score > 0)
     .sort((left, right) => right.score - left.score);
 

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "ai:server": "node --env-file-if-exists=.env.local --import tsx server/aiServer.ts",
+    "build:server": "esbuild server/aiServer.ts server/texService.ts --bundle --platform=node --format=esm --target=node22 --outdir=server-dist --packages=external",
     "dev": "vite",
     "build": "vite build",
     "build:web": "vite build --mode web",
@@ -13,6 +14,7 @@
     "check:public-deploy": "node scripts/validate-public-deploy-config.mjs",
     "lint": "eslint .",
     "measure:release-closeout": "node scripts/measure-release-closeout-performance.mjs",
+    "monitor:gcp:cloud-run": "node scripts/gcp/apply-cloud-run-monitoring.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
@@ -21,6 +23,7 @@
     "typecheck:server": "tsc -p tsconfig.server.json --noEmit"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.17.2",
     "@google-cloud/firestore": "^8.3.0",
     "@google/genai": "^1.44.0",
     "@hookform/resolvers": "^3.10.0",
@@ -110,6 +113,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "esbuild": "^0.25.10",
     "@eslint/js": "^9.32.0",
     "@playwright/test": "^1.55.0",
     "@tailwindcss/typography": "^0.5.16",

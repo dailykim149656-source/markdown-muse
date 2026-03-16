@@ -1,10 +1,18 @@
 import type { Locale } from "../../../src/i18n/types";
-import type { AgentAvailableTargetDocument, AgentDelegatedCapability, AgentDriveCandidate, AgentTurnRequest } from "../../../src/types/liveAgent";
+import type {
+  AgentAvailableTargetDocument,
+  AgentCreateDocumentKind,
+  AgentDelegatedCapability,
+  AgentDriveCandidate,
+  AgentTurnRequest,
+} from "../../../src/types/liveAgent";
 import { generateMultimodalStructuredJson, generateStructuredJson, schemaType } from "../gemini/client";
 import { searchDriveDocuments } from "../workspace/searchDriveDocuments";
 import {
   buildCurrentDocumentDraftPrompt,
   buildNewDraftFallbackPrompt,
+  findLatestSummaryRequestInConversation,
+  hasHandoverDocumentRequestInConversation,
 } from "./buildTurnPrompt";
 import type {
   ActiveDocumentRetrievalContext,
@@ -192,6 +200,7 @@ const createDelegatedCapabilityResponse = ({
   capability,
   context,
   createDocumentAfter,
+  createDocumentKind,
   objective,
   prompt,
   targetFileId,
@@ -201,6 +210,7 @@ const createDelegatedCapabilityResponse = ({
   capability: AgentDelegatedCapability;
   context: AgentExecutionContext;
   createDocumentAfter?: boolean;
+  createDocumentKind?: AgentCreateDocumentKind;
   objective?: string;
   prompt?: string;
   targetFileId?: string;
@@ -227,7 +237,11 @@ const createDelegatedCapabilityResponse = ({
     if (capability === "summarize_document") {
       return buildAssistantText({
         en: createDocumentAfter
-          ? "I prepared a summary request and a summary document can be created after review."
+          ? (
+            createDocumentKind === "handover"
+              ? "I prepared a summary request and a handover document can be created after review."
+              : "I prepared a summary request and a summary document can be created after review."
+          )
           : "I prepared a summary request for the current document.",
         ko: createDocumentAfter
           ? "현재 문서의 요약을 준비했습니다. 검토 후 요약 문서를 만들 수 있습니다."
@@ -269,6 +283,7 @@ const createDelegatedCapabilityResponse = ({
   effect: {
     capability,
     createDocumentAfter,
+    createDocumentKind,
     objective,
     prompt,
     targetFileId,
@@ -871,6 +886,36 @@ const executeUpdateCurrentDocument = async (
     };
   }
 
+  if (context.request.activeDocument) {
+    try {
+      const fullDocumentDraft = await generateCurrentDocumentDraft({
+        context,
+        planner: {
+          ...planner,
+          target: {
+            ...planner.target,
+            headingNodeId: undefined,
+            sectionId: undefined,
+          },
+        },
+      });
+
+      if (fullDocumentDraft.rawResponse) {
+        return {
+          availableImportTargets: [],
+          driveCandidates: [],
+          rawResponse: fullDocumentDraft.rawResponse,
+          telemetry: {
+            deterministicFallbackUsed: false,
+            executorAction: "update_current_document",
+          },
+        };
+      }
+    } catch {
+      // AI fallback failed, continue to ask_followup
+    }
+  }
+
   return {
     availableImportTargets: [],
     driveCandidates: [],
@@ -1111,9 +1156,17 @@ const executeDelegatedAction = (
         : preRouteHints.localTarget
     )
     : null;
-  const objective = planner.arguments?.prompt?.trim() || context.latestUserMessage.trim();
+  const latestSummaryObjective = findLatestSummaryRequestInConversation(context.request.messages);
+  const objective = planner.action === "summarize_document"
+    ? planner.arguments?.prompt?.trim() || latestSummaryObjective || context.latestUserMessage.trim()
+    : planner.arguments?.prompt?.trim() || context.latestUserMessage.trim();
+  const createDocumentKind = planner.action === "summarize_document"
+    ? (hasHandoverDocumentRequestInConversation(context.request.messages) ? "handover" : "summary")
+    : undefined;
   const createDocumentAfter = planner.action === "summarize_document"
-    ? Boolean(planner.arguments?.createDocumentAfter) || SUMMARY_DOCUMENT_REQUEST_PATTERN.test(context.latestUserMessage)
+    ? Boolean(planner.arguments?.createDocumentAfter)
+      || SUMMARY_DOCUMENT_REQUEST_PATTERN.test(context.latestUserMessage)
+      || createDocumentKind === "handover"
     : undefined;
 
   if (
@@ -1127,6 +1180,7 @@ const executeDelegatedAction = (
         rawResponse: createDelegatedCapabilityResponse({
           capability: planner.action,
           context,
+          createDocumentKind,
           objective,
           prompt: objective,
           targetDocument: null,
@@ -1148,6 +1202,7 @@ const executeDelegatedAction = (
         rawResponse: createDelegatedCapabilityResponse({
           capability: planner.action,
           context,
+          createDocumentKind,
           objective,
           prompt: objective,
           targetDocument: null,
@@ -1178,6 +1233,7 @@ const executeDelegatedAction = (
             rawResponse: createDelegatedCapabilityResponse({
               capability: planner.action,
               context,
+              createDocumentKind,
               objective,
               prompt: objective,
               targetDocument: null,
@@ -1220,6 +1276,7 @@ const executeDelegatedAction = (
           rawResponse: createDelegatedCapabilityResponse({
             capability: planner.action,
             context,
+            createDocumentKind,
             objective,
             prompt: objective,
             targetDocument: null,
@@ -1239,6 +1296,7 @@ const executeDelegatedAction = (
       capability: planner.action as AgentDelegatedCapability,
       context,
       createDocumentAfter,
+      createDocumentKind,
       objective,
       prompt: objective,
       targetDocument: delegatedTarget,

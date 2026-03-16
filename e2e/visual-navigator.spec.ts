@@ -13,20 +13,38 @@ const prepareAdvancedEditor = async (page: Page) => {
 
 const openAiAssistant = async (page: Page) => {
   const trigger = page.locator("[data-visual-target='header-open-ai-assistant']");
-  await trigger.click();
-
   const dialog = page.locator("[data-visual-target='ai-assistant-dialog']");
-  if (await dialog.count() === 0) {
-    await page.waitForTimeout(500);
-    await trigger.click();
+
+  await trigger.click();
+  await page.waitForTimeout(500);
+
+  if (await dialog.isVisible()) {
+    return;
   }
+
+  await trigger.click();
 
   await expect(dialog).toBeVisible();
 };
 
 test.describe("visual navigator", () => {
-  test("executes a bounded multi-step UI flow with mocked navigator turns", async ({ page }) => {
+  test("starts a run from a suggested goal chip", async ({ page }) => {
     let turnCount = 0;
+
+    await page.route("**/api/ai/navigator/suggest-goals", async (route) => {
+      await route.fulfill({
+        body: JSON.stringify({
+          suggestions: [{
+            confidence: 0.93,
+            intent: "Open the Google Workspace connection dialog.",
+            label: "Open Google Workspace",
+            rationale: "Google controls are visible.",
+          }],
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+    });
 
     await page.route("**/api/ai/navigator/turn", async (route) => {
       turnCount += 1;
@@ -89,15 +107,52 @@ test.describe("visual navigator", () => {
     });
 
     await prepareAdvancedEditor(page);
-
     await openAiAssistant(page);
     await page.locator("[data-visual-target='ai-dialog-tab-navigator']").click();
-    await page.locator("[data-visual-target='navigator-intent']").fill("Open the Google Workspace connection dialog.");
-    await page.locator("[data-visual-target='navigator-start']").click();
+    await page.locator("[data-visual-target='navigator-suggested-goal-0']").click();
 
     await expect(page.locator("[data-visual-target='visual-navigator-overlay']")).toBeVisible();
     await expect(page.locator("[data-visual-target='workspace-connection-dialog']")).toBeVisible();
     await expect(page.locator("[data-visual-target='visual-navigator-overlay']")).toContainText("Visual navigation complete.");
     expect(turnCount).toBe(3);
+  });
+
+  test("supports quick actions and surfaces recent goals after a run", async ({ page }) => {
+    await page.route("**/api/ai/navigator/suggest-goals", async (route) => {
+      await route.fulfill({
+        body: JSON.stringify({
+          suggestions: [],
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+    });
+
+    await page.route("**/api/ai/navigator/turn", async (route) => {
+      await route.fulfill({
+        body: JSON.stringify({
+          action: {
+            summary: "Patch Review is ready.",
+            type: "done",
+          },
+          confidence: 0.87,
+          rationale: "Use the quick action goal directly.",
+          statusText: "Visual navigation complete.",
+        }),
+        contentType: "application/json",
+        status: 200,
+      });
+    });
+
+    await prepareAdvancedEditor(page);
+    await openAiAssistant(page);
+    await page.locator("[data-visual-target='ai-dialog-tab-navigator']").click();
+    await page.locator("[data-visual-target='navigator-preset-open-patch-review']").click();
+
+    await expect(page.locator("[data-visual-target='visual-navigator-overlay']")).toContainText("Patch Review is ready.");
+
+    await openAiAssistant(page);
+    await page.locator("[data-visual-target='ai-dialog-tab-navigator']").click();
+    await expect(page.locator("[data-visual-target='navigator-recent-goal-0']")).toContainText("Open Patch Review");
   });
 });

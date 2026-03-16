@@ -6,6 +6,7 @@ import { I18nContext } from "@/i18n/I18nProvider";
 import { useTexValidation } from "@/hooks/useTexValidation";
 
 const getTexHealthMock = vi.fn();
+const validateTexMock = vi.fn();
 const previewTexMock = vi.fn();
 const exportTexPdfMock = vi.fn();
 
@@ -13,6 +14,7 @@ vi.mock("@/lib/ai/texClient", () => ({
   exportTexPdf: (...args: unknown[]) => exportTexPdfMock(...args),
   getTexHealth: (...args: unknown[]) => getTexHealthMock(...args),
   previewTex: (...args: unknown[]) => previewTexMock(...args),
+  validateTex: (...args: unknown[]) => validateTexMock(...args),
 }));
 
 const wrapper = ({ children }: { children: ReactNode }) => (
@@ -39,11 +41,19 @@ describe("useTexValidation", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     getTexHealthMock.mockReset();
+    validateTexMock.mockReset();
     previewTexMock.mockReset();
     exportTexPdfMock.mockReset();
     getTexHealthMock.mockResolvedValue({
       configured: true,
       engine: "xelatex",
+      ok: true,
+    });
+    validateTexMock.mockResolvedValue({
+      compileMs: 42,
+      diagnostics: [],
+      engine: "xelatex",
+      logSummary: "ok",
       ok: true,
     });
   });
@@ -53,15 +63,6 @@ describe("useTexValidation", () => {
   });
 
   it("debounces background validation requests", async () => {
-    previewTexMock.mockResolvedValue({
-      compileMs: 42,
-      diagnostics: [],
-      engine: "xelatex",
-      logSummary: "ok",
-      ok: true,
-      pdfBase64: undefined,
-    });
-
     renderHook(() => useTexValidation({
       documentName: "Draft",
       latexSource: "\\section{One}",
@@ -72,23 +73,24 @@ describe("useTexValidation", () => {
       vi.advanceTimersByTime(1490);
     });
 
-    expect(previewTexMock).not.toHaveBeenCalled();
+    expect(validateTexMock).not.toHaveBeenCalled();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(10);
     });
 
-    expect(previewTexMock).toHaveBeenCalledTimes(1);
-    expect(previewTexMock.mock.calls[0]?.[1]).toMatchObject({
+    expect(validateTexMock).toHaveBeenCalledTimes(1);
+    expect(validateTexMock.mock.calls[0]?.[1]).toMatchObject({
       signal: expect.any(AbortSignal),
     });
+    expect(previewTexMock).not.toHaveBeenCalled();
   });
 
   it("keeps the latest validation result when older requests resolve later", async () => {
     let resolveFirst: ((value: unknown) => void) | null = null;
     let resolveSecond: ((value: unknown) => void) | null = null;
 
-    previewTexMock
+    validateTexMock
       .mockImplementationOnce(() => new Promise((resolve) => {
         resolveFirst = resolve;
       }))
@@ -132,7 +134,6 @@ describe("useTexValidation", () => {
         engine: "xelatex",
         logSummary: "old",
         ok: false,
-        pdfBase64: undefined,
       });
       await Promise.resolve();
     });
@@ -145,7 +146,6 @@ describe("useTexValidation", () => {
         engine: "xelatex",
         logSummary: "new",
         ok: true,
-        pdfBase64: undefined,
       });
       await Promise.resolve();
     });
@@ -157,23 +157,13 @@ describe("useTexValidation", () => {
   });
 
   it("keeps the last successful preview when a later compile fails", async () => {
-    Object.defineProperty(URL, "createObjectURL", {
-      configurable: true,
-      value: vi.fn().mockReturnValue("blob:preview-1"),
-    });
-    Object.defineProperty(URL, "revokeObjectURL", {
-      configurable: true,
-      value: vi.fn(),
-    });
-
-    previewTexMock
+    validateTexMock
       .mockResolvedValueOnce({
         compileMs: 11,
         diagnostics: [],
         engine: "xelatex",
         logSummary: "ok",
         ok: true,
-        pdfBase64: btoa("%PDF-1.7"),
       })
       .mockResolvedValueOnce({
         compileMs: 13,
@@ -185,7 +175,28 @@ describe("useTexValidation", () => {
         engine: "xelatex",
         logSummary: "failed",
         ok: false,
-        pdfBase64: undefined,
+      });
+
+    previewTexMock
+      .mockResolvedValueOnce({
+        compileMs: 11,
+        diagnostics: [],
+        engine: "xelatex",
+        logSummary: "ok",
+        ok: true,
+        previewExpiresAt: Date.now() + 900_000,
+        previewUrl: "https://example.com/preview-1.pdf",
+      })
+      .mockResolvedValueOnce({
+        compileMs: 13,
+        diagnostics: [{
+          message: "Compile error",
+          severity: "error",
+          stage: "compile",
+        }],
+        engine: "xelatex",
+        logSummary: "failed",
+        ok: false,
       });
 
     const { result, rerender } = renderHook((props: { latexSource: string }) => useTexValidation({
@@ -198,21 +209,21 @@ describe("useTexValidation", () => {
     });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
+      await vi.advanceTimersByTimeAsync(5000);
     });
     await flushAsyncValidation();
     await flushAsyncValidation();
 
-    expect(result.current.previewUrl).toBe("blob:preview-1");
+    expect(result.current.previewUrl).toBe("https://example.com/preview-1.pdf");
 
     rerender({ latexSource: "\\section{B}" });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1500);
+      await vi.advanceTimersByTimeAsync(5000);
     });
     await flushAsyncValidation();
 
-    expect(result.current.previewUrl).toBe("blob:preview-1");
+    expect(result.current.previewUrl).toBe("https://example.com/preview-1.pdf");
     expect(result.current.status).toBe("error");
   });
 });

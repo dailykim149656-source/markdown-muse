@@ -200,6 +200,6 @@ export const navigatorTurnResponseSchema = {
     rationale: { type: schemaType.STRING },
     statusText: { type: schemaType.STRING },
   },
-  required: ["action", "confidence", "rationale", "statusText"],
+  required: ["action", "confidence"],
   type: schemaType.OBJECT,
 };

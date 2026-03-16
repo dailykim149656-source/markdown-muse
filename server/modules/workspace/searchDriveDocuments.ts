@@ -9,13 +9,16 @@ import { assertWorkspaceSession } from "../auth/routes";
 import { HttpError } from "../http/http";
 import { exportGoogleDocAsHtml, getGoogleDriveFileMetadata, listGoogleDocsFiles } from "./googleDriveClient";
 import { getWorkspaceRepository } from "./repository";
+import { mapWithConcurrency } from "../shared/mapWithConcurrency";
 
 const MAX_QUERY_LENGTH = 120;
 const SHORTLIST_PAGE_SIZE = 12;
 const SHORTLIST_FALLBACK_COUNT = 6;
-const MAX_DOCUMENTS_TO_READ = 6;
+const MAX_DOCUMENTS_TO_READ = 3;
 const MAX_CANDIDATES = 5;
 const MAX_EXCERPTS_PER_DOCUMENT = 2;
+const MAX_SELECTED_DRIVE_REFERENCES = 2;
+const DRIVE_LOAD_CONCURRENCY = 2;
 
 const DRIVE_INTENT_PATTERN = /\b(google|drive|google docs|docs|search drive|find in drive|import from google)\b|(?:구글|드라이브|구글\s*문서|구글독스|드라이브에서|드라이브\s*문서|구글에서.*(?:불러|가져와|찾아|열어)|드라이브에서.*(?:불러|가져와|찾아|열어))/i;
 
@@ -116,8 +119,9 @@ export const loadDriveReferenceDocuments = async (
   }
 
   const { accessToken } = await getAuthorizedConnection(request);
-  const uniqueFileIds = Array.from(new Set(fileIds)).slice(0, 3);
-  const loadedDocuments = await Promise.all(uniqueFileIds.map((fileId) => loadDriveDocument(accessToken, fileId)));
+  const uniqueFileIds = Array.from(new Set(fileIds)).slice(0, MAX_SELECTED_DRIVE_REFERENCES);
+  const loadedDocuments = await mapWithConcurrency(uniqueFileIds, DRIVE_LOAD_CONCURRENCY, (fileId) =>
+    loadDriveDocument(accessToken, fileId));
 
   return loadedDocuments.map((document) => ({
     excerpt: document.excerpt,
@@ -167,7 +171,8 @@ export const searchDriveDocuments = async ({
     return [];
   }
 
-  const loadedDocuments = await Promise.all(shortlistedFiles.map((file) => loadDriveDocument(accessToken, file.fileId)));
+  const loadedDocuments = await mapWithConcurrency(shortlistedFiles, DRIVE_LOAD_CONCURRENCY, (file) =>
+    loadDriveDocument(accessToken, file.fileId));
   const retrieval = keywordRetrieve(
     loadedDocuments.map((document) => document.normalized),
     {

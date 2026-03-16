@@ -8,6 +8,8 @@ import {
 const isDocumentDarkMode = () =>
   typeof document !== "undefined" && document.documentElement.classList.contains("dark");
 
+const MAX_MOUNT_RETRY_ATTEMPTS = 120;
+
 const scheduleAnimationFrame = (callback: () => void) => {
   if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
     return window.requestAnimationFrame(callback);
@@ -25,9 +27,30 @@ const cancelScheduledAnimationFrame = (frameId: number) => {
   window.clearTimeout(frameId);
 };
 
+const getMountedEditorRoot = (editor: Editor | null) => {
+  if (!editor || typeof HTMLElement === "undefined") {
+    return null;
+  }
+
+  try {
+    const root = editor.view.dom;
+
+    if (!(root instanceof HTMLElement) || !root.isConnected) {
+      return null;
+    }
+
+    return root;
+  } catch {
+    return null;
+  }
+};
+
 export const useRichTextDarkModeDisplayOverride = (editor: Editor | null) => {
   const [isDarkMode, setIsDarkMode] = useState(isDocumentDarkMode);
-  const animationFrameRef = useRef<number | null>(null);
+  const refreshAnimationFrameRef = useRef<number | null>(null);
+  const mountRetryAnimationFrameRef = useRef<number | null>(null);
+  const observerRef = useRef<MutationObserver | null>(null);
+  const observedRootRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (typeof document === "undefined" || typeof MutationObserver === "undefined") {
@@ -50,19 +73,25 @@ export const useRichTextDarkModeDisplayOverride = (editor: Editor | null) => {
   }, []);
 
   useEffect(() => {
-    const root = editor?.view.dom as HTMLElement | undefined;
-
-    if (!root) {
-      return;
-    }
+    let isDisposed = false;
 
     const scheduleOverrideRefresh = () => {
-      if (animationFrameRef.current !== null) {
-        cancelScheduledAnimationFrame(animationFrameRef.current);
+      const root = observedRootRef.current;
+
+      if (!root) {
+        return;
       }
 
-      animationFrameRef.current = scheduleAnimationFrame(() => {
-        animationFrameRef.current = null;
+      if (refreshAnimationFrameRef.current !== null) {
+        cancelScheduledAnimationFrame(refreshAnimationFrameRef.current);
+      }
+
+      refreshAnimationFrameRef.current = scheduleAnimationFrame(() => {
+        refreshAnimationFrameRef.current = null;
+
+        if (isDisposed || observedRootRef.current !== root) {
+          return;
+        }
 
         if (isDarkMode) {
           applyDarkModeDisplayColorOverrides(root);
@@ -73,40 +102,95 @@ export const useRichTextDarkModeDisplayOverride = (editor: Editor | null) => {
       });
     };
 
-    scheduleOverrideRefresh();
+    const cleanupObservedRoot = () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
 
-    if (typeof MutationObserver === "undefined") {
-      return () => {
-        if (animationFrameRef.current !== null) {
-          cancelScheduledAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
-        }
-
-        clearDarkModeDisplayColorOverrides(root);
-      };
-    }
-
-    const observer = new MutationObserver(() => {
-      scheduleOverrideRefresh();
-    });
-
-    observer.observe(root, {
-      attributeFilter: ["style"],
-      attributes: true,
-      characterData: true,
-      childList: true,
-      subtree: true,
-    });
-
-    return () => {
-      observer.disconnect();
-
-      if (animationFrameRef.current !== null) {
-        cancelScheduledAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = null;
+      if (refreshAnimationFrameRef.current !== null) {
+        cancelScheduledAnimationFrame(refreshAnimationFrameRef.current);
+        refreshAnimationFrameRef.current = null;
       }
 
-      clearDarkModeDisplayColorOverrides(root);
+      const root = observedRootRef.current;
+
+      if (root) {
+        clearDarkModeDisplayColorOverrides(root);
+      }
+
+      observedRootRef.current = null;
+    };
+
+    const attachToMountedRoot = (root: HTMLElement) => {
+      if (observedRootRef.current === root) {
+        scheduleOverrideRefresh();
+        return;
+      }
+
+      cleanupObservedRoot();
+      observedRootRef.current = root;
+      scheduleOverrideRefresh();
+
+      if (typeof MutationObserver === "undefined") {
+        return;
+      }
+
+      const observer = new MutationObserver(() => {
+        scheduleOverrideRefresh();
+      });
+
+      observer.observe(root, {
+        attributeFilter: ["style"],
+        attributes: true,
+        characterData: true,
+        childList: true,
+        subtree: true,
+      });
+
+      observerRef.current = observer;
+    };
+
+    const scheduleMountRetry = (attempt = 0) => {
+      if (mountRetryAnimationFrameRef.current !== null || attempt >= MAX_MOUNT_RETRY_ATTEMPTS) {
+        return;
+      }
+
+      mountRetryAnimationFrameRef.current = scheduleAnimationFrame(() => {
+        mountRetryAnimationFrameRef.current = null;
+
+        if (isDisposed) {
+          return;
+        }
+
+        const root = getMountedEditorRoot(editor);
+
+        if (!root) {
+          if (editor) {
+            scheduleMountRetry(attempt + 1);
+          }
+          return;
+        }
+
+        attachToMountedRoot(root);
+      });
+    };
+
+    const initialRoot = getMountedEditorRoot(editor);
+
+    if (initialRoot) {
+      attachToMountedRoot(initialRoot);
+    } else if (editor) {
+      scheduleMountRetry();
+    }
+
+    return () => {
+      isDisposed = true;
+
+      if (mountRetryAnimationFrameRef.current !== null) {
+        cancelScheduledAnimationFrame(mountRetryAnimationFrameRef.current);
+        mountRetryAnimationFrameRef.current = null;
+      }
+
+      cleanupObservedRoot();
     };
   }, [editor, isDarkMode]);
 };

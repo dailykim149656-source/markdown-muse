@@ -1,6 +1,7 @@
 import { schemaType } from "../gemini/client";
 import type {
   AgentChatMessage,
+  AgentCreateDocumentKind,
   AgentCurrentDocumentDraft,
   AgentDeliveryMode,
   AgentDelegatedCapability,
@@ -20,6 +21,7 @@ export interface RawAgentTurnResponse {
     type?: string;
     changeSetTitle?: string;
     createDocumentAfter?: boolean;
+    createDocumentKind?: AgentCreateDocumentKind;
     deliveryMode?: AgentDeliveryMode;
     objective?: string;
     prompt?: string;
@@ -39,6 +41,7 @@ const effectBaseProperties = {
   capability: { type: schemaType.STRING },
   changeSetTitle: { type: schemaType.STRING },
   createDocumentAfter: { type: schemaType.BOOLEAN },
+  createDocumentKind: { type: schemaType.STRING },
   deliveryMode: { type: schemaType.STRING },
   fileId: { type: schemaType.STRING },
   fileName: { type: schemaType.STRING },
@@ -123,7 +126,9 @@ const appendActionHint = (text: string, effect: AgentEffect) => {
   }
 
   if (effect.type === "delegate_ai_capability" && effect.capability === "summarize_document" && effect.createDocumentAfter) {
-    const hint = "Review the summary card and create the summary document when ready.";
+    const hint = effect.createDocumentKind === "handover"
+      ? "Review the summary card and create the handover document when ready."
+      : "Review the summary card and create the summary document when ready.";
     return trimmed.includes(hint) ? trimmed : `${trimmed}\n\n${hint}`.trim();
   }
 
@@ -178,6 +183,9 @@ const normalizeEffect = (
       return {
         capability: effect.capability || "summarize_document",
         createDocumentAfter: effect.createDocumentAfter,
+        createDocumentKind: effect.createDocumentKind === "handover" || effect.createDocumentKind === "summary"
+          ? effect.createDocumentKind
+          : undefined,
         objective: effect.objective?.trim() || undefined,
         prompt: effect.prompt?.trim() || undefined,
         targetFileId: effect.targetFileId?.trim() || undefined,

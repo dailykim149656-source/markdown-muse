@@ -11,7 +11,7 @@ export const captureViewportScreenshot = async (): Promise<AiAssistantScreenshot
     height: window.innerHeight,
     ignoreElements: shouldIgnoreElement,
     logging: false,
-    scale: 1,
+    scale: 0.5,
     scrollX: window.scrollX,
     scrollY: window.scrollY,
     useCORS: true,
@@ -22,13 +22,13 @@ export const captureViewportScreenshot = async (): Promise<AiAssistantScreenshot
     y: window.scrollY,
   });
 
-  const dataUrl = canvas.toDataURL("image/png");
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
 
   return {
     capturedAt: Date.now(),
-    dataBase64: dataUrl.replace(/^data:image\/png;base64,/, ""),
-    height: window.innerHeight,
-    mimeType: "image/png",
-    width: window.innerWidth,
+    dataBase64: dataUrl.replace(/^data:image\/jpeg;base64,/, ""),
+    height: canvas.height,
+    mimeType: "image/jpeg",
+    width: canvas.width,
   };
 };

@@ -61,6 +61,8 @@ export interface AgentResolvedReference {
   label: string;
 }
 
+export type AgentCreateDocumentKind = "summary" | "handover";
+
 export type AgentSectionEdit =
   | {
       kind: "replace_document_body";
@@ -198,6 +200,7 @@ export type AgentEffect =
       type: "delegate_ai_capability";
       capability: AgentDelegatedCapability;
       createDocumentAfter?: boolean;
+      createDocumentKind?: AgentCreateDocumentKind;
       objective?: string;
       prompt?: string;
       targetFileId?: string;
@@ -267,6 +270,7 @@ export type AgentArtifact =
       id: string;
       kind: "summary";
       createDocumentAfter?: boolean;
+      createDocumentKind?: AgentCreateDocumentKind;
       documentCreated?: boolean;
       objective: string;
       result: SummarizeDocumentResponse;

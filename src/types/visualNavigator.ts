@@ -91,7 +91,7 @@ export interface NavigatorUiHints {
     height: number;
     width: number;
   };
-  visibleLabels: string[];
+  visibleLabels?: string[];
   visibleTargets: NavigatorVisibleTarget[];
 }
 
@@ -112,6 +112,24 @@ export interface NavigatorHistoryEntry {
   rationale: string;
   statusText: string;
   targetDescription?: string;
+}
+
+export interface NavigatorGoalSuggestion {
+  confidence?: number;
+  intent: string;
+  label: string;
+  rationale: string;
+}
+
+export interface NavigatorGoalSuggestionRequest {
+  locale?: Locale;
+  recentHistory: NavigatorHistoryEntry[];
+  screenshot: AiAssistantScreenshotPayload;
+  ui: NavigatorUiHints;
+}
+
+export interface NavigatorGoalSuggestionResponse {
+  suggestions: NavigatorGoalSuggestion[];
 }
 
 export interface NavigatorTurnRequest {

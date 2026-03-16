@@ -39,6 +39,7 @@ steps:
         TEX_ALLOW_RESTRICTED_COMMANDS: "${_TEX_ALLOW_RESTRICTED_COMMANDS}"
         TEX_ALLOWED_PACKAGES: "${_TEX_ALLOWED_PACKAGES}"
         TEX_SERVICE_BASE_URL: "${_TEX_SERVICE_BASE_URL}"
+        NODE_OPTIONS: "${_NODE_OPTIONS}"
         EOF
 
         gcloud run deploy "${_SERVICE_NAME}" \
@@ -47,6 +48,10 @@ steps:
           --platform=managed \
           --allow-unauthenticated \
           --port=8080 \
+          --memory="${_RUN_MEMORY}" \
+          --cpu="${_RUN_CPU}" \
+          --concurrency="${_RUN_CONCURRENCY}" \
+          --max-instances="${_RUN_MAX_INSTANCES}" \
           --ingress=all \
           --service-account="${_RUN_SERVICE_ACCOUNT}" \
           --env-vars-file=/workspace/ai-service-env.yaml \
@@ -55,10 +60,14 @@ substitutions:
   _REGION: asia-northeast3
   _VERTEX_LOCATION: asia-northeast3
   _SERVICE_NAME: docsy
+  _RUN_MEMORY: 1Gi
+  _RUN_CPU: "1"
+  _RUN_CONCURRENCY: "8"
+  _RUN_MAX_INSTANCES: "20"
   _GEMINI_MODEL: gemini-3.1-flash-lite-preview
   _GEMINI_FALLBACK_MODEL: gemini-2.5-flash
   _AI_ALLOWED_ORIGIN: ""
-  _AI_MAX_REQUEST_BYTES: "2097152"
+  _AI_MAX_REQUEST_BYTES: "1572864"
   _GOOGLE_CLIENT_ID: ""
   _GOOGLE_OAUTH_REDIRECT_URI: ""
   _GOOGLE_OAUTH_PUBLISHING_STATUS: "testing"
@@ -74,6 +83,7 @@ substitutions:
   _GOOGLE_CLIENT_SECRET_SECRET: google-client-secret
   _TEX_SERVICE_AUTH_TOKEN_SECRET: tex-service-auth-token
   _TEX_SERVICE_BASE_URL: ""
+  _NODE_OPTIONS: "--max-old-space-size=768"
   _RUN_SERVICE_ACCOUNT: "399359781191-compute@developer.gserviceaccount.com"
 images:
   - ${_IMAGE_URI}

@@ -1876,6 +1876,7 @@ const Index = () => {
   }, [createDocument, t]);
   const handleCreateSummaryDocument = useCallback(({
     createdAt,
+    documentKind,
     locale: draftLocale,
     objective,
     sourceDocumentId,
@@ -1884,6 +1885,7 @@ const Index = () => {
   }: SummaryDocumentDraftInput) => {
     const draft = buildSummaryDocumentDraft({
       createdAt,
+      documentKind,
       locale: draftLocale || locale,
       objective,
       sourceDocumentId,
@@ -1901,7 +1903,7 @@ const Index = () => {
       storageKind: "docsy",
       tiptapJson: null,
     });
-    toast.success(`Created summary document "${draft.title}".`);
+    toast.success(`Created ${documentKind === "handover" ? "handover" : "summary"} document "${draft.title}".`);
     return draft;
   }, [createDocument, locale]);
 
@@ -2441,22 +2443,32 @@ const Index = () => {
         toggleLocalReference: () => undefined,
       },
       visualNavigator: {
+        advancedCommandOpen: false,
         canStart: false,
         clearHistory: () => undefined,
         confirmPendingAction: async () => undefined,
         history: [],
+        isRefreshingSuggestions: false,
         intent: "",
         isRunning: false,
         lastConfidence: null,
         lastError: null,
         lastRationale: null,
         pendingConfirmation: null,
+        presetGoals: [],
+        recentGoals: [],
+        refreshSuggestions: async () => undefined,
         rejectPendingAction: () => undefined,
+        runGoal: async () => undefined,
+        selectedGoalIntent: null,
+        setAdvancedCommandOpen: () => undefined,
         setIntent: () => undefined,
         startRun: async () => undefined,
         statusText: null,
         stopReason: null,
         stopRun: () => undefined,
+        suggestedGoals: [],
+        suggestionsError: null,
       },
       onCompare: async () => undefined,
       onCreateSummaryDocument: () => undefined,
@@ -2903,7 +2915,10 @@ const Index = () => {
       )}
       {canAccessAiAssistant && aiRuntimeState && (
         <Suspense fallback={null}>
-          <VisualNavigatorOverlay visualNavigator={aiRuntimeState.visualNavigator} />
+          <VisualNavigatorOverlay
+            onOpenFullNavigator={() => aiRuntimeState.setAssistantOpen(true)}
+            visualNavigator={aiRuntimeState.visualNavigator}
+          />
         </Suspense>
       )}
       <ResetDocumentsDialog

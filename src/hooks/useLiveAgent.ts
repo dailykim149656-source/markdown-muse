@@ -18,6 +18,7 @@ import type {
   AgentArtifact,
   AgentAvailableTargetDocument,
   AgentChatMessage,
+  AgentCreateDocumentKind,
   AgentCurrentDocumentDraft,
   AgentDeliveryMode,
   AgentDelegatedCapability,
@@ -33,7 +34,7 @@ import type {
 import type { DocumentPatchSet } from "@/types/documentPatch";
 
 const MAX_MESSAGE_HISTORY = 12;
-const MAX_DRIVE_REFERENCES = 3;
+const MAX_DRIVE_REFERENCES = 2;
 const createArtifactId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 type PendingAgentConfirmation =
@@ -501,6 +502,7 @@ export const useLiveAgent = ({
   const handleDelegatedCapability = useCallback(async ({
     capability,
     createDocumentAfter,
+    createDocumentKind,
     objective,
     prompt,
     targetFileId,
@@ -509,6 +511,7 @@ export const useLiveAgent = ({
   }: {
     capability: AgentDelegatedCapability;
     createDocumentAfter?: boolean;
+    createDocumentKind?: AgentCreateDocumentKind;
     objective?: string;
     prompt?: string;
     targetFileId?: string;
@@ -526,6 +529,7 @@ export const useLiveAgent = ({
 
       appendArtifact({
         createDocumentAfter,
+        createDocumentKind: createDocumentKind || "summary",
         id: createArtifactId("summary"),
         kind: "summary",
         objective: summaryObjective,
@@ -639,6 +643,7 @@ export const useLiveAgent = ({
     }
 
     onCreateSummaryDocument({
+      documentKind: artifact.createDocumentKind || "summary",
       locale,
       objective: artifact.objective,
       sourceDocumentId: artifact.sourceDocumentId,
@@ -836,6 +841,7 @@ export const useLiveAgent = ({
           await handleDelegatedCapability({
             capability: response.effect.capability,
             createDocumentAfter: response.effect.createDocumentAfter,
+            createDocumentKind: response.effect.createDocumentKind,
             objective: response.effect.objective || optimisticUserMessage.text,
             prompt: response.effect.prompt || optimisticUserMessage.text,
             targetFileId: response.effect.targetFileId,

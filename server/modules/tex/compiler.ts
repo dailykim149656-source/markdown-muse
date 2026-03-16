@@ -10,7 +10,8 @@ import type { TexDiagnostic, TexExportPdfRequest, TexPreviewRequest, TexValidate
 
 const COMPILE_TIMEOUT_MS = Number(process.env.TEX_COMPILE_TIMEOUT_MS || 15000);
 const MAX_SOURCE_BYTES = Number(process.env.TEX_MAX_SOURCE_BYTES || 300_000);
-const MAX_CONCURRENCY = Number(process.env.TEX_MAX_CONCURRENCY || 2);
+const MAX_CONCURRENCY = Number(process.env.TEX_MAX_CONCURRENCY || 1);
+type CompileMode = "export" | "preview" | "validate";
 
 let activeCompilations = 0;
 const waitingResolvers: Array<() => void> = [];
@@ -31,8 +32,10 @@ const releaseCompileSlot = () => {
   next?.();
 };
 
+const getLatexByteLength = (latex: string) => Buffer.byteLength(latex, "utf8");
+
 const ensureLatexLength = (latex: string) => {
-  const size = Buffer.byteLength(latex, "utf8");
+  const size = getLatexByteLength(latex);
 
   if (size === 0) {
     throw new HttpError(400, "LaTeX content is required.");
@@ -127,9 +130,12 @@ const runCompileCommand = async (workdir: string) => {
 
 export interface CompileTexResult {
   compileMs: number;
+  compileMode: CompileMode;
   diagnostics: TexDiagnostic[];
+  latexBytes: number;
   logSummary: string;
   ok: boolean;
+  pdfBytes: number;
   pdfBuffer?: Buffer;
 }
 
@@ -147,6 +153,7 @@ const compileLatexDocument = async (
   latex: string,
   documentName: string | undefined,
   sourceType: TexValidateRequest["sourceType"],
+  compileMode: CompileMode,
 ) => {
   ensureLatexLength(latex);
   assertTexCompilationAllowed({ latex, sourceType });
@@ -154,22 +161,31 @@ const compileLatexDocument = async (
 
   const startedAt = Date.now();
   const workdir = await mkdtemp(join(tmpdir(), "docsy-tex-"));
+  const latexBytes = getLatexByteLength(latex);
 
   try {
     await writeFile(join(workdir, "document.tex"), normalizeCompileInput(latex, documentName), "utf8");
     const commandResult = await runCompileCommand(workdir);
     const fullLogOutput = await readLogOutput(workdir, commandResult.output);
     const diagnostics = parseTexDiagnostics(fullLogOutput);
+    const shouldReadPdf = compileMode === "preview" || compileMode === "export";
     const pdfPath = join(workdir, "document.pdf");
-    const pdfBuffer = await readFile(pdfPath).catch(() => null);
-    const ok = Boolean(pdfBuffer) && commandResult.code === 0;
+    const pdfBuffer = shouldReadPdf
+      ? await readFile(pdfPath).catch(() => null)
+      : null;
+    const ok = shouldReadPdf
+      ? Boolean(pdfBuffer) && commandResult.code === 0
+      : commandResult.code === 0;
     const compileMs = Date.now() - startedAt;
 
     return {
       compileMs,
+      compileMode,
       diagnostics,
+      latexBytes,
       logSummary: summarizeTexLog(fullLogOutput),
       ok,
+      pdfBytes: pdfBuffer?.byteLength || 0,
       pdfBuffer: pdfBuffer || undefined,
     } satisfies CompileTexResult;
   } finally {
@@ -179,18 +195,21 @@ const compileLatexDocument = async (
 };
 
 export const validateLatex = async (request: TexValidateRequest): Promise<CompileTexResult> => {
-  const result = await compileLatexDocument(request.latex, request.documentName, request.sourceType);
+  const result = await compileLatexDocument(request.latex, request.documentName, request.sourceType, "validate");
 
   return {
     compileMs: result.compileMs,
+    compileMode: result.compileMode,
     diagnostics: result.diagnostics,
+    latexBytes: result.latexBytes,
     logSummary: result.logSummary,
     ok: result.ok,
+    pdfBytes: result.pdfBytes,
   };
 };
 
 export const exportPdf = async (request: TexExportPdfRequest) => {
-  const result = await compileLatexDocument(request.latex, request.documentName, request.sourceType);
+  const result = await compileLatexDocument(request.latex, request.documentName, request.sourceType, "export");
 
   if (!result.ok || !result.pdfBuffer) {
     const primaryError = result.diagnostics.find((diagnostic) => diagnostic.severity === "error")?.message || "XeLaTeX compilation failed.";
@@ -201,17 +220,7 @@ export const exportPdf = async (request: TexExportPdfRequest) => {
 };
 
 export const previewLatex = async (request: TexPreviewRequest) => {
-  const result = await compileLatexDocument(request.latex, request.documentName, request.sourceType);
-
-  return {
-    compileMs: result.compileMs,
-    diagnostics: result.diagnostics,
-    logSummary: result.logSummary,
-    ok: result.ok,
-    pdfBase64: result.ok && result.pdfBuffer
-      ? result.pdfBuffer.toString("base64")
-      : undefined,
-  };
+  return compileLatexDocument(request.latex, request.documentName, request.sourceType, "preview");
 };
 
 export const getTexToolingHealth = () => {

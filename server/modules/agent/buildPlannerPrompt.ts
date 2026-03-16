@@ -87,12 +87,18 @@ const summarizeRetrievalContext = (retrievalContext: ActiveDocumentRetrievalCont
 };
 
 export const buildPlannerPrompt = ({
+  conversationIntent,
   driveReferences,
   preRouteHints,
   retrievalContext,
   request,
   workspaceConnected,
 }: {
+  conversationIntent: {
+    currentDocumentSummaryRequested: boolean;
+    currentDocumentUpdateRequested: boolean;
+    handoverDocumentRequested: boolean;
+  };
   driveReferences: Array<{
     excerpt: string;
     fileId: string;
@@ -137,6 +143,9 @@ Rules:
 - Prefer generate_section when the user asks to add a new section to the active document instead of revising an existing section in place.
 - Prefer search_drive_documents or prepare_drive_import only for explicit Google Drive or Google Docs requests.
 - Do not infer Google Drive intent from generic words like "document", "content", or "apply".
+- If conversationIntent.currentDocumentSummaryRequested=true and no local or Drive target is identified, prefer summarize_document for the active document instead of asking which document to summarize.
+- If conversationIntent.currentDocumentUpdateRequested=true and no local or Drive target is identified, prefer update_current_document for the active document instead of asking which document to edit.
+- If conversationIntent.handoverDocumentRequested=true and summarize_document is selected, treat the request as a summary that should support creating a handover document after review.
 - If the request is ambiguous or missing essential data, choose ask_followup and fill missingInformation.
 - Use general_reply only for conversational questions that do not require a draft or Google action.
 - You may choose summarize_document, generate_section, generate_toc, compare_documents, extract_procedure, or suggest_document_updates when the user explicitly asks for those capabilities.
@@ -157,7 +166,7 @@ Rules:
 - target.headingNodeId should be set when one exact heading node is the clear target.
 - target.fileId may only be used when a selected Drive reference already gives you that exact file id.
 - Use top section targets, top field targets, and workspace graph hints as the primary evidence for deciding where the user wants to edit.
-- If retrieval matches are empty for a current-document edit, choose ask_followup unless the request clearly asks for a brand-new document.
+- If retrieval matches are empty for a current-document edit but the active document exists, still choose update_current_document and let the executor decide the best edit strategy. Only choose ask_followup when no active document is available at all.
 - When compare_documents or suggest_document_updates is clearly requested but the target document is not clear, still choose that action and leave target.documentId empty instead of falling back to ask_followup. The client can present a target picker.
 
 Execution note:
@@ -182,6 +191,9 @@ ${JSON.stringify(summarizeAvailableTargetDocuments(request), null, 2)}
 Pre-route hints:
 ${JSON.stringify(preRouteHints, null, 2)}
 
+Conversation intent hints:
+${JSON.stringify(conversationIntent, null, 2)}
+
 Selected Drive references:
 ${JSON.stringify(summarizeDriveReferences(driveReferences), null, 2)}
 
@@ -198,4 +210,9 @@ export const plannerNeedsFollowup = (
     planner.missingInformation.length > 0
     && planner.action !== "compare_documents"
     && planner.action !== "suggest_document_updates"
+    && planner.action !== "update_current_document"
+    && planner.action !== "summarize_document"
+    && planner.action !== "generate_section"
+    && planner.action !== "generate_toc"
+    && planner.action !== "extract_procedure"
   );

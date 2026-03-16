@@ -14,7 +14,7 @@ export interface AgentPreRouteHints {
   localTarget: AgentAvailableTargetDocument | null;
 }
 
-const ACTIVE_DOCUMENT_PATTERN = /\b(?:this\s+document|current\s+document|current\s+doc|this\s+doc)\b|(?:\uC774\s*\uBB38\uC11C)|(?:\uD604\uC7AC\s*\uBB38\uC11C)/iu;
+const ACTIVE_DOCUMENT_PATTERN = /\b(?:this\s+document|current\s+document|current\s+doc|this\s+doc|open\s+document|opened\s+document)\b|(?:\uC774\s*\uBB38\uC11C)|(?:\uD604\uC7AC\s*(?:\uB300\uC0C1\s*)?\uBB38\uC11C)|(?:\uB300\uC0C1\s*\uBB38\uC11C)|(?:\uC9C0\uAE08\s*\uBB38\uC11C)|(?:\uC5F4\uB824\s*\uC788\uB294\s*\uBB38\uC11C)|(?:\uC5F4\uB824\uC788\uB294\s*\uBB38\uC11C)/iu;
 
 const normalizeName = (value: string) =>
   value
@@ -110,9 +110,12 @@ export const buildAgentPreRouteHints = ({
 }): AgentPreRouteHints => {
   const localResolution = resolveBestMatch(latestUserMessage, request.availableTargetDocuments || []);
   const driveResolution = resolveBestMatch(latestUserMessage, driveReferences);
+  const activeDocumentScore = request.activeDocument
+    ? scoreNameMatch(latestUserMessage, request.activeDocument.fileName)
+    : 0;
 
   return {
-    activeDocumentPinned: ACTIVE_DOCUMENT_PATTERN.test(latestUserMessage),
+    activeDocumentPinned: ACTIVE_DOCUMENT_PATTERN.test(latestUserMessage) || activeDocumentScore >= 0.82,
     ambiguousDriveReferences: driveResolution.ambiguous.map((candidate) => ({
       fileId: candidate.fileId,
       fileName: candidate.fileName,

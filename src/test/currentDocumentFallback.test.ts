@@ -28,7 +28,7 @@ describe("buildDeterministicCurrentDocumentDraftResponse", () => {
     expect(response?.currentDocumentDraft?.edits[0]?.markdownBody).toContain("\uC778\uC218\uC790: \uC2EC\uCCAD\uC774");
   });
 
-  it("returns null when the current document has headings", () => {
+  it("builds a replace_document_body draft even when the current document has headings", () => {
     const response = buildDeterministicCurrentDocumentDraftResponse({
       latestUserMessage: "\uC778\uACC4\uC790\uB294 \uD64D\uAE38\uB3D9, \uC778\uC218\uC790\uB294 \uC2EC\uCCAD\uC774. \uC774 \uB0B4\uC6A9\uC744 \uBB38\uC11C\uC5D0 \uBC18\uC601\uD574",
       locale: "ko",
@@ -52,6 +52,8 @@ describe("buildDeterministicCurrentDocumentDraftResponse", () => {
       },
     });
 
-    expect(response).toBeNull();
+    expect(response?.effect.type).toBe("draft_current_document");
+    expect(response?.currentDocumentDraft?.edits[0]?.kind).toBe("replace_document_body");
+    expect(response?.currentDocumentDraft?.edits[0]?.markdownBody).toContain("\uC778\uACC4\uC790: \uD64D\uAE38\uB3D9");
   });
 });

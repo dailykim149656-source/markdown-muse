@@ -1,5 +1,4 @@
 import {
-  collectVisibleNavigatorLabels,
   collectVisibleNavigatorTargets,
   describeFocusedNavigatorElement,
 } from "@/lib/visualNavigator/domTargets";
@@ -17,6 +16,5 @@ export const buildVisualNavigatorUiHints = (): NavigatorUiHints => ({
     height: window.innerHeight,
     width: window.innerWidth,
   },
-  visibleLabels: collectVisibleNavigatorLabels(),
   visibleTargets: collectVisibleNavigatorTargets(),
 });

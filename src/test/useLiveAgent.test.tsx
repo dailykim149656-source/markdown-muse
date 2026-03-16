@@ -228,4 +228,79 @@ describe("useLiveAgent", () => {
     const request = liveAgentTurnMock.mock.calls[0]?.[0] as AgentTurnRequest;
     expect(request.activeDocument).toBeNull();
   });
+
+  it("preserves handover document intent through the summary artifact flow", async () => {
+    const activeDoc = createDocument({
+      id: "doc-active",
+      name: "Active Doc",
+    });
+    const onCreateSummaryDocument = vi.fn();
+    const onSummarizeDocument = vi.fn().mockResolvedValue({
+      attributions: [{
+        chunkId: "chunk-1",
+        ingestionId: "doc-active",
+        rationale: "Grounded in the active document.",
+      }],
+      bulletPoints: ["Key handover point"],
+      requestId: "req-1",
+      summary: "Summary body",
+    });
+
+    liveAgentTurnMock.mockResolvedValueOnce({
+      assistantMessage: {
+        createdAt: Date.now(),
+        id: "agent-1",
+        role: "assistant",
+        text: "I prepared a summary request and a handover document can be created after review.",
+      },
+      effect: {
+        capability: "summarize_document",
+        createDocumentAfter: true,
+        createDocumentKind: "handover",
+        objective: "Summarize the current document and prepare a handover.",
+        type: "delegate_ai_capability",
+      },
+    });
+
+    const { result } = renderHook(() => useLiveAgent({
+      activeDoc,
+      activeEditor: null,
+      currentRenderableMarkdown: "# Active Doc",
+      documents: [activeDoc],
+      getFreshRenderableMarkdown: async () => "# Active Doc",
+      onAutoApplyPatchSet: vi.fn().mockResolvedValue(true),
+      onCompareWithDocument: vi.fn(),
+      onCreateDocumentDraft: vi.fn(),
+      onCreateSummaryDocument,
+      onExtractProcedure: vi.fn(),
+      onGenerateSection: vi.fn(),
+      onGenerateToc: vi.fn(),
+      onImportDriveDocument: vi.fn(),
+      onOpenPatchReview: vi.fn(),
+      onOpenWorkspaceConnection: vi.fn(),
+      onSummarizeDocument,
+      onSuggestUpdates: vi.fn(),
+    }), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage("문서 요약해주고 인수인계서 만들어줘");
+    });
+
+    const summaryArtifact = result.current.artifacts.find((artifact) => artifact.kind === "summary");
+
+    expect(summaryArtifact).toEqual(expect.objectContaining({
+      createDocumentAfter: true,
+      createDocumentKind: "handover",
+      kind: "summary",
+    }));
+
+    act(() => {
+      result.current.createSummaryDocumentFromArtifact(summaryArtifact!.id);
+    });
+
+    expect(onCreateSummaryDocument).toHaveBeenCalledWith(expect.objectContaining({
+      documentKind: "handover",
+      objective: "Summarize the current document and prepare a handover.",
+    }));
+  });
 });
