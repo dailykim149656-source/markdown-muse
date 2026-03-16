@@ -62,11 +62,6 @@ gcloud storage buckets add-iam-policy-binding "gs://${TEX_PREVIEW_BUCKET}" \
   --role="roles/storage.objectAdmin" \
   >/dev/null
 
-gcloud iam service-accounts add-iam-policy-binding "${RUN_SERVICE_ACCOUNT}" \
-  --member="serviceAccount:${RUN_SERVICE_ACCOUNT}" \
-  --role="roles/iam.serviceAccountTokenCreator" \
-  >/dev/null
-
 if ! gcloud tasks queues describe "${TEX_TASK_QUEUE}" --location "${TEX_TASK_LOCATION}" >/dev/null 2>&1; then
   gcloud tasks queues create "${TEX_TASK_QUEUE}" --location "${TEX_TASK_LOCATION}" >/dev/null
 fi

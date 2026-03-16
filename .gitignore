@@ -54,5 +54,6 @@ temp-*.ts
 temp-*.tsx
 test-results
 output/gcp-monitoring/
+output/readme-bundles/
 playwright-report
 .playwright-*.png

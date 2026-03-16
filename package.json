@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "ai:server": "node --env-file-if-exists=.env.local --import tsx server/aiServer.ts",
+    "bundle:readme-docs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-readme-bundle.ps1",
     "build:server": "esbuild server/aiServer.ts server/texService.ts server/texWorker.ts --bundle --platform=node --format=esm --target=node22 --outdir=server-dist --packages=external",
     "dev": "vite",
     "build": "vite build",
