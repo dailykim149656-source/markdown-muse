@@ -216,7 +216,7 @@ const buildAiRequestLogContext = (
       loadedDriveDocs: 0,
       markdownBytes: getMarkdownByteLength(request.activeDocument?.markdown),
       screenshotBytes: getScreenshotByteLength(request),
-      selectedDriveRefs: request.driveReferenceFileIds.length,
+      selectedDriveRefs: (request.driveReferenceFileIds || []).length,
     };
   }
 
@@ -699,7 +699,7 @@ const MIN_PLANNER_CONFIDENCE = 0.65;
 const SUCCESS_REPLY_ONLY_PATTERN = /\b(done|updated|applied|prepared|created|imported|reflected)\b|(?:\uBC18\uC601|\uC218\uC815|\uC801\uC6A9|\uC644\uB8CC|\uC0DD\uC131|\uC900\uBE44)/i;
 
 const findLatestUserMessage = (request: AgentTurnRequest) => {
-  const latestUserMessage = [...request.messages]
+  const latestUserMessage = [...(request.messages || [])]
     .reverse()
     .find((message) => message.role === "user" && message.text.trim().length > 0)
     ?.text
@@ -724,13 +724,14 @@ const DOCUMENT_FOLLOWUP_PATTERN = /\b(?:document|doc|source document|target docu
 const SUMMARY_DOCUMENT_PATTERN = /(summary document|separate summary|document the summary|요약 문서|문서화|따로 문서|별도 문서)/i;
 
 const buildConversationIntentHints = (request: AgentTurnRequest): AgentConversationIntentHints => {
-  const latestSummaryRequest = findLatestSummaryRequestInConversation(request.messages);
+  const messages = request.messages || [];
+  const latestSummaryRequest = findLatestSummaryRequestInConversation(messages);
 
   return {
-    currentDocumentSummaryRequested: Boolean(request.activeDocument) && hasSummaryRequestInConversation(request.messages),
+    currentDocumentSummaryRequested: Boolean(request.activeDocument) && hasSummaryRequestInConversation(messages),
     currentDocumentUpdateRequested: Boolean(request.activeDocument)
-      && hasExplicitCurrentDocumentUpdateRequestInConversation(request.messages),
-    handoverDocumentRequested: hasHandoverDocumentRequestInConversation(request.messages),
+      && hasExplicitCurrentDocumentUpdateRequestInConversation(messages),
+    handoverDocumentRequested: hasHandoverDocumentRequestInConversation(messages),
     latestSummaryRequest,
     summaryDocumentRequested: Boolean(latestSummaryRequest && SUMMARY_DOCUMENT_PATTERN.test(latestSummaryRequest)),
   };
@@ -911,9 +912,11 @@ export const handleAgentTurn = async (
   });
   let driveReferences: Array<{ excerpt: string; fileId: string; fileName: string }> = [];
 
-  if (workspaceConnected && request.driveReferenceFileIds.length > 0) {
+  const driveReferenceFileIds = request.driveReferenceFileIds || [];
+
+  if (workspaceConnected && driveReferenceFileIds.length > 0) {
     try {
-      driveReferences = (await loadDriveReferenceDocuments(httpRequest, request.driveReferenceFileIds))
+      driveReferences = (await loadDriveReferenceDocuments(httpRequest, driveReferenceFileIds))
         .map((reference) => ({
           excerpt: reference.excerpt,
           fileId: reference.fileId,

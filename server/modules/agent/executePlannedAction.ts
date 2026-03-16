@@ -720,7 +720,7 @@ const generateCurrentDocumentDraft = async ({
     prompt: buildCurrentDocumentDraftPrompt({
       latestUserMessage: context.latestUserMessage,
       planner,
-      recentUserMessages: context.request.messages
+      recentUserMessages: (context.request.messages || [])
         .filter((message) => message.role === "user")
         .map((message) => message.text)
         .slice(-6),
@@ -758,7 +758,7 @@ const executeCreateNewDocument = async (context: AgentExecutionContext): Promise
     images: getRequestImages(context.request),
     prompt: buildNewDraftFallbackPrompt({
       latestUserMessage: context.latestUserMessage,
-      recentUserMessages: context.request.messages
+      recentUserMessages: (context.request.messages || [])
         .filter((message) => message.role === "user")
         .map((message) => message.text)
         .slice(-6),
@@ -1156,12 +1156,13 @@ const executeDelegatedAction = (
         : preRouteHints.localTarget
     )
     : null;
-  const latestSummaryObjective = findLatestSummaryRequestInConversation(context.request.messages);
+  const messages = context.request.messages || [];
+  const latestSummaryObjective = findLatestSummaryRequestInConversation(messages);
   const objective = planner.action === "summarize_document"
     ? planner.arguments?.prompt?.trim() || latestSummaryObjective || context.latestUserMessage.trim()
     : planner.arguments?.prompt?.trim() || context.latestUserMessage.trim();
   const createDocumentKind = planner.action === "summarize_document"
-    ? (hasHandoverDocumentRequestInConversation(context.request.messages) ? "handover" : "summary")
+    ? (hasHandoverDocumentRequestInConversation(messages) ? "handover" : "summary")
     : undefined;
   const createDocumentAfter = planner.action === "summarize_document"
     ? Boolean(planner.arguments?.createDocumentAfter)

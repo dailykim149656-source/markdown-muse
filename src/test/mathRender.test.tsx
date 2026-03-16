@@ -1,9 +1,10 @@
 import { render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import katex from "katex";
 import MathRender from "@/components/editor/MathRender";
 
-vi.mock("@/lib/rendering/loadKatex", async () => ({
-  loadKatex: async () => (await import("katex")).default,
+vi.mock("@/lib/rendering/loadKatex", () => ({
+  loadKatex: () => Promise.resolve(katex),
 }));
 
 describe("MathRender", () => {

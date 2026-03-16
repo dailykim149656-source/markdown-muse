@@ -131,7 +131,7 @@ Current active document:
 ${JSON.stringify(summarizeDocumentContext(request.activeDocument), null, 2)}
 
 Selected local references:
-${JSON.stringify(request.localReferences.map(summarizeLocalReference), null, 2)}
+${JSON.stringify((request.localReferences || []).map(summarizeLocalReference), null, 2)}
 
 Selected Drive references:
 ${JSON.stringify(driveReferences.map(summarizeDriveReference), null, 2)}
@@ -227,7 +227,7 @@ Active document context:
 ${JSON.stringify(summarizeDocumentContext(request.activeDocument), null, 2)}
 
 Selected local references:
-${JSON.stringify(request.localReferences.map(summarizeLocalReference), null, 2)}
+${JSON.stringify((request.localReferences || []).map(summarizeLocalReference), null, 2)}
 
 Recent user requirements:
 ${JSON.stringify(recentUserMessages, null, 2)}
@@ -331,7 +331,7 @@ Neighboring section titles around the primary target:
 ${JSON.stringify(neighboringSectionTitles, null, 2)}
 
 Selected local references:
-${JSON.stringify(request.localReferences.map(summarizeLocalReference), null, 2)}
+${JSON.stringify((request.localReferences || []).map(summarizeLocalReference), null, 2)}
 
 Recent user requirements:
 ${JSON.stringify(recentUserMessages, null, 2)}

@@ -19,7 +19,7 @@ const summarizeActiveDocument = (request: AgentTurnRequest) => {
 };
 
 const summarizeLocalReferences = (request: AgentTurnRequest) =>
-  request.localReferences.map((reference) => ({
+  (request.localReferences || []).map((reference) => ({
     documentId: reference.documentId,
     existingHeadings: reference.existingHeadings,
     fileName: reference.fileName,
