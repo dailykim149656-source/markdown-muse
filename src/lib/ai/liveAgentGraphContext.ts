@@ -9,6 +9,8 @@ import type { AgentGraphContext } from "@/types/liveAgent";
 
 const MAX_RELATED_DOCUMENTS = 5;
 const MAX_ISSUES = 5;
+const MAX_PATHS = 5;
+const MAX_REASONS = 6;
 
 const clampScore = (value: number) => {
   if (!Number.isFinite(value)) {
@@ -24,6 +26,28 @@ const clampScore = (value: number) => {
   }
 
   return Math.round(value);
+};
+
+const getRelationConfidence = (relationKinds: KnowledgeDocumentImpact["paths"][number]["relationKinds"], depth: 1 | 2) => {
+  const base = relationKinds.includes("references") || relationKinds.includes("referenced_by")
+    ? 0.92
+    : relationKinds.includes("duplicate")
+      ? 0.82
+      : relationKinds.includes("similar")
+        ? 0.64
+        : 0.56;
+
+  return Number(Math.max(0.4, Math.min(0.98, base - (depth === 2 ? 0.14 : 0))).toFixed(2));
+};
+
+const buildPathReasonMessage = (path: KnowledgeDocumentImpact["paths"][number]) => {
+  const relationLabel = path.relationKinds.join(", ");
+
+  if (path.depth === 2 && path.viaDocumentName) {
+    return `${path.targetDocumentName} is related through ${path.viaDocumentName} (${relationLabel}).`;
+  }
+
+  return `${path.targetDocumentName} is directly related (${relationLabel}).`;
 };
 
 const summarizeImpact = (impact: KnowledgeDocumentImpact | null) => {
@@ -47,6 +71,29 @@ const summarizeImpact = (impact: KnowledgeDocumentImpact | null) => {
         relatedDocumentIds: issue.relatedDocumentIds,
         severity: issue.severity,
       })),
+    paths: impact.paths
+      .slice(0, MAX_PATHS)
+      .map((path) => ({
+        confidence: getRelationConfidence(path.relationKinds, path.depth),
+        depth: path.depth,
+        relationKinds: path.relationKinds,
+        targetDocumentId: path.targetDocumentId,
+        targetDocumentName: path.targetDocumentName,
+        viaDocumentId: path.viaDocumentId,
+        viaDocumentName: path.viaDocumentName,
+      })),
+    reasons: [
+      ...impact.issues.map((issue) => ({
+        message: issue.message,
+        source: "issue" as const,
+      })),
+      ...impact.paths.map((path) => ({
+        message: buildPathReasonMessage(path),
+        source: "path" as const,
+        targetDocumentId: path.targetDocumentId,
+        targetDocumentName: path.targetDocumentName,
+      })),
+    ].slice(0, MAX_REASONS),
     relatedDocuments: impact.relatedDocuments
       .slice(0, MAX_RELATED_DOCUMENTS)
       .map((document) => ({

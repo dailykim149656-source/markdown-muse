@@ -40,6 +40,7 @@ import type {
   KnowledgeWorkspaceInsights,
 } from "@/lib/knowledge/workspaceInsights";
 import {
+  buildGraphPathExplanations,
   buildGraphConnectionSummary,
   createPreparedGraphView,
   filterPreparedGraphByQuery,
@@ -149,6 +150,18 @@ const chainSuggestionLabelKey = (context: GraphContextKind) => {
     case "change":
     default:
       return "knowledge.changeMonitoringSuggestUpdate";
+  }
+};
+
+const formatGraphProvenanceLabel = (provenance?: KnowledgeGraphEdge["provenance"]) => {
+  switch (provenance) {
+    case "issue_assisted":
+      return "Issue-assisted";
+    case "rule":
+      return "Rule-based";
+    case "heuristic":
+    default:
+      return "Heuristic";
   }
 };
 
@@ -264,9 +277,21 @@ const GraphExplorerDialog = ({
   const selectedNode = displayedGraph.nodes.find((node) => node.id === selectedNodeId)
     || modeGraph.nodes.find((node) => node.id === selectedNodeId)
     || null;
+  const displayedNodeById = useMemo(
+    () => new Map(displayedGraph.nodes.map((node) => [node.id, node])),
+    [displayedGraph.nodes],
+  );
   const connectionSummary = useMemo(
     () => buildGraphConnectionSummary(displayedGraph.edges),
     [displayedGraph.edges],
+  );
+  const pathExplanations = useMemo(
+    () => buildGraphPathExplanations({
+      edges: displayedGraph.edges,
+      nodeById: displayedNodeById,
+      selectedNodeId,
+    }),
+    [displayedGraph.edges, displayedNodeById, selectedNodeId],
   );
 
   const selectedNodeEdges = useMemo(
@@ -766,12 +791,65 @@ const GraphExplorerDialog = ({
                   )}
                 </div>
 
+                <div className="space-y-2 rounded-md border border-border/60 px-3 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] font-medium text-foreground">
+                      Path Explanations
+                    </div>
+                    <Badge variant="outline">{pathExplanations.length}</Badge>
+                  </div>
+                  {pathExplanations.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-border px-3 py-3 text-xs text-muted-foreground">
+                      No ranked source-target paths are available for this selection.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {pathExplanations.map((path) => (
+                        <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-3" key={path.id}>
+                          <div className="flex flex-wrap items-center gap-1">
+                            <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant={path.provenance === "heuristic" ? "outline" : "secondary"}>
+                              {formatGraphProvenanceLabel(path.provenance)}
+                            </Badge>
+                            <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant="outline">
+                              Confidence {Math.round(path.confidence * 100)}%
+                            </Badge>
+                            {path.viaNodeLabel && (
+                              <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant="outline">
+                                Via {path.viaNodeLabel}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="mt-2 text-sm font-medium text-foreground">
+                            {path.targetNodeLabel}
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                            {path.summary}
+                          </p>
+                          <div className="mt-2">
+                            <Button
+                              onClick={() => handleOpenDocument(toGraphNavigationTarget(displayedNodeById.get(path.targetNodeId) || selectedNode))}
+                              size="sm"
+                              type="button"
+                              variant="ghost"
+                            >
+                              {t("knowledge.open")}
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 {semanticOverlayEnabled && (
-                  <div className="space-y-3 rounded-md border border-border/60 px-3 py-3">
+                  <div className="space-y-3 rounded-md border border-dashed border-border/60 bg-muted/10 px-3 py-3">
                     <div className="space-y-1">
                       <div className="text-[11px] font-medium text-foreground">
                         {t("knowledge.graphSemanticTitle")}
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        Secondary heuristic layer.
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {t("knowledge.graphSemanticDescription")}
                       </p>
@@ -806,6 +884,9 @@ const GraphExplorerDialog = ({
                                 </Badge>
                                 <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant={link.confidence === "medium" ? "secondary" : "outline"}>
                                   {t(semanticConfidenceLabelKey(link.confidence))}
+                                </Badge>
+                                <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant="outline">
+                                  {link.provenance === "issue_assisted" ? "Issue-assisted" : "Heuristic"}
                                 </Badge>
                               </div>
                               <div className="mt-2 text-sm font-medium text-foreground">
@@ -880,6 +961,12 @@ const GraphExplorerDialog = ({
                               {isOutgoing
                                 ? t("knowledge.graphOutgoing", { count: 1 })
                                 : t("knowledge.graphIncoming", { count: 1 })}
+                            </Badge>
+                            <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant={edge.provenance === "heuristic" ? "outline" : "secondary"}>
+                              {formatGraphProvenanceLabel(edge.provenance)}
+                            </Badge>
+                            <Badge className="h-5 rounded-full px-1.5 text-[10px]" variant="outline">
+                              Confidence {Math.round((edge.confidence || 0.6) * 100)}%
                             </Badge>
                           </div>
                           <button

@@ -42,6 +42,19 @@ describe("buildActiveDocumentRetrievalContext", () => {
               relatedDocumentIds: ["doc-1", "doc-2"],
               severity: "warning",
             }],
+            paths: [{
+              confidence: 0.92,
+              depth: 1,
+              relationKinds: ["referenced_by"],
+              targetDocumentId: "doc-2",
+              targetDocumentName: "Ops Guide",
+            }],
+            reasons: [{
+              message: "Ops Guide is directly related (referenced_by).",
+              source: "path",
+              targetDocumentId: "doc-2",
+              targetDocumentName: "Ops Guide",
+            }],
             relatedDocuments: [{
               documentId: "doc-2",
               name: "Ops Guide",

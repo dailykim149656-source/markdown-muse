@@ -64,9 +64,9 @@ describe("workspaceInsights", () => {
     expect(insights.summary.imageNodeCount).toBe(1);
     expect(insights.summary.referenceEdgeCount).toBeGreaterThanOrEqual(1);
     expect(insights.edges).toEqual(expect.arrayContaining([
-      expect.objectContaining({ kind: "contains_section" }),
-      expect.objectContaining({ kind: "contains_image" }),
-      expect.objectContaining({ kind: "references" }),
+      expect.objectContaining({ kind: "contains_section", provenance: "rule", sourceRule: "document_structure_section" }),
+      expect.objectContaining({ kind: "contains_image", provenance: "rule", sourceRule: "document_structure_image" }),
+      expect.objectContaining({ kind: "references", provenance: "rule", sourceRule: expect.stringContaining("reference_target") }),
     ]));
   });
 
@@ -126,7 +126,7 @@ describe("workspaceInsights", () => {
       expect.objectContaining({ kind: "unresolved_reference" }),
     ]));
     expect(insights.edges).toEqual(expect.arrayContaining([
-      expect.objectContaining({ group: "issue", kind: "issue_relation" }),
+      expect.objectContaining({ group: "issue", kind: "issue_relation", provenance: "issue_assisted" }),
     ]));
     expect(insights.summary.issueCount).toBeGreaterThanOrEqual(3);
     expect(insights.summary.staleIssueCount).toBe(1);

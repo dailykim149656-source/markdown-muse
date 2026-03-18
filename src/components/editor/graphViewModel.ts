@@ -25,6 +25,19 @@ export interface GraphConnectionSummary {
   outgoing: Map<string, number>;
 }
 
+export interface GraphPathExplanation {
+  confidence: number;
+  edgeIds: string[];
+  id: string;
+  provenance: KnowledgeGraphEdge["provenance"];
+  score: number;
+  summary: string;
+  targetNodeId: string;
+  targetNodeLabel: string;
+  viaNodeId?: string;
+  viaNodeLabel?: string;
+}
+
 const sortNodes = (left: KnowledgeGraphNode, right: KnowledgeGraphNode) =>
   nodeKindOrder[left.kind] - nodeKindOrder[right.kind]
   || Number(right.issueSeverity === "warning") - Number(left.issueSeverity === "warning")
@@ -37,6 +50,30 @@ const sortEdges = (left: KnowledgeGraphEdge, right: KnowledgeGraphEdge) =>
   || left.description.localeCompare(right.description);
 
 const normalizeSearchValue = (value: string) => value.trim().toLowerCase();
+
+const getEdgePriority = (edge: KnowledgeGraphEdge) => {
+  switch (edge.group) {
+    case "reference":
+      return 20;
+    case "issue":
+      return 16;
+    case "containment":
+      return 10;
+    case "similarity":
+    default:
+      return 6;
+  }
+};
+
+const getPathProvenance = (edges: KnowledgeGraphEdge[]): KnowledgeGraphEdge["provenance"] =>
+  edges.some((edge) => edge.provenance === "issue_assisted")
+    ? "issue_assisted"
+    : edges.some((edge) => edge.provenance === "rule")
+      ? "rule"
+      : "heuristic";
+
+const getPathConfidence = (edges: KnowledgeGraphEdge[]) =>
+  Number((edges.reduce((sum, edge) => sum + (edge.confidence || 0.6), 0) / Math.max(edges.length, 1)).toFixed(2));
 
 export const createPreparedGraphView = ({
   edgeFilter,
@@ -147,4 +184,107 @@ export const buildGraphConnectionSummary = (
     incoming,
     outgoing,
   };
+};
+
+export const buildGraphPathExplanations = ({
+  edges,
+  nodeById,
+  selectedNodeId,
+}: {
+  edges: KnowledgeGraphEdge[];
+  nodeById: Map<string, KnowledgeGraphNode>;
+  selectedNodeId: string | null;
+}) => {
+  if (!selectedNodeId || !nodeById.has(selectedNodeId)) {
+    return [] as GraphPathExplanation[];
+  }
+
+  const directPaths: GraphPathExplanation[] = [];
+
+  for (const edge of edges) {
+    const touchesSelected = edge.sourceId === selectedNodeId || edge.targetId === selectedNodeId;
+
+    if (!touchesSelected) {
+      continue;
+    }
+
+    const targetNodeId = edge.sourceId === selectedNodeId ? edge.targetId : edge.sourceId;
+    const targetNode = nodeById.get(targetNodeId);
+
+    if (!targetNode) {
+      continue;
+    }
+
+    directPaths.push({
+      confidence: getPathConfidence([edge]),
+      edgeIds: [edge.id],
+      id: `direct:${edge.id}`,
+      provenance: getPathProvenance([edge]),
+      score: edge.weight * 10 + getEdgePriority(edge),
+      summary: edge.description,
+      targetNodeId,
+      targetNodeLabel: targetNode.label,
+    });
+  }
+
+  const twoHopPaths: GraphPathExplanation[] = [];
+  const seenTwoHopTargets = new Set<string>();
+
+  for (const firstEdge of edges) {
+    const viaNodeId = firstEdge.sourceId === selectedNodeId
+      ? firstEdge.targetId
+      : firstEdge.targetId === selectedNodeId
+        ? firstEdge.sourceId
+        : null;
+
+    if (!viaNodeId) {
+      continue;
+    }
+
+    for (const secondEdge of edges) {
+      if (secondEdge.id === firstEdge.id) {
+        continue;
+      }
+
+      const connectsViaNode = secondEdge.sourceId === viaNodeId || secondEdge.targetId === viaNodeId;
+
+      if (!connectsViaNode) {
+        continue;
+      }
+
+      const targetNodeId = secondEdge.sourceId === viaNodeId ? secondEdge.targetId : secondEdge.sourceId;
+
+      if (targetNodeId === selectedNodeId || seenTwoHopTargets.has(targetNodeId)) {
+        continue;
+      }
+
+      const targetNode = nodeById.get(targetNodeId);
+      const viaNode = nodeById.get(viaNodeId);
+
+      if (!targetNode || !viaNode) {
+        continue;
+      }
+
+      seenTwoHopTargets.add(targetNodeId);
+      twoHopPaths.push({
+        confidence: getPathConfidence([firstEdge, secondEdge]),
+        edgeIds: [firstEdge.id, secondEdge.id],
+        id: `two-hop:${firstEdge.id}:${secondEdge.id}`,
+        provenance: getPathProvenance([firstEdge, secondEdge]),
+        score: firstEdge.weight * 8 + secondEdge.weight * 8 + getEdgePriority(firstEdge) + getEdgePriority(secondEdge) - 20,
+        summary: `${firstEdge.description} Then ${secondEdge.description}`,
+        targetNodeId,
+        targetNodeLabel: targetNode.label,
+        viaNodeId,
+        viaNodeLabel: viaNode.label,
+      });
+    }
+  }
+
+  return [...directPaths, ...twoHopPaths]
+    .sort((left, right) =>
+      right.score - left.score
+      || right.confidence - left.confidence
+      || left.targetNodeLabel.localeCompare(right.targetNodeLabel))
+    .slice(0, 6);
 };

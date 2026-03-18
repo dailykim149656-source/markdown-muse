@@ -465,4 +465,82 @@ describe("executePlannedAction", () => {
       type: "delegate_ai_capability",
     }));
   });
+
+  it("uses graph recommendations to select a compare target when the user did not name one", async () => {
+    const planner: AgentPlannerResponse = {
+      action: "compare_documents",
+      confidence: 0.92,
+      missingInformation: [],
+      reason: "Compare against the most relevant related document.",
+    };
+
+    const result = await executePlannedAction(createContext({
+      latestUserMessage: "Compare this document with the most related doc.",
+      request: {
+        activeDocument: {
+          documentId: "doc-1",
+          existingHeadings: [],
+          fileName: "handover.md",
+          markdown: "Owner: TBD",
+          mode: "markdown",
+        },
+        availableTargetDocuments: [{
+          documentId: "doc-2",
+          fileName: "Rollback Runbook",
+          mode: "markdown",
+        }, {
+          documentId: "doc-3",
+          fileName: "Status Notes",
+          mode: "markdown",
+        }],
+        driveReferenceFileIds: [],
+        graphContext: {
+          workspaceHints: {
+            impactSummary: {
+              impactedDocumentCount: 2,
+              inboundReferenceCount: 1,
+              issueCount: 1,
+              outboundReferenceCount: 1,
+            },
+            issues: [],
+            paths: [{
+              confidence: 0.94,
+              depth: 1,
+              relationKinds: ["references"],
+              targetDocumentId: "doc-2",
+              targetDocumentName: "Rollback Runbook",
+            }],
+            reasons: [{
+              message: "Rollback Runbook is directly related (references).",
+              source: "path",
+              targetDocumentId: "doc-2",
+              targetDocumentName: "Rollback Runbook",
+            }],
+            relatedDocuments: [{
+              documentId: "doc-2",
+              name: "Rollback Runbook",
+              recommendationScore: 92,
+              relationKinds: ["references"],
+            }, {
+              documentId: "doc-3",
+              name: "Status Notes",
+              recommendationScore: 54,
+              relationKinds: ["similar"],
+            }],
+          },
+        },
+        localReferences: [],
+        locale: "en",
+        messages: [],
+        targetDefault: "active_document",
+        threadId: "thread-5",
+      },
+    }), planner);
+
+    expect(result.rawResponse.effect).toEqual(expect.objectContaining({
+      targetDocumentId: "doc-2",
+      targetDocumentName: "Rollback Runbook",
+      type: "delegate_ai_capability",
+    }));
+  });
 });

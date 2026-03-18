@@ -143,6 +143,23 @@ export interface AgentWorkspaceGraphHintIssue {
   severity: "info" | "warning";
 }
 
+export interface AgentWorkspaceGraphHintPath {
+  confidence: number;
+  depth: 1 | 2;
+  relationKinds: Array<"duplicate" | "referenced_by" | "references" | "similar">;
+  targetDocumentId: string;
+  targetDocumentName: string;
+  viaDocumentId?: string;
+  viaDocumentName?: string;
+}
+
+export interface AgentWorkspaceGraphHintReason {
+  message: string;
+  source: "issue" | "path";
+  targetDocumentId?: string;
+  targetDocumentName?: string;
+}
+
 export interface AgentWorkspaceGraphHints {
   impactSummary: {
     impactedDocumentCount: number;
@@ -151,6 +168,8 @@ export interface AgentWorkspaceGraphHints {
     outboundReferenceCount: number;
   };
   issues: AgentWorkspaceGraphHintIssue[];
+  paths: AgentWorkspaceGraphHintPath[];
+  reasons: AgentWorkspaceGraphHintReason[];
   relatedDocuments: AgentWorkspaceGraphHintDocument[];
 }
 

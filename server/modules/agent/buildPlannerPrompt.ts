@@ -82,7 +82,14 @@ const summarizeRetrievalContext = (retrievalContext: ActiveDocumentRetrievalCont
       score: target.score,
       sectionId: target.sectionId || null,
     })),
-    workspaceGraphHints: retrievalContext.workspaceGraphHints,
+    workspaceGraphEvidence: retrievalContext.workspaceGraphHints
+      ? {
+        impactSummary: retrievalContext.workspaceGraphHints.impactSummary,
+        paths: retrievalContext.workspaceGraphHints.paths,
+        reasons: retrievalContext.workspaceGraphHints.reasons,
+        relatedDocuments: retrievalContext.workspaceGraphHints.relatedDocuments,
+      }
+      : null,
   };
 };
 
@@ -165,7 +172,9 @@ Rules:
 - target.sectionId should be set when one section is the clear target.
 - target.headingNodeId should be set when one exact heading node is the clear target.
 - target.fileId may only be used when a selected Drive reference already gives you that exact file id.
-- Use top section targets, top field targets, and workspace graph hints as the primary evidence for deciding where the user wants to edit.
+- Use top section targets, top field targets, and workspace graph evidence as the primary evidence for deciding where the user wants to edit.
+- For compare_documents or suggest_document_updates, prefer graph-related local documents when the graph evidence clearly points to one available target and the user did not name a different target.
+- Use workspaceGraphEvidence.relatedDocuments as the main candidate list, workspaceGraphEvidence.paths as source-target chains, and workspaceGraphEvidence.reasons as concise justification snippets.
 - If retrieval matches are empty for a current-document edit but the active document exists, still choose update_current_document and let the executor decide the best edit strategy. Only choose ask_followup when no active document is available at all.
 - When compare_documents or suggest_document_updates is clearly requested but the target document is not clear, still choose that action and leave target.documentId empty instead of falling back to ask_followup. The client can present a target picker.
 

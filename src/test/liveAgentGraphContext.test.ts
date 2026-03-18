@@ -45,5 +45,7 @@ describe("buildLiveAgentGraphContext", () => {
 
     expect(context?.workspaceHints?.impactSummary.outboundReferenceCount).toBeGreaterThanOrEqual(1);
     expect(context?.workspaceHints?.relatedDocuments.some((document) => document.documentId === "doc-2")).toBe(true);
+    expect(context?.workspaceHints?.paths.some((path) => path.targetDocumentId === "doc-2")).toBe(true);
+    expect(context?.workspaceHints?.reasons.length).toBeGreaterThan(0);
   });
 });

@@ -347,40 +347,18 @@ jobs:
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
           RUN_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-
-          ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
-          if [ -z "${ALLOWED_ORIGIN}" ]; then
-            ALLOWED_ORIGIN="${DEFAULT_FRONTEND_ORIGIN}"
-          fi
-
-          WORKSPACE_FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
-          if [ -z "${WORKSPACE_FRONTEND_ORIGIN}" ]; then
-            WORKSPACE_FRONTEND_ORIGIN="${ALLOWED_ORIGIN}"
-          fi
-
-          GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
-          if [ -z "${GOOGLE_OAUTH_REDIRECT_URI}" ]; then
-            GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_GOOGLE_OAUTH_REDIRECT_URI}"
-          fi
-          GOOGLE_OAUTH_REDIRECT_URI="$(node scripts/normalize-google-oauth-redirect-uri.mjs "${GOOGLE_OAUTH_REDIRECT_URI}" "${WORKSPACE_FRONTEND_ORIGIN}")"
-
-          GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
-          if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then
-            GOOGLE_OAUTH_PUBLISHING_STATUS="testing"
-          fi
-
-          GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
-          if [ -z "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" ]; then
-            GOOGLE_WORKSPACE_SCOPE_PROFILE="restricted"
-          fi
-
-          WORKSPACE_REPOSITORY_BACKEND="firestore"
-
-          GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
-          AI_MAX_REQUEST_BYTES="${{ secrets.GCP_AI_MAX_REQUEST_BYTES }}"
-          if [ -z "${AI_MAX_REQUEST_BYTES}" ]; then
-            AI_MAX_REQUEST_BYTES="2097152"
-          fi
+          export DOCSY_AI_SERVICE_NAME="${AI_SERVICE_NAME}"
+          export DOCSY_PUBLIC_FRONTEND_ORIGIN="${EXPECTED_PUBLIC_FRONTEND_ORIGIN}"
+          export DOCSY_REGION="${GCP_REGION}"
+          export DOCSY_VERTEX_LOCATION="${VERTEX_LOCATION}"
+          export GCP_AI_ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          export GCP_GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
+          export GCP_GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          export GCP_GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
+          export GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
+          export GCP_WORKSPACE_FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
+          export GCP_AI_MAX_REQUEST_BYTES="${{ secrets.GCP_AI_MAX_REQUEST_BYTES }}"
+          eval "$(node scripts/resolve-public-deploy-env.mjs --target ai)"
 
           TEX_ALLOW_ALL_PACKAGES="${{ secrets.GCP_TEX_ALLOW_ALL_PACKAGES }}"
           if [ -z "${TEX_ALLOW_ALL_PACKAGES}" ]; then
@@ -660,22 +638,16 @@ jobs:
             fi
           }
 
-          FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
-          if [ -z "${FRONTEND_ORIGIN}" ]; then
-            FRONTEND_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
-          fi
-          if [ -z "${FRONTEND_ORIGIN}" ]; then
-            FRONTEND_ORIGIN="${DEFAULT_FRONTEND_ORIGIN}"
-          fi
-
-          AI_API_BASE_URL="${{ secrets.GCP_WEB_VITE_AI_API_BASE_URL }}"
-          if [ -z "${AI_API_BASE_URL}" ]; then
-            AI_API_BASE_URL="${FRONTEND_ORIGIN}"
-          fi
-
-          if [ -z "${AI_API_BASE_URL}" ]; then
-            AI_API_BASE_URL="${{ needs.deploy-ai.outputs.ai_service_url }}"
-          fi
+          export DOCSY_PUBLIC_FRONTEND_ORIGIN="${EXPECTED_PUBLIC_FRONTEND_ORIGIN}"
+          export DOCSY_AI_SERVICE_URL="${{ needs.deploy-ai.outputs.ai_service_url }}"
+          export GCP_AI_ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          export GCP_GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
+          export GCP_GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          export GCP_GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
+          export GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
+          export GCP_WORKSPACE_FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
+          export GCP_WEB_VITE_AI_API_BASE_URL="${{ secrets.GCP_WEB_VITE_AI_API_BASE_URL }}"
+          eval "$(node scripts/resolve-public-deploy-env.mjs --target web --ai-url "${{ needs.deploy-ai.outputs.ai_service_url }}")"
 
           if [ -z "${AI_API_BASE_URL}" ] && [ "${{ github.event.inputs.force_frontend }}" != "true" ]; then
             echo "Browser API base URL was not resolved. Set GCP_WEB_VITE_AI_API_BASE_URL or configure GCP_WORKSPACE_FRONTEND_ORIGIN/GCP_AI_ALLOWED_ORIGIN for same-origin Hosting deploys, or use workflow_dispatch with force_frontend=true to override."
@@ -695,27 +667,6 @@ jobs:
               exit 1
               ;;
           esac
-
-          GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
-          if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then
-            GOOGLE_OAUTH_PUBLISHING_STATUS="testing"
-          fi
-
-          GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
-          if [ -z "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" ]; then
-            GOOGLE_WORKSPACE_SCOPE_PROFILE="restricted"
-          fi
-
-          ROUTING_MODE="split-origin"
-          if [ -n "${FRONTEND_ORIGIN}" ] && [ "${AI_API_BASE_URL}" = "${FRONTEND_ORIGIN}" ]; then
-            ROUTING_MODE="same-origin-hosting-rewrite"
-          fi
-
-          GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
-          if [ -z "${GOOGLE_OAUTH_REDIRECT_URI}" ]; then
-            GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_GOOGLE_OAUTH_REDIRECT_URI}"
-          fi
-          GOOGLE_OAUTH_REDIRECT_URI="$(node scripts/normalize-google-oauth-redirect-uri.mjs "${GOOGLE_OAUTH_REDIRECT_URI}" "${FRONTEND_ORIGIN}")"
 
           export AI_ALLOWED_ORIGIN="${FRONTEND_ORIGIN}"
           export GOOGLE_CLIENT_ID="${{ secrets.GCP_GOOGLE_CLIENT_ID }}"
@@ -806,13 +757,10 @@ jobs:
       - name: Verify AI runtime smoke through frontend origin
         run: |
           set -euo pipefail
-          FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
-          if [ -z "${FRONTEND_ORIGIN}" ]; then
-            FRONTEND_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
-          fi
-          if [ -z "${FRONTEND_ORIGIN}" ]; then
-            FRONTEND_ORIGIN="https://docsy.cyou"
-          fi
+          export DOCSY_PUBLIC_FRONTEND_ORIGIN="https://docsy.cyou"
+          export GCP_AI_ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          export GCP_WORKSPACE_FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
+          eval "$(node scripts/resolve-public-deploy-env.mjs --target web)"
 
           for i in {1..10}; do
             if node scripts/check-ai-runtime-smoke.mjs --origin "${FRONTEND_ORIGIN}" --label "Frontend same-origin rewrite"; then

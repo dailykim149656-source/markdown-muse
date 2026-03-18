@@ -154,6 +154,90 @@ const createReplyOnlyResponse = ({
 
 const SUMMARY_DOCUMENT_REQUEST_PATTERN = /(summary document|separate summary|document the summary|요약 문서|문서화|따로 문서|별도 문서)/i;
 
+const getRelationPriorityBoost = (relationKinds: Array<"duplicate" | "referenced_by" | "references" | "similar">) =>
+  (relationKinds.includes("references") || relationKinds.includes("referenced_by") ? 12 : 0)
+  + (relationKinds.includes("duplicate") ? 6 : 0)
+  + (relationKinds.includes("similar") ? 3 : 0);
+
+const buildGraphSuggestedTargets = (request: AgentTurnRequest) => {
+  const availableTargets = request.availableTargetDocuments || [];
+  const graphHints = request.graphContext?.workspaceHints;
+
+  if (!graphHints || availableTargets.length === 0) {
+    return [];
+  }
+
+  const pathConfidenceByDocumentId = new Map(
+    graphHints.paths.map((path) => [path.targetDocumentId, Math.round(path.confidence * 100)]),
+  );
+
+  return graphHints.relatedDocuments
+    .map((document) => {
+      const target = availableTargets.find((candidate) => candidate.documentId === document.documentId);
+
+      if (!target) {
+        return null;
+      }
+
+      return {
+        document: target,
+        relationKinds: document.relationKinds,
+        score: document.recommendationScore
+          + getRelationPriorityBoost(document.relationKinds)
+          + (pathConfidenceByDocumentId.get(document.documentId) || 0),
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+    .sort((left, right) =>
+      right.score - left.score
+      || left.document.fileName.localeCompare(right.document.fileName));
+};
+
+const resolveGraphSuggestedTargetDocument = (request: AgentTurnRequest) => {
+  const rankedTargets = buildGraphSuggestedTargets(request);
+
+  if (rankedTargets.length === 0) {
+    return null;
+  }
+
+  if (rankedTargets.length === 1) {
+    return rankedTargets[0].document;
+  }
+
+  const [primary, secondary] = rankedTargets;
+  return primary.score >= 120 && primary.score - secondary.score >= 10
+    ? primary.document
+    : null;
+};
+
+const buildGraphTargetHint = ({
+  capability,
+  locale,
+  request,
+}: {
+  capability: Extract<AgentDelegatedCapability, "compare_documents" | "suggest_document_updates">;
+  locale?: Locale;
+  request: AgentTurnRequest;
+}) => {
+  const suggestions = buildGraphSuggestedTargets(request)
+    .slice(0, 3)
+    .map((entry) => entry.document.fileName);
+
+  if (suggestions.length === 0) {
+    return null;
+  }
+
+  return buildAssistantText({
+    en: capability === "compare_documents"
+      ? `Suggested from the workspace graph: ${suggestions.join(", ")}.`
+      : `Suggested reference documents from the workspace graph: ${suggestions.join(", ")}.`,
+    ko: capability === "compare_documents"
+      ? `워크스페이스 그래프 기준 추천 문서: ${suggestions.join(", ")}.`
+      : `워크스페이스 그래프 기준 추천 참조 문서: ${suggestions.join(", ")}.`,
+    locale,
+  });
+};
+
 const resolveDelegatedTargetDocument = ({
   latestUserMessage,
   planner,
@@ -219,16 +303,30 @@ const createDelegatedCapabilityResponse = ({
 }): RawAgentTurnResponse => ({
   assistantText: (() => {
     if (capability === "compare_documents" && !targetDocument) {
+      const graphHint = buildGraphTargetHint({
+        capability,
+        locale: context.request.locale,
+        request: context.request,
+      });
       return buildAssistantText({
-        en: "Choose a document to compare against.",
+        en: graphHint
+          ? `Choose a document to compare against. ${graphHint}`
+          : "Choose a document to compare against.",
         ko: "비교할 문서를 선택해 주세요.",
         locale: context.request.locale,
       });
     }
 
     if (capability === "suggest_document_updates" && !targetDocument) {
+      const graphHint = buildGraphTargetHint({
+        capability,
+        locale: context.request.locale,
+        request: context.request,
+      });
       return buildAssistantText({
-        en: "Choose a reference document to generate update suggestions.",
+        en: graphHint
+          ? `Choose a reference document to generate update suggestions. ${graphHint}`
+          : "Choose a reference document to generate update suggestions.",
         ko: "업데이트 제안을 생성할 기준 문서를 선택해 주세요.",
         locale: context.request.locale,
       });
@@ -562,7 +660,7 @@ const buildSectionDraftFromUpdatedMarkdown = ({
   return {
     assistantText: buildAssistantText({
       en: `I prepared a reviewable update for the "${range.headingTitle}" section.`,
-      ko: `\"${range.headingTitle}\" \uC139\uC158\uC5D0 \uB300\uD55C \uAC80\uD1A0\uC6A9 \uBCC0\uACBD\uC548\uC744 \uC900\uBE44\uD588\uC2B5\uB2C8\uB2E4.`,
+      ko: `"${range.headingTitle}" \uC139\uC158\uC5D0 \uB300\uD55C \uAC80\uD1A0\uC6A9 \uBCC0\uACBD\uC548\uC744 \uC900\uBE44\uD588\uC2B5\uB2C8\uB2E4.`,
       locale,
     }),
     currentDocumentDraft: {
@@ -571,7 +669,7 @@ const buildSectionDraftFromUpdatedMarkdown = ({
         markdownBody: sectionBody,
         rationale: buildAssistantText({
           en: `Apply the requested updates inside the "${range.headingTitle}" section.`,
-          ko: `\"${range.headingTitle}\" \uC139\uC158 \uC548\uC5D0 \uC694\uCCAD\uD55C \uBCC0\uACBD\uC744 \uBC18\uC601\uD569\uB2C8\uB2E4.`,
+          ko: `"${range.headingTitle}" \uC139\uC158 \uC548\uC5D0 \uC694\uCCAD\uD55C \uBCC0\uACBD\uC744 \uBC18\uC601\uD569\uB2C8\uB2E4.`,
           locale,
         }),
         targetHeadingNodeId: range.headingNodeId,
@@ -588,7 +686,7 @@ const buildSectionDraftFromUpdatedMarkdown = ({
       deliveryMode: "direct_apply",
       summary: buildAssistantText({
         en: `Review the requested field changes in "${range.headingTitle}".`,
-        ko: `\"${range.headingTitle}\" \uC139\uC158\uC758 \uD544\uB4DC \uBCC0\uACBD\uC744 \uAC80\uD1A0\uD558\uC138\uC694.`,
+        ko: `"${range.headingTitle}" \uC139\uC158\uC758 \uD544\uB4DC \uBCC0\uACBD\uC744 \uAC80\uD1A0\uD558\uC138\uC694.`,
         locale,
       }),
       type: "draft_current_document",
@@ -1149,11 +1247,16 @@ const executeDelegatedAction = (
     latestUserMessage: context.latestUserMessage,
     request: context.request,
   });
+  const graphSuggestedTarget = (
+    planner.action === "compare_documents" || planner.action === "suggest_document_updates"
+  ) && !preRouteHints.localTarget && preRouteHints.ambiguousLocalTargets.length === 0
+    ? resolveGraphSuggestedTargetDocument(context.request)
+    : null;
   const delegatedTarget = planner.action === "compare_documents" || planner.action === "suggest_document_updates"
     ? (
       planner.target?.documentId
         ? (context.request.availableTargetDocuments || []).find((document) => document.documentId === planner.target?.documentId) || null
-        : preRouteHints.localTarget
+        : preRouteHints.localTarget || graphSuggestedTarget
     )
     : null;
   const messages = context.request.messages || [];

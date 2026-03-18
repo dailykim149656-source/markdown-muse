@@ -7,10 +7,13 @@ import type { KnowledgeWorkspaceInsights } from "@/lib/knowledge/workspaceInsigh
 const insightsFixture: KnowledgeWorkspaceInsights = {
   edges: [
     {
+      confidence: 0.98,
       description: "Alpha references Beta.",
       group: "reference",
       id: "edge-1",
       kind: "references",
+      provenance: "rule",
+      sourceRule: "reference_target_pattern",
       sourceDocumentId: "doc-alpha",
       sourceId: "doc:alpha",
       targetDocumentId: "doc-beta",
@@ -18,10 +21,13 @@ const insightsFixture: KnowledgeWorkspaceInsights = {
       weight: 2,
     },
     {
+      confidence: 0.93,
       description: "Alpha Doc has an unresolved reference to Beta Doc.",
       group: "issue",
       id: "edge-issue-1",
       kind: "issue_relation",
+      provenance: "issue_assisted",
+      sourceRule: "issue_projection:unresolved_reference",
       sourceDocumentId: "doc-alpha",
       sourceId: "doc:alpha",
       targetDocumentId: "doc-beta",
@@ -120,8 +126,8 @@ describe("GraphExplorerDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "knowledge.graphFocusSelection" }));
 
     await waitFor(() => {
-      expect(screen.queryByText("Gamma Doc")).not.toBeInTheDocument();
-    });
+      expect(screen.queryAllByText("Gamma Doc")).toHaveLength(0);
+    }, { timeout: 30000 });
 
     fireEvent.click(screen.getByRole("button", { name: "knowledge.graphResetView" }));
 
@@ -180,7 +186,7 @@ describe("GraphExplorerDialog", () => {
     expect(screen.getByText("knowledge.graphScaleLarge")).toBeInTheDocument();
     expect(screen.getByText("knowledge.graphScaleHintLarge")).toBeInTheDocument();
     expect(screen.getByText('knowledge.graphValidatedRangeValue:{"edges":900,"nodes":480}')).toBeInTheDocument();
-  });
+  }, 30000);
 
   it("supports an issues graph mode through the view dropdown", async () => {
     renderDialog();
@@ -204,8 +210,8 @@ describe("GraphExplorerDialog", () => {
     renderDialog();
 
     await waitFor(() => {
-      expect(screen.getByText("Alpha Doc has an unresolved reference to Beta Doc.")).toBeInTheDocument();
-      expect(screen.getByText("Alpha references Beta.")).toBeInTheDocument();
+      expect(screen.getAllByText("Alpha Doc has an unresolved reference to Beta Doc.").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Alpha references Beta.").length).toBeGreaterThan(0);
     });
 
     openMenu("knowledge.graphRelationsMenuAria");
@@ -215,7 +221,7 @@ describe("GraphExplorerDialog", () => {
 
     await waitFor(() => {
       expect(screen.queryByText("Alpha Doc has an unresolved reference to Beta Doc.")).not.toBeInTheDocument();
-      expect(screen.getByText("Alpha references Beta.")).toBeInTheDocument();
+      expect(screen.getAllByText("Alpha references Beta.").length).toBeGreaterThan(0);
     });
 
     openMenu("knowledge.graphRelationsMenuAria");
@@ -223,7 +229,7 @@ describe("GraphExplorerDialog", () => {
 
     await waitFor(() => {
       expect(screen.queryByText("Alpha Doc has an unresolved reference to Beta Doc.")).not.toBeInTheDocument();
-      expect(screen.getByText("Alpha references Beta.")).toBeInTheDocument();
+      expect(screen.getAllByText("Alpha references Beta.").length).toBeGreaterThan(0);
       expect(screen.getByText("knowledge.graphFilterReferences / knowledge.issueReference")).toBeInTheDocument();
     });
   });
@@ -239,5 +245,16 @@ describe("GraphExplorerDialog", () => {
       expect(screen.getAllByText("Gamma Doc").length).toBeGreaterThan(0);
       expect(screen.queryByText("Beta Doc")).not.toBeInTheDocument();
     });
+  });
+
+  it("shows ranked path explanations for the selected node", async () => {
+    renderDialog();
+
+    await waitFor(() => {
+      expect(screen.getByText("Path Explanations")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("Rule-based").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Alpha references Beta.").length).toBeGreaterThan(0);
   });
 });

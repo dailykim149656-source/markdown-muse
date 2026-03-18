@@ -9,6 +9,7 @@ export type KnowledgeGraphEdgeKind =
   | "duplicate"
   | "issue_relation";
 export type KnowledgeGraphEdgeGroup = "containment" | "reference" | "similarity" | "issue";
+export type KnowledgeGraphEdgeProvenance = "heuristic" | "issue_assisted" | "rule";
 export type KnowledgeHealthIssueKind =
   | "stale_index"
   | "unresolved_reference"
@@ -43,10 +44,13 @@ export interface KnowledgeGraphNavigationTarget {
 }
 
 export interface KnowledgeGraphEdge {
+  confidence?: number;
   description: string;
   group: KnowledgeGraphEdgeGroup;
   id: string;
   kind: KnowledgeGraphEdgeKind;
+  provenance?: KnowledgeGraphEdgeProvenance;
+  sourceRule?: string;
   sourceId: string;
   sourceDocumentId: string;
   targetId: string;
@@ -222,10 +226,13 @@ export const buildKnowledgeWorkspaceInsights = (
         sectionId: section.sectionId,
       });
       edges.push({
+        confidence: 1,
         description: `${record.normalizedDocument.metadata.title || record.fileName} includes section ${section.title}.`,
         group: "containment",
         id: `edge:contains_section:${record.documentId}:${section.sectionId}`,
         kind: "contains_section",
+        provenance: "rule",
+        sourceRule: "document_structure_section",
         sourceId: `doc:${record.documentId}`,
         sourceDocumentId: record.documentId,
         targetId: `section:${record.documentId}:${section.sectionId}`,
@@ -245,10 +252,13 @@ export const buildKnowledgeWorkspaceInsights = (
         sectionId: image.sectionId,
       });
       edges.push({
+        confidence: 1,
         description: `${record.normalizedDocument.metadata.title || record.fileName} includes image ${image.alt || image.caption || image.src}.`,
         group: "containment",
         id: `edge:contains_image:${record.documentId}:${image.imageId}`,
         kind: "contains_image",
+        provenance: "rule",
+        sourceRule: "document_structure_image",
         sourceId: image.sectionId
           ? `section:${record.documentId}:${image.sectionId}`
           : `doc:${record.documentId}`,
@@ -307,10 +317,13 @@ export const buildKnowledgeWorkspaceInsights = (
       }
 
       edges.push({
+        confidence: 0.98,
         description: `${record.normalizedDocument.metadata.title || record.fileName} references ${target.normalizedDocument.metadata.title || target.fileName}.`,
         group: "reference",
         id: `edge:references:${record.documentId}:${target.documentId}:${reference.anchor || "root"}`,
         kind: "references",
+        provenance: "rule",
+        sourceRule: reference.anchor ? "reference_target_with_anchor" : "reference_target_pattern",
         sourceId: `doc:${record.documentId}`,
         sourceDocumentId: record.documentId,
         targetId: `doc:${target.documentId}`,
@@ -351,10 +364,13 @@ export const buildKnowledgeWorkspaceInsights = (
       for (let targetIndex = index + 1; targetIndex < duplicateRecords.length; targetIndex += 1) {
         const target = duplicateRecords[targetIndex];
         edges.push({
+          confidence: 0.72,
           description: `${source.normalizedDocument.metadata.title || source.fileName} overlaps with ${target.normalizedDocument.metadata.title || target.fileName}.`,
           group: "similarity",
           id: `edge:duplicate:${source.documentId}:${target.documentId}`,
           kind: "duplicate",
+          provenance: "heuristic",
+          sourceRule: "duplicate_normalized_title",
           sourceId: `doc:${source.documentId}`,
           sourceDocumentId: source.documentId,
           targetId: `doc:${target.documentId}`,
@@ -379,10 +395,13 @@ export const buildKnowledgeWorkspaceInsights = (
       }
 
       edges.push({
+        confidence: Number(Math.max(0.5, Math.min(0.95, similarity)).toFixed(2)),
         description: `${left.normalizedDocument.metadata.title || left.fileName} is similar to ${right.normalizedDocument.metadata.title || right.fileName}.`,
         group: "similarity",
         id: `edge:similar_to:${left.documentId}:${right.documentId}`,
         kind: "similar_to",
+        provenance: "heuristic",
+        sourceRule: "jaccard_title_section_similarity",
         sourceId: `doc:${left.documentId}`,
         sourceDocumentId: left.documentId,
         targetId: `doc:${right.documentId}`,
@@ -399,10 +418,13 @@ export const buildKnowledgeWorkspaceInsights = (
     ));
 
     return relatedDocumentIds.map((relatedDocumentId) => ({
+      confidence: issue.severity === "warning" ? 0.93 : 0.78,
       description: issue.message,
       group: "issue" as const,
       id: `edge:issue:${issue.id}:${relatedDocumentId}`,
       kind: "issue_relation" as const,
+      provenance: "issue_assisted" as const,
+      sourceRule: `issue_projection:${issue.kind}`,
       sourceId: `doc:${issue.documentId}`,
       sourceDocumentId: issue.documentId,
       targetId: `doc:${relatedDocumentId}`,

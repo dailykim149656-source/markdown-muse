@@ -10,12 +10,18 @@ on:
       - "Dockerfile.ai"
       - "cloudbuild.ai.yaml"
       - "scripts/check-ai-runtime-smoke.mjs"
+      - "scripts/normalize-google-oauth-redirect-uri.mjs"
+      - "scripts/resolve-public-deploy-env.mjs"
       - "scripts/gcp/ensure-ai-runtime-resources.sh"
       - "server/**"
       - "server/modules/config/**"
       - "scripts/validate-public-deploy-config.mjs"
+      - "src/i18n/types.ts"
       - "src/lib/ai/client.ts"
-      - "src/types/tex.ts"
+      - "src/lib/ai/summaryContracts.ts"
+      - "src/lib/ingestion/**"
+      - "src/lib/retrieval/**"
+      - "src/types/**"
       - "!server/texService.ts"
       - "!server/modules/tex/compiler.ts"
       - "!server/modules/tex/diagnostics.ts"
@@ -127,40 +133,18 @@ jobs:
           PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
           PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
           RUN_SERVICE_ACCOUNT="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
-
-          ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
-          if [ -z "${ALLOWED_ORIGIN}" ]; then
-            ALLOWED_ORIGIN="${DEFAULT_FRONTEND_ORIGIN}"
-          fi
-
-          WORKSPACE_FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
-          if [ -z "${WORKSPACE_FRONTEND_ORIGIN}" ]; then
-            WORKSPACE_FRONTEND_ORIGIN="${ALLOWED_ORIGIN}"
-          fi
-
-          GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
-          if [ -z "${GOOGLE_OAUTH_REDIRECT_URI}" ]; then
-            GOOGLE_OAUTH_REDIRECT_URI="${DEFAULT_GOOGLE_OAUTH_REDIRECT_URI}"
-          fi
-          GOOGLE_OAUTH_REDIRECT_URI="$(node scripts/normalize-google-oauth-redirect-uri.mjs "${GOOGLE_OAUTH_REDIRECT_URI}" "${WORKSPACE_FRONTEND_ORIGIN}")"
-
-          GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
-          if [ -z "${GOOGLE_OAUTH_PUBLISHING_STATUS}" ]; then
-            GOOGLE_OAUTH_PUBLISHING_STATUS="testing"
-          fi
-
-          GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
-          if [ -z "${GOOGLE_WORKSPACE_SCOPE_PROFILE}" ]; then
-            GOOGLE_WORKSPACE_SCOPE_PROFILE="restricted"
-          fi
-
-          WORKSPACE_REPOSITORY_BACKEND="firestore"
-
-          GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
-          AI_MAX_REQUEST_BYTES="${{ secrets.GCP_AI_MAX_REQUEST_BYTES }}"
-          if [ -z "${AI_MAX_REQUEST_BYTES}" ]; then
-            AI_MAX_REQUEST_BYTES="2097152"
-          fi
+          export DOCSY_AI_SERVICE_NAME="${AI_SERVICE_NAME}"
+          export DOCSY_PUBLIC_FRONTEND_ORIGIN="${EXPECTED_PUBLIC_FRONTEND_ORIGIN}"
+          export DOCSY_REGION="${GCP_REGION}"
+          export DOCSY_VERTEX_LOCATION="${VERTEX_LOCATION}"
+          export GCP_AI_ALLOWED_ORIGIN="${{ secrets.GCP_AI_ALLOWED_ORIGIN }}"
+          export GCP_GOOGLE_OAUTH_PUBLISHING_STATUS="${{ secrets.GCP_GOOGLE_OAUTH_PUBLISHING_STATUS }}"
+          export GCP_GOOGLE_OAUTH_REDIRECT_URI="${{ secrets.GCP_GOOGLE_OAUTH_REDIRECT_URI }}"
+          export GCP_GOOGLE_WORKSPACE_SCOPES="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPES }}"
+          export GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE="${{ secrets.GCP_GOOGLE_WORKSPACE_SCOPE_PROFILE }}"
+          export GCP_WORKSPACE_FRONTEND_ORIGIN="${{ secrets.GCP_WORKSPACE_FRONTEND_ORIGIN }}"
+          export GCP_AI_MAX_REQUEST_BYTES="${{ secrets.GCP_AI_MAX_REQUEST_BYTES }}"
+          eval "$(node scripts/resolve-public-deploy-env.mjs --target ai)"
 
           TEX_ALLOW_ALL_PACKAGES="${{ secrets.GCP_TEX_ALLOW_ALL_PACKAGES }}"
           if [ -z "${TEX_ALLOW_ALL_PACKAGES}" ]; then
@@ -231,6 +215,7 @@ jobs:
           export TEX_ALLOW_RAW_DOCUMENT
           export TEX_ALLOW_RESTRICTED_COMMANDS
           export TEX_ALLOWED_PACKAGES
+          export DOCSY_AI_SERVICE_URL=""
 
           node scripts/validate-public-deploy-config.mjs
 

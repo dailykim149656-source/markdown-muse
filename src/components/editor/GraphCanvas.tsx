@@ -141,6 +141,18 @@ const getEdgeStyle = (edge: KnowledgeGraphEdge, selectedNodeId: string | null) =
   }
 };
 
+const formatGraphProvenanceLabel = (provenance?: KnowledgeGraphEdge["provenance"]) => {
+  switch (provenance) {
+    case "issue_assisted":
+      return "Issue-assisted";
+    case "rule":
+      return "Rule-based";
+    case "heuristic":
+    default:
+      return "Heuristic";
+  }
+};
+
 const LegendNodeSwatch = ({
   fill,
   stroke,
@@ -627,6 +639,8 @@ const GraphCanvas = ({
                 </div>
                 <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
                   <span>{t(edgeFilterKey(hoveredEdge.group))}</span>
+                  <span>{formatGraphProvenanceLabel(hoveredEdge.provenance)}</span>
+                  <span>Confidence {Math.round((hoveredEdge.confidence || 0.6) * 100)}%</span>
                   <span>
                     {t("knowledge.graphHoverRelated", {
                       source: nodeById.get(hoveredEdge.sourceId)?.label || hoveredEdge.sourceId,
